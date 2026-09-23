@@ -1,0 +1,697 @@
+{
+  "frames": [
+    {
+      "name": "boss_p1_idle0",
+      "size": 256,
+      "colors": 16187,
+      "softShare": 0.0586729734983477
+    },
+    {
+      "name": "boss_p1_idle1",
+      "size": 256,
+      "colors": 16164,
+      "softShare": 0.05879104816968201
+    },
+    {
+      "name": "boss_p1_tele",
+      "size": 256,
+      "colors": 16281,
+      "softShare": 0.061899441340782124
+    },
+    {
+      "name": "boss_p2_idle0",
+      "size": 256,
+      "colors": 16474,
+      "softShare": 0.05364614465032875
+    },
+    {
+      "name": "boss_p2_idle1",
+      "size": 256,
+      "colors": 16459,
+      "softShare": 0.053675699955083096
+    },
+    {
+      "name": "boss_p2_tele",
+      "size": 256,
+      "colors": 15871,
+      "softShare": 0.0569644646573653
+    },
+    {
+      "name": "boss_p3_idle0",
+      "size": 256,
+      "colors": 13694,
+      "softShare": 0.04860236716192395
+    },
+    {
+      "name": "boss_p3_idle1",
+      "size": 256,
+      "colors": 13690,
+      "softShare": 0.048626858150667675
+    },
+    {
+      "name": "boss_p3_tele",
+      "size": 256,
+      "colors": 13136,
+      "softShare": 0.05070244005492764
+    },
+    {
+      "name": "enemy_tank_s_idle0",
+      "size": 96,
+      "colors": 3500,
+      "softShare": 0.07515615555107798
+    },
+    {
+      "name": "enemy_tank_s_idle1",
+      "size": 96,
+      "colors": 3459,
+      "softShare": 0.07600901454619954
+    },
+    {
+      "name": "enemy_tank_s_tele",
+      "size": 96,
+      "colors": 2970,
+      "softShare": 0.05493975903614458
+    },
+    {
+      "name": "enemy_tank_n_idle0",
+      "size": 96,
+      "colors": 3231,
+      "softShare": 0.07106299212598426
+    },
+    {
+      "name": "enemy_tank_n_idle1",
+      "size": 96,
+      "colors": 3187,
+      "softShare": 0.07132867132867132
+    },
+    {
+      "name": "enemy_tank_n_tele",
+      "size": 96,
+      "colors": 2574,
+      "softShare": 0.05899777832633918
+    },
+    {
+      "name": "enemy_tank_w_idle0",
+      "size": 96,
+      "colors": 3460,
+      "softShare": 0.05646147574398695
+    },
+    {
+      "name": "enemy_tank_w_idle1",
+      "size": 96,
+      "colors": 3419,
+      "softShare": 0.05673612543841552
+    },
+    {
+      "name": "enemy_tank_w_tele",
+      "size": 96,
+      "colors": 2528,
+      "softShare": 0.05130409859558613
+    },
+    {
+      "name": "enemy_summoner_s_idle0",
+      "size": 96,
+      "colors": 2149,
+      "softShare": 0.09582132564841499
+    },
+    {
+      "name": "enemy_summoner_s_idle1",
+      "size": 96,
+      "colors": 2149,
+      "softShare": 0.09582132564841499
+    },
+    {
+      "name": "enemy_summoner_s_tele",
+      "size": 96,
+      "colors": 1914,
+      "softShare": 0.10047281323877069
+    },
+    {
+      "name": "enemy_summoner_n_idle0",
+      "size": 96,
+      "colors": 1703,
+      "softShare": 0.08958020989505247
+    },
+    {
+      "name": "enemy_summoner_n_idle1",
+      "size": 96,
+      "colors": 1703,
+      "softShare": 0.08958020989505247
+    },
+    {
+      "name": "enemy_summoner_n_tele",
+      "size": 96,
+      "colors": 1536,
+      "softShare": 0.11260162601626016
+    },
+    {
+      "name": "enemy_summoner_w_idle0",
+      "size": 96,
+      "colors": 1814,
+      "softShare": 0.11084142394822007
+    },
+    {
+      "name": "enemy_summoner_w_idle1",
+      "size": 96,
+      "colors": 1814,
+      "softShare": 0.11084142394822007
+    },
+    {
+      "name": "enemy_summoner_w_tele",
+      "size": 96,
+      "colors": 1787,
+      "softShare": 0.09234411996842937
+    },
+    {
+      "name": "player_s_0",
+      "size": 64,
+      "colors": 1197,
+      "softShare": 0.08826815642458101
+    },
+    {
+      "name": "player_s_1",
+      "size": 64,
+      "colors": 1197,
+      "softShare": 0.08826815642458101
+    },
+    {
+      "name": "player_n_0",
+      "size": 64,
+      "colors": 1047,
+      "softShare": 0.08826815642458101
+    },
+    {
+      "name": "player_n_1",
+      "size": 64,
+      "colors": 1047,
+      "softShare": 0.08826815642458101
+    },
+    {
+      "name": "player_w_0",
+      "size": 64,
+      "colors": 1077,
+      "softShare": 0.10292249047013977
+    },
+    {
+      "name": "player_w_1",
+      "size": 64,
+      "colors": 1077,
+      "softShare": 0.10292249047013977
+    },
+    {
+      "name": "enemy_rusher_s_idle0",
+      "size": 64,
+      "colors": 1634,
+      "softShare": 0.08345606283750613
+    },
+    {
+      "name": "enemy_rusher_s_idle1",
+      "size": 64,
+      "colors": 1634,
+      "softShare": 0.08345606283750613
+    },
+    {
+      "name": "enemy_rusher_n_idle0",
+      "size": 64,
+      "colors": 1562,
+      "softShare": 0.06322711178553364
+    },
+    {
+      "name": "enemy_rusher_n_idle1",
+      "size": 64,
+      "colors": 1562,
+      "softShare": 0.06322711178553364
+    },
+    {
+      "name": "enemy_rusher_w_idle0",
+      "size": 64,
+      "colors": 1092,
+      "softShare": 0.11627906976744186
+    },
+    {
+      "name": "enemy_rusher_w_idle1",
+      "size": 64,
+      "colors": 1092,
+      "softShare": 0.11627906976744186
+    },
+    {
+      "name": "enemy_shooter_s_idle0",
+      "size": 64,
+      "colors": 1252,
+      "softShare": 0.13195747342088807
+    },
+    {
+      "name": "enemy_shooter_s_idle1",
+      "size": 64,
+      "colors": 1252,
+      "softShare": 0.13195747342088807
+    },
+    {
+      "name": "enemy_shooter_s_tele",
+      "size": 64,
+      "colors": 1169,
+      "softShare": 0.10596026490066225
+    },
+    {
+      "name": "enemy_shooter_n_idle0",
+      "size": 64,
+      "colors": 1183,
+      "softShare": 0.12402088772845953
+    },
+    {
+      "name": "enemy_shooter_n_idle1",
+      "size": 64,
+      "colors": 1183,
+      "softShare": 0.12402088772845953
+    },
+    {
+      "name": "enemy_shooter_n_tele",
+      "size": 64,
+      "colors": 1072,
+      "softShare": 0.10380116959064327
+    },
+    {
+      "name": "enemy_shooter_w_idle0",
+      "size": 64,
+      "colors": 1232,
+      "softShare": 0.10266406757634827
+    },
+    {
+      "name": "enemy_shooter_w_idle1",
+      "size": 64,
+      "colors": 1232,
+      "softShare": 0.10266406757634827
+    },
+    {
+      "name": "enemy_shooter_w_tele",
+      "size": 64,
+      "colors": 1317,
+      "softShare": 0.07533414337788578
+    },
+    {
+      "name": "enemy_orbiter_s_idle0",
+      "size": 64,
+      "colors": 1160,
+      "softShare": 0.16317991631799164
+    },
+    {
+      "name": "enemy_orbiter_s_idle1",
+      "size": 64,
+      "colors": 1160,
+      "softShare": 0.16317991631799164
+    },
+    {
+      "name": "enemy_orbiter_s_tele",
+      "size": 64,
+      "colors": 881,
+      "softShare": 0.20259019426456984
+    },
+    {
+      "name": "enemy_orbiter_n_idle0",
+      "size": 64,
+      "colors": 1185,
+      "softShare": 0.16413974950560317
+    },
+    {
+      "name": "enemy_orbiter_n_idle1",
+      "size": 64,
+      "colors": 1185,
+      "softShare": 0.16413974950560317
+    },
+    {
+      "name": "enemy_orbiter_n_tele",
+      "size": 64,
+      "colors": 1007,
+      "softShare": 0.1842948717948718
+    },
+    {
+      "name": "enemy_orbiter_w_idle0",
+      "size": 64,
+      "colors": 879,
+      "softShare": 0.1681096681096681
+    },
+    {
+      "name": "enemy_orbiter_w_idle1",
+      "size": 64,
+      "colors": 879,
+      "softShare": 0.1681096681096681
+    },
+    {
+      "name": "enemy_orbiter_w_tele",
+      "size": 64,
+      "colors": 898,
+      "softShare": 0.16700336700336701
+    },
+    {
+      "name": "enemy_turret_idle0",
+      "size": 64,
+      "colors": 1651,
+      "softShare": 0.06796628029504742
+    },
+    {
+      "name": "enemy_turret_idle1",
+      "size": 64,
+      "colors": 1647,
+      "softShare": 0.06796628029504742
+    },
+    {
+      "name": "enemy_turret_tele",
+      "size": 64,
+      "colors": 1689,
+      "softShare": 0.0680021085925145
+    },
+    {
+      "name": "tile_floor_0",
+      "size": 64,
+      "colors": 1570,
+      "softShare": 0
+    },
+    {
+      "name": "tile_floor_1",
+      "size": 64,
+      "colors": 1566,
+      "softShare": 0
+    },
+    {
+      "name": "tile_floor_2",
+      "size": 64,
+      "colors": 1587,
+      "softShare": 0
+    },
+    {
+      "name": "tile_floor_3",
+      "size": 64,
+      "colors": 1844,
+      "softShare": 0
+    },
+    {
+      "name": "tile_wall_c",
+      "size": 64,
+      "colors": 1504,
+      "softShare": 0
+    },
+    {
+      "name": "tile_wall_n",
+      "size": 64,
+      "colors": 1932,
+      "softShare": 0
+    },
+    {
+      "name": "tile_wall_e",
+      "size": 64,
+      "colors": 1921,
+      "softShare": 0
+    },
+    {
+      "name": "tile_wall_s",
+      "size": 64,
+      "colors": 1954,
+      "softShare": 0
+    },
+    {
+      "name": "tile_wall_w",
+      "size": 64,
+      "colors": 1971,
+      "softShare": 0
+    },
+    {
+      "name": "tile_wall_ne",
+      "size": 64,
+      "colors": 2215,
+      "softShare": 0
+    },
+    {
+      "name": "tile_wall_nw",
+      "size": 64,
+      "colors": 2216,
+      "softShare": 0
+    },
+    {
+      "name": "tile_wall_se",
+      "size": 64,
+      "colors": 2212,
+      "softShare": 0
+    },
+    {
+      "name": "tile_wall_sw",
+      "size": 64,
+      "colors": 2237,
+      "softShare": 0
+    },
+    {
+      "name": "hazard_spike_0",
+      "size": 64,
+      "colors": 1852,
+      "softShare": 0
+    },
+    {
+      "name": "hazard_spike_1",
+      "size": 64,
+      "colors": 2070,
+      "softShare": 0
+    },
+    {
+      "name": "hazard_poison_0",
+      "size": 64,
+      "colors": 1672,
+      "softShare": 0.023680930619027835
+    },
+    {
+      "name": "hazard_poison_1",
+      "size": 64,
+      "colors": 1672,
+      "softShare": 0.023680930619027835
+    },
+    {
+      "name": "hazard_ice_0",
+      "size": 64,
+      "colors": 2009,
+      "softShare": 0.03819585534335636
+    },
+    {
+      "name": "hazard_ice_1",
+      "size": 64,
+      "colors": 2083,
+      "softShare": 0.03819585534335636
+    },
+    {
+      "name": "hazard_crumble_0",
+      "size": 64,
+      "colors": 1570,
+      "softShare": 0
+    },
+    {
+      "name": "hazard_crumble_1",
+      "size": 64,
+      "colors": 1781,
+      "softShare": 0
+    },
+    {
+      "name": "prop_pillar_0",
+      "size": 64,
+      "colors": 916,
+      "softShare": 0.08089500860585198
+    },
+    {
+      "name": "prop_pillar_1",
+      "size": 64,
+      "colors": 952,
+      "softShare": 0.08089500860585198
+    },
+    {
+      "name": "prop_brazier_0",
+      "size": 64,
+      "colors": 911,
+      "softShare": 0.12259371833839919
+    },
+    {
+      "name": "prop_brazier_1",
+      "size": 64,
+      "colors": 911,
+      "softShare": 0.12259371833839919
+    },
+    {
+      "name": "prop_mirror_0",
+      "size": 64,
+      "colors": 1460,
+      "softShare": 0.06990521327014218
+    },
+    {
+      "name": "prop_mirror_1",
+      "size": 64,
+      "colors": 1450,
+      "softShare": 0.06990521327014218
+    },
+    {
+      "name": "prop_manawell_0",
+      "size": 64,
+      "colors": 1046,
+      "softShare": 0.1548154815481548
+    },
+    {
+      "name": "prop_manawell_1",
+      "size": 64,
+      "colors": 1046,
+      "softShare": 0.1548154815481548
+    },
+    {
+      "name": "prop_chest_0",
+      "size": 64,
+      "colors": 1928,
+      "softShare": 0.04046028210838901
+    },
+    {
+      "name": "prop_chest_1",
+      "size": 64,
+      "colors": 2065,
+      "softShare": 0.04046898638426626
+    },
+    {
+      "name": "prop_shop_0",
+      "size": 64,
+      "colors": 1711,
+      "softShare": 0.13767019667170954
+    },
+    {
+      "name": "prop_shop_1",
+      "size": 64,
+      "colors": 1763,
+      "softShare": 0.13767019667170954
+    },
+    {
+      "name": "prop_restfire_0",
+      "size": 64,
+      "colors": 682,
+      "softShare": 0.24055944055944056
+    },
+    {
+      "name": "prop_restfire_1",
+      "size": 64,
+      "colors": 682,
+      "softShare": 0.24055944055944056
+    },
+    {
+      "name": "icon_door_combat",
+      "size": 64,
+      "colors": 1558,
+      "softShare": 0.11011342155009451
+    },
+    {
+      "name": "icon_door_elite",
+      "size": 64,
+      "colors": 1315,
+      "softShare": 0.08683926645091694
+    },
+    {
+      "name": "icon_door_treasure",
+      "size": 64,
+      "colors": 1832,
+      "softShare": 0.008349146110056925
+    },
+    {
+      "name": "icon_door_shop",
+      "size": 64,
+      "colors": 1524,
+      "softShare": 0.06311300639658848
+    },
+    {
+      "name": "icon_door_rest",
+      "size": 64,
+      "colors": 1154,
+      "softShare": 0.07701941139636818
+    },
+    {
+      "name": "icon_door_boss",
+      "size": 64,
+      "colors": 1245,
+      "softShare": 0.08208154506437768
+    },
+    {
+      "name": "ui_heart_full",
+      "size": 64,
+      "colors": 897,
+      "softShare": 0.058823529411764705
+    },
+    {
+      "name": "ui_heart_empty",
+      "size": 64,
+      "colors": 845,
+      "softShare": 0.0720384204909285
+    },
+    {
+      "name": "ui_mana_pip",
+      "size": 64,
+      "colors": 887,
+      "softShare": 0.06700593723494487
+    },
+    {
+      "name": "ui_card_frame",
+      "size": 64,
+      "colors": 1166,
+      "softShare": 0.09344262295081968
+    },
+    {
+      "name": "bullet_player_a_0",
+      "size": 32,
+      "colors": 194,
+      "softShare": 0.21962616822429906
+    },
+    {
+      "name": "bullet_player_a_1",
+      "size": 32,
+      "colors": 177,
+      "softShare": 0.21962616822429906
+    },
+    {
+      "name": "bullet_player_b_0",
+      "size": 32,
+      "colors": 155,
+      "softShare": 0.18285714285714286
+    },
+    {
+      "name": "bullet_player_b_1",
+      "size": 32,
+      "colors": 150,
+      "softShare": 0.18285714285714286
+    },
+    {
+      "name": "bullet_player_c_0",
+      "size": 32,
+      "colors": 269,
+      "softShare": 0.20833333333333334
+    },
+    {
+      "name": "bullet_player_c_1",
+      "size": 32,
+      "colors": 240,
+      "softShare": 0.20833333333333334
+    },
+    {
+      "name": "bullet_enemy_a_0",
+      "size": 32,
+      "colors": 333,
+      "softShare": 0.09176029962546817
+    },
+    {
+      "name": "bullet_enemy_a_1",
+      "size": 32,
+      "colors": 286,
+      "softShare": 0.09176029962546817
+    },
+    {
+      "name": "bullet_enemy_b_0",
+      "size": 32,
+      "colors": 382,
+      "softShare": 0.18013856812933027
+    },
+    {
+      "name": "bullet_enemy_b_1",
+      "size": 32,
+      "colors": 367,
+      "softShare": 0.18013856812933027
+    }
+  ],
+  "duplicates": [],
+  "enemyBulletUnprotected": 0,
+  "unintendedMagenta": []
+}

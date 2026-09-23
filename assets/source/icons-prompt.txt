@@ -1,0 +1,18 @@
+Use case: precise-object-edit. Asset type: 15 small game icons and projectiles extracted/recreated from the supplied approved dungeon art.
+STRICT 5 columns x 3 rows, equal square cells, wide 1536x1024 canvas. One isolated item centered in each cell with ample completely transparent padding. NO backdrop, no panels, no door archways, no circles behind symbols (except coin and bullets themselves). Actual transparent RGBA. NO bloom or glows or floor shadows; fully opaque painted shapes, narrow edge antialias, dark neutral outlines. Detailed beveled hand-painted style of reference.
+ROW 1, left to right, IVORY door symbols matching those on the six doors in reference:
+1 crossed sword and dagger. 2 horned skull (two horns, two eye sockets). 3 little closed treasure chest. 4 gold/ivory coin with SQUARE hole. 5 small ivory flame.
+ROW 2, left to right:
+1 IVORY five-point crown (sixth door symbol).
+2 full heart, ruby RED (not pink) with subtle ivory glint and dark outline.
+3 EMPTY heart: dark indigo fill, pale grey contour, same silhouette as previous heart.
+4 a cyan vertical rounded mana capsule/crystal.
+5 an EMPTY ornate square reward card BORDER, ivory corners and slim dark blue frame, transparent center. NO cross or emblem in center.
+ROW 3, left to right, PROJECTILES:
+1 CYAN elongated sharp diamond with bright pale cyan central highlight.
+2 CYAN narrow arrow-like energy bolt with pointed tip.
+3 CYAN four-point star with bright pale cyan center.
+4 solid circular MAGENTA orb bullet, bright pink core.
+5 circular MAGENTA ring bullet, bright pink inside ring and darker pink center.
+For enemy bullets (last two), EVERY painted shade including outline and highlights MUST be a shade of pink-magenta near #ff3fa4, hue 328 degrees. Very dark magenta outlines and pale pink highlights, not blue shadows. Cyan bullets hue about 190 degrees. Enemy circular silhouettes must differ from the player's angular silhouettes.
+No text, numbering, visible grid, glowing haze or colored background.

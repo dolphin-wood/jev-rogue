@@ -1,0 +1,9 @@
+packages:
+  - "packages/*"
+
+# pnpm 11 reads settings from here, not from package.json.
+# esbuild's postinstall is not needed: vite and vitest load the platform
+# package directly, so the check is skipped rather than the build approved.
+onlyBuiltDependencies:
+  - esbuild
+verifyDepsBeforeRun: false

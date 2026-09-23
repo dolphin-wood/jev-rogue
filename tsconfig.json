@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": [
+      "node"
+    ],
+    "paths": {
+      "@jr/core": [
+        "./packages/core/src/index.ts"
+      ],
+      "@jr/director": [
+        "./packages/director/src/index.ts"
+      ],
+      "@jr/harness": [
+        "./packages/harness/src/index.ts"
+      ]
+    },
+    "baseUrl": "."
+  },
+  "include": [
+    "packages/*/src/**/*.ts",
+    "vitest.config.ts"
+  ]
+}

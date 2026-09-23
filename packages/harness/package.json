@@ -1,0 +1,24 @@
+{
+  "name": "@jr/harness",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@jr/core": "workspace:*",
+    "@jr/director": "workspace:*"
+  },
+  "scripts": {
+    "accuracy": "node --experimental-strip-types src/cli/accuracy.ts",
+    "assets-audio": "node --experimental-strip-types src/cli/assets-audio.ts",
+    "measure-rooms": "node --experimental-strip-types src/cli/measure-rooms.ts",
+    "art-workorder": "node --experimental-strip-types src/cli/art-workorder.ts",
+    "style-reference": "node --experimental-strip-types src/cli/style-reference.ts",
+    "measure-arc": "node --experimental-strip-types src/cli/measure-arc.ts",
+    "check-arc-art": "node --experimental-strip-types src/cli/check-arc-art.ts",
+    "check-swing-strip": "node --experimental-strip-types src/cli/check-swing-strip.ts",
+    "check-decals": "node --experimental-strip-types src/cli/check-decals.ts",
+    "swing-dps": "node --experimental-strip-types src/cli/swing-dps.ts"
+  }
+}

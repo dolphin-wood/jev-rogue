@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Rig test</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; background: #14121f; color: #e8e3d8; font: 13px/1.5 ui-monospace, monospace; }
+    main { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+    h1 { font-size: 16px; margin: 0 0 4px; }
+    p { color: #8792b5; margin: 0 0 16px; }
+    .row { display: flex; gap: 24px; flex-wrap: wrap; }
+    figure { margin: 0; }
+    figcaption { color: #8792b5; margin-top: 6px; }
+    canvas { background: #2a2740; image-rendering: pixelated; display: block; }
+    .controls { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+    button { background: #221f33; color: #e8e3d8; border: 1px solid #4a4666; padding: 6px 12px; font: inherit; cursor: pointer; }
+    button[aria-pressed="true"] { background: #3b3558; border-color: #8fdcff; }
+    label { display: inline-flex; gap: 6px; align-items: center; color: #c9cfe8; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Rig test: the warden, frames vs a cut-out skeleton</h1>
+    <p>Left: the delivered frames as the game plays them. Right: the same drawing cut into six parts on a skeleton, animated in code.</p>
+    <div class="controls" id="moves"></div>
+    <div class="controls">
+      <label><input type="checkbox" id="pixel" checked /> render at art resolution (what the game would show)</label>
+      <label><input type="checkbox" id="joints" /> show joints</label>
+    </div>
+    <div class="row">
+      <figure><canvas id="frames" width="384" height="384"></canvas><figcaption>frames</figcaption></figure>
+      <figure><canvas id="rig" width="384" height="384"></canvas><figcaption>skeleton</figcaption></figure>
+    </div>
+  </main>
+  <script type="module" src="/src/rig-test.ts"></script>
+</body>
+</html>

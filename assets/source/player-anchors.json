@@ -1,0 +1,431 @@
+{
+  "player_s_idle0": {
+    "grip": [
+      20,
+      35
+    ],
+    "offhand": [
+      44,
+      35
+    ],
+    "bladeAngleDeg": -115
+  },
+  "player_s_idle1": {
+    "grip": [
+      20,
+      35
+    ],
+    "offhand": [
+      44,
+      35
+    ],
+    "bladeAngleDeg": -115
+  },
+  "player_s_idle2": {
+    "grip": [
+      20,
+      35
+    ],
+    "offhand": [
+      44,
+      35
+    ],
+    "bladeAngleDeg": -115
+  },
+  "player_s_idle3": {
+    "grip": [
+      20,
+      35
+    ],
+    "offhand": [
+      44,
+      35
+    ],
+    "bladeAngleDeg": -115
+  },
+  "player_s_walk0": {
+    "grip": [
+      20,
+      35
+    ],
+    "offhand": [
+      44,
+      35
+    ],
+    "bladeAngleDeg": -115
+  },
+  "player_s_walk1": {
+    "grip": [
+      20,
+      34
+    ],
+    "offhand": [
+      45,
+      34
+    ],
+    "bladeAngleDeg": -115
+  },
+  "player_s_walk2": {
+    "grip": [
+      20,
+      35
+    ],
+    "offhand": [
+      44,
+      35
+    ],
+    "bladeAngleDeg": -115
+  },
+  "player_s_walk3": {
+    "grip": [
+      20,
+      34
+    ],
+    "offhand": [
+      43,
+      34
+    ],
+    "bladeAngleDeg": -115
+  },
+  "player_s_windup": {
+    "grip": [
+      23,
+      31
+    ],
+    "offhand": [
+      42,
+      34
+    ],
+    "bladeAngleDeg": -115
+  },
+  "player_s_follow": {
+    "grip": [
+      16,
+      38
+    ],
+    "offhand": [
+      46,
+      36
+    ],
+    "bladeAngleDeg": -115
+  },
+  "player_s_dash": {
+    "grip": [
+      20,
+      36
+    ],
+    "offhand": [
+      44,
+      36
+    ],
+    "bladeAngleDeg": -115
+  },
+  "player_s_hurt0": {
+    "grip": [
+      20,
+      38
+    ],
+    "offhand": [
+      44,
+      38
+    ],
+    "bladeAngleDeg": -115
+  },
+  "player_s_hurt1": {
+    "grip": [
+      20,
+      38
+    ],
+    "offhand": [
+      44,
+      38
+    ],
+    "bladeAngleDeg": -115
+  },
+  "player_n_idle0": {
+    "grip": [
+      44,
+      32
+    ],
+    "offhand": [
+      20,
+      32
+    ],
+    "bladeAngleDeg": -65
+  },
+  "player_n_idle1": {
+    "grip": [
+      44,
+      32
+    ],
+    "offhand": [
+      20,
+      32
+    ],
+    "bladeAngleDeg": -65
+  },
+  "player_n_idle2": {
+    "grip": [
+      44,
+      32
+    ],
+    "offhand": [
+      20,
+      32
+    ],
+    "bladeAngleDeg": -65
+  },
+  "player_n_idle3": {
+    "grip": [
+      44,
+      32
+    ],
+    "offhand": [
+      20,
+      32
+    ],
+    "bladeAngleDeg": -65
+  },
+  "player_n_walk0": {
+    "grip": [
+      44,
+      32
+    ],
+    "offhand": [
+      20,
+      32
+    ],
+    "bladeAngleDeg": -65
+  },
+  "player_n_walk1": {
+    "grip": [
+      44,
+      31
+    ],
+    "offhand": [
+      21,
+      31
+    ],
+    "bladeAngleDeg": -65
+  },
+  "player_n_walk2": {
+    "grip": [
+      44,
+      32
+    ],
+    "offhand": [
+      20,
+      32
+    ],
+    "bladeAngleDeg": -65
+  },
+  "player_n_walk3": {
+    "grip": [
+      44,
+      31
+    ],
+    "offhand": [
+      19,
+      31
+    ],
+    "bladeAngleDeg": -65
+  },
+  "player_n_windup": {
+    "grip": [
+      41,
+      28
+    ],
+    "offhand": [
+      22,
+      31
+    ],
+    "bladeAngleDeg": -65
+  },
+  "player_n_follow": {
+    "grip": [
+      48,
+      35
+    ],
+    "offhand": [
+      18,
+      33
+    ],
+    "bladeAngleDeg": -65
+  },
+  "player_n_dash": {
+    "grip": [
+      44,
+      33
+    ],
+    "offhand": [
+      20,
+      33
+    ],
+    "bladeAngleDeg": -65
+  },
+  "player_n_hurt0": {
+    "grip": [
+      44,
+      35
+    ],
+    "offhand": [
+      20,
+      35
+    ],
+    "bladeAngleDeg": -65
+  },
+  "player_n_hurt1": {
+    "grip": [
+      44,
+      35
+    ],
+    "offhand": [
+      20,
+      35
+    ],
+    "bladeAngleDeg": -65
+  },
+  "player_w_idle0": {
+    "grip": [
+      20,
+      34
+    ],
+    "offhand": [
+      45,
+      35
+    ],
+    "bladeAngleDeg": 180
+  },
+  "player_w_idle1": {
+    "grip": [
+      20,
+      34
+    ],
+    "offhand": [
+      45,
+      35
+    ],
+    "bladeAngleDeg": 180
+  },
+  "player_w_idle2": {
+    "grip": [
+      20,
+      34
+    ],
+    "offhand": [
+      45,
+      35
+    ],
+    "bladeAngleDeg": 180
+  },
+  "player_w_idle3": {
+    "grip": [
+      20,
+      34
+    ],
+    "offhand": [
+      45,
+      35
+    ],
+    "bladeAngleDeg": 180
+  },
+  "player_w_walk0": {
+    "grip": [
+      20,
+      34
+    ],
+    "offhand": [
+      45,
+      35
+    ],
+    "bladeAngleDeg": 180
+  },
+  "player_w_walk1": {
+    "grip": [
+      20,
+      33
+    ],
+    "offhand": [
+      46,
+      34
+    ],
+    "bladeAngleDeg": 180
+  },
+  "player_w_walk2": {
+    "grip": [
+      20,
+      34
+    ],
+    "offhand": [
+      45,
+      35
+    ],
+    "bladeAngleDeg": 180
+  },
+  "player_w_walk3": {
+    "grip": [
+      20,
+      33
+    ],
+    "offhand": [
+      44,
+      34
+    ],
+    "bladeAngleDeg": 180
+  },
+  "player_w_windup": {
+    "grip": [
+      24,
+      30
+    ],
+    "offhand": [
+      42,
+      34
+    ],
+    "bladeAngleDeg": 180
+  },
+  "player_w_follow": {
+    "grip": [
+      17,
+      37
+    ],
+    "offhand": [
+      48,
+      36
+    ],
+    "bladeAngleDeg": 180
+  },
+  "player_w_dash": {
+    "grip": [
+      20,
+      35
+    ],
+    "offhand": [
+      45,
+      36
+    ],
+    "bladeAngleDeg": 180
+  },
+  "player_w_hurt0": {
+    "grip": [
+      20,
+      37
+    ],
+    "offhand": [
+      45,
+      38
+    ],
+    "bladeAngleDeg": 180
+  },
+  "player_w_hurt1": {
+    "grip": [
+      20,
+      37
+    ],
+    "offhand": [
+      45,
+      38
+    ],
+    "bladeAngleDeg": 180
+  }
+}

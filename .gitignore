@@ -1,0 +1,22 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build
+dist/
+.vercel/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+assets/.placeholder
+frame*.png
+
+# TypeScript incremental build state
+*.tsbuildinfo

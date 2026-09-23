@@ -1,0 +1,13 @@
+{
+  "name": "@jr/game",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "phaser": "^3.90.0"
+  },
+  "dependencies": {
+    "@jr/core": "workspace:*",
+    "@jr/director": "workspace:*"
+  }
+}

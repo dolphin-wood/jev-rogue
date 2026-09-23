@@ -1,0 +1,71 @@
+# Overnight task list (2026-09-23)
+
+A working checklist, updated as each task lands. Each entry says what was done and how it was verified.
+
+Status: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` evaluated, not done (with the reason)
+
+## Order
+
+Art first (it unblocks the enemies), then the gameplay tasks, then balance with the harness, then Jev last — Jev calls cost money, so they start only once the game plays well on the rule arm.
+
+## Tasks
+
+- [x] **0. Wire the delivered art** — 896 frames in the atlas: new enemy sheets (warden, bellringer, rifter, snarecaster, delver, cinderling, sower), lancer and sentinel sheets, boss attack poses, elite and enemy VFX. Everything marked "after delivery" in `art-workorder-codex.md`.
+- [x] **1. New enemies and attacks** — implement the archetypes the delivered sheets are for, with elite variants that attack differently (research: `docs/research/enemy-expansion.md`).
+- [x] **2. NPCs** — bigger, more visible, and nothing in front of them (no obstacles, no breakables).
+- [x] **3. Idle enemies** — research how idle/dormant enemies should behave, and whether whole-map hard tracking is right.
+- [x] **4. Kill rewards** — killing an enemy gives almost nothing today.
+- [x] **5. Elite room waves** — a floor on the number of waves; a single-wave elite room is too easy.
+- [x] **6. Spell types** — evaluate whether to add spell kinds.
+- [x] **7. Affix categories** — evaluate adding affixes; `scatter + repeat` is dominant and `repeat` shows up nearly every run.
+- [x] **8. Spell balance** — no dead spells, no overtuned ones; measured, not guessed.
+- [x] **9. Rule Director** — adapt to the player's state and build preference: every spell and affix stays in the pool, weighted by state and build (the Jev arm decides these weights itself).
+- [x] **10. Build progression** — make sure a player can assemble a mature build before the boss rather than fighting it with nothing; reduce frustration (investigate, then test).
+- [x] **11. (Optional) Render performance** — frame drops when many effects fire at once, e.g. several kills together.
+- [x] **12. Jev** — only after the above: connect and debug the Jev arm (`TYPESAFE_API_KEY` in `.env.local`), keeping call counts low.
+
+## Log
+
+- **1 (in progress).** `sim/attacks.ts`: six attack primitives (rift, mine, tether, lob, slow field, disc) and the seven archetypes (warden, bellringer, rifter, snarecaster, delver, cinderling, sower), each with an elite form that is a different attack; elite forms for the old roster (shooter pin shot, turret rift lance, sentinel sight beam, orbiter seedwake, tank shock cleave, summoner ward tether). Rostered into all four compositions. Tests: `attacks.test.ts` (12). Balance: first harness pass 10/24 survived (warden bash 28% of hearts lost, mines 15%); tuned warden (slower, rarer, 120° plate, 30% pass-through, threat 3.0) and mines (fewer, smaller trigger), taught the reference player to flank and read the new hazards → 16/24.
+- **0 (in progress).** New sheets wired: lancer and sentinel on their own sheets (tints removed), sentinel barrel sprite, warden plate sprite, special poses for every new body and elite form, rift/mine/tether/lob/slow-field/disc/mound/ward-aura VFX, spike sprites for the spike drives and the lancer's flying spikes.
+- **2 done.** Vendors drawn 1.6× with a warm light pool and their trade badge (`icon_npc_*`) bobbing overhead; the ground round each vendor and three rows in front is cleared of walls, pillars and breakables (`clearVendorGround`). Checked in the browser.
+- **4 done.** Every kill drops mana orbs (1, +1 for heavy bodies, +2 for elites; 5 mana each); elites always drop 2 coins; coin chance 22% → 35%; a streak (3+ kills within 2 s) banks extra rage.
+- **5 done.** Elite rooms can no longer choose a single wave (code constraint on the question's options), and the three elite presets arrive in two waves. Test: 20 seeds of elite rooms all have ≥ 2 waves.
+- **3 done.** Research in `docs/research/idle-pursuit-pacing.md`. Unaware bodies take an idle role (guard: stands and scans, sees in a 140° cone past close range; patrol: walks a two-point beat; idler: wanders; sleeper: wakes only on close proximity or a hit, shows a drifting "z"), glance at each other now and then, and hear the sword and the dash through walls. The alarm spreads as a ripple (140–400 ms by distance) instead of waking a group on one frame. The first hit on an unaware body lands at double (the ambush). On pursuit: a body that loses sight of the player for 1.8 s stops and searches for 0.9 s before following on, instead of tracking perfectly through stone. A room holding only unaware bodies after the fight has started wakes the nearest after 4 s, so a sleeper can never stall a room. The alert "!" is the delivered `icon_status_alert`.
+- **Harness fixes found on the way.** Stationary bodies could be placed on floor the player cannot reach (a pocket walled off by stubs) — spawns now only land on reachable floor. The reference player could stall (holding a firing line with no mana, or swinging at a body behind a pillar) — it now closes in when a target goes 5 s without losing health. No timeouts after both.
+- **6 done.** Three spells for roles the pool lacked, built from the bolt: Frost Nova (a short ring of ice, for being surrounded), Seeker Swarm (hunting darts, for not being able to aim), Fault Line (a stone blade that pierces a line, for corridors). Icons added to the work order.
+- **7 done.** Seven affixes in three new families — trajectory (`pierce`, `seek`, `ricochet`), element (`kindle`, `rime`, `blight`: any spell carries fire, ice or poison) and tempo (`haste`: a kill cuts the cooldown); `overload` was dropped because it scaled a number, which doc 013's rule (enforced by a test) forbids for affixes. `repeat` and `scatter` now cost mana for what they add (repeat ×1.45/1.9/2.35, scatter ×1.15/1.45/1.75, and they multiply), an echo lands at 75% and a side cast at 60%: measured, top-tier repeat + scatter went from dominant to 0.7× the bare bolt against a target in front (its value is now being surrounded). Brand's detonation was the strongest single affix (5× on a pack) and was cut. Icons for the new affixes added to the work order.
+- **8 done.** New `pnpm spell-bench`: every attack alone on a key for 20 s with a run's mana, at one body and a bunched pack (close-range shapes at arm's length), against the pool's median; plus affix loadouts on the plain bolt. Fixed: hook damage (brand, harvest, chain arcs) was never counted in `damageDealt`. Tuned: Wildfire Field (7× the median on a pack → 2.4×), Void Maw, Blink Strike and Scatter Shot down; Shock Arc, Spirit Ally, Frost Needle, Venom Spit up; Stone Ward now shoves and hurts what stands beside it as it rises (it was a dead key). No attack is now flagged overtuned or dead.
+- **9 done.** Every legal card stays in the pool; the rule arm now reads the whole build, not only the stated style. New card facts (`cardNeedsFor`, shared by the scene and the harness): `build` (the style the keys actually lean — revealed preference), `bottleneck` (eases what the build simulation says limits it: damage, cast frequency, mana, accuracy), `synergy` (an element the keys carry, or its infusion affix), `upgrade` (raises a held spell or affix). The weights multiply them (doc 007). The Jev arm is asked the same questions over the same facts. Tests: infusion weighed up with a matching element, bottleneck affixes weighed up, revealed style followed.
+- **10 done.** Measured with a new build-at-boss snapshot in the harness (`builds at the boss`). The losing runs reached the boss with 3.6 hearts against the winners' 5.6, and with spell levels near 1.5 a key. Changes: the stop before the boss mends 3 hearts (`PREBOSS_MEND_HEARTS`); the reference player now uses the blacksmith with its remaining gold (it never had, so the harness measured a boss fought without the stop's purpose). Also found: the first cut at `repeat`/`scatter` was too hard (survival 14 → 6 of 24); scatter is now free with half-strength side casts, repeat costs +35% a tier. Result: 19/24 survived, boss 19/20 beaten (was 16/23), 6.0 hearts and 8.1 spell levels at the boss.
+- **0 done.** Also wired: the boss's attack poses per phase (windup, commit, leap, slam), the delivered action-bar verbs (`icon_action_attack/spin/dodge`), the armour mark `ui_shield`, a status mark over each body (`icon_status_*`: freeze, stun, burn, poison, chill, stagger), the tank's greatsword sprite (scaled uniformly, as the art rules require), and floors 4–7 as further plain layouts.
+- **1 done.** Docs 005 (roster table, attack kinds, elite forms, idle roles and pursuit) and 003 (kill pay, the last stop's mend) updated. `pnpm verify` green. Final 24-run harness: 21/24 survived, boss 21/22 beaten (2.26 hearts lost, 39 s), no timeouts; hearts lost led by the boss (12%), tank bullets (11%), mines (11%), burn (9%) and the warden (9%) — no single new body dominates.
+- **11 done.** Every per-frame `Text` (HUD numbers, keycaps, boss title, damage numbers, marks over heads) is now kept by key and redrawn only on change (`ftext`, doc 008). Measured with twelve burning, poisoned bodies and damage numbers on: 13.5 ms mean / 20.4 ms p95 → 6.9 / 8.4 (refresh-capped); killing all twelve at once no longer shows. Also fixed on the way: Frost Nova's even shard count left a gap exactly on the aim line.
+- **12 done.** 101 paid Jev requests in total (two smoke calls, two full runs of 44 and 43, two five-call probes, two from the browser). Tooling: `pnpm jev-run <seeds> <budget>` and `pnpm jev-probe`, both running the Worker's handler in-process with a hard call budget and a JSON-lines log (never the key). The game takes `?director=jev`, and the dev proxy is now a middleware running the same handler, so it loads `.env.local` from the repository root and adds the model, which the old `server.proxy` rule did neither of. Bugs found against the live model:
+  - One declined question threw away the whole request, despite doc 002 saying "that single decision"; a decline now goes to the rule table on its own.
+  - Jev's two-decimal rounding drifted an eight-option question to 0.99, which the ±0.01 check rejected; the tolerance now scales with the option count.
+  - Several questions gave Jev nothing to match. The encounter questions named labels that were not in the state (`clear_speed`, `recent_damage`, "the charter"), the options were bare names, and `npc_room` said "Rarely", which is a count. Every option now says when it fits, in labels the state carries (a new rule in doc 002). Mean confidence on those questions went from about 0.5 to about 0.9, and fallback mass is now near zero.
+  - Verified: the second full run had 43/43 requests answered by Jev with no declines. The probe shows the adaptation: for a strong player, elite 100%, tank anchor and two waves; for a struggling one, rewards graded up 100%, sparse 99%, trickle 96%, far-front entry and no elite. Latency p50 about 240 ms, p90 under 400 ms; about 100k input tokens a run.
+
+## Follow-ups (2026-09-23, after review)
+
+- [x] **Mana binds again.** Regeneration 5% → 2% of the cap a second; mana orbs only from heavy bodies and elites. Harness: time below the cheapest key 32% → 40%.
+- [x] **Deaths that burst wait.** The elite lancer's and `volatile`'s spikes grow out of the corpse, hang (0.45 / 0.52 s) and fly; `volatile` at most two a room. Per-room affix caps (`AFFIXES.max_enemies`) are now enforced at spawn — `shielded` had never been capped.
+- [x] **Rooms play in rounds** (doc 005, 014): each round in band on its own, the room's pressure its hardest round's. Median combat room 11 s → 22 s, build rooms 38 s.
+- [x] **Mines are answerable.** Touched, a seed flashes for 0.32 s before it bursts; a seed nobody set off goes out harmlessly; the sower's death seeds scatter past arm's length and arm slowly.
+- [x] **Enemies less sluggish.** Acceleration 320 → 700 px/s² with heavy bodies at half, the gait's push-and-settle halved, mid-weight bodies ~15% faster.
+- [x] **Ward tether** strains visibly while stood in, breaks into sparks when cut, and the first one of a session says how to cut it.
+- [x] **Warden reworked** into a gunner (its arm is drawn as a gun): holds 84 px, raises the gun with its reach drawn on the floor ray by ray, fires a Metal Slug shotgun-style dragon's-breath blast (instant, one hit and a burn, stops at walls, nothing on the floor), reloads standing. Plate, guard, sweep, slam and disc removed.
+- [x] **Still walk cycles found**: the five expansion sheets' walk frames are one drawing (0% difference). A code waddle stands in; real cycles are in the art work order.
+- [x] **Screen shake** is a setting: on / reduced (default) / off; translation only; no full-screen flash.
+- [x] **Director questions grouped by category** (pacing, room, mood, layout, enemies, portals, cards) on the room plan page and the debug panel.
+- [x] **Rig test** (`/rig-test.html`): the warden cut into six parts on a skeleton against its frames. Finding: motion is continuous, but a cut-out from one flat drawing leaves holes and stray outline pixels when a limb swings, and rotation resamples the pixel art; a skeleton needs parts drawn separately, with overlap.
+- [x] **Shake only when hurt**; invincible still shows the damage numbers it does not take.
+- [x] **Bullet system after Metal Slug**:
+  - [x] B0. Code-baked pixel sprites (`fx/sheets.ts`): effect frames generated at the art's pixel, palette-banded, baked to textures at boot — no waiting on the art pipeline for effects.
+  - [x] B1. A muzzle flash on every enemy shot, sized by the weapon's weight; heavy shots hold the frame.
+  - [x] B2. Enemy projectiles as stretched two-frame tracers with a hot core and a dark rim, a shape per family.
+  - [x] B3. Impacts: a spark and dust where a shot meets stone, a fizzle where one is spent, a harder hit on the player.
+  - [x] B4. Sound by weight: a low layer under heavy shots.
+  - [x] B5. Player spells: a cast flash at the hand in the element's colour; a dear spell kicks the body back (no hitstop: the player's own cast should never stall them).
+  - [x] B6. The warden's blast as baked frames, masked to the rays the sim cut at walls.

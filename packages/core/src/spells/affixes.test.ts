@@ -1,0 +1,146 @@
+import { describe, expect, it } from "vitest";
+import {
+  SPELL_AFFIXES, AFFIX_TIERS, SPELL_SHAPES, spellAffixById, spellAffixIcon, spellAffixMagnitude,
+  affixFits, affixFitsLine, itemShape,
+} from "./affixes.ts";
+import { ITEMS } from "./items.ts";
+import type { AffixHook } from "./affixes.ts";
+
+describe("the affix pool", () => {
+  it("has unique ids and names", () => {
+    expect(new Set(SPELL_AFFIXES.map((a) => a.id)).size).toBe(SPELL_AFFIXES.length);
+    expect(new Set(SPELL_AFFIXES.map((a) => a.name)).size).toBe(SPELL_AFFIXES.length);
+  });
+
+  it("gives every affix exactly three tiers", () => {
+    // Doc 013: fine enough that a duplicate always means something, coarse
+    // enough that a low-tier duplicate of a high-tier affix is not wasted.
+    for (const a of SPELL_AFFIXES)
+      expect({ id: a.id, n: a.tiers.length }).toEqual({ id: a.id, n: AFFIX_TIERS });
+  });
+
+  it("climbs: every tier is strictly stronger than the one below", () => {
+    /*
+     * The one number a player has to track is the tier, so the tier has to
+     * mean something on its own. An affix whose tier 2 is sideways from its
+     * tier 1 turns a duplicate from a reward into a question.
+     */
+    for (const a of SPELL_AFFIXES) {
+      const m = a.tiers.map((t) => spellAffixMagnitude(t.effect));
+      expect({ id: a.id, m }).toEqual({ id: a.id, m: [...m].sort((x, y) => x - y) });
+      expect({ id: a.id, grows: m[2]! > m[0]! }).toEqual({ id: a.id, grows: true });
+    }
+  });
+
+  it("hooks every affix onto a moment the simulation already has", () => {
+    /*
+     * This is the assertion that keeps the pool implementable. Each of these
+     * is a place `sim` already reaches — three are the payload triggers, the
+     * rest are world events — so an affix is a use of `firePayloadChild`
+     * rather than a request for new machinery.
+     */
+    const real: readonly AffixHook[] = ["hit", "expire", "wall", "kill", "cast", "hurt", "dash", "swing"];
+    for (const a of SPELL_AFFIXES)
+      expect({ id: a.id, ok: real.includes(a.hook) }).toEqual({ id: a.id, ok: true });
+  });
+
+  it("covers the offensive, the economic and the defensive", () => {
+    /*
+     * Not a balance assertion — a coverage one. A pool that hooks only `hit`
+     * would make every build the same build, because the only decision left
+     * would be which projectile carries it.
+     */
+    const hooks = new Set(SPELL_AFFIXES.map((a) => a.hook));
+    expect(hooks.has("hit")).toBe(true);
+    expect(hooks.has("kill")).toBe(true);
+    expect(hooks.has("cast")).toBe(true);
+    // Something that fires when the player is losing, so the pool is not
+    // exclusively a reward for already winning.
+    expect(hooks.has("hurt") || hooks.has("dash")).toBe(true);
+    expect(hooks.size).toBeGreaterThanOrEqual(5);
+  });
+
+  it("cannot express a bare number, which is the point", () => {
+    /*
+     * Doc 013's anti-collapse rule: "An affix adds or changes an event. A
+     * spell level and a gold purchase scale numbers." It also says why this
+     * has to be schema-enforced rather than trusted — the cheap kind is easier
+     * to author, so the pool fills with it silently.
+     *
+     * The structural guarantee is that `AffixEffect` has no member that names
+     * a spell's damage, mana or cooldown. This asserts it over the authored
+     * data too, so a future member cannot quietly reintroduce one.
+     */
+    const forbidden = /damage|mana|cooldown|crit|speed_mult|_mult/;
+    for (const a of SPELL_AFFIXES)
+      for (const t of a.tiers) {
+        const keys = Object.keys(t.effect).join(" ");
+        expect({ id: a.id, keys, clean: !forbidden.test(keys) })
+          .toEqual({ id: a.id, keys, clean: true });
+      }
+  });
+
+  it("says what it does in words, at every tier", () => {
+    // The card screen exists so an item can be read. An affix with no text is
+    // an affix the player has to learn by dying.
+    for (const a of SPELL_AFFIXES) {
+      expect(a.description.length).toBeGreaterThan(40);
+      for (const t of a.tiers) expect(t.text.length).toBeGreaterThan(8);
+    }
+  });
+
+  it("names an icon for every affix", () => {
+    // The names are the art request. If this list changes, the work order has
+    // to change with it, and a test is the only thing that will say so.
+    expect(SPELL_AFFIXES.map(spellAffixIcon).sort()).toEqual([
+      "icon_affix_blight", "icon_affix_bloom", "icon_affix_brand", "icon_affix_chain",
+      "icon_affix_echo", "icon_affix_fork", "icon_affix_harvest", "icon_affix_haste", "icon_affix_kindle",
+      "icon_affix_pierce", "icon_affix_repeat", "icon_affix_resonance", "icon_affix_retort", "icon_affix_ricochet",
+      "icon_affix_rime", "icon_affix_scatter", "icon_affix_seek",
+      "icon_affix_shatter", "icon_affix_slipstream", "icon_affix_ward",
+    ]);
+  });
+
+  it("looks up by id and refuses an unknown one", () => {
+    expect(spellAffixById("fork")?.name).toBe("Fork");
+    expect(spellAffixById("damage_up")).toBeNull();
+  });
+
+  it("names the spell shapes it works on, and every shape has takers", () => {
+    for (const a of SPELL_AFFIXES) {
+      expect(a.shapes.length, a.id).toBeGreaterThan(0);
+      for (const s of a.shapes) expect(SPELL_SHAPES).toContain(s);
+    }
+    // A hook that needs a projectile is not offered to a spell without one.
+    for (const a of SPELL_AFFIXES)
+      if (a.hook === "hit" || a.hook === "kill" || a.hook === "expire" || a.hook === "wall")
+        for (const s of a.shapes) expect(["bolt", "orbit"], `${a.id} on ${s}`).toContain(s);
+    expect(affixFits(spellAffixById("shatter")!, "field")).toBe(false);
+    expect(affixFits(spellAffixById("ward")!, "summon")).toBe(true);
+    // Every shape in the pool has at least one affix that fits it.
+    for (const s of SPELL_SHAPES)
+      expect(SPELL_AFFIXES.some((a) => affixFits(a, s)), s).toBe(true);
+  });
+
+  it("reads an item's shape, with a projectile as the default", () => {
+    expect(itemShape(ITEMS.get("magic_bolt"))).toBe("bolt");
+    expect(itemShape(ITEMS.get("spirit_blades"))).toBe("orbit");
+    expect(itemShape(ITEMS.get("wildfire_field"))).toBe("field");
+    expect(itemShape(null)).toBe("bolt");
+  });
+
+  it("says where it fits, in words the card can carry", () => {
+    expect(affixFitsLine(spellAffixById("ward")!)).toBe("fits any spell");
+    expect(affixFitsLine(spellAffixById("chain")!)).toBe("fits bolt, orbit");
+  });
+
+  it("fits nine slots with room to choose", () => {
+    /*
+     * Doc 013: three spells, three affix slots each. A pool barely larger than
+     * the slots means every run converges on holding all of them, and the
+     * decision disappears. Twelve against nine is thin on purpose — duplicates
+     * are supposed to be common, because a duplicate is an upgrade.
+     */
+    expect(SPELL_AFFIXES.length).toBeGreaterThanOrEqual(12);
+  });
+});

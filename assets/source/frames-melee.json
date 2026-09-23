@@ -1,0 +1,4507 @@
+{
+  "total": 896,
+  "counts": {
+    "reuse": 106,
+    "rename": 3,
+    "draw": 787
+  },
+  "retired": [
+    "player_n_0",
+    "player_n_1",
+    "player_s_0",
+    "player_s_1",
+    "player_w_0",
+    "player_w_1"
+  ],
+  "drawBySize": {
+    "32px": 84,
+    "64px": 564,
+    "96px": 116,
+    "256px": 23
+  },
+  "frames": [
+    {
+      "name": "player_s_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_s_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_s_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_s_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_s_idle2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_s_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_s_idle3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_s_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_s_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_s_follow",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_s_dash",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_s_hurt0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_s_hurt1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_n_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_n_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_n_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_n_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_n_idle2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_n_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_n_idle3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_n_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_n_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_n_follow",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_n_dash",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_n_hurt0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_n_hurt1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_w_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_w_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_w_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_w_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_w_idle2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_w_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_w_idle3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_w_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_w_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_w_follow",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_w_dash",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_w_hurt0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "player_w_hurt1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "weapon_player_sword",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_impact_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_impact_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_impact_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_bolt_0",
+      "px": "64x128",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_bolt_1",
+      "px": "64x128",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_bolt_2",
+      "px": "64x128",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_offhand_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_offhand_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_offhand_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_offhand_3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_groundfire_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_groundfire_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_groundfire_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_groundfire_3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "weapon_enemy_rusher",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_s_dormant",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_s_idle0",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_rusher_s_idle1",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_rusher_s_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_s_lunge",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_n_dormant",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_n_idle0",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_rusher_n_idle1",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_rusher_n_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_n_lunge",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_w_dormant",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_w_idle0",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_rusher_w_idle1",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_rusher_w_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_w_lunge",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_s_dormant",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_s_idle0",
+      "px": "96x96",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_tank_s_idle1",
+      "px": "96x96",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_tank_s_windup",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_s_lunge",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_n_dormant",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_n_idle0",
+      "px": "96x96",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_tank_n_idle1",
+      "px": "96x96",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_tank_n_windup",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_n_lunge",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_w_dormant",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_w_idle0",
+      "px": "96x96",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_tank_w_idle1",
+      "px": "96x96",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_tank_w_windup",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_w_lunge",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_s_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_s_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_s_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_s_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_n_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_n_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_n_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_n_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_w_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_w_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_w_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_w_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_s_walk0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_s_walk1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_s_walk2",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_s_walk3",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_n_walk0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_n_walk1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_n_walk2",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_n_walk3",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_w_walk0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_w_walk1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_w_walk2",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_w_walk3",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_s_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_s_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_s_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_s_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_n_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_n_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_n_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_n_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_w_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_w_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_w_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_w_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_s_walk0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_s_walk1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_s_walk2",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_s_walk3",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_n_walk0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_n_walk1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_n_walk2",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_n_walk3",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_w_walk0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_w_walk1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_w_walk2",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_w_walk3",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_s_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_s_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_s_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_s_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_n_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_n_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_n_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_n_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_w_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_w_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_w_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_w_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_s_dormant",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_s_idle0",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_shooter_s_idle1",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_shooter_s_tele",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_shooter_n_dormant",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_n_idle0",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_shooter_n_idle1",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_shooter_n_tele",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_shooter_w_dormant",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_w_idle0",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_shooter_w_idle1",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_shooter_w_tele",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_orbiter_s_dormant",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_s_idle0",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_orbiter_s_idle1",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_orbiter_s_tele",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_orbiter_n_dormant",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_n_idle0",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_orbiter_n_idle1",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_orbiter_n_tele",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_orbiter_w_dormant",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_w_idle0",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_orbiter_w_idle1",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_orbiter_w_tele",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_summoner_s_dormant",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_s_idle0",
+      "px": "96x96",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_summoner_s_idle1",
+      "px": "96x96",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_summoner_s_tele",
+      "px": "96x96",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_summoner_n_dormant",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_n_idle0",
+      "px": "96x96",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_summoner_n_idle1",
+      "px": "96x96",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_summoner_n_tele",
+      "px": "96x96",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_summoner_w_dormant",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_w_idle0",
+      "px": "96x96",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_summoner_w_idle1",
+      "px": "96x96",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_summoner_w_tele",
+      "px": "96x96",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_rusher_s_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_n_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_w_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_s_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_n_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_w_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_s_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_n_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_w_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_s_dormant1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_n_dormant1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_w_dormant1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_s_dormant1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_n_dormant1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_w_dormant1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_s_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_s_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_n_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_n_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_w_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_w_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_s_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_s_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_n_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_n_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_w_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_w_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_s_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_s_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_n_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_n_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_w_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_w_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_s_hit0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_s_hit1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_n_hit0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_n_hit1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_w_hit0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_w_hit1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_s_tele",
+      "px": "96x96",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_tank_s_hit0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_s_hit1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_n_tele",
+      "px": "96x96",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_tank_n_hit0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_n_hit1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_w_tele",
+      "px": "96x96",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_tank_w_hit0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_w_hit1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_turret_dormant",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_turret_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_turret_idle0",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_turret_idle1",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_turret_tele",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "enemy_turret_tele1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_turret_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_turret_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rusher_death",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_death",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_turret_death",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_orbiter_death",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_death",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_death",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_s_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_s_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_s_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_s_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_s_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_s_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_s_dormant",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_s_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_s_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_s_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_s_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_s_lunge",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_n_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_n_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_n_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_n_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_n_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_n_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_n_dormant",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_n_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_n_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_n_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_n_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_n_lunge",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_w_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_w_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_w_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_w_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_w_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_w_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_w_dormant",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_w_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_w_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_w_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_w_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_w_lunge",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_death",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_lancer_burst",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sentinel_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sentinel_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sentinel_dormant",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sentinel_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sentinel_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sentinel_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sentinel_tele",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sentinel_tele1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sentinel_death",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_spike_bone",
+      "px": "16x6",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_spike_gold",
+      "px": "16x6",
+      "status": "draw"
+    },
+    {
+      "name": "weapon_enemy_sentinel_barrel",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "weapon_enemy_tank",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_break_pot_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_break_pot_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_break_pot_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_break_crate_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_break_crate_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_break_crate_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_break_urn_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_break_urn_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_break_urn_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_s_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_s_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_s_attack",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_n_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_n_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_n_attack",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_w_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_w_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_w_attack",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_s_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_s_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_s_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_s_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_n_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_n_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_n_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_n_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_w_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_w_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_w_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pet_w_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_merchant_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_merchant_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_blacksmith_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_blacksmith_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "tile_floor_0",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "tile_floor_1",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "tile_floor_2",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "tile_floor_3",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "tile_floor_4",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "tile_floor_5",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "tile_floor_6",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "tile_floor_7",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "tile_wall_solid",
+      "px": "64x64",
+      "status": "rename",
+      "from": "tile_wall_c"
+    },
+    {
+      "name": "tile_wall_n",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "tile_wall_e",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "tile_wall_s",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "tile_wall_w",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "tile_wall_ne",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "tile_wall_es",
+      "px": "64x64",
+      "status": "rename",
+      "from": "tile_wall_se"
+    },
+    {
+      "name": "tile_wall_sw",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "tile_wall_wn",
+      "px": "64x64",
+      "status": "rename",
+      "from": "tile_wall_nw"
+    },
+    {
+      "name": "tile_wall_ns",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "tile_wall_ew",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "tile_wall_nes",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "tile_wall_esw",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "tile_wall_swn",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "tile_wall_wne",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "tile_wall_nesw",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_portal_shut_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_portal_shut_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_portal_open_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_portal_open_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_portal_open_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_portal_open_3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_reward_spell_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_reward_spell_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_reward_affix_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_reward_affix_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_reward_gold_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "prop_reward_gold_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "pickup_heart_0",
+      "px": "32x32",
+      "status": "draw"
+    },
+    {
+      "name": "pickup_heart_1",
+      "px": "32x32",
+      "status": "draw"
+    },
+    {
+      "name": "pickup_coin_0",
+      "px": "32x32",
+      "status": "draw"
+    },
+    {
+      "name": "pickup_coin_1",
+      "px": "32x32",
+      "status": "draw"
+    },
+    {
+      "name": "deco_crack_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "deco_crack_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "deco_drain_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "deco_drain_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "deco_stain_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "deco_stain_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "deco_rubble_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "deco_rubble_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "deco_moss_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "deco_moss_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "deco_scorch",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "deco_bones",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "boss_p1_idle0",
+      "px": "256x256",
+      "status": "reuse"
+    },
+    {
+      "name": "boss_p1_idle1",
+      "px": "256x256",
+      "status": "reuse"
+    },
+    {
+      "name": "boss_p1_tele",
+      "px": "256x256",
+      "status": "reuse"
+    },
+    {
+      "name": "boss_p2_idle0",
+      "px": "256x256",
+      "status": "reuse"
+    },
+    {
+      "name": "boss_p2_idle1",
+      "px": "256x256",
+      "status": "reuse"
+    },
+    {
+      "name": "boss_p2_tele",
+      "px": "256x256",
+      "status": "reuse"
+    },
+    {
+      "name": "boss_p3_idle0",
+      "px": "256x256",
+      "status": "reuse"
+    },
+    {
+      "name": "boss_p3_idle1",
+      "px": "256x256",
+      "status": "reuse"
+    },
+    {
+      "name": "boss_p3_tele",
+      "px": "256x256",
+      "status": "reuse"
+    },
+    {
+      "name": "boss_p1_windup",
+      "px": "256x256",
+      "status": "draw"
+    },
+    {
+      "name": "boss_p1_commit",
+      "px": "256x256",
+      "status": "draw"
+    },
+    {
+      "name": "boss_p1_hit0",
+      "px": "256x256",
+      "status": "draw"
+    },
+    {
+      "name": "boss_p1_hit1",
+      "px": "256x256",
+      "status": "draw"
+    },
+    {
+      "name": "boss_p1_leap",
+      "px": "256x256",
+      "status": "draw"
+    },
+    {
+      "name": "boss_p1_slam",
+      "px": "256x256",
+      "status": "draw"
+    },
+    {
+      "name": "boss_p2_windup",
+      "px": "256x256",
+      "status": "draw"
+    },
+    {
+      "name": "boss_p2_commit",
+      "px": "256x256",
+      "status": "draw"
+    },
+    {
+      "name": "boss_p2_hit0",
+      "px": "256x256",
+      "status": "draw"
+    },
+    {
+      "name": "boss_p2_hit1",
+      "px": "256x256",
+      "status": "draw"
+    },
+    {
+      "name": "boss_p2_leap",
+      "px": "256x256",
+      "status": "draw"
+    },
+    {
+      "name": "boss_p2_slam",
+      "px": "256x256",
+      "status": "draw"
+    },
+    {
+      "name": "boss_p3_windup",
+      "px": "256x256",
+      "status": "draw"
+    },
+    {
+      "name": "boss_p3_commit",
+      "px": "256x256",
+      "status": "draw"
+    },
+    {
+      "name": "boss_p3_hit0",
+      "px": "256x256",
+      "status": "draw"
+    },
+    {
+      "name": "boss_p3_hit1",
+      "px": "256x256",
+      "status": "draw"
+    },
+    {
+      "name": "boss_p3_leap",
+      "px": "256x256",
+      "status": "draw"
+    },
+    {
+      "name": "boss_p3_slam",
+      "px": "256x256",
+      "status": "draw"
+    },
+    {
+      "name": "bullet_player_a_0",
+      "px": "32x32",
+      "status": "reuse"
+    },
+    {
+      "name": "bullet_player_a_1",
+      "px": "32x32",
+      "status": "reuse"
+    },
+    {
+      "name": "bullet_player_b_0",
+      "px": "32x32",
+      "status": "reuse"
+    },
+    {
+      "name": "bullet_player_b_1",
+      "px": "32x32",
+      "status": "reuse"
+    },
+    {
+      "name": "bullet_player_c_0",
+      "px": "32x32",
+      "status": "reuse"
+    },
+    {
+      "name": "bullet_player_c_1",
+      "px": "32x32",
+      "status": "reuse"
+    },
+    {
+      "name": "bullet_enemy_a_0",
+      "px": "32x32",
+      "status": "reuse"
+    },
+    {
+      "name": "bullet_enemy_a_1",
+      "px": "32x32",
+      "status": "reuse"
+    },
+    {
+      "name": "bullet_enemy_b_0",
+      "px": "32x32",
+      "status": "reuse"
+    },
+    {
+      "name": "bullet_enemy_b_1",
+      "px": "32x32",
+      "status": "reuse"
+    },
+    {
+      "name": "hazard_spike_0",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "hazard_spike_1",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "hazard_poison_0",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "hazard_poison_1",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "hazard_ice_0",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "hazard_ice_1",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "hazard_crumble_0",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "hazard_crumble_1",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "prop_pillar_0",
+      "px": "64x128",
+      "status": "reuse"
+    },
+    {
+      "name": "prop_pillar_1",
+      "px": "64x128",
+      "status": "reuse"
+    },
+    {
+      "name": "prop_brazier_0",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "prop_brazier_1",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "prop_mirror_0",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "prop_mirror_1",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "prop_manawell_0",
+      "px": "96x96",
+      "status": "reuse"
+    },
+    {
+      "name": "prop_manawell_1",
+      "px": "96x96",
+      "status": "reuse"
+    },
+    {
+      "name": "prop_chest_0",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "prop_chest_1",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "prop_shop_0",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "prop_shop_1",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "prop_restfire_0",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "prop_restfire_1",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "icon_door_combat",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "icon_door_elite",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "icon_door_treasure",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "icon_door_shop",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "icon_door_rest",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "icon_door_boss",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "icon_magic_bolt",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_shock_arc",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_spark_spray",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_stone_shard",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_ember_dart",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_frost_needle",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_venom_spit",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_arc_lance",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_scatter_shot",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_cinder_burst",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_glacier_spike",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_void_orb",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_plague_bloom",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_impact_carrier",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_fuse_carrier",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_wall_carrier",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_piercing_carrier",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_mortar_carrier",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_spirit_blades",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_wildfire_field",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_stone_ward",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_blink_strike",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_void_maw",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_spirit_ally",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_affix_fork",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_affix_chain",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_affix_brand",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_affix_harvest",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_affix_echo",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_affix_bloom",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_affix_shatter",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_affix_repeat",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_affix_scatter",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_affix_ward",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_affix_retort",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_affix_slipstream",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_affix_resonance",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_stat_fleet",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_stat_second_wind",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_stat_long_stride",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_stat_vigour",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_stat_steady_nerve",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_stat_deep_well",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_stat_quickening",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_stat_leeching_edge",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_stat_keen_edge",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_stat_long_reach",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_stat_swift_hand",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_stat_wrath",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_reward_stat",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_reward_spell",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_reward_affix",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_reward_gold",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "ui_elite_badge",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_ward_0",
+      "px": "32x32",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_ward_1",
+      "px": "32x32",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_brand_mark",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "prop_reward_stat_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "icon_npc_merchant",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_npc_smith",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_action_attack",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_action_spin",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_action_dodge",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_status_burn",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_status_poison",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_status_chill",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_status_freeze",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_status_stun",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_status_stagger",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "icon_status_alert",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "ui_shield",
+      "px": "16x16",
+      "status": "draw"
+    },
+    {
+      "name": "shadow_rusher",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "shadow_shooter",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "shadow_turret",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "shadow_orbiter",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "shadow_summoner",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "shadow_player",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "shadow_tank",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "shadow_lancer",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "shadow_sentinel",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "shadow_boss_p1",
+      "px": "256x256",
+      "status": "draw"
+    },
+    {
+      "name": "ui_heart_full",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "ui_heart_empty",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "ui_mana_pip",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "ui_card_frame",
+      "px": "64x64",
+      "status": "reuse"
+    },
+    {
+      "name": "vfx_rift_seg_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_rift_seg_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_rift_seg_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_rift_seg_3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_rift_cap_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_rift_cap_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_rift_burst_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_rift_burst_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_rift_burst_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_tether_seg_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_tether_seg_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_tether_node_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_tether_node_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_tether_node_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_ward_aura_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_ward_aura_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_ward_aura_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_lob_shadow_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_lob_shadow_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_lob_shadow_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_lob_ring_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_lob_ring_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_s_lob",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_n_lob",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_shooter_w_lob",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_turret_telegraph_rift",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sentinel_telegraph_beam",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_s_cleave_shock",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_n_cleave_shock",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_tank_w_cleave_shock",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_s_tether",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_n_tether",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_summoner_w_tether",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_lob_shot_0",
+      "px": "32x32",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_lob_shot_1",
+      "px": "32x32",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_lob_shot_2",
+      "px": "32x32",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_lob_shot_3",
+      "px": "32x32",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_beam_seg_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_beam_seg_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_beam_seg_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_beam_seg_3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_beam_cap_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_beam_cap_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_s_idle0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_s_idle1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_s_walk0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_s_walk1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_s_walk2",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_s_walk3",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_s_dormant0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_s_dormant1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_s_windup",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_s_lunge",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_s_plant",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_s_hit0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_s_hit1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_n_idle0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_n_idle1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_n_walk0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_n_walk1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_n_walk2",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_n_walk3",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_n_dormant0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_n_dormant1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_n_windup",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_n_lunge",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_n_plant",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_n_hit0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_n_hit1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_w_idle0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_w_idle1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_w_walk0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_w_walk1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_w_walk2",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_w_walk3",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_w_dormant0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_w_dormant1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_w_windup",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_w_lunge",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_w_plant",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_w_hit0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_w_hit1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_death",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_s_throw_windup",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_s_throw_release",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_s_idle_bare0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_s_idle_bare1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_n_throw_windup",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_n_throw_release",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_n_idle_bare0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_n_idle_bare1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_w_throw_windup",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_w_throw_release",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_w_idle_bare0",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_warden_w_idle_bare1",
+      "px": "96x96",
+      "status": "draw"
+    },
+    {
+      "name": "weapon_enemy_warden_shield",
+      "px": "64x96",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_s_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_s_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_s_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_s_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_s_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_s_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_s_dormant0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_s_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_s_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_s_cast",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_s_field",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_s_burst",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_s_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_s_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_s_peal_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_s_peal_release",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_n_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_n_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_n_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_n_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_n_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_n_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_n_dormant0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_n_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_n_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_n_cast",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_n_field",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_n_burst",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_n_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_n_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_n_peal_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_n_peal_release",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_w_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_w_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_w_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_w_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_w_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_w_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_w_dormant0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_w_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_w_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_w_cast",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_w_field",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_w_burst",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_w_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_w_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_w_peal_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_w_peal_release",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_bellringer_death",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rifter_dormant",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rifter_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rifter_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rifter_telegraph",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rifter_erupt",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rifter_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rifter_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rifter_death",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_rifter_telegraph_walk",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_plate_spark_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_plate_spark_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_plate_spark_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_plate_disc_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_plate_disc_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_plate_disc_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_plate_disc_3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_slowfield_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_slowfield_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_slowfield_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_slowfield_3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_peal_ring_0",
+      "px": "128x128",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_peal_ring_1",
+      "px": "128x128",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_peal_ring_2",
+      "px": "128x128",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_peal_ring_3",
+      "px": "128x128",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_mine_seed_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_mine_seed_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_mine_armed_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_mine_armed_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_mine_armed_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_mine_armed_3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_mine_burst_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_mine_burst_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_mine_burst_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_s_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_s_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_s_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_s_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_s_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_s_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_s_dormant0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_s_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_s_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_s_fire",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_s_whip",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_s_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_s_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_s_anchor_cast",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_n_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_n_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_n_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_n_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_n_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_n_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_n_dormant0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_n_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_n_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_n_fire",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_n_whip",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_n_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_n_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_n_anchor_cast",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_w_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_w_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_w_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_w_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_w_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_w_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_w_dormant0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_w_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_w_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_w_fire",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_w_whip",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_w_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_w_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_w_anchor_cast",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_snarecaster_death",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_s_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_s_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_s_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_s_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_s_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_s_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_s_dormant0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_s_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_s_burrow0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_s_burrow1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_s_emerge0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_s_emerge1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_s_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_s_lunge",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_s_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_s_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_n_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_n_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_n_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_n_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_n_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_n_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_n_dormant0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_n_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_n_burrow0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_n_burrow1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_n_emerge0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_n_emerge1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_n_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_n_lunge",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_n_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_n_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_w_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_w_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_w_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_w_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_w_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_w_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_w_dormant0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_w_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_w_burrow0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_w_burrow1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_w_emerge0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_w_emerge1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_w_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_w_lunge",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_w_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_w_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_delver_death",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_s_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_s_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_s_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_s_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_s_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_s_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_s_dormant0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_s_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_s_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_s_lob",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_s_burning0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_s_burning1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_s_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_s_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_s_flare_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_n_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_n_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_n_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_n_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_n_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_n_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_n_dormant0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_n_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_n_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_n_lob",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_n_burning0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_n_burning1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_n_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_n_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_n_flare_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_w_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_w_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_w_walk0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_w_walk1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_w_walk2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_w_walk3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_w_dormant0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_w_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_w_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_w_lob",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_w_burning0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_w_burning1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_w_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_w_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_w_flare_windup",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_cinderling_death",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_s_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_s_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_s_idle2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_s_idle3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_s_dormant0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_s_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_s_cast",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_s_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_s_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_s_bloom_cast",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_n_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_n_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_n_idle2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_n_idle3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_n_dormant0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_n_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_n_cast",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_n_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_n_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_n_bloom_cast",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_w_idle0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_w_idle1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_w_idle2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_w_idle3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_w_dormant0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_w_dormant1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_w_cast",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_w_hit0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_w_hit1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_w_bloom_cast",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "enemy_sower_death",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_chain_seg_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_chain_seg_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_chain_hook_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_chain_hook_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_chain_live_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_chain_live_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_chain_live_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_chain_live_3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_mound_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_mound_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_mound_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_mound_3",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_emerge_ring_0",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_emerge_ring_1",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_emerge_ring_2",
+      "px": "64x64",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_coal_0",
+      "px": "32x32",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_coal_1",
+      "px": "32x32",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_coal_2",
+      "px": "32x32",
+      "status": "draw"
+    },
+    {
+      "name": "vfx_coal_3",
+      "px": "32x32",
+      "status": "draw"
+    }
+  ]
+}

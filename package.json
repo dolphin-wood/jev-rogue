@@ -1,0 +1,46 @@
+{
+  "name": "jev-rogue",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.10.0",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "content:check": "node --experimental-strip-types packages/harness/src/cli/content-check.ts",
+    "harness": "node --experimental-strip-types packages/harness/src/cli/harness.ts",
+    "verify": "pnpm typecheck && pnpm test && pnpm assets:check && pnpm assets:decal-check && pnpm content:check && pnpm spell-check && pnpm harness",
+    "dev": "vite --config packages/game/vite.config.ts",
+    "build": "vite build --config packages/game/vite.config.ts",
+    "assets:check": "node --experimental-strip-types packages/harness/src/cli/assets-check.ts",
+    "assets:request-art": "node --experimental-strip-types packages/harness/src/cli/generate-request-art.ts && node --experimental-strip-types packages/harness/src/cli/generate-expansion-art.ts",
+    "assets:normalize-animations": "node --experimental-strip-types packages/harness/src/cli/normalize-generated-animations.ts",
+    "assets:normalize-part-a": "node --experimental-strip-types packages/harness/src/cli/normalize-part-a.ts",
+    "assets:normalize-expansion": "node --experimental-strip-types packages/harness/src/cli/normalize-expansion.ts",
+    "assets:art": "pnpm assets:request-art && node --experimental-strip-types packages/harness/src/cli/assets-art.ts && pnpm assets:check && pnpm assets:decal-check",
+    "assets:decal-check": "node --experimental-strip-types packages/harness/src/cli/check-decals.ts assets",
+    "assets:placeholder": "node --experimental-strip-types packages/harness/src/cli/assets-placeholder.ts",
+    "play": "node --experimental-strip-types packages/harness/src/cli/play.ts",
+    "jev-run": "NODE_USE_ENV_PROXY=1 node --no-warnings --env-file=.env.local --experimental-strip-types packages/harness/src/cli/jev-run.ts",
+    "jev-probe": "NODE_USE_ENV_PROXY=1 node --no-warnings --env-file=.env.local --experimental-strip-types packages/harness/src/cli/jev-probe.ts",
+    "variety": "node --experimental-strip-types packages/harness/src/cli/variety.ts",
+    "frame": "node --experimental-strip-types packages/harness/src/cli/frame.ts",
+    "calibrate": "node --experimental-strip-types packages/harness/src/cli/calibrate.ts",
+    "assets:facing-check": "node --experimental-strip-types packages/harness/src/cli/facing-check.ts",
+    "spell-check": "node --experimental-strip-types packages/harness/src/cli/spell-check.ts",
+    "spell-bench": "node --experimental-strip-types packages/harness/src/cli/spell-bench.ts",
+    "fx:preview": "node --experimental-strip-types --no-warnings packages/harness/src/cli/fx-preview.ts",
+    "melee-rooms": "node --experimental-strip-types packages/harness/src/cli/melee-rooms.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/pngjs": "^6.0.5",
+    "pngjs": "^7.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  }
+}

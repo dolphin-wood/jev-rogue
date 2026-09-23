@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>jev-rogue</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #0d0b1f; overflow: hidden; }
+      /* The canvas is positioned and sized from script; see main.ts. */
+      /* Phaser centres the canvas inside this; see present() in main.ts. */
+      #game { position: fixed; inset: 0; }
+      /* Keep the integer-authored pixels intact when the fixed backing store
+         is fitted to a browser window whose dimensions are not an exact
+         multiple of the game view. */
+      #game canvas { image-rendering: pixelated; }
+    </style>
+  </head>
+  <body>
+    <div id="game"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
