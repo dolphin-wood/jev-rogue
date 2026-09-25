@@ -308,6 +308,9 @@ const VARIETY_QUESTION = {
   ],
 } as const;
 
+/** How many spell doors a promised school sits out after it has been promised. */
+const SCHOOL_REPEAT_WINDOW = 2;
+
 export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Director {
   const style: QuestionStyle = deps.state_format ?? "labels";
   const briefed = style === "briefing" && mode === "jev";
@@ -322,6 +325,15 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
   const signal = deps.signal ?? new AbortController().signal;
 
   let consecutiveFailures = 0;
+  /**
+   * The schools the last spell doors promised, most recent last
+   * (`SCHOOL_REPEAT_WINDOW`). Doc 002's rule for a sequence — enforce it in
+   * code (finding 5) — applied to the school: a player who took a storm
+   * spell was offered storm on door after door, because the rule arm puts
+   * half its mass on the style's two schools and Jev leans on the schools
+   * already held, and nothing in either could see the run of them.
+   */
+  const recentSchools: SpellSchool[] = [];
   /** The questions in an answer that the rule table filled because Jev declined them. */
   const declinedIn = new WeakMap<Record<string, Distribution>, ReadonlySet<string>>();
   /** Questions answered by the rule table without being asked, and why (`no_history`). */
@@ -513,6 +525,9 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
       withheld.add(kind);
     }
     choices = { ...choices, kinds: choices.kinds.filter((k) => !withheld.has(k)) };
+    // A school a recent spell door promised sits the next ones out, while three are left to choose from.
+    const fresh = choices.schools.filter((sc) => !recentSchools.includes(sc));
+    if (fresh.length >= 3) choices = { ...choices, schools: fresh };
     const needOptions = [
       ...choices.kinds.map((k) => ({ ...opt(k, KIND_CLAUSE[k] ?? k), ...(KIND_SPEC[k] ? { spec: KIND_SPEC[k]! } : {}) })),
       ...choices.npcKinds.map((k) => ({ ...opt(k, NPC_CLAUSE[k]!), ...(NPC_SPEC[k] ? { spec: NPC_SPEC[k]! } : {}) })),
@@ -832,6 +847,10 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
           return d.choice;
         };
         const school = take("spell_school", choices.schools[0]!) as SpellSchool;
+        if (draft.wantsSchool) {
+          recentSchools.push(school);
+          if (recentSchools.length > SCHOOL_REPEAT_WINDOW) recentSchools.shift();
+        }
         const family = take("stat_family", choices.families[0]!) as StatFamily;
         const doors = assemblePortals({
           kinds: draft.kinds, eliteKind: draft.eliteKind, eliteGrade: draft.eliteGrade,
