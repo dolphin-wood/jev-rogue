@@ -2,6 +2,15 @@
 .env
 .env.*
 !.env.example
+# Wrangler's local secret file and its state directory
+.dev.vars
+.dev.vars.*
+.wrangler/
+
+# Operator-only: invite codes, the script that mints them, and the runbook.
+# Nothing in here is part of the published project.
+local/
+secrets/
 
 # Dependencies
 node_modules/
@@ -15,8 +24,27 @@ dist/
 
 # OS
 .DS_Store
+
+# Tool state: the pnpm store and Claude Code's per-checkout state.
+.pnpm-store/
+.claude/
 assets/.placeholder
 frame*.png
 
 # TypeScript incremental build state
 *.tsbuildinfo
+
+# The side-by-side sound set rendered for A/B listening (`?sfx=next`).
+assets/sfx-next/
+
+# Audio experiments: sample cache, render scripts and A/B output. Not shipped.
+audio-lab/
+
+# Image-generation drafts and temporary visual review boards, including the
+# generated facing check; delivery sources live in assets/source/.
+art-review/
+# Screenshots and preview boards are not documentation.
+docs/**/*.png
+# Raw image-generator drafts. Only the one-off `normalize-*` scripts read them;
+# the normalised sheets beside them are the sources `pnpm assets:art` builds from.
+assets/source/**/*-draft.png

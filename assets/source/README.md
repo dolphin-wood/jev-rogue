@@ -24,5 +24,9 @@ Minor idle animation uses raster translations, part motion and highlight
 pulses; attack poses have separate artwork. The protected-magenta rule maps
 shop stock to amber and the UI heart to red.
 
-See `docs/art-directions.png`, `docs/art-audit.json` and
-`docs/art-delivery.md` for review evidence and validation.
+See `docs/art-audit.json` for the validation record.
+
+Raw generator drafts (`*-draft.png`) are kept out of the repository. They are
+the inputs of the one-off `normalize-*` scripts under `packages/harness/src/cli/`,
+which turned them into the normalised sheets checked in here; rebuilding the
+atlas needs only those sheets.
