@@ -65,7 +65,7 @@ export interface BossLabActions {
 /** The moves, in the order the panel offers them. */
 const MOVES = ["slam", "quake", "leap", "hook", "storm"] as const;
 /** The blades the boss can be asked for: what its phases choose, and the backhand. */
-const BLADES: readonly MeleeKind[] = ["greatslash", "greatsweep", "greatcleave", "dashcut", "maul"];
+const BLADES: readonly MeleeKind[] = ["greatslash", "greatsweep", "dashcut", "maul"];
 const SPEEDS: readonly [number, string][] = [[1, "1×"], [0.5, "½×"], [0.25, "¼×"], [0, "pause"]];
 
 const BTN = "background:#221d46;color:#c9cfe8;border:1px solid #2a2750;font:inherit;padding:1px 6px;margin:0 3px 3px 0;cursor:pointer;border-radius:2px";

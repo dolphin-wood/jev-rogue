@@ -2469,13 +2469,13 @@ function chooseBossAct(w: World, e: Enemy): BossAct | null {
   if (d < BOSS_CLOSE_PX) {
     // At his feet the side matters: his sweeps go out of his front only, so beside him is the cleave's, behind him the backhand's.
     if (bossBehind(e, p)) opts.push(["maul", 4], ["slam", 1]);
-    else if (level) opts.push(["greatcleave", 3], ["maul", 2], ["slam", 1]);
-    else opts.push(["greatsweep", 3], ["greatslash", 3], ["maul", 2], ["greatcleave", 1.5], ["slam", 1]);
+    // Beside him, where the sweeps do not reach, the backhand (the greatcleave was taken out: it read strangely).
+    else if (level) opts.push(["maul", 4], ["slam", 1]);
+    else opts.push(["greatsweep", 3], ["greatslash", 3], ["maul", 2], ["slam", 1]);
   } else if (d < BOSS_FAR_PX) {
     opts.push(["quake", 1], ["storm", 1]);
     if (ph >= 2) opts.push(["hook", 1.5]);
-    // The cleave comes down along a line at them, level or in front; behind him it cannot.
-    opts.push(bossBehind(e, p) ? ["maul", 2] : ["greatcleave", 2]);
+    if (bossBehind(e, p)) opts.push(["maul", 2]);
     opts.push(["greatslash", 3], ["greatsweep", 2]);
     opts.push(["volley", 1]);
   } else {

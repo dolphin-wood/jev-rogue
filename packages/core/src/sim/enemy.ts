@@ -1838,10 +1838,8 @@ function advanceMelee(e: Enemy, world: World, dtMs: number): void {
        */
       if (e.archetype === "boss" && e.bossString.length > 0) {
         let next = e.bossString.shift()!;
-        // A string's cleave comes down at them level with him or in front of him; behind him, where it cannot, the backhand closes it.
-        if (next.kind === "greatcleave" && bossBehind(e, world.player)) next = { ...next, kind: "maul" };
-        // A sweep or a slash goes out of his front only: at a player who has gone round beside him, the cleave comes down on them instead.
-        if ((next.kind === "greatsweep" || next.kind === "greatslash") && bossLevel(e, world.player)) next = { ...next, kind: "greatcleave" };
+        // A sweep or a slash goes out of his front only: at a player who has gone round beside or behind him, the backhand instead.
+        if ((next.kind === "greatsweep" || next.kind === "greatslash") && (bossLevel(e, world.player) || bossBehind(e, world.player))) next = { ...next, kind: "maul" };
         const cuts = (k: MeleeKind | null): boolean => k === "greatsweep" || k === "greatslash";
         if (cuts(next.kind) && cuts(e.meleeKind)) e.strafe = e.strafe === 1 ? -1 : 1;
         e.bossLinked = true;
@@ -2033,7 +2031,7 @@ function chooseMelee(e: Enemy): MeleeKind | null {
     // On top of him: the sweep, across his front.
     if (e.closeIn) return ph.melee.near;
     // From phase II the strings open on the light slash too (`BossPhase.strings`), turn and turn about.
-    return e.phase >= 2 ? (["greatslash", "greatsweep", "greatcleave"] as const)[e.casts % 3]! : e.casts % 2 === 0 ? "greatsweep" : "greatcleave";
+    return e.casts % 2 === 0 ? "greatsweep" : "greatslash";
   }
   /*
    * The spiked bodies have **three** moves and only one of them travels.

@@ -932,7 +932,7 @@ export const BOSS_PHASES: readonly BossPhase[] = [
       { pattern: ring({ speed: 134, count: 8, interval: 2.0, rotate_deg: 24, gap_deg: 46, size: 0.95 }), duration: 2.0 },
       { pattern: rest(), duration: 1.0 },
     ]),
-    rate: 0.85, speed: 1.05, melee: { far: "greatcleave", near: "greatsweep" }, farPx: 999,
+    rate: 0.85, speed: 1.05, melee: { far: "greatslash", near: "greatsweep" }, farPx: 999,
     strings: {},
   },
   {
@@ -968,8 +968,9 @@ export const BOSS_PHASES: readonly BossPhase[] = [
     rate: 1, speed: 1.15, melee: { far: "dashcut", near: "greatsweep" }, farPx: 120,
     strings: {
       // x--x----X
-      greatslash: [{ kind: "greatslash", at: 3 }, { kind: "greatcleave", at: 8 }],
-      greatsweep: [{ kind: "greatcleave", at: 6 }],
+      // The greatcleave is out of his hand (it read strangely); the sweep closes the strings in its place.
+      greatslash: [{ kind: "greatslash", at: 3 }, { kind: "greatsweep", at: 8 }],
+      greatsweep: [{ kind: "greatslash", at: 6 }],
       dashcut: [{ kind: "greatsweep", at: 6 }],
     },
   },
@@ -1007,10 +1008,10 @@ export const BOSS_PHASES: readonly BossPhase[] = [
     ]),
     rate: 1.1, speed: 1.3, melee: { far: "dashcut", near: "greatsweep" }, farPx: 110,
     strings: {
-      // x--x--x-----X: three slashes, and the cleave held a beat longer than phase II's.
-      greatslash: [{ kind: "greatslash", at: 3 }, { kind: "greatslash", at: 6 }, { kind: "greatcleave", at: 12 }],
-      greatsweep: [{ kind: "greatslash", at: 4 }, { kind: "greatcleave", at: 10 }],
-      dashcut: [{ kind: "greatslash", at: 5 }, { kind: "greatcleave", at: 10 }],
+      // x--x--x-----X: three slashes, and the sweep held a beat longer than phase II's.
+      greatslash: [{ kind: "greatslash", at: 3 }, { kind: "greatslash", at: 6 }, { kind: "greatsweep", at: 12 }],
+      greatsweep: [{ kind: "greatslash", at: 4 }, { kind: "greatsweep", at: 10 }],
+      dashcut: [{ kind: "greatslash", at: 5 }, { kind: "greatsweep", at: 10 }],
     },
   },
 ];
