@@ -2436,10 +2436,11 @@ export const BOSS_VOLLEY_MS = beats(8);
 // 3.5 s where it was 2.6: a blade given up for a turn that fits the range was a blade traded for a wave.
 const BOSS_BLADE_CHASE_MS = 3500;
 /** The rest after a turn, in beats, by phase; and up to this many more, drawn. */
-const BOSS_REST_BEATS: Readonly<Record<number, number>> = { 1: 7, 2: 6, 3: 5 };
-const BOSS_REST_JITTER_BEATS = 2;
+// Down from 7 / 6 / 5 and up to 2 more: played, the rests were long enough that the fight felt slack.
+const BOSS_REST_BEATS: Readonly<Record<number, number>> = { 1: 5, 2: 4, 3: 3 };
+const BOSS_REST_JITTER_BEATS = 1.5;
 /** After a heavy turn — a leap, a slam, a quake, a string of three — this many beats more: the big opening. */
-const BOSS_HEAVY_REST_BEATS = 4;
+const BOSS_HEAVY_REST_BEATS = 3;
 const BOSS_HEAVY_ACTS: ReadonlySet<string> = new Set(["leap", "slam", "quake", "storm"]);
 
 /** The rest after the turn that has just ended, ms. */
