@@ -230,6 +230,13 @@ const CRESCENT: Omit<CrescentOptions, "width" | "fade" | "tailCut"> = {
  */
 const WAVE_BODY_PX = 11;
 /** The king's sword wave in the danger palette: a dark lip, red light, an orange half-light and a hot core. */
+/**
+ * **The colour a struck body is filled with** for its flash, and a dying
+ * one's pop: a pale warm grey at about four fifths of full, not 255 white.
+ * Full white at the camera's zoom was a blinding block on every hit — the
+ * flash has to say *that landed*, not light the screen.
+ */
+const HIT_FLASH_FILL = 0xd2c6cc;
 const KING_WAVE = { lip: 0x1a0806, aura: 0xe8344a, mid: mix(0xe8344a, 0xffb070, 0.6), core: 0xfff0d8 } as const;
 const WAVE_FLASH_PX = 10;
 /** How thick the crescent starts, as a fraction of its full thickness. */
@@ -11086,7 +11093,7 @@ export class PlayScene extends Phaser.Scene {
         // Swells through the flash and holds, as though about to give.
         .setScale((1 / ART_SCALE) * (flash ? 1 + 0.12 * u : 1.12 + 0.04 * u))
         .setDepth(7);
-      if (flash) img.setTintFill(0xffffff);
+      if (flash) img.setTintFill(HIT_FLASH_FILL);
       this.sprites.add(img);
       /*
        * The death frame under a filter: a hot glow laid over it additively,
@@ -12387,7 +12394,7 @@ export class PlayScene extends Phaser.Scene {
             .setScale((1 / ART_SCALE) * (e.archetype === "lancer" ? 1.7 : 1), 1 / ART_SCALE)
             .setDepth(8.8);
           if (e.archetype === "lancer") weapon.setTint(0xffd24a);
-          if (e.hitFlashMs > 0) weapon.setTintFill(0xffffff);
+          if (e.hitFlashMs > 0) weapon.setTintFill(HIT_FLASH_FILL);
           this.hazardMarks.push(weapon);
         }
         /*
@@ -12479,7 +12486,7 @@ export class PlayScene extends Phaser.Scene {
       const blade = this.add.image(gx, gy, this.textureKey, "weapon_enemy_tank")
         .setOrigin(ENEMY_WEAPON_GRIP_X / 64, 0.5).setRotation(angle)
         .setScale(1 / ART_SCALE).setAlpha(alpha).setDepth(8.8);
-      if (e.hitFlashMs > 0) blade.setTintFill(0xffffff);
+      if (e.hitFlashMs > 0) blade.setTintFill(HIT_FLASH_FILL);
       this.hazardMarks.push(blade);
       return;
     }
@@ -15385,7 +15392,7 @@ function drawEnemy(
         // sorts against the others by where that body is standing.
         .setDepth(bodyDepth(e.y + e.radius, e.id) + 0.002);
       // The barrel is part of the body: it flashes with it when struck.
-      if (e.hitFlashMs > 0) barrel.setTintFill(0xffffff);
+      if (e.hitFlashMs > 0) barrel.setTintFill(HIT_FLASH_FILL);
       group.add(barrel);
     }
   }
@@ -15488,7 +15495,7 @@ function drawEnemy(
      */
     img.setAlpha(0.92);
     img.setScale(base);
-    if (e.hitFlashMs > 0) img.setTintFill(0xffffff);
+    if (e.hitFlashMs > 0) img.setTintFill(HIT_FLASH_FILL);
     group.add(img);
     drawSubspeciesMark(scene, group, textureKey, atlas, e, img, name, flipX);
     return;
@@ -15756,7 +15763,7 @@ function drawEnemy(
    * an enemy struck while winding up or lunging showed no flash at all —
    * missing precisely when the player was hitting it.
    */
-  if (e.hitFlashMs > 0) img.setTintFill(0xffffff);
+  if (e.hitFlashMs > 0) img.setTintFill(HIT_FLASH_FILL);
 
   /*
    * The motion the frames do not carry (`body-feel.ts`): the give as a foot
@@ -15841,13 +15848,13 @@ function drawEnemy(
       .setScale(1 / ART_SCALE)
       .setRotation(blade + Math.PI / 2)
       .setDepth(img.depth + (Math.sin(blade) < -.3 ? -.002 : .002));
-    if (e.hitFlashMs > 0) sword.setTintFill(0xffffff);
+    if (e.hitFlashMs > 0) sword.setTintFill(HIT_FLASH_FILL);
     group.add(sword);
     const fist = `weapon_boss_fist_p${Math.min(3, Math.max(1, e.phase))}`;
     if (atlas.has(fist)) {
       const wrap = scene.add.image(gx, gy, textureKey, fist)
         .setScale(1 / ART_SCALE).setDepth(img.depth + .004);
-      if (e.hitFlashMs > 0) wrap.setTintFill(0xffffff);
+      if (e.hitFlashMs > 0) wrap.setTintFill(HIT_FLASH_FILL);
       group.add(wrap);
     }
   }
@@ -15914,7 +15921,7 @@ function drawSubspeciesMark(
     // Just over its own body, inside the band `bodyDepth` reserves, so it
     // still sorts against other bodies by where this one is standing.
     .setDepth(img.depth + 0.004);
-  if (e.hitFlashMs > 0) decal.setTintFill(0xffffff);
+  if (e.hitFlashMs > 0) decal.setTintFill(HIT_FLASH_FILL);
   group.add(decal);
 }
 
