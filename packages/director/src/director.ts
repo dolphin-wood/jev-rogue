@@ -379,11 +379,14 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
     const sent = briefed && brief && use.kind === "jev"
       ? { briefing: briefingFrom(brief.ctx, { ...brief, deciding: decidingPhrases(Object.keys(questions)) }) }
       : state;
-    const seen = (dists: Record<string, Distribution>, source: DecisionSource, path?: string) => {
+    const seen = (
+      dists: Record<string, Distribution>, source: DecisionSource, path?: string,
+      shown: Record<string, unknown> = source === "jev" ? sent : state,
+    ) => {
       try {
-        // The readout shows what was actually sent to whoever answered.
+        // The readout shows what was actually sent: to Jev when Jev was asked, even if it failed.
         deps.observe?.({
-          meta, state: source === "jev" ? sent : state, questions, dists, source,
+          meta, state: shown, questions, dists, source,
           ...(path ? { fallback_path: path } : {}),
         });
       } catch { /* a readout never breaks a plan */ }
@@ -406,7 +409,8 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
       consecutiveFailures++;
       const path = e instanceof EvaluatorError ? e.path : "invalid";
       const r = await fallback.distributions(questions, state, meta, signal);
-      seen({ ...r.dists }, fallback.kind, path);
+      // A failed request was still sent to Jev: the readout shows what Jev was sent, not the labels the table read after.
+      seen({ ...r.dists }, fallback.kind, path, use.kind === "jev" ? sent : state);
       return { dists: { ...r.dists }, source: fallback.kind, path };
     }
   }

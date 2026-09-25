@@ -575,6 +575,15 @@ describe("the two state formats as arms", () => {
     return { seen, observed, evaluate };
   }
 
+  it("shows the briefing Jev was sent when the request failed, not the labels the rule table read after", async () => {
+    const observed: ObservedRequest[] = [];
+    const failing: Evaluator = async () => { throw new EvaluatorError("timeout", "timed out"); };
+    await createDirector("jev", { evaluate: failing, state_format: "briefing", observe: (r) => observed.push(r) })
+      .planPortals(ctx, choices);
+    expect(observed[0]!.source).toBe("rule");
+    expect(Object.keys(observed[0]!.state)).toEqual(["briefing"]);
+  });
+
   it("sends the briefing on one arm and the label table on the other", async () => {
     const brief = spy("briefing");
     await createDirector("jev", { evaluate: brief.evaluate, state_format: "briefing" }).planPortals(ctx, choices);
@@ -615,8 +624,13 @@ describe("the two state formats as arms", () => {
     expect(observed.length).toBeGreaterThan(0);
     for (const r of observed) {
       expect(r.source).toBe("rule");
-      expect(r.state["briefing"]).toBeUndefined();
-      expect(r.state["health"]).toBe("ok");
+      // The readout shows what Jev was sent; the table's answer shows what it read. Labels give
+      // it weights, so its distributions are not flat; a briefing would have made every one flat.
+      const flat = Object.values(r.dists).every((d) => {
+        const ps = Object.values(d);
+        return ps.every((p) => Math.abs(p - ps[0]!) < 1e-9);
+      });
+      expect(flat).toBe(false);
     }
   });
 });

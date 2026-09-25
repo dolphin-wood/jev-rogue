@@ -2618,7 +2618,12 @@ export class PlayScene extends Phaser.Scene {
         affixes: slot ? slot.affixes.map((a) => `${a.id}${a.tier > 1 ? ` x${a.tier}` : ""}`) : [],
       })),
       enemies: { alive: w.enemies.filter((e) => e.hp > 0).length, pending: w.pendingWaves.length, byArchetype },
-      history: { rooms: this.history.rooms, tensions: this.history.tensions },
+      history: {
+        rooms: this.history.rooms, tensions: this.history.tensions,
+        ...(this.intent?.preset ? { style: this.intent.preset } : {}),
+        ...(this.intent?.free_text ? { words: this.intent.free_text } : {}),
+        decided: (this.history.journal ?? []).flatMap((j) => (j.decided && Object.keys(j.decided).length ? [{ room: j.index, decided: j.decided }] : [])),
+      },
       /*
        * The room round 1 produced, which round 2 was then asked about. It is
        * the reason a room takes two requests rather than one: round 2's
