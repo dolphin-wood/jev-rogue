@@ -200,6 +200,15 @@ export interface Portal {
    * these are drawn as the room ahead instead.
    */
   readonly onward?: boolean;
+  /** The cards the room behind it will offer, by id; see `DoorOffer.cards`. */
+  readonly cards?: readonly string[];
+  /**
+   * **Standing but not yet decided.** The doors rise as soon as the reward is
+   * taken and turn while the Director decides what is behind them; a pending
+   * portal is drawn and cannot be entered (`portalInReach`), and
+   * `resolvePortals` gives it its kind.
+   */
+  readonly pending?: boolean;
   x: number;
   y: number;
   /** Shut until the offer is answered. A shut portal is not drawn. */
@@ -448,9 +457,18 @@ export interface PortalSpec {
   readonly boss?: boolean;
   /** No reward behind it, only the room ahead; see `PortalSpec.onward`. */
   readonly onward?: boolean;
+  /** See `Portal.cards`. */
+  readonly cards?: readonly string[];
+  /** See `Portal.pending`. */
+  readonly pending?: boolean;
 }
 
-function makePortal(spec: PortalSpec, x: number, y: number): Portal {
+/** `count` doors standing while the Director decides what is behind them. */
+export function pendingDoors(count: number): PortalSpec[] {
+  return Array.from({ length: count }, () => ({ reward: "spell" as const, elite: false, type: "combat" as const, pending: true }));
+}
+
+export function makePortal(spec: PortalSpec, x: number, y: number): Portal {
   return {
     reward: spec.reward,
     elite: spec.elite,
@@ -461,6 +479,8 @@ function makePortal(spec: PortalSpec, x: number, y: number): Portal {
     ...(spec.family ? { family: spec.family } : {}),
     grade: spec.grade ?? 1,
     ...(spec.npc ? { npc: spec.npc } : {}),
+    ...(spec.cards ? { cards: spec.cards } : {}),
+    ...(spec.pending ? { pending: true } : {}),
     x, y,
     open: false,
     riseMs: 0,
@@ -521,7 +541,23 @@ export function portalInReach(
   let best: Portal | null = null;
   let bestD = PORTAL_ENTER_RADIUS;
   for (const p of portals) {
-    if (!p.open || p.riseMs < PORTAL_RISE_MS) continue;
+    if (!p.open || p.pending || p.riseMs < PORTAL_RISE_MS) continue;
+    const d = Math.hypot(p.x - player.x, p.y - player.y);
+    if (d > bestD) continue;
+    bestD = d;
+    best = p;
+  }
+  return best;
+}
+
+/** The pending portal the player is standing by, or null: it prompts that the door is opening. */
+export function pendingPortalNear(
+  portals: readonly Portal[], player: { x: number; y: number },
+): Portal | null {
+  let best: Portal | null = null;
+  let bestD = PORTAL_ENTER_RADIUS;
+  for (const p of portals) {
+    if (!p.open || !p.pending) continue;
     const d = Math.hypot(p.x - player.x, p.y - player.y);
     if (d > bestD) continue;
     bestD = d;

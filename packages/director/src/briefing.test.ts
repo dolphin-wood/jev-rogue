@@ -935,7 +935,7 @@ describe("the facts the offer's shape is read off", () => {
     expect(text).toMatch(/- Last 3 cards kept, oldest first: Shock Arc \(tagged spam\); Fleet \(tagged [a-z, ]+\); Kindle \(tagged [a-z, ]+\)/);
   });
 
-  it("writes each room's fight and doors as they were built, with what each door promised", () => {
+  it("writes each room's fight and doors as they were built, with what each door held", () => {
     const encounter = {
       composition: "ranged_heavy", density: "sparse", wave_structure: "steady", anchor: "tank",
       entry: "flanks", subspecies: ["wisp"], subspecies_weight: "some", elite_presence: "one",
@@ -958,17 +958,17 @@ describe("the facts the offer's shape is read off", () => {
     expect(text).toContain("- Room 1: combat, build, compact open arena, mirrored");
     expect(text).toContain("  - fight as built: ranged heavy roster, density sparse, steady waves, entering from the "
       + "flanks, anchored by a tank, variants wisp, one enraged");
-    expect(text).toContain("  - doors out spell promising storm, stat promising movement (elite, grade 2), smith, took affix");
+    expect(text).toContain("  - doors out spell (mostly storm), stat (mostly movement; elite, grade 2), smith, took affix");
     // No record of the Director's own answers beside the rooms: the rooms are the record.
     expect(text).not.toContain("JSON");
   });
 
-  it("tallies what the rolled-up rooms' doors promised, so the run's first spell doors are not lost", () => {
+  it("tallies what the rolled-up rooms' doors held, so the run's first spell doors are not lost", () => {
     const journal = [1, 2, 3, 4, 5, 6, 7].map((i) => room(i, {
       doors: [{ kind: "spell", school: i === 2 ? "void" : "storm" }, { kind: "stat", family: "mana" }],
     }));
     const text = briefingFrom({ ...minimalContext(), history: { ...emptyHistory(), journal } }, { deciding: [] });
-    expect(text).toContain("  - spell doors promised storm, void; stat doors promised mana ×2; no elite doors");
+    expect(text).toContain("  - spell doors mostly storm, void; stat doors mostly mana ×2; no elite doors");
   });
 
   it("says, for a spell offer with an empty key, where a new spell and a copy go", () => {

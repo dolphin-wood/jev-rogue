@@ -14,7 +14,7 @@ import {
   generateRoom, pacingLabels, sampleOne,
   sampleUniform, sampleWithoutReplacement, toRoomPlan, withTemperature,
   allowedTensions, PLAYABLE_ARCHETYPES, FEATURES,
-  assemblePortals, SCHOOL_OF, STYLE_SCHOOLS,
+  assemblePortals, SCHOOL_OF,
   rampDensities, rampAnchors, rampSubspecies, rampElitePresence, rampFor, rampRoster,
   keysLean, UNMEASURED, PORTAL_NEED_TEMPERATURE, PORTAL_TAIL_TEMPERATURE,
   buildFacts, NO_BUILD, enemy,
@@ -22,7 +22,7 @@ import {
 import type {
   CounterScore, Distribution, EncounterProfile, RoomPlan,
   RoomSize, RoomType, Rng, RunContext, SpaceArchetypeId, Tension, Density, Anchor,
-  PortalChoices, RewardCardKind, SpellSchool, StatFamily, NpcKind, EnemyId, SubspeciesWeight, ElitePresence,
+  PortalChoices, RewardCardKind, NpcKind, EnemyId, SubspeciesWeight, ElitePresence,
   KeysLean,
 } from "@jr/core";
 import { EvaluatorError, FALLBACK } from "./types.ts";
@@ -35,9 +35,9 @@ import { choiceQuestion, clampFreeText, INTENT_CLAUSE, offeredKeys } from "./que
 import type { QuestionStyle } from "./questions/common.ts";
 import {
   ANCHOR_SPEC, COMPOSITION_SPEC, DENSITY_SPEC, ELITE_GRADE_SPEC, ELITE_PORTAL_SPEC, ELITE_PRESENCE_SPEC,
-  ENTRY_SPEC, FAMILY_SPEC, KIND_SPEC, NORMAL_GRADE_SPEC, NPC_SPEC,
+  ENTRY_SPEC, KIND_SPEC, NORMAL_GRADE_SPEC, NPC_SPEC,
   SUBSPECIES_WEIGHT_SPEC, VARIETY_SPEC,
-  WAVES_SPEC, cardNegativesDiscriminate, cardNotFor, schoolSpec, subspeciesSpec,
+  WAVES_SPEC, cardNegativesDiscriminate, cardNotFor, subspeciesSpec,
 } from "./questions/specs.ts";
 import { briefingFrom } from "./briefing.ts";
 import type { BriefingCardPool, BriefingRoomNow } from "./briefing.ts";
@@ -173,8 +173,6 @@ interface PortalDraft {
   readonly source: DecisionSource;
   readonly path?: string;
   readonly decisions: readonly Decision[];
-  readonly wantsSchool: boolean;
-  readonly wantsFamily: boolean;
 }
 
 interface PortalAsk {
@@ -335,9 +333,6 @@ const VARIETY_QUESTION = {
   ],
 } as const;
 
-/** How many spell doors a promised school sits out after it has been promised. */
-const SCHOOL_REPEAT_WINDOW = 2;
-
 export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Director {
   const style: QuestionStyle = deps.state_format ?? "labels";
   const briefed = style === "briefing" && mode === "jev";
@@ -352,26 +347,12 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
   const signal = deps.signal ?? new AbortController().signal;
 
   let consecutiveFailures = 0;
-  /**
-   * The schools the last spell doors promised, most recent last
-   * (`SCHOOL_REPEAT_WINDOW`). Doc 002's rule for a sequence — enforce it in
-   * code (finding 5) — applied to the school: a player who took a storm
-   * spell was offered storm on door after door, because the rule arm puts
-   * half its mass on the style's two schools and Jev leans on the schools
-   * already held, and nothing in either could see the run of them.
-   */
-  const recentSchools: SpellSchool[] = [];
   /*
-   * **The sparse-room cap is the rule arm's; the school cap is everyone's.**
-   * Both were written because no arm could see the run. Jev's briefing now
-   * carries every room as it was built — the fight, and each door with what
-   * it promised — so the sparse-room cap holds only for the rule and random
-   * arms, whose tables cannot read it. The school cap stays on every arm:
-   * measured with Jev's own answers in the briefing and the cap off, one run
-   * promised storm on nine spell doors of nine, and replaying its requests
-   * with the record removed moved storm *down*, not up — Jev reads a school
-   * the run keeps promising as the school this run is about. The door-kind
-   * streak cap stays on every arm for the same reason.
+   * **The sparse-room cap is the rule arm's.** It was written because no arm
+   * could see the run; Jev's briefing now carries every room as it was built,
+   * so it holds only for the rule and random arms, whose tables cannot read
+   * it. The door-kind streak cap stays on every arm. There is no school cap:
+   * a door no longer promises a school (`mainTypeOf`).
    */
   const capRuns = mode !== "jev";
   /** The questions in an answer that the rule table filled because Jev declined them. */
@@ -581,9 +562,6 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
       withheld.add(kind);
     }
     choices = { ...choices, kinds: choices.kinds.filter((k) => !withheld.has(k)) };
-    // A school a recent spell door promised sits the next ones out, while three are left to choose from.
-    const fresh = choices.schools.filter((sc) => !recentSchools.includes(sc));
-    if (fresh.length >= 3) choices = { ...choices, schools: fresh };
     const needOptions = [
       ...choices.kinds.map((k) => ({ ...opt(k, KIND_CLAUSE[k] ?? k), ...(KIND_SPEC[k] ? { spec: KIND_SPEC[k]! } : {}) })),
       ...choices.npcKinds.map((k) => ({ ...opt(k, NPC_CLAUSE[k]!), ...(NPC_SPEC[k] ? { spec: NPC_SPEC[k]! } : {}) })),
@@ -800,122 +778,24 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
           eliteGrade = take("elite_grade") === "best" ? 3 : 2;
         }
         const normalGrade = choices.lateGrade && take("normal_grade") === "raised" ? 2 : 1;
-        /*
-         * The doors as they will stand, with the promises still blank: a
-         * vendor's room replaces one of them, so which kinds actually survive
-         * is only knowable once the npc answer is in. That is what decides
-         * whether the school and the family are worth asking at all.
-         */
-        const shape = assemblePortals({
-          kinds, eliteKind, eliteGrade, normalGrade,
-          school: choices.schools[0]!, family: choices.families[0]!, npc,
-        });
-        return {
-          kinds, eliteKind, eliteGrade, normalGrade, npc, rng, source, path, decisions,
-          wantsSchool: shape.some((d) => d.reward === "spell" && !d.npc) && choices.schools.length > 1,
-          wantsFamily: shape.some((d) => d.reward === "stat" && !d.npc) && choices.families.length > 1,
-        };
+        return { kinds, eliteKind, eliteGrade, normalGrade, npc, rng, source, path, decisions };
       },
       /*
-       * The promises, asked only for the doors that exist. `held_schools` and
-       * the bottleneck travel with them because the round they ride in — a
-       * room's round 2 — carries neither.
+       * **Nothing is asked after the kinds.** A spell door named a school and a
+       * stat door a family, each asked in a round of its own and then forced
+       * onto the cards; the badge now names what the door's cards are
+       * (`mainTypeOf`), decided with the doors, so there is no promise left
+       * to ask for.
        */
-      follow(draft) {
-        const q: Record<string, ChoiceQuestion> = {};
-        if (draft.wantsSchool)
-          q.spell_school = choiceQuestion({
-            labels, style,
-            /*
-             * `held_schools` is why this question is not a constant. Asked with
-             * the style alone, the live model answered `storm` for every portal
-             * of two runs — correct for a spam run, and a run that offers one
-             * school fourteen times is a run with one spell door in it. The
-             * schools already on the keys are in the state, and the instruction
-             * names them, so a second school of the style can win once the
-             * first is held.
-             */
-            instructions:
-              /*
-               * Even-handed (finding 4): it names what to weigh, and says
-               * nothing about which kind of school to favour. It used to add
-               * that a school already held "adds least ... a second one widens
-               * nothing", which is a verdict on every option `held_schools`
-               * names; the fact stays in the state and in each option's own
-               * negative.
-               */
-              "One of the portals out of this room offers a spell. Which school should it promise? Weigh the " +
-              "player's stated style and their own words, which way the keys lean, the schools already on the " +
-              "keys (held schools) and what the last fights measured. Before any fight has been measured, the " +
-              "stated style and the player's own words are the evidence. The spell doors earlier in this run, " +
-              "and the school each promised, are in the state. A run whose doors have kept promising one school " +
-              "has settled into it, which a run should not; where no spell door has promised a school yet, this " +
-              "weighs nothing.",
-            options: choices.schools.map((sc) => ({
-              ...opt(sc, schoolText(sc)),
-              spec: schoolSpec(sc, schoolSpells(sc).split(", "), SCHOOL_STYLES[sc] ?? []),
-            })),
-          });
-        if (draft.wantsFamily)
-          q.stat_family = choiceQuestion({
-            labels, style,
-            instructions:
-              /*
-               * **Four subjects, named evenly.** The instruction is read before
-               * the options, so a sentence that argues one family's case decides
-               * the question before Jev reaches the list: two clauses about
-               * levels raising mana costs took `mana` to 95% of answers, on
-               * states whose bar was measuring `little` time short. The facts
-               * stay in the state and on the option that owns them.
-               */
-              "One of the portals out of this room offers a stat upgrade. Which family should it promise? " +
-              "Each names one subject and the state carries all four: survival and movement off health, " +
-              "recent damage, movement pressure and what has been taking the health; mana off the time " +
-              "the bar spent under the cheapest key, how many casts a full bar buys and whether a mana " +
-              "stat has ever been taken; the sword off how much of the damage the blade did and the " +
-              "stated style. Before any fight has been measured, the player's stated style and their own " +
-              "words are what there is to go on, and each family is judged by how well it serves them.",
-            options: choices.families.map((f) => ({
-              ...opt(f, FAMILY_TEXT[f] ?? grounded(`${f} upgrades.`, ["health", "ok"])),
-              ...(FAMILY_SPEC[f] ? { spec: FAMILY_SPEC[f]! } : {}),
-            })),
-          });
-        return {
-          questions: q,
-          state: Object.keys(q).length === 0 ? {} : {
-            held_schools: heldSchools(ctx),
-            gold: ctx.labels.gold,
-            build_shape: ctx.labels.build_shape ?? "forming",
-            // The staff, so the promise is judged against what it is promised
-            // to: the mana family in particular is only worth a door once the
-            // levels have made the bar too small for the keys.
-            ...buildFactsOf(ctx),
-            // The stated style, in the nested shape the control reads it in,
-            // so a promise decided inside a room's round 2 and one decided in
-            // a request of its own are weighed from the same state.
-            intent: { preset: ctx.intent.preset },
-          },
-        };
+      follow() {
+        return { questions: {}, state: {} };
       },
-      finish(draft, answer) {
-        const decisions = [...draft.decisions];
-        const take = (name: string, fallback: string) => {
-          if (!answer?.dists[name]) return fallback;
-          const d = decide(name, answer.dists, answer.source, draft.rng, TEMPERATURE.portal, answer.path);
-          decisions.push(d);
-          return d.choice;
-        };
-        const school = take("spell_school", choices.schools[0]!) as SpellSchool;
-        if (draft.wantsSchool) {
-          recentSchools.push(school);
-          if (recentSchools.length > SCHOOL_REPEAT_WINDOW) recentSchools.shift();
-        }
-        const family = take("stat_family", choices.families[0]!) as StatFamily;
+      finish(draft) {
         const doors = assemblePortals({
           kinds: draft.kinds, eliteKind: draft.eliteKind, eliteGrade: draft.eliteGrade,
-          normalGrade: draft.normalGrade, school, family, npc: draft.npc,
+          normalGrade: draft.normalGrade, npc: draft.npc,
         });
-        return { room_index: ctx.room_index, doors, source: draft.source, decisions };
+        return { room_index: ctx.room_index, doors, source: draft.source, decisions: [...draft.decisions] };
       },
     };
   }
@@ -1601,14 +1481,6 @@ function restrictTo(d: Distribution, keys: readonly string[]): Distribution {
   return Object.fromEntries(keys.map((k) => [k, total > 0 ? (d[k] ?? 0) / total : 1 / keys.length]));
 }
 
-/** The spells a school holds, named, for its option description. */
-function schoolSpells(school: string): string {
-  return Object.entries(SCHOOL_OF as Record<string, string>)
-    .filter(([, sc]) => sc === school)
-    .map(([id]) => id.replace(/_/g, " "))
-    .join(", ");
-}
-
 /** The schools the player can already cast, as labels, for `spell_school`. */
 function heldSchools(ctx: RunContext): string[] {
   const held = [...ctx.slots.flatMap((s) => (s ? [s.base] : [])), ...ctx.inventory.map((i) => i.base)];
@@ -1617,76 +1489,6 @@ function heldSchools(ctx: RunContext): string[] {
     return school ? [school] : [];
   }))].sort();
 }
-
-/** The intent presets each school can serve, from `STYLE_SCHOOLS` read backwards. */
-const SCHOOL_STYLES: Readonly<Record<string, readonly string[]>> = (() => {
-  const out: Record<string, string[]> = {};
-  for (const [style, schools] of Object.entries(STYLE_SCHOOLS))
-    for (const school of schools) {
-      const list = out[school] ?? [];
-      list.push(style);
-      out[school] = list;
-    }
-  return out;
-})();
-
-/**
- * A school's option text. Named only as "storm spells: shock arc, spark spray"
- * the question was answered `storm` for every portal of two runs: the option
- * said what was in the school and never who it was for, so the one school the
- * state's style word appeared next to won every time. It now says which styles
- * it carries, which lets a second school win when the first is already held.
- */
-function schoolText(school: string): string {
-  const styles = SCHOOL_STYLES[school] ?? [];
-  const head = `${school} spells: ${schoolSpells(school)}.`;
-  return styles.length > 0
-    ? grounded(head, ["intent_preset", ...styles] as [ "intent_preset", ...string[] ],
-        ["keys_lean", ...styles] as ["keys_lean", ...string[]])
-    : grounded(head, ["keys_lean", "mixed"]);
-}
-
-/**
- * The four stat families, partitioned across `health`: a hurt player is sold
- * survival, a whole one can afford to buy range or reach. Without the
- * partition a player at `ok` or `full` matched no family at all, and the
- * question spread onto the escape option rather than answering.
- */
-/*
- * **Three clauses each, and each family names only its own subject.**
- *
- * An option's chance of matching rises with the number of clauses it carries
- * and with how common the fields it names are, so a family that borrows a
- * common field wins on arithmetic rather than on the merits. `mana` was given
- * `casts_per_bar` and `mana_stats_taken` on top of the three it already had
- * and took 96% of the answers — and it kept `health is ok`, which is the
- * commonest state in the game and has nothing to do with the bar.
- *
- * So health is the survival and movement families' subject, the bar is mana's,
- * and the blade is the sword's. `mana_stats_taken` stays in the state and in
- * the instruction, weighed without being a fourth match.
- */
-const FAMILY_TEXT: Record<string, string> = {
-  movement: grounded(
-    "Movement: speed, dash cooldown, stride.",
-    ["movement_pressure_recent", "heavy"], ["hurt_by", "shots"], ["health", "full"],
-  ),
-  survival: grounded(
-    "Survival: health, healing, steadier footing.",
-    ["health", "low", "critical"], ["recent_damage", "heavy"], ["hurt_by", "blades", "hazards"],
-  ),
-  mana: grounded(
-    "Mana: a deeper pool, faster regeneration, mana from hits.",
-    // `hurt_by nothing` is mana's share of the one field the four families
-    // cover end to end (doc 002): a player nothing is hurting can spend the
-    // door on throughput rather than on staying alive.
-    ["mana_short_time", "some", "most"], ["casts_per_bar", "few"], ["hurt_by", "nothing"],
-  ),
-  sword: grounded(
-    "Sword: damage, reach, swing speed.",
-    ["sword_share", "some", "most"], ["intent_preset", "melee"], ["keys_lean", "melee"],
-  ),
-};
 
 /**
  * One reward kind, said once: what it pays and when it is worth a portal.

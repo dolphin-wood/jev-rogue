@@ -15,10 +15,10 @@ import {
   levelAt, withLevels,
   observedFigures,
   bucketConsistency, cardStyleTags, measureOf, observedLabels, UNMEASURED,
-  makeEnemy, GRID_W, GRID_H, TILE_PX, runStaff, SPELL_LEVEL_MAX, slotCost, affixFitsSpell, spellAffixById, journalDoor,
+  makeEnemy, GRID_W, GRID_H, TILE_PX, runStaff, SPELL_LEVEL_MAX, slotCost, affixFitsSpell, spellAffixById, journalDoor, mainTypeOf,
 } from "@jr/core";
 import type {
-  Archetype, ItemInstance, RoomType, RunContext, RunHistory, RunJournalEntry, Staff, Tension, World,
+  Archetype, ItemInstance, RoomType, JournalDoor, RunContext, RunHistory, RunJournalEntry, Staff, Tension, World,
   PlayerMods, RewardCardKind, DoorOffer, OfferCard, AttachedAffix,
 } from "@jr/core";
 import { createDirector } from "@jr/director";
@@ -388,6 +388,69 @@ export async function playRun(
   let rage = 0;
   let needMisses = 0;
 
+  /** The keys as the offer reads them: each held spell and what is attached to it. */
+  const heldNow = () => slots.flatMap((x, i) =>
+    (x ? [heldSpell(ITEMS.get(x.base), (spellAffixes[i] ?? []).map((a) => a.id))] : []));
+  /** The same facts the scene reads (task 9). */
+  const needsFor = (c: RunContext) => cardNeedsFor(
+    c.labels, preset,
+    slots.flatMap((x, i) => (x ? [{ base: x.base, affixes: spellAffixes[i] ?? [] }] : [])), ITEMS,
+  );
+  // As in the scene: a held spell below the cap stays offerable, a copy levels it.
+  const ownedFor = (k: RewardCardKind): string[] => k === "spell"
+    ? slots.flatMap((x, i) => (x && (spellLevels[i] ?? 1) >= SPELL_LEVEL_MAX ? [x.base] : []))
+    : owned;
+  /** The run as the Director reads it at this moment. */
+  const contextNow = (index: number): RunContext => context(
+    seed, index, hearts, gold, staff, slots, inventory, history(), preset, lastClearMs, heartsLostRecent,
+    pickTags, clearedMs, nearShare, measures,
+    freeText, { levels: spellLevels, affixes: spellAffixes, mods: liveMods() }, xp,
+  );
+
+  /**
+   * **The doors out of a room, decided once its reward is taken**, as the
+   * scene decides them while the portals turn: one request carries the
+   * portal questions and, for each kind a portal could be, the cards the room
+   * behind it will offer. A door keeps its kind's cards and is badged with the
+   * school or family most of them are (`mainTypeOf`); the rest are unused.
+   */
+  async function openPortals(index: number, elite: boolean): Promise<DoorOffer[]> {
+    const ctx = contextNow(index);
+    const held = heldNow();
+    const needs = needsFor(ctx);
+    const choices = portalChoices(
+      {
+        roomIndex: index,
+        /*
+         * **This room's own difficulty.** These portals decide the next
+         * room, so "no elite after an elite" is about the room the player
+         * is standing in. It used to be the room before it, and a run
+         * could come back with two elites in a row.
+         */
+        lastWasElite: elite,
+        elitesSoFar: eliteRooms,
+        ...(fightsSinceElite === undefined ? {} : { fightsSinceElite }),
+        critical: hearts <= 1, style: preset,
+        // The same hard rules the scene applies: no second room without a
+        // fight straight after one, and one fountain a run.
+        npcRooms, fountains, lastWasNpc, npcOffers, fountainOffers,
+        hurt: hearts < MAX_HEARTS + liveMods().maxHearts,
+      },
+      src.stream("portal-count", index),
+    );
+    const kinds = ["spell", "affix", "stat"] as const;
+    const cards: CardRequest[] = kinds.map((k) => ({
+      room_index: index + 1, pool: cardPool(ITEMS, ownedFor(k), k, held, { style: preset }, needs),
+      count: CARDS_PER_OFFER, pity: needMisses >= 3, temptation: offersMade % 4 === 3, salt: `door_${k}`,
+    }));
+    const plan = await director.planOffer(ctx, { portals: choices, cards });
+    return (plan.portals?.doors ?? []).map((d) => {
+      if (d.npc || d.reward === "gold") return d;
+      const ids = plan.cards[kinds.indexOf(d.reward as (typeof kinds)[number])]?.ids ?? [];
+      return ids.length ? { ...d, ...mainTypeOf(d.reward, ids), cards: ids } : d;
+    });
+  }
+
   /*
    * `JR_ROOMS=<n>` ends the run after its first n rooms: the opening rooms
    * are where a style's starter is the whole staff, and a study of them
@@ -430,26 +493,22 @@ export async function playRun(
       freeText, { levels: spellLevels, affixes: spellAffixes, mods: liveMods() }, xp,
     );
 
-    // The offer's questions, built first so they can ride in the room's
-    // round-1 request as they do in the scene: the portals out (doc 003) and
-    // the cards in (doc 007), each over the legal answers code enumerated.
-    // The merchant stocks one card of each kind; the boss room offers nothing.
+    /*
+     * **This room's cards came with the door.** They were decided when the
+     * door opened, at the end of the room before, against the build the player
+     * walked through it with (`openPortals` below). Only a door that brought
+     * none — the run's first room, or a door the fallback made — asks for them
+     * here, riding in the room's round 1 as they always did. The merchant
+     * stocks one card of each kind; the boss room offers nothing.
+     */
     const offerKind: RewardCardKind | null =
       isFight ? door.reward : stage === "shop" ? "stat" : null;
-    const held = slots.flatMap((x, i) =>
-      (x ? [heldSpell(ITEMS.get(x.base), (spellAffixes[i] ?? []).map((a) => a.id))] : []));
-    // The same facts the scene reads (task 9).
-    const needs = cardNeedsFor(
-      ctx.labels, preset,
-      slots.flatMap((x, i) => (x ? [{ base: x.base, affixes: spellAffixes[i] ?? [] }] : [])), ITEMS,
-    );
-    const promise = isFight ? { school: door.school, family: door.family, grade: door.grade, style: preset } : {};
-    // As in the scene: a held spell below the cap stays offerable, a copy levels it.
-    const ownedFor = (k: RewardCardKind): string[] => k === "spell"
-      ? slots.flatMap((x, i) => (x && (spellLevels[i] ?? 1) >= SPELL_LEVEL_MAX ? [x.base] : []))
-      : owned;
+    const held = heldNow();
+    const needs = needsFor(ctx);
+    const promise = isFight ? { grade: door.grade, style: preset } : {};
+    const decidedCards = isFight && door.reward !== "gold" ? door.cards : undefined;
     const cardReqs: CardRequest[] = [];
-    if (isFight && door.reward !== "gold")
+    if (isFight && door.reward !== "gold" && !decidedCards)
       cardReqs.push({
         room_index: index, pool: cardPool(ITEMS, ownedFor(door.reward), door.reward, held, promise, needs),
         count: CARDS_PER_OFFER, pity: needMisses >= 3, temptation: offersMade % 4 === 3,
@@ -460,68 +519,43 @@ export async function playRun(
           room_index: index, pool: cardPool(ITEMS, ownedFor(k), k, held, {}, needs), count: 1,
           pity: false, temptation: false, salt: `shop_${k}`,
         });
-    const offerReq: OfferRequest = {
-      /*
-       * **The run narrows twice, and neither narrowing is a question**
-       * (`fixedExit`): the last fight opens onto the vendors' stop and the
-       * stop opens onto the boss. The last fight used to be asked anyway and
-       * ended with three badges promising three currencies, all three of
-       * which led to the same merchant.
-       */
-      ...(stage === "combat" && !fixedExit(index) ? {
-        portals: portalChoices(
-          {
-            roomIndex: index,
-            /*
-             * **This room's own difficulty.** These portals decide the next
-             * room, so "no elite after an elite" is about the room the player
-             * is standing in. It used to be the room before it, and a run
-             * could come back with two elites in a row.
-             */
-            lastWasElite: elite,
-            elitesSoFar: eliteRooms,
-            ...(fightsSinceElite === undefined ? {} : { fightsSinceElite }),
-            critical: hearts <= 1, style: preset,
-            // The same hard rules the scene applies: no second room without a
-            // fight straight after one, and one fountain a run.
-            npcRooms, fountains, lastWasNpc, npcOffers, fountainOffers,
-            hurt: hearts < MAX_HEARTS + liveMods().maxHearts,
-          },
-          src.stream("portal-count", index),
-        ),
-      } : {}),
-      cards: cardReqs,
-    };
+    const offerReq: OfferRequest = { cards: cardReqs };
 
     // The Director still plans the fights; the merchant and the boss are
     // placed directly, as the scene does, because neither is an encounter.
     const planned = isFight
-      ? await director.planRoom(ctx, { room_index: index, door_slot: 0, room_type: roomType }, tension, offerReq)
+      ? await director.planRoom(ctx, { room_index: index, door_slot: 0, room_type: roomType }, tension,
+        cardReqs.length ? offerReq : undefined)
       : null;
     // What the room was actually built at: round 1 decided it (doc 004), so it
     // comes off the plan rather than off a request made a room earlier.
     const builtTension: Tension = planned?.tension ?? tension;
     const plan = planned ? planned.plan : fixedRoom(stage === "boss" ? "boss" : "shop", src.stream("fixed", index));
-    const answered = stage === "boss" ? null : planned?.offer ?? await director.planOffer(ctx, offerReq);
+    const answered = stage === "boss" || cardReqs.length === 0 ? null
+      : planned?.offer ?? await director.planOffer(ctx, offerReq);
 
     let cards: OfferCard[] = [];
-    if (isFight && door.reward !== "gold" && answered?.cards[0]) {
-      const cardPlan = answered.cards[0];
-      const pool = cardReqs[0]!.pool;
-      cards = cardsFor(ITEMS, door.reward, cardPlan.ids, promise);
-      needMisses = cardPlan.ids.some((id) => pool.candidates.find((c) => c.id === id)?.facts.includes("need")) ? 0 : needMisses + 1;
+    const cardIds = decidedCards ?? (isFight && door.reward !== "gold" ? answered?.cards[0]?.ids : undefined);
+    if (cardIds && door.reward !== "gold") {
+      cards = cardsFor(ITEMS, door.reward, cardIds, promise);
+      // Pity reads whether a card of a need reached the screen, against the build as it stands.
+      const pool = cardPool(ITEMS, ownedFor(door.reward), door.reward, held, promise, needs);
+      needMisses = cardIds.some((id) => pool.candidates.find((c) => c.id === id)?.facts.includes("need")) ? 0 : needMisses + 1;
       offersMade++;
     } else if (stage === "shop") {
       answered?.cards.forEach((p, i) => cards.push(...cardsFor(ITEMS, cardReqs[i]!.pool.kind, p.ids)));
     }
     const offer = offerKind ? { cards } : null;
-    const portals = answered?.portals ?? null;
-    // What the room actually offered on the way out, fixed exits included, so
-    // the route review and the history facts see the same doors the player did.
+    // The doors out: a fixed exit now, the Director's once the reward is taken
+    // (`openPortals`). Held in arrays the route and the journal share, so the
+    // doors land in both when they are decided.
     const exit = fixedExit(index);
-    const doorsOut: DoorOffer[] = exit
+    let doorsOut: DoorOffer[] = exit
       ? exit.map((p) => ({ reward: p.reward, difficulty: "normal" as const, grade: 1, onward: true }))
-      : [...(portals?.doors ?? [])];
+      : [];
+    const portalsOutWords: string[] = doorsOut.map(doorWord);
+    const doorKinds: string[] = doorsOut.flatMap((d) => (d.onward ? [] : [d.npc ?? d.reward]));
+    const journalDoors: JournalDoor[] = doorsOut.filter((d) => !d.onward).map(journalDoor);
 
     if (stage === "boss" && !atBoss)
       atBoss = {
@@ -699,7 +733,7 @@ export async function playRun(
     rooms.push({
       route: {
         doorIn: doorWord(door),
-        portalsOut: doorsOut.map(doorWord),
+        portalsOut: portalsOutWords,
         cards: cards.map((c) => `${c.itemId || c.kind}${(c.grade ?? 1) > 1 ? `@${c.grade}` : ""}`),
         dead: cards.flatMap((c) => {
           if (c.kind !== "affix") return [];
@@ -768,8 +802,8 @@ export async function playRun(
         hurt_by: hurtFamilyOf(world.stats),
         ...(hurtByEnemy ? { hurt_most_by: hurtByEnemy } : {}),
         ...(bodies.length ? { enemies: bodies } : {}),
-        doors_offered: doorsOut.flatMap((d) => (d.onward ? [] : [d.npc ?? d.reward])),
-        doors: doorsOut.filter((d) => !d.onward).map(journalDoor),
+        doors_offered: doorKinds,
+        doors: journalDoors,
         ...(reward ? { picked: [reward.toLowerCase().replace(/ /g, "_")] } : {}),
         passed_over: cards
           .map((c) => c.itemId || c.kind)
@@ -785,7 +819,6 @@ export async function playRun(
      * ended with, and the badge the player walked in through. A fixed exit is
      * not a badge the player chose, so it is not counted as one.
      */
-    doorsOffered_.push(doorsOut.flatMap((d) => (d.npc || d.onward ? [] : [d.reward])));
     // A fixed exit is not a badge the player chose, so it reveals no preference.
     if (!door.onward) doorsTaken_.push(door.npc ?? door.reward);
     moods_.unshift(plan.params.mood);
@@ -794,8 +827,23 @@ export async function playRun(
     if (plan.skeleton) skeletons_.unshift(plan.skeleton);
     if (planned?.profile) profiles_.push(planned.profile);
     scores_.push("neutral");
-    if (!result.cleared) break;
-    if (stage === "boss") break;
+    if (!result.cleared) { doorsOffered_.push([]); break; }
+    if (stage === "boss") { doorsOffered_.push([]); break; }
+
+    /*
+     * **The doors open now**, with the reward taken and the fight's cost
+     * known: one request decides the portals and, for every kind a portal
+     * could be, the cards behind it (`openPortals`). They used to be decided
+     * as the room began, before the fight they depend on — a player who
+     * walked in on 37 health and out on 12 was offered doors chosen for 37.
+     */
+    if (!exit) {
+      doorsOut = await openPortals(index, elite);
+      portalsOutWords.push(...doorsOut.map(doorWord));
+      doorKinds.push(...doorsOut.flatMap((d) => (d.onward ? [] : [d.npc ?? d.reward])));
+      journalDoors.push(...doorsOut.filter((d) => !d.onward).map(journalDoor));
+    }
+    doorsOffered_.push(doorsOut.flatMap((d) => (d.npc || d.onward ? [] : [d.reward])));
 
     /*
      * No `planDoors` call. The next room's pitch is decided inside that room's

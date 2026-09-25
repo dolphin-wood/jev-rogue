@@ -749,15 +749,20 @@ const ENTRY_WORDS: Readonly<Record<string, string>> = {
   flanks: "from the flanks", far_front: "from the far side", surround: "from all around",
 };
 
-/** A door and what it promised: "spell promising storm", "stat promising movement, elite, grade 2". */
+/**
+ * A door and what was behind it: "spell (mostly storm)", "stat (mostly
+ * movement; elite, grade 2)". The school or family is the one most of the
+ * door's cards were (`mainTypeOf`), not a promise the cards were held to.
+ */
 function doorWords(d: JournalDoor): string {
-  const promise = d.school ?? d.family;
+  const main = d.school ?? d.family;
   const marks = [d.elite ? "elite" : null, d.grade && d.grade > 1 ? `grade ${d.grade}` : null].filter(Boolean);
-  return `${d.kind}${promise ? ` promising ${promise}` : ""}${marks.length ? ` (${marks.join(", ")})` : ""}`;
+  const inside = [main ? `mostly ${main}` : null, marks.length ? marks.join(", ") : null].filter(Boolean);
+  return `${d.kind}${inside.length ? ` (${inside.join("; ")})` : ""}`;
 }
 
 /**
- * What the rolled-up rooms' doors promised, tallied: the recent rooms' lines
+ * What the rolled-up rooms' doors held, tallied: the recent rooms' lines
  * carry each door, and without this the run's first spell doors drop out of
  * the briefing as soon as they are more than five rooms old.
  */
@@ -768,8 +773,8 @@ function promisesRolledUp(rooms: readonly RunJournalEntry[]): string | null {
   const elite = doors.filter((d) => d.elite).map((d) => d.kind);
   if (doors.length === 0) return null;
   return [
-    schools.length ? `spell doors promised ${counted(schools)}` : null,
-    families.length ? `stat doors promised ${counted(families)}` : null,
+    schools.length ? `spell doors mostly ${counted(schools)}` : null,
+    families.length ? `stat doors mostly ${counted(families)}` : null,
     elite.length ? `elite doors: ${counted(elite)}` : "no elite doors",
   ].filter(Boolean).join("; ");
 }

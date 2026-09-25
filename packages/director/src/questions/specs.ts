@@ -212,25 +212,6 @@ export const NORMAL_GRADE_SPEC: Readonly<Record<string, OptionSpec>> = {
 /* ------------------------------------------------- what a door's badge says */
 
 /**
- * Which styles a school carries, from `STYLE_SCHOOLS` read backwards: a
- * school carries a style when two or more of its spells are tagged with it
- * (doc 006, "Schools"), and the option says so in those words rather than as
- * a claim about who the school is for.
- *
- * The negative is the situation, not a price on it: it used to add that a
- * second spell of a held school "widens nothing, so the door is worth less",
- * which is the answer to the question written on the option.
- */
-export function schoolSpec(school: string, spells: readonly string[], styles: readonly string[]): OptionSpec {
-  return {
-    what: `A ${school} spell. The school holds ${spells.join(", ")}`
-      + `${styles.length ? `; two or more of them are tagged ${styles.join(" and ")}` : ""}.`,
-    not_for: `A player who already casts ${school}, for whom the card is a second ${school} spell beside the one `
-      + "on the keys.",
-  };
-}
-
-/**
  * **The four stat families: one sentence each, one negative each, one example
  * each.**
  *

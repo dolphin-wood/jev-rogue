@@ -262,6 +262,7 @@ export const ZH: Table = {
   "prompt.levelUp": "升级「{spell}」",
   "prompt.floorSpell": "[E] {tap}    长按 [E] 拆解 +{gold} {coin}",
   "prompt.portal": "[E] {what}",
+  "prompt.portalOpening": "正在开启…",
   "prompt.theMerchant": "商人",
   "prompt.theBlacksmith": "铁匠",
   "prompt.theFountain": "生命之泉",

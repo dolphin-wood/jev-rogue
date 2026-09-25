@@ -25,7 +25,7 @@ import { BASE_ITEMS } from "../spells/items.ts";
 import { ARCHETYPES } from "../content/tags.ts";
 import type { BaseItem } from "../types.ts";
 import type { SpellSchool } from "../spells/schools.ts";
-import { STAT_FAMILIES } from "./stats.ts";
+import { STAT_FAMILIES, STAT_UPGRADES } from "./stats.ts";
 import type { StatFamily } from "./stats.ts";
 export type Difficulty = "normal" | "elite";
 
@@ -33,14 +33,21 @@ export interface DoorOffer {
   readonly reward: RewardCardKind;
   readonly difficulty: Difficulty;
   /**
-   * What the badge promises beyond the kind. A spell door names a **school**
-   * (doc 003's portal question with the build asked at the door), a stat door
-   * a **family**, and every door a **grade**: 1 ordinarily, 2 or 3 behind an
-   * elite, occasionally 2 late in the run.
+   * What the badge names beyond the kind: the school most of a spell door's
+   * cards belong to, the family most of a stat door's do (`mainTypeOf`) —
+   * read off the cards, not promised ahead of them — and every door a
+   * **grade**: 1 ordinarily, 2 or 3 behind an elite, occasionally 2 late in
+   * the run.
    */
   readonly school?: SpellSchool;
   readonly family?: StatFamily;
   readonly grade: number;
+  /**
+   * **The cards behind the door**, decided when the door opened, by id and in
+   * the Director's order. Absent for a door whose room pays no cards (gold, a
+   * vendor, a fixed exit) and for one decided before cards travelled with it.
+   */
+  readonly cards?: readonly string[];
   /**
    * A door to a **room with no fight** instead of one: the merchant, the
    * blacksmith or the fountain alone, met mid-run. Never the only way on.
@@ -479,8 +486,6 @@ export interface PortalAnswers {
   readonly eliteGrade: 2 | 3;
   /** A normal door's grade late in the run. */
   readonly normalGrade: 1 | 2;
-  readonly school: SpellSchool;
-  readonly family: StatFamily;
   readonly npc: NpcKind | null;
 }
 
@@ -499,11 +504,7 @@ export function assemblePortals(a: PortalAnswers): DoorOffer[] {
   const doors: DoorOffer[] = kinds.map((reward) => {
     const elite = reward === a.eliteKind;
     const grade = elite ? a.eliteGrade : a.normalGrade;
-    return {
-      reward, difficulty: elite ? "elite" : "normal", grade,
-      ...(reward === "spell" ? { school: a.school } : {}),
-      ...(reward === "stat" ? { family: a.family } : {}),
-    };
+    return { reward, difficulty: elite ? "elite" : "normal", grade };
   });
   if (a.npc) {
     /*
@@ -520,6 +521,28 @@ export function assemblePortals(a: PortalAnswers): DoorOffer[] {
       }
   }
   return doors;
+}
+
+/**
+ * **What a door shows is what is behind it.**
+ *
+ * The door's cards are decided when it opens, and its badge names the kind of
+ * thing most of them are: the school most of a spell offer's cards belong to,
+ * the family most of a stat offer's do, the first card breaking a tie (the
+ * offer's order is the Director's). It used to be a promise decided on its
+ * own — a school asked for each spell door, which the cards were then forced
+ * to keep — and a promise decided apart from the cards repeats whenever the
+ * Director's taste is steady, however varied the cards themselves are.
+ */
+export function mainTypeOf(kind: RewardCardKind, ids: readonly string[]): { school?: SpellSchool; family?: StatFamily } {
+  const of = (id: string): string | undefined => kind === "spell" ? schoolOf(id) ?? undefined
+    : kind === "stat" ? STAT_UPGRADES.find((u) => u.id === id)?.family : undefined;
+  const counts = new Map<string, number>();
+  for (const id of ids) { const t = of(id); if (t) counts.set(t, (counts.get(t) ?? 0) + 1); }
+  let best: string | undefined, most = 0;
+  for (const [t, n] of counts) if (n > most) { best = t; most = n; }
+  if (!best) return {};
+  return kind === "spell" ? { school: best as SpellSchool } : { family: best as StatFamily };
 }
 
 /**
@@ -578,6 +601,7 @@ export function doorSpecs(doors: readonly DoorOffer[], roomIndex: number): Porta
     ...(d.school ? { school: d.school } : {}),
     ...(d.family ? { family: d.family } : {}),
     ...(d.npc ? { npc: d.npc } : {}),
+    ...(d.cards ? { cards: d.cards } : {}),
     grade: d.grade,
     // The stage of the room the portal leads *into*: the last combat room's
     // portals open onto the merchant, and the merchant's onto the boss. A

@@ -261,6 +261,7 @@ export const JA: Table = {
   "prompt.levelUp": "「{spell}」を強化",
   "prompt.floorSpell": "[E] {tap}    [E] 長押しで分解 +{gold} {coin}",
   "prompt.portal": "[E] {what}",
+  "prompt.portalOpening": "開いています…",
   "prompt.theMerchant": "商人",
   "prompt.theBlacksmith": "鍛冶屋",
   "prompt.theFountain": "回復の泉",

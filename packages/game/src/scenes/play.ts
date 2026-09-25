@@ -15,7 +15,7 @@ import {
   affixFits, affixFitsPart, affixTierKey, affixFitsSpell, itemShape,
   spikesOut, featureCells, fillSubspecies,
   heldDominantTags, STYLE_START, bucketClearSpeed, bucketGold, bucketMovementPressure, bucketRunProgress,
-  portalInReach, answerOffer, PORTAL_RISE_MS, bucketHealth, bucketRecentDamage,
+  portalInReach, pendingPortalNear, pendingDoors, resolvePortals, mainTypeOf, answerOffer, PORTAL_RISE_MS, bucketHealth, bucketRecentDamage,
   rewardInReach, REWARD_RISE_MS, NO_INPUT, tetherEnds, TOLL_PULSE_MS, ALERT_MS, MINE_BLAST, MINE_PRIME_MS, MINE_BURST_MS,
   MUSKET_RANGE, MUSKET_SPREAD_DEG, MUSKET_WINDUP_MS, FLAME_ROLL_MS, FLAME_LIFE_MS, flameRays, muzzleOf,
   ELEMENT_TINT, spellLookOf,
@@ -44,7 +44,7 @@ import {
   SMITH_PRICE, MERCHANT_PRICE, FOUNTAIN_HEAL_FRACTION, fountainDrink, fountainWouldHeal,
   ARCHETYPES, STYLE_CARDS, observedFigures, journalDoor,
 } from "@jr/core";
-import type { BaseItem, CardNeeds, NpcKind, OfferPromise, RoomStage, RunShape, WorldEvent } from "@jr/core";
+import type { BaseItem, CardNeeds, DoorOffer, NpcKind, OfferPromise, RoomStage, RunShape, WorldEvent } from "@jr/core";
 import {
   BOSS_LEAP_MS, BOSS_LEAP_RISE_MS, BOSS_SLAM_MS, BOSS_SLAM_IMPACT_PX, BOSS_LEAP_RADIUS, BOSS_QUAKE_MS, SLAM_SHOCK_RADIUS,
   BOSS_POWER,
@@ -788,6 +788,21 @@ const ENEMY_FRAME: Record<EnemyId, string> = fillSubspecies<string>({
   boss: "boss_p1",
 });
 
+/**
+ * **The run as it stands inside a room**: the facts `leaveThrough` folds into
+ * the run when the player walks out, taken early, so the doors can be decided
+ * the moment the reward is taken (`openDoors`) rather than a room late.
+ */
+interface RoomSoFar {
+  readonly heartsLostRecent: number;
+  readonly lastClearMs: number;
+  readonly clearedMs: readonly number[];
+  readonly measures: readonly RoomMeasure[];
+  readonly nearShare: number;
+  readonly gold: number;
+  readonly history: RunHistory;
+}
+
 export class PlayScene extends Phaser.Scene {
   private atlas!: RecolourableAtlas;
   private textureKey = "sheet_mood";
@@ -1290,6 +1305,13 @@ export class PlayScene extends Phaser.Scene {
   private modalHoldGfx!: Phaser.GameObjects.Graphics;
   /** What the portal this room was entered through promised. */
   private roomPromise: { school?: string; family?: string; grade: number } = { grade: 1 };
+  /** The cards this room offers, decided when the door into it opened (`openDoors`); null when they were not. */
+  private roomCards: readonly string[] | null = null;
+  /** The run's shape at this room's entry, and how many doors it will open with (`openDoors`). */
+  private roomRun: RunShape | null = null;
+  private portalCount = 0;
+  /** Set once this room's doors have been asked for, so they are asked for once. */
+  private doorsOpening = false;
   /** True in the merchant's room, where the cards cost gold instead of a slot. */
   private shopping = false;
   /** Set once the boss is down. The run is over; nothing loads after it. */
@@ -2063,7 +2085,10 @@ export class PlayScene extends Phaser.Scene {
     // to the last one's journal entry, which has already been written.
     this.pickedThisRoom = null;
     this.roomReward = through?.reward ?? "spell";
+    // What the door showed — the school or family most of its cards are — and the cards themselves.
     this.roomPromise = { school: through?.school, family: through?.family, grade: through?.grade ?? 1 };
+    this.roomCards = through?.cards ?? null;
+    this.doorsOpening = false;
     this.lastWasElite = this.elite;
     this.elite = through?.elite ?? false;
     /*
@@ -2160,6 +2185,9 @@ export class PlayScene extends Phaser.Scene {
       hurt: startHearts < MAX_HEARTS + this.liveMods().maxHearts,
       lastWasNpc: this.npcRoom !== null,
     };
+    this.roomRun = run;
+    // How many doors the room will open with; what they are is asked once the reward is taken.
+    this.portalCount = fixedExit(index) ? 0 : portalChoices(run, src.stream("portal-count")).count;
     const ctx = this.directorContext(index, startHearts, staff);
     const ask = this.offerRequest(ctx, src, run, stage, fight, held);
     const planStart = performance.now();
@@ -2315,11 +2343,12 @@ export class PlayScene extends Phaser.Scene {
     ctx: RunContext, src: RngSource, run: RunShape, stage: RoomStage, fight: boolean, held: HeldShape[],
   ): OfferAsk {
     const kind = this.roomReward;
-    const promise: OfferPromise = fight ? { ...this.roomPromise, style: this.intent.preset } : {};
+    // The grade and the style only: the school or family on the door describes its cards, it does not choose them.
+    const promise: OfferPromise = fight ? { grade: this.roomPromise.grade, style: this.intent.preset } : {};
     if (stage === "boss") return { kind, promise, request: {} };
     const needs = this.cardNeeds(ctx);
     const cards: CardRequest[] = [];
-    if (fight && kind !== "gold")
+    if (fight && kind !== "gold" && !this.roomCards)
       cards.push({
         room_index: run.roomIndex, pool: cardPool(ITEMS, this.ownedFor(kind), kind, held, promise, needs),
         count: CARDS_PER_OFFER, pity: this.needMisses >= 3, temptation: this.offersMade % 4 === 3,
@@ -2331,24 +2360,13 @@ export class PlayScene extends Phaser.Scene {
           room_index: run.roomIndex, pool: cardPool(ITEMS, this.ownedFor(k), k, held, {}, needs),
           count: 1, pity: false, temptation: false, salt: `shop_${k}`,
         });
-    return {
-      kind, promise,
-      request: {
-        /*
-         * **The run narrows twice, and neither narrowing is a question.**
-         *
-         * The last fight opens onto the vendors' stop and the stop opens onto
-         * the boss (`fixedExit`), so at both of those rooms there is one legal
-         * answer and doc 002 does not ask a question that has one. The last
-         * fight used to fall through to the portal question anyway and end
-         * with three badges promising a spell, an affix and a stat, every one
-         * of which led to the same merchant — reported from play as random
-         * doors around the shop.
-         */
-        ...(fixedExit(run.roomIndex) ? {} : { portals: portalChoices(run, src.stream("portal-count")) }),
-        cards,
-      },
-    };
+    /*
+     * **No portals here.** The doors are asked for once the reward is taken
+     * (`openDoors`), with the fight they follow already known; the room's own
+     * request carries only its cards, and only when the door in did not
+     * bring them.
+     */
+    return { kind, promise, request: { cards } };
   }
 
   /**
@@ -2384,32 +2402,24 @@ export class PlayScene extends Phaser.Scene {
           offers: [...(prev?.offers ?? []), ...(offer ? [offer] : [])],
         });
       };
-      if (plan.portals) {
-        this.portalPlan = plan.portals;
-        record(plan.portals.decisions);
-      }
       /*
-       * The vendors' stop asks no portal question, because there is nothing to
-       * ask: its one way on is the boss. It used to fall through to
-       * `ruleDoors`, which drew up to three portals with three different
-       * reward badges, every one of them opening onto the same fight.
+       * The doors stand pending until the reward is taken (`openDoors`): the
+       * vendors' stop and the last fight have their one fixed way on, and
+       * every other room opens with the count it was drawn, as yet unnamed.
        */
-      const doors = fixedExit(run.roomIndex)
-        ?? (plan.portals
-          ? doorSpecs(plan.portals.doors, run.roomIndex)
-          : doorSpecs(ruleDoors(run, src.stream("offer")), run.roomIndex));
-      // Counted where the list is made, so a declined vendor still spends one
-      // of the run's `NPC_OFFERS_MAX`.
-      playtestLog.attach(run.roomIndex, (r) => {
-        r.doors = doors.map((d) => d.npc ? `npc:${d.npc}` : `${d.reward}${d.school ? `:${d.school}` : d.family ? `:${d.family}` : ""}${d.onward ? " (onward)" : ""}`);
-      });
-      if (doors.some((d) => d.npc && d.npc !== "fountain")) this.npcOffers++;
-      if (doors.some((d) => d.npc === "fountain")) this.fountainOffers++;
+      const doors = fixedExit(run.roomIndex) ?? pendingDoors(this.portalCount);
       let cards: OfferCard[] = [];
       let stock: OfferCard[] = [];
       const reqs = ask.request.cards ?? [];
       const cardPlan = plan.cards[0];
-      if (fight && kind !== "gold" && cardPlan && reqs[0]) {
+      if (fight && kind !== "gold" && this.roomCards) {
+        // Decided with the door the player came through, against the build they carried through it.
+        cards = cardsFor(ITEMS, kind, this.roomCards, promise);
+        const pool = cardPool(ITEMS, this.ownedFor(kind), kind, held, promise, this.cardNeeds(ctx));
+        const hadNeed = this.roomCards.some((id) => pool.candidates.find((c) => c.id === id)?.facts.includes("need"));
+        this.needMisses = hadNeed ? 0 : this.needMisses + 1;
+        this.offersMade++;
+      } else if (fight && kind !== "gold" && cardPlan && reqs[0]) {
         this.cardPlan = cardPlan;
         record(cardPlan.decisions, { prefix: "", label: kind, blended: cardPlan.blended, ids: cardPlan.ids });
         cards = cardsFor(ITEMS, kind, cardPlan.ids, promise);
@@ -2466,10 +2476,18 @@ export class PlayScene extends Phaser.Scene {
    * The run's state as the Director reads it — the same labels the harness
    * builds, so the browser and the measurement plan from the same facts.
    */
-  private directorContext(index: number, hearts: number, staff: Staff): RunContext {
+  private directorContext(index: number, hearts: number, staff: Staff, now?: RoomSoFar): RunContext {
+    // The run so far, with the room being played folded in when there is one (`roomSoFar`).
+    const heartsLostRecent = now?.heartsLostRecent ?? this.heartsLostRecent;
+    const lastClearMs = now?.lastClearMs ?? this.lastClearMs;
+    const clearedMs = now?.clearedMs ?? this.clearedMs;
+    const measures = now?.measures ?? this.measures;
+    const nearShare = now?.nearShare ?? this.lastNearShare;
+    const gold = now?.gold ?? this.runGold;
+    const history = now?.history ?? this.history;
     // Doc 003's pacing rule: no hazards when the player is critical or has
     // just taken heavy damage.
-    const hazard_cap = hearts <= 1 || this.heartsLostRecent >= 2 ? "none" : hearts <= 2 ? "low" : "high";
+    const hazard_cap = hearts <= 1 || heartsLostRecent >= 2 ? "none" : hearts <= 2 ? "low" : "high";
     return {
       run_id: this.runSeed, seed: this.runSeed, room_index: index,
       // The bar, its cap after upgrades, and the purse, for the briefing
@@ -2477,20 +2495,20 @@ export class PlayScene extends Phaser.Scene {
       // cannot say whether a fountain is worth a room.
       health: hearts * HP_PER_HEART,
       max_health: (MAX_HEARTS + this.liveMods().maxHearts) * HP_PER_HEART,
-      gold: this.runGold,
+      gold,
       // The body's level and how far into the next, as plain facts
       // (`RunContext.level`); nothing in the Director reacts to them.
       level: levelAt(this.runXp).level,
       xp_into: levelAt(this.runXp).into,
       xp_to_next: levelAt(this.runXp).toNext,
-      ...(observedFigures(this.measures) ? { observed_figures: observedFigures(this.measures)! } : {}),
+      ...(observedFigures(measures) ? { observed_figures: observedFigures(measures)! } : {}),
       labels: {
         health: bucketHealth(hearts),
-        recent_damage: bucketRecentDamage(this.heartsLostRecent),
-        clear_speed: bucketClearSpeed(this.lastClearMs, expectedClearMsFor(index, this.clearedMs)),
-        movement_pressure_recent: bucketMovementPressure(this.lastNearShare),
+        recent_damage: bucketRecentDamage(heartsLostRecent),
+        clear_speed: bucketClearSpeed(lastClearMs, expectedClearMsFor(index, clearedMs)),
+        movement_pressure_recent: bucketMovementPressure(nearShare),
         run_progress: bucketRunProgress(index),
-        gold: bucketGold(this.runGold),
+        gold: bucketGold(gold),
         tension_cap: "peak_allowed", hazard_cap, pressure_cap: 5,
         build: { range: "mid" },
         preference: {
@@ -2498,7 +2516,7 @@ export class PlayScene extends Phaser.Scene {
           consistency: bucketConsistency(this.pickTags, this.intent.preset),
         },
         // What the last two fights measured.
-        observed: observedLabels(this.measures),
+        observed: observedLabels(measures),
         // Doc 007's completion signal: what the offer is grounded on.
         build_shape: buildShapeFor({
           keysFilled: this.slots.filter((x) => x !== null).length,
@@ -2512,7 +2530,7 @@ export class PlayScene extends Phaser.Scene {
       staff, slots: this.slots, inventory: [],
       // `stats_taken` rides on the history so `mana_stats_taken` reads the
       // whole run rather than the room (`run/build-facts.ts`).
-      history: { ...this.history, stats_taken: this.statsTaken },
+      history: { ...history, stats_taken: this.statsTaken },
       intent: this.intent,
       /*
        * **What the keys are actually holding** (`run/build-facts.ts`). It was
@@ -7595,7 +7613,8 @@ export class PlayScene extends Phaser.Scene {
         case "dash": sfx.play("dash"); break;
         case "wave_spawned": sfx.play("enemy_wake", 0.9); break;
         case "room_cleared": sfx.play("clear"); break;
-        case "portals_open": sfx.play("portal_open"); break;
+        // A gold room's or a vendor's doors rise pending; what they are is asked now (`openDoors`).
+        case "portals_open": sfx.play("portal_open"); void this.openDoors(); break;
         case "portal_entered": sfx.play("portal_enter"); break;
         case "reward_shown": sfx.play("reward_reveal"); break;
         /*
@@ -8430,7 +8449,7 @@ export class PlayScene extends Phaser.Scene {
    * the floor and how low the bar went, and the player has chosen a door, so
    * the offer's outcome is settled.
    */
-  private journalEntry(portal: Portal): RunJournalEntry {
+  private journalEntry(portal: Portal | null): RunJournalEntry {
     const w = this.world;
     const stats = w.stats;
     const hurtMost = Object.entries(stats.hurtByEnemy).sort((a, b) => b[1] - a[1])[0]?.[0];
@@ -8441,7 +8460,8 @@ export class PlayScene extends Phaser.Scene {
     const offered = (this.offer?.cards ?? []).map((c) => c.itemId || c.kind);
     return {
       index: this.roomIndex,
-      type: portal.npc ?? w.room.room_type,
+      // This room's own vendor, not the door out's: leaving a fight by a smith's door made the fight a smithy.
+      type: this.npcRoom ?? w.room.room_type,
       tension: this.tension,
       space: w.room.params.space,
       size: w.room.params.size,
@@ -8457,9 +8477,9 @@ export class PlayScene extends Phaser.Scene {
       ...(hurtMost ? { hurt_most_by: hurtMost } : {}),
       ...(bodies.length ? { enemies: bodies } : {}),
       ...(this.planned?.plan.encounter ? { encounter: this.planned.plan.encounter.profile } : {}),
-      doors_offered: (this.offer?.doors ?? []).flatMap((d) => (d.onward ? [] : [d.npc ?? d.reward])),
-      doors: (this.offer?.doors ?? []).filter((d) => !d.onward).map(journalDoor),
-      ...(portal.onward ? {} : { door_taken: portal.npc ?? portal.reward }),
+      doors_offered: (this.offer?.doors ?? []).flatMap((d) => (d.onward || d.pending ? [] : [d.npc ?? d.reward])),
+      doors: (this.offer?.doors ?? []).filter((d) => !d.onward && !d.pending).map(journalDoor),
+      ...(!portal || portal.onward ? {} : { door_taken: portal.npc ?? portal.reward }),
       ...(this.pickedThisRoom ? { picked: [this.pickedThisRoom] } : {}),
       passed_over: offered.filter((id) => id !== this.pickedThisRoom),
       ...(this.pickedThisRoom === "gold" ? { took_gold_instead: true } : {}),
@@ -10539,8 +10559,127 @@ export class PlayScene extends Phaser.Scene {
     if (!this.shopping) {
       this.destroyRewardDrop();
       answerOffer(this.world);
+      // The doors rise pending now; ask what they are. `answerOffer` runs outside a step, so its
+      // `portals_open` never reaches `playWorldSounds`, which opens a gold or a vendor's room's doors.
+      void this.openDoors();
     }
     this.sfx.play("card_pick");
+  }
+
+  /** The run with the room being played folded in, as `leaveThrough` will fold it; see `RoomSoFar`. */
+  private roomSoFar(): RoomSoFar {
+    const w = this.world;
+    const plan = this.planned;
+    return {
+      heartsLostRecent: w.stats.heartsLost,
+      lastClearMs: w.stats.elapsedMs,
+      clearedMs: this.npcRoom ? this.clearedMs : [...this.clearedMs, w.stats.elapsedMs],
+      measures: w.stats.elapsedMs > 0 ? [...this.measures, measureOf(w.stats)] : this.measures,
+      nearShare: playtestLog.nearShare(),
+      gold: this.runGold + w.gold,
+      history: {
+        ...this.history,
+        tensions: [...this.history.tensions, this.tension],
+        hearts_lost: [...(this.history.hearts_lost ?? []), w.stats.heartsLost],
+        spaces: [w.room.params.space, ...this.history.spaces],
+        profiles: plan?.profile ? [...this.history.profiles, plan.profile] : this.history.profiles,
+        moods: [w.room.params.mood, ...(this.history.moods ?? [])],
+        symmetries: [w.room.params.symmetry, ...(this.history.symmetries ?? [])],
+        journal: [...(this.history.journal ?? []), this.journalEntry(null)],
+      },
+    };
+  }
+
+  /**
+   * **The doors, decided as they open.**
+   *
+   * They rise pending the moment the way out opens — the reward taken, a gold
+   * room's coins scattered, a vendor's room entered — and turn while one
+   * request decides what they are: the portal questions, and for every kind
+   * a portal could be, the cards the room behind it will offer, read against
+   * the fight just played and the build just changed. They used to be decided
+   * as the room began, so a player who walked in whole and out on one heart
+   * was offered doors chosen for the player who walked in.
+   *
+   * Each door keeps its kind's cards and is badged with the school or family
+   * most of them are (`mainTypeOf`). The request waits as long as any Jev
+   * call does, and its failures fall to the rule table as theirs do; if
+   * nothing answers at all, the rule doors open and their rooms ask for their
+   * own cards on entry.
+   */
+  private async openDoors(): Promise<void> {
+    const world = this.world;
+    if (this.doorsOpening || !world.portalSpecs.some((d) => d.pending) || !this.roomRun) return;
+    this.doorsOpening = true;
+    const index = this.roomIndex;
+    const hearts = world.player.hearts;
+    const ctx = this.directorContext(index, hearts, world.staff, this.roomSoFar());
+    const run: RunShape = {
+      ...this.roomRun, critical: hearts <= 1, hurt: hearts < MAX_HEARTS + this.liveMods().maxHearts,
+    };
+    const src = new RngSource(`${this.runSeed}-${index}`);
+    const held = this.slots.flatMap((x, i) =>
+      (x ? [heldSpell(ITEMS.get(x.base), (this.spellAffixes[i] ?? []).map((a) => a.id))] : []));
+    const needs = this.cardNeeds(ctx);
+    const kinds = ["spell", "affix", "stat"] as const;
+    const requests: CardRequest[] = kinds.map((k) => ({
+      room_index: index + 1, pool: cardPool(ITEMS, this.ownedFor(k), k, held, { style: this.intent.preset }, needs),
+      count: CARDS_PER_OFFER, pity: this.needMisses >= 3, temptation: this.offersMade % 4 === 3, salt: `door_${k}`,
+    }));
+    let doors: DoorOffer[];
+    try {
+      const plan = await this.director.planOffer(ctx, {
+        portals: portalChoices(run, src.stream("portal-count"), this.portalCount), cards: requests,
+      });
+      if (plan.portals) {
+        this.portalPlan = plan.portals;
+        this.planRecords.set("portals", { decisions: plan.portals.decisions });
+        playtestLog.decide(index, "portals", plan.portals.decisions);
+      }
+      doors = (plan.portals?.doors ?? ruleDoors(run, src.stream("offer"), this.portalCount)).map((d) => {
+        if (d.npc || d.reward === "gold") return d;
+        const ids = plan.cards[kinds.indexOf(d.reward as (typeof kinds)[number])]?.ids ?? [];
+        return ids.length ? { ...d, ...mainTypeOf(d.reward, ids), cards: ids } : d;
+      });
+    } catch {
+      doors = ruleDoors(run, src.stream("offer"), this.portalCount);
+    }
+    // The player may have died, or the run restarted, while the doors turned.
+    if (this.world !== world || this.roomIndex !== index) return;
+    const specs = doorSpecs(doors, index);
+    playtestLog.attach(index, (r) => {
+      r.doors = specs.map((d) => d.npc ? `npc:${d.npc}` : `${d.reward}${d.school ? `:${d.school}` : d.family ? `:${d.family}` : ""}${d.onward ? " (onward)" : ""}`);
+    });
+    // Counted where the list is made, so a declined vendor still spends one of the run's `NPC_OFFERS_MAX`.
+    if (specs.some((d) => d.npc && d.npc !== "fountain")) this.npcOffers++;
+    if (specs.some((d) => d.npc === "fountain")) this.fountainOffers++;
+    if (this.offer) this.offer = { ...this.offer, doors: specs };
+    resolvePortals(world, specs);
+    this.redrawPortals(true);
+  }
+
+  /**
+   * The portals' drawings, made again from the portals as they now are; with
+   * `flash`, a burst of light on each, which is the door becoming a
+   * particular one.
+   */
+  private redrawPortals(flash = false): void {
+    for (const g of this.portalGfx) { g.body.destroy(); g.badge.destroy(); g.plate.destroy(); g.tag?.destroy(); }
+    for (const m of this.eliteMarks) m.mark.destroy();
+    this.portalGfx = [];
+    this.eliteMarks = [];
+    this.buildPortalGfx();
+    if (!flash) return;
+    for (const p of this.world.portals) {
+      if (!p.open) continue;
+      const burst = this.add.circle(p.x, p.y, TILE_PX * 0.8, 0xffffff, 0.9)
+        .setDepth(8.8).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({
+        targets: burst, scale: 2.2, alpha: 0, duration: 420, ease: "Quad.easeOut",
+        onComplete: () => burst.destroy(),
+      });
+    }
+    this.sfx.play("portal_open");
   }
 
   /**
@@ -10578,9 +10717,24 @@ export class PlayScene extends Phaser.Scene {
          * reads as appearing rather than as arriving.
          */
         const rise = Math.min(1, portal.riseMs / PORTAL_RISE_MS);
-        body.setFrame(`prop_portal_open_${((this.world.tick >> 3) & 3)}`);
         body.setScale((1 / ART_SCALE) * (0.2 + 0.8 * rise));
         body.setAlpha(1);
+        if (portal.pending) {
+          /*
+           * **Turning, not yet a door.** The same four frames spun twice as
+           * fast and cooled, with nothing on it to read: what it leads to is
+           * still being decided (`openDoors`), and a badge now would be a guess.
+           */
+          body.setFrame(`prop_portal_open_${((this.world.tick >> 2) & 3)}`);
+          body.setTint(0x8fa8ff);
+          plate.setVisible(false);
+          badge.setVisible(false);
+          eliteMark?.setVisible(false);
+          tag?.setVisible(false);
+          continue;
+        }
+        body.setFrame(`prop_portal_open_${((this.world.tick >> 3) & 3)}`);
+        body.clearTint();
         plate.setAlpha(rise);
         badge.setAlpha(rise);
         eliteMark?.setAlpha(rise);
@@ -10647,6 +10801,7 @@ export class PlayScene extends Phaser.Scene {
     }
     this.hintStrip?.setVisible(true);
     const near = portalInReach(this.world.portals, this.world.player);
+    const opening = near ? null : pendingPortalNear(this.world.portals, this.world.player);
     const pl = this.world.player;
     const spellNear = this.floorSpells.find((f) => Math.hypot(f.x - pl.x, f.y - pl.y) <= 22);
     const npcNear = this.npcs.find((n) => Math.hypot(n.x - pl.x, n.y - pl.y) <= 34);
@@ -10793,6 +10948,11 @@ export class PlayScene extends Phaser.Scene {
        * pixels, for the purse to be drawn across the name it belongs to.
        */
       this.promptAbove(near.x, this.portalTop(near));
+    } else if (opening) {
+      // Beside a door still being decided: it says so, rather than seeming not to answer the key.
+      this.prompt.setVisible(true);
+      this.prompt.setText(t("prompt.portalOpening"));
+      this.promptAbove(opening.x, opening.y - TILE_PX * 1.4);
     } else {
       this.prompt.setVisible(false);
     }
