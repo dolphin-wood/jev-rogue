@@ -16,6 +16,6 @@ ALLOWED_ORIGIN = "https://jev-rogue.vercel.app"
 # time, delete this block and deploy again. `namespace_id` is any number you
 # have not used for another limiter in this Worker.
 [[ratelimits]]
-binding = "INVITE_RATE_LIMIT"
+name = "INVITE_RATE_LIMIT"
 namespace_id = "1001"
 simple = { limit = 10, period = 60 }
