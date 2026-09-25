@@ -34,7 +34,7 @@ its identity is in its materials and shapes, not in a tint the filter will chang
 | `tile_<id>_wall_*` | 64 × 64 | The wall autotile, **the same twenty names as the common set** with the depth's id put in: `solid`, `n`, `e`, `s`, `w`, `ne`, `es`, `sw`, `wn`, `ns`, `ew`, `nes`, `esw`, `swn`, `wne`, `nesw`, and the inner corners `inner_ne`, `inner_es`, `inner_sw`, `inner_wn` (so `tile_ossuary_wall_ne`, `tile_ossuary_wall_inner_sw` …). A missing name falls back to the common frame. |
 | `deco_<id>_0` – `_7` | 64 × 64 | Eight small decals scattered one floor tile in nine: ossuary — a skull, scattered finger bones, a cobweb in a joint, a burial plaque; flooded — a puddle, moss, a dropped lantern, a rusted grate; furnace — a scorch, cold ash, a melted candle stub, a length of chain. |
 | `patch_<id>_0` – `_2` | 128 × 128 (2 × 2 tiles) | Three larger pieces of floor with a story, two at most to a room: ossuary — a spread of bones round a broken coffin lid, a collapsed niche's rubble, a ring of candle stubs; flooded — a pool with its edge of moss, a silted drain, a fallen stone half under water; furnace — a burnt-out pyre, a spill of cold coals, a cracked slab with embers in the break. |
-| `prop_<id>_sconce` | 64 × 64 | A light hung just off a north wall, **seen from directly above** like the floor and the wall tops: an open iron cage of candles (ossuary), a green-glass lantern (flooded), a brazier bowl (furnace) — its rim, its bars and the light inside, no side view, no wall face. Two frames, only the flame changing. The game adds the pool of light on the floor below it. |
+| `prop_<id>_sconce` | 64 × 128 | *(Delivered, not used — see below.)* A light hung on a north wall's face: an iron cage of candles (ossuary), a green-glass lantern (flooded), a brazier bowl on a bracket (furnace). |
 
 ### The wall autotile
 
@@ -62,9 +62,9 @@ cell in sixteen until then); and the flooded depth's rust-red whorl decal is clo
 telegraph range — cool it or darken it.
 
 The first sconces were drawn from the side, as lamps hung on a wall face, and the walls here are
-seen from above with no face, so in a room they lay on the wall tops like fallen lanterns. The game
-draws its own top-down lamps in code for now (`lamp_<id>` in `packages/game/src/fx/sheets.ts`);
-redraw the three sconces to the row above and they can replace those.
+seen from above with no face, so in a room they lay on the wall tops like fallen lanterns. A lamp
+drawn from overhead in code read no better. The game draws no lamp for now, only the pool of light
+on the floor below the wall; a redrawn sconce is not needed until a lamp fits the view.
 
 Deliver each set as a sheet of named cells in `assets/source/biomes/<id>.png` with its list in the
 delivery notes, and pack it into the atlas under the names above. The game picks each name up the
