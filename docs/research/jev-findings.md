@@ -68,6 +68,8 @@ Giving every middle option a `not_for` moved `mood_particles` 96% → 55%.
 **Now:** every option, hand-written or generated, carries a `not_for`
 written from its own data; a test fails if a hand-written spec lacks one.
 
+<a id="finding-3"></a>
+
 ### 3. Examples are noise on some questions and the whole mechanism on others
 Deleting the two examples from `anchor` (nothing else changed) took it from
 `tank` 56% to `none` 99%; one generic example each brought it back to 86%.
@@ -102,6 +104,8 @@ share 59% → 72%.
 **Rule:** variety is a property of a *sequence*; a classifier answers
 *states*. Sequence properties belong to code (sampling, soft penalties,
 caps), not to wording. `DOOR_STREAK_CAP` stays.
+
+<a id="finding-5a"></a>
 
 ### 5a. Emphatic narration about an option raises it; neutral counts do not
 A controlled test: one fixed briefing (an empty key, four open affix slots),
@@ -502,6 +506,8 @@ decision is marked `no_history`, not a decline. **Rule:** a question whose
 options only mean something relative to history is not asked before there
 is history.
 
+
+<a id="finding-28"></a>
 
 ### 28. Neutral card text changed nothing Jev answers; the style lean is Jev's (2026-09-25)
 After the spell redesign (doc 006, thirty-nine spells) every card `what` was
