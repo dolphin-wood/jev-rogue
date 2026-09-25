@@ -20,6 +20,7 @@ import {
   MUSKET_RANGE, MUSKET_SPREAD_DEG, MUSKET_WINDUP_MS, FLAME_ROLL_MS, FLAME_LIFE_MS, flameRays, muzzleOf,
   ELEMENT_TINT, spellLookOf,
   levelAt, withLevels, levelBonus, LEVEL_HP, swordAt,
+  HIT_FLASH_MS,
 } from "@jr/core";
 import type {
   Bullet, Enemy, EnemyId, Input, ItemInstance, Mood, Offer, OfferCard, Portal,
@@ -239,6 +240,8 @@ const WAVE_BODY_PX = 11;
  * flash has to say *that landed*, not light the screen.
  */
 const HIT_FLASH_FILL = 0xd2c6cc;
+/** How strong the king's hit wash starts, added over him (`drawEnemy`'s boss flash). */
+const BOSS_FLASH_ALPHA = 0.35;
 const KING_WAVE = { lip: 0x1a0806, aura: 0xe8344a, mid: mix(0xe8344a, 0xffb070, 0.6), core: 0xfff0d8 } as const;
 const WAVE_FLASH_PX = 10;
 /** How thick the crescent starts, as a fraction of its full thickness. */
@@ -15803,7 +15806,7 @@ function drawEnemy(
    * an enemy struck while winding up or lunging showed no flash at all —
    * missing precisely when the player was hitting it.
    */
-  if (e.hitFlashMs > 0) img.setTintFill(HIT_FLASH_FILL);
+  if (e.hitFlashMs > 0 && e.archetype !== "boss") img.setTintFill(HIT_FLASH_FILL);
 
   /*
    * The motion the frames do not carry (`body-feel.ts`): the give as a foot
@@ -15853,6 +15856,22 @@ function drawEnemy(
   }
 
   group.add(img);
+  /*
+   * **The king's flash is a wash, not a fill.** He is struck far more often
+   * than any body and is the largest thing on the screen, so filling him
+   * pale on every blow turned him into a flickering light-grey block for a
+   * third of the fight under a held sword. His own frame is added over him,
+   * pale and faint, fading out through the flash: his shading stays, and the
+   * blow still reads.
+   */
+  if (e.archetype === "boss" && e.hitFlashMs > 0) {
+    const fade = Math.min(1, e.hitFlashMs / HIT_FLASH_MS);
+    group.add(scene.add.image(img.x, img.y, textureKey, name)
+      .setOrigin(img.originX, img.originY).setFlipX(img.flipX).setRotation(img.rotation)
+      .setScale(img.scaleX, img.scaleY)
+      .setTintFill(HIT_FLASH_FILL).setBlendMode(Phaser.BlendModes.ADD).setAlpha(BOSS_FLASH_ALPHA * fade)
+      .setDepth(img.depth + 0.0005));
+  }
   // The king's frames are to carry his sword (doc 020, art order B8: his cuts go to his sides, so a
   // drawn sword can match them). Until the atlas packs those frames, the sword is placed here.
   if (BOSS_PLACED_SWORD && e.archetype === "boss" && e.hp > 0 && !replacementFrame && atlas.has("weapon_boss_sword")) {
@@ -15888,13 +15907,11 @@ function drawEnemy(
       .setScale(1 / ART_SCALE)
       .setRotation(blade + Math.PI / 2)
       .setDepth(img.depth + (Math.sin(blade) < -.3 ? -.002 : .002));
-    if (e.hitFlashMs > 0) sword.setTintFill(HIT_FLASH_FILL);
     group.add(sword);
     const fist = `weapon_boss_fist_p${Math.min(3, Math.max(1, e.phase))}`;
     if (atlas.has(fist)) {
       const wrap = scene.add.image(gx, gy, textureKey, fist)
         .setScale(1 / ART_SCALE).setDepth(img.depth + .004);
-      if (e.hitFlashMs > 0) wrap.setTintFill(HIT_FLASH_FILL);
       group.add(wrap);
     }
   }
