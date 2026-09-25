@@ -713,6 +713,11 @@ function givingGround(world: World, e: Enemy): boolean {
   return Math.hypot(p.x - e.x, p.y - e.y) < keepDistance(e) * 0.8;
 }
 
+/** Whether the body is in an attack it has started: a melee windup or lunge, or a shot being aimed or fired. */
+export function midAttack(e: Enemy): boolean {
+  return e.attack === "windup" || e.attack === "lunge" || e.telegraphMs > 0 || e.pending.length > 0;
+}
+
 export function canStagger(e: Enemy): boolean {
   // The king is never interrupted: every move he starts, he finishes, and the opening is the rest after it.
   return e.archetype !== "boss" && e.armour <= 0;

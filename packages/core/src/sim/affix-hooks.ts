@@ -377,10 +377,9 @@ function nearestOther(
 /**
  * A body died to a projectile carrying affixes.
  *
- * `harvest` bursts where it fell; `echo` refunds the cast. The refund is a
- * fraction of what the cast actually cost, recorded on the projectile at cast
- * time, so a cheaper build refunds less in absolute terms and the affix cannot
- * be turned into a mana engine by attaching it to something free.
+ * `harvest` bursts where it fell; `haste` takes cooldown off. Nothing on a
+ * spell gives mana back — Echo did, and a spell that paid for itself left
+ * the sword, which is what supplies mana, with nothing to do.
  */
 export function onKill(w: World, b: Bullet, e: Enemy, sim: HookSim): void {
   const kills = at(b.affixes, "kill");
@@ -389,12 +388,6 @@ export function onKill(w: World, b: Bullet, e: Enemy, sim: HookSim): void {
   const harvest = find(kills, "burst");
   if (harvest && harvest.kind === "burst")
     burst(w, e.x, e.y, harvest.radiusPx, BURST_DAMAGE, sim, "harvest");
-
-  const echo = find(kills, "refund");
-  if (echo && echo.kind === "refund" && b.manaSpent > 0) {
-    w.player.mana = Math.min(w.staff.mana_max, w.player.mana + b.manaSpent * echo.fraction);
-    w.events.push({ kind: "pickup", x: e.x, y: e.y, what: "echo" });
-  }
 
   // `haste`: the kill takes a share off this spell's cooldown.
   const haste = find(kills, "haste");

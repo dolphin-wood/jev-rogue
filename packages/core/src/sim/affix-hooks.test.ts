@@ -274,16 +274,6 @@ describe("kill affixes", () => {
     expect(bystander.hp).toBeLessThan(100_000);
   });
 
-  it("echo returns mana on a kill", () => {
-    const bare = arena();
-    dummy(bare, 150, 0, 1);
-    castAndRun(bare, bare.enemies[0]!, 30);
-    const echo = arena({ id: "echo" });
-    dummy(echo, 150, 0, 1);
-    castAndRun(echo, echo.enemies[0]!, 30);
-    // Same regen over the same frames, so the difference is the refund.
-    expect(echo.player.mana).toBeGreaterThan(bare.player.mana);
-  });
 });
 
 describe("death affixes", () => {

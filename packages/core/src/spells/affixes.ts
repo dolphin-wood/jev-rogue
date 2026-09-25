@@ -124,8 +124,6 @@ export type AffixEffect =
   | { readonly kind: "repeat"; readonly extra: number }
   /** Fires the spell along `dirs` extra directions spaced evenly around. */
   | { readonly kind: "spread"; readonly dirs: number }
-  /** Returns `fraction` of the spell's cost. */
-  | { readonly kind: "refund"; readonly fraction: number }
   /** Leaves a rune that stops `shots` enemy projectiles. */
   | { readonly kind: "ward"; readonly shots: number }
   /** Fires the spell at up to `targets` bodies, free. */
@@ -247,21 +245,6 @@ const BASE_AFFIXES: SpellAffix[] = [
     description:
       "A body killed by this spell bursts where it falls, hitting the bodies "
       + "round it.",
-  },
-  {
-    id: "echo",
-    name: "Echo",
-    hook: "kill",
-    shapes: [...HITTING],
-    element: null,
-    tiers: [
-      { effect: { kind: "refund", fraction: 0.5 }, text: "a kill returns half the mana" },
-      { effect: { kind: "refund", fraction: 1 }, text: "a kill returns the mana" },
-      { effect: { kind: "refund", fraction: 1.5 }, text: "a kill returns one and a half times the mana" },
-    ],
-    description:
-      "A kill with this spell gives back mana: part of what the killing cast "
-      + "cost, all of it, or more, by tier.",
   },
   {
     id: "bloom",
@@ -695,7 +678,6 @@ export function spellAffixMagnitude(e: AffixEffect): number {
     case "mark": return e.radiusPx;
     case "repeat": return e.extra;
     case "spread": return e.dirs;
-    case "refund": return e.fraction;
     case "ward": return e.shots;
     case "riposte": return e.targets;
     case "resonate": return 1 / e.every;

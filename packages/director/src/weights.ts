@@ -235,16 +235,14 @@ export const ruleTable: WeightTable = (scopedQuestion, option, scopedState) => {
       // The same facts the question gives Jev, and no verdicts: what the last
       // rooms measured, which way the keys lean, and what the player typed.
       const hits = label(state, "hits_per_shot");
-      const manaShort = label(state, "mana_short_time");
-      const manaRefused = label(state, "mana_refused");
       const casts = label(state, "cast_rate");
       const damage = label(state, "damage_rate");
       const lean = label(state, "keys_lean");
       const preset = label(state, "intent.preset");
       let w = 1;
       if (option === "homing") w = hits === "few" ? 3 : 0.5;
-      else if (option === "cheaper") w = manaRefused !== "never" ? 3
-        : manaShort === "most" ? 2.2 : casts === "slow" ? 2 : 0.5;
+      // Haste takes cooldown off, not mana: a slow cast rate, not an empty bar.
+      else if (option === "cheaper") w = casts === "slow" ? 2 : 0.5;
       else if (option === "elemental") w = lean === "dot" || lean === "area" ? 2.5
         : preset === "dot" || preset === "area" ? 1.8 : 0.8;
       else if (option === "heavier") w = lean === "nuke" ? 2

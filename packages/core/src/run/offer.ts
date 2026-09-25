@@ -609,16 +609,16 @@ export function gapOf(observed: ObservedLabels | undefined): string {
 }
 
 /**
- * Which spells, affixes and stat families ease each gap. `harvest` is a
- * damage affix — a kill bursts — and not a mana one: it returns nothing to
- * the bar, which is `echo`'s event.
+ * Which spells, affixes and stat families ease each gap. No affix eases a
+ * mana gap: nothing on a spell gives mana back, so the answer to running dry
+ * is the mana upgrades and the sword.
  */
 const GAP_SPELL_TAGS: Readonly<Record<string, readonly string[]>> = {
   damage: ["nuke", "area"], cast_frequency: ["spam"], mana: ["spam"], accuracy: ["tracking", "area"],
 };
 const GAP_AFFIXES: Readonly<Record<string, readonly string[]>> = {
   damage: ["brand", "fork", "pierce", "kindle", "blight", "harvest"], cast_frequency: ["haste", "repeat", "resonance"],
-  mana: ["echo"], accuracy: ["seek", "chain", "scatter"],
+  mana: [], accuracy: ["seek", "chain", "scatter"],
 };
 const GAP_FAMILIES: Readonly<Record<string, readonly string[]>> = {
   damage: ["sword"], cast_frequency: ["mana"], mana: ["mana"], accuracy: ["movement"],
@@ -711,7 +711,7 @@ export interface CardPool {
  * works two verbs.
  */
 const AFFIX_STYLE: Readonly<Record<string, readonly string[]>> = {
-  spam: ["echo", "repeat", "fork", "seek", "ricochet"],
+  spam: ["repeat", "fork", "seek", "ricochet"],
   nuke: ["haste", "shatter", "fork", "brand", "rime"],
   area: ["scatter", "chain", "harvest", "pierce"],
   dot: ["kindle", "blight", "bloom", "brand"],

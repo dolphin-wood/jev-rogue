@@ -60,7 +60,6 @@ export const ZH_CONTENT: ContentTable = {
   chain: { name: "连锁", description: "命中后向附近的下一个敌人放出一枚缩小、减弱的同款法术。敌人越聚越好用。" },
   brand: { name: "烙印", description: "第一下打上标记，第二下引爆它。适合盯着一个目标打。" },
   harvest: { name: "收割", description: "用它击杀的敌人会炸开。" },
-  echo: { name: "回响", description: "用它击杀敌人时，返还下一发的法力。" },
   bloom: { name: "绽放", description: "弹丸飞到尽头时点燃地面，站在上面的敌人会被烧着。打空了也不浪费。" },
   shatter: { name: "碎裂", description: "打到墙和杂物也会炸开碎片。房间越乱越好用。" },
   repeat: { name: "重施", description: "按下后隔一拍再自动放一次，朝你那时瞄准的方向。" },

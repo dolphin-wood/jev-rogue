@@ -56,27 +56,21 @@ export const AFFIX_LANES: Readonly<Record<AffixIntent, Lane>> = {
   },
   cheaper: {
     /*
-     * Echo and Haste: the two whose event hands a cast back on a kill, the
-     * mana or the cooldown. Harvest used to sit here, on the reading that a
-     * kill that bursts leaves the next cast less to do — an inference, where
-     * what Harvest does is hit the bodies round a kill, which is `wider`'s
-     * event (more of the room reached from one cast).
+     * Haste: the kill hands the cast back sooner, by taking cooldown off.
+     * Echo sat here too and gave mana back on a kill; it is gone, since
+     * nothing on a spell may pay for spells (the sword and the mana upgrades
+     * do). So this lane answers a slow cast rate, not an empty bar — a player
+     * short of mana is the stat door's to answer. Harvest used to sit here,
+     * on the reading that a kill that bursts leaves the next cast less to
+     * do — an inference, where what Harvest does is hit the bodies round a
+     * kill, which is `wider`'s event (more of the room reached from one cast).
      */
-    affixes: ["echo", "haste"],
-    // Not "fast": "clear rooms fast" is a sentence about pace, and it read as
-    // a sentence about the mana bar — which took a chain-lightning player to
-    // the lane that answers a problem they did not have.
-    words: ["mana", "cheap", "cost", "spam", "often", "cooldown"],
-    phrases: ["out of mana", "run out", "cast more"],
-    /*
-     * Harvest does **not** refund mana — it makes the kill itself burst. The
-     * text once said it did, which is a fact about the game that is not true,
-     * and an option that misdescribes its own contents is worse than one with
-     * no text at all: Jev matched a player who could not cast onto a lane two
-     * thirds of which does nothing about casting. It is in `wider` now.
-     */
-    text: "A kill that hands a cast back: Echo gives mana back on a kill, Haste takes cooldown off on a kill.",
-    fits: [["mana_short_time", "some", "most"], ["mana_refused", "sometimes", "often"], ["cast_rate", "slow"]],
+    affixes: ["haste"],
+    // Not "fast": "clear rooms fast" is a sentence about pace, not about the cast rate.
+    words: ["often", "cooldown", "spam"],
+    phrases: ["cast more", "cast faster"],
+    text: "A kill that hands a cast back sooner: Haste takes cooldown off the spell on a kill.",
+    fits: [["cast_rate", "slow"]],
   },
   elemental: {
     affixes: ["kindle", "rime", "blight"],
@@ -162,8 +156,7 @@ export const LANE_SPEC: Readonly<Record<AffixIntent, OptionSpec>> = {
   },
   cheaper: {
     what: AFFIX_LANES.cheaper.text,
-    not_for: "A bar that has refused no cast and spent little time under the cheapest key, and a spell "
-      + "that seldom lands the kill.",
+    not_for: "A build that already casts each key as often as it wants, and a spell that seldom lands the kill.",
   },
   elemental: {
     what: AFFIX_LANES.elemental.text,

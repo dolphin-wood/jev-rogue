@@ -1453,12 +1453,12 @@ describe("enemy behaviour", () => {
     expect(e.hp).toBeLessThan(before);
   });
 
-  it("a hit interrupts a windup, which is what pays for reading the tell", () => {
+  it("the sword does not cancel an attack under way: a windup is finished through the blows", () => {
     /*
-     * The single largest thing missing from how the enemies felt. Without it a
-     * hit changed nothing the player could see — the body kept walking, kept
-     * winding up, kept swinging — and damage that does not interrupt reads as
-     * damage that did not land.
+     * Every blow used to cancel the windup it landed in, and a held sword
+     * swings faster than any windup, so holding the button kept every body in
+     * reach from ever attacking. The tell is now read to be dodged, not to be
+     * out-clicked; a heavy spell is what interrupts.
      */
     const w = world();
     const e = makeEnemy(1, "rusher", w.player.x + 40, w.player.y, []);
@@ -1470,11 +1470,39 @@ describe("enemy behaviour", () => {
     expect(e.attack).toBe("windup");
 
     w.player.facing = 0;
-    step(w, input({ swing: true }));
-    for (let i = 0; i < 12 && e.staggerMs <= 0; i++) step(w, NO_INPUT);
-    expect(e.staggerMs, "a hit should stagger").toBeGreaterThan(0);
-    expect(e.attack, "and cancel the attack outright").toBe("approach");
-    expect(e.hasToken, "and hand the turn back").toBe(false);
+    const hp = e.hp;
+    let lunged = false;
+    for (let i = 0; i < 40 && !lunged; i++) {
+      step(w, input({ swing: true }));
+      lunged = e.attack === "lunge";
+    }
+    expect(e.hp, "the blows land").toBeLessThan(hp);
+    expect(e.staggerMs).toBeLessThanOrEqual(0);
+    expect(lunged, "and the attack comes anyway").toBe(true);
+  });
+
+  it("the sword flinches a body that is not attacking, and not again for a second", () => {
+    const w = world();
+    const e = makeEnemy(1, "tank", w.player.x + 44, w.player.y, []);
+    e.spawnFadeMs = 0;
+    e.awake = true;
+    e.alertMs = 0;
+    e.armour = 0;
+    e.hp = 10_000;
+    // Between attacks: it has nothing started for a blow to leave alone.
+    e.attackCooldownMs = 1e9;
+    w.enemies.push(e);
+    w.player.facing = 0;
+
+    for (let i = 0; i < 40 && e.staggerMs <= 0; i++) step(w, input({ swing: i % 20 === 0 }));
+    expect(e.staggerMs, "the first blow flinches it").toBeGreaterThan(0);
+    run(w, 20);
+    expect(e.staggerMs).toBeLessThanOrEqual(0);
+    // Inside the second, a blow lands but does not flinch it again.
+    const hp = e.hp;
+    for (let i = 0; i < 20 && e.hp === hp; i++) step(w, input({ swing: i === 0 }));
+    expect(e.hp).toBeLessThan(hp);
+    expect(e.staggerMs).toBeLessThanOrEqual(0);
   });
 
   it("knocks a charge down when it hits a wall", () => {
@@ -1535,7 +1563,7 @@ describe("enemy behaviour", () => {
     expect(e.hp).toBe(e.maxHp);
   });
 
-  it("lets the player earn the interrupt by breaking the armour", () => {
+  it("lets the player earn the flinch by breaking the armour", () => {
     /*
      * The whole reason armour is a pool rather than permanent immunity. An
      * enemy whose state the player cannot touch is an obstacle, not an
@@ -1561,12 +1589,14 @@ describe("enemy behaviour", () => {
     run(w, 20);
     expect(e.staggerMs).toBeLessThanOrEqual(0);
 
-    // Now a hit lands as a hit: it staggers, and it cancels the attack.
-    beginWindup(w, e, w.player);
+    // Past its flinch window, a hit lands as a hit on a body between attacks.
+    run(w, 60);
+    e.attack = "approach";
+    e.attackCooldownMs = 1e9;
+    e.staggerImmuneMs = 0;
     for (let i = 0; i < 40 && e.staggerMs <= 0; i++)
       step(w, input({ swing: i % 20 === 0 }));
     expect(e.staggerMs, "a broken-armour body should stagger").toBeGreaterThan(0);
-    expect(e.attack).toBe("approach");
   });
 
   it("caps how many enemies attack at once, and scales the cap with the room", () => {

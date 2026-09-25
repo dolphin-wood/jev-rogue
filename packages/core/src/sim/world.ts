@@ -63,7 +63,7 @@ import { ARM_TELE_MS, castArm, castRift, castRanged, castShockwave, dragStep, in
 import type { AttackHooks } from "./attacks.ts";
 import { computeFlowField, tileOf } from "./flow.ts";
 import {
-  anchored, bossStringHearts, hatchMinion, isActive, livingSummoners, makeEnemy, stepEnemy, stagger, wake, dropToken,
+  anchored, bossStringHearts, hatchMinion, isActive, livingSummoners, makeEnemy, stepEnemy, stagger, canStagger, midAttack, wake, dropToken,
   dropFireToken, ARMOUR_BREAK_MS, SPAWN_FADE_MS, SPAWN_TELEGRAPH_MS, ENEMY_FREEZE_MS, STAGGER_MS,
   ENEMY_BURN_MS, ENEMY_POISON_MS, ENEMY_BURN_SOURCES, ENEMY_POISON_STACKS, SHATTER_MULT,
   STATUS_BREADTH_MULT, statusBreadth,
@@ -111,6 +111,27 @@ function spellStagger(w: World, e: Enemy, weight: number): void {
   if (e.staggerImmuneMs > 0) return;
   stagger(w, e, STAGGER_MS * weight);
   e.staggerImmuneMs = SPELL_STAGGER_IMMUNE_MS;
+}
+
+/**
+ * **The sword flinches a body; it does not cancel its attack.**
+ *
+ * Every connecting blow used to stagger, and a stagger cancels whatever the
+ * body was doing and pushes its next attack back. A sword held down swings
+ * faster than any windup in the roster, so a held button kept every body in
+ * reach from ever attacking — the whole game could be cleared by holding
+ * the sword. Now an attack already under way (a windup, a lunge, a shot
+ * being aimed) is finished through the blows, and a body the sword has
+ * staggered cannot be staggered by it again for `SWORD_STAGGER_IMMUNE_MS`,
+ * so a body being hit still gets its turn. A heavy spell (`spellStagger`)
+ * still interrupts: that is what the slow cast is for.
+ */
+const SWORD_STAGGER_IMMUNE_MS = 1000;
+
+function swordStagger(w: World, e: Enemy): void {
+  if (e.staggerImmuneMs > 0 || midAttack(e) || !canStagger(e)) return;
+  stagger(w, e);
+  e.staggerImmuneMs = SWORD_STAGGER_IMMUNE_MS;
 }
 
 /** A player's shot at least this heavy (`weight`) staggers what it hits, for `STAGGER_MS` times its weight. */
@@ -1154,7 +1175,7 @@ function resolveSwing(w: World, dtMs: number): void {
   for (const e of struck) {
     // A blow of the swing proper, not the spin's: the one kind of kill a streak counts.
     w.swordBlow = w.player.swingStretch === 1;
-    hurtEnemy(w, e, box.damage, e.awake ? "" : "sneak", w.player);
+    const { broke } = hurtEnemy(w, e, box.damage, e.awake ? "" : "sneak", w.player);
     w.swordBlow = false;
     w.stats.damageDealt += box.damage;
     w.stats.swordDamage += box.damage;
@@ -1178,10 +1199,11 @@ function resolveSwing(w: World, dtMs: number): void {
       e.knockY += (dy / d) * push;
     }
 
-    // Being hit is the loudest way to be noticed, and it interrupts whatever
-    // the body was doing — which is most of why a hit reads as landing.
+    // Being hit is the loudest way to be noticed, and it flinches a body that
+    // is not already attacking (`swordStagger`).
     wake(w, e);
-    stagger(w, e);
+    // Breaking its armour is the one blow that cancels what it had started.
+    if (broke) { stagger(w, e); e.staggerImmuneMs = SWORD_STAGGER_IMMUNE_MS; } else swordStagger(w, e);
     impact(w, HITSTOP_HIT, TRAUMA_HIT);
 
     // The loop the whole design turns on: the sword pays for the spells, so
@@ -1214,7 +1236,7 @@ function breakProps(w: World): void {
     const id = PROP_HIT_ID_BASE - i;
     if (box.hitIds.includes(id)) continue;
     box.hitIds.push(id);
-    damageProp(w, p, box.damage);
+    damageProp(w, p, box.damage, true);
   }
 }
 
@@ -1303,7 +1325,7 @@ export function hurtEnemy(
   return { broke: false };
 }
 
-function damageProp(w: World, p: Destructible, amount: number): void {
+function damageProp(w: World, p: Destructible, amount: number, bySword = false): void {
   // Carved stone rings when struck and that is all it does.
   if (!breakable(p)) { p.hitFlashMs = HIT_FLASH_MS; return; }
   p.hp -= amount;
@@ -1315,7 +1337,8 @@ function damageProp(w: World, p: Destructible, amount: number): void {
   }
   /*
    * Broken: the cell becomes floor, the flow field is invalidated so enemies
-   * use the lane immediately, and the player is paid in mana.
+   * use the lane immediately, and a player who broke it with the sword is
+   * paid in mana.
    *
    * Mana rather than gold or health because it is the resource the design
    * starves on purpose — the sword supplies it and spells spend it — so
@@ -1328,8 +1351,10 @@ function damageProp(w: World, p: Destructible, amount: number): void {
   impact(w, HITSTOP_HIT, TRAUMA_HIT);
   // A conjured pillar is the player's own spell: breaking it pays nothing,
   // or a ward would be a coin purse the player raises and smashes.
+  // And only the sword's blow pays mana: the sword supplies, spells spend,
+  // and a spell that broke a crate refunded itself.
   if (p.kind !== "pillar") {
-    w.player.mana = Math.min(
+    if (bySword) w.player.mana = Math.min(
       w.staff.mana_max, w.player.mana + w.staff.mana_max * PROP_MANA_FRACTION,
     );
     dropPropLoot(w, p.x, p.y);

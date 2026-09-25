@@ -312,7 +312,7 @@ cards, in the room's own request.
     off the observed labels in this order: few bodies hit per shot, a bar that
     refused or ran under the cheapest key, a slow cast rate, a low damage
     rate) — accuracy (tracking and area spells; `seek`, `chain`, `scatter`;
-    the movement family), mana (Barrage spells; `echo`; the mana family), cast
+    the movement family), mana (Barrage spells; the mana family), cast
     frequency (Barrage spells; `haste`, `repeat`, `resonance`; the mana
     family), damage (Heavy and Crowd spells; `brand`, `fork`, `pierce`,
     `kindle`, `blight`, `harvest`; the sword).
@@ -369,7 +369,7 @@ names a real set:
 | Lane | Affixes | Fits |
 |---|---|---|
 | `homing` | seek, ricochet | few bodies hit per shot, a run in which the sword has done nothing |
-| `cheaper` | echo, haste | time under the cheapest key, casts refused, a slow cast rate |
+| `cheaper` | haste | a slow cast rate (no affix gives mana back; running dry is the mana family's) |
 | `elemental` | kindle, rime, blight | keys leaning, or a stated style of, dot or area |
 | `heavier` | fork, pierce, shatter, brand | keys leaning, or a stated style of, nuke; a low damage rate |
 | `wider` | scatter, repeat, bloom, chain, harvest | keys leaning, or a stated style of, area or spam; heavy movement pressure |

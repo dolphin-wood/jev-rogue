@@ -360,9 +360,9 @@ describe("firstSentence", () => {
 });
 
 describe("the affix lanes describe their own contents correctly", () => {
-  it("does not claim Harvest refunds mana; only Echo does", () => {
+  it("does not claim any affix gives mana back: none does", () => {
     const cheaper = AFFIX_LANES.cheaper.text;
-    expect(cheaper).toContain("Echo gives mana back");
+    expect(cheaper).not.toMatch(/mana/i);
     expect(cheaper).not.toMatch(/Harvest/);
     // Harvest's event is a burst round a kill: more of the room from one cast.
     expect(AFFIX_LANES.cheaper.affixes).not.toContain("harvest");

@@ -638,9 +638,16 @@ const STARTERS: readonly string[] = Object.values(STYLE_START);
  * Their advantage on a crowd is their identity and is billed separately
  * (`AREA_PACK_FLOOR`, `PACK_CEILING`).
  */
-const BASE_TARGET = 0.875;
+/*
+ * Lowered from 0.875 and 0.75 when spells went back to the old price and
+ * Echo was taken out: the bar is now the limit on a held key, so a cheap
+ * spell sustains about two thirds of the sword over twenty seconds rather
+ * than nine tenths, and the sword is the income as well as the weapon. The
+ * heavy spells, which their cooldowns already held back, barely moved.
+ */
+const BASE_TARGET = 0.7;
 const BASE_HI = 1.0;
-const BASE_LO = 0.75;
+const BASE_LO = 0.55;
 /**
  * How far below the cluster an **area** spell may sit on one body. A crowd
  * specialist trades single-target for a crowd; what it owes for the privilege
@@ -652,7 +659,7 @@ const BASE_LO = 0.75;
  * a poison below the generalists' floor left that style the only one whose
  * average player seldom reached the boss. It is held to `BASE_LO` like the rest.
  */
-const AREA_LO = 0.6;
+const AREA_LO = 0.45;
 /**
  * **What an `area` spell has to be worth against six bodies**, as a multiple
  * of what it does to one. Measured against itself rather than against the
@@ -675,7 +682,8 @@ const PACK_CEILING = 1.35;
  * generalists only. An `area` or `dot` specialist is allowed to sit below
  * them because `AREA_PACK_FLOOR` bills it for the difference.
  */
-const SPREAD_MAX = 1.45;
+// Widened from x1.45 with the price: the cheap keys fell and the cooldown-bound heavy ones did not.
+const SPREAD_MAX = 1.6;
 /**
  * **Every spell must have a build that clearly passes the sword**, or there is
  * no reason to put gold into it. Measured at level five with the best pair of

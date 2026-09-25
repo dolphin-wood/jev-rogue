@@ -85,6 +85,8 @@ const ATTACKS: readonly BaseItem[] = [
     params: {
       damage: 6.8, speed: 900, radius: 3, count: 1, spread: 0, lifetime: 0.75,
       pierce: 0, element: "none", seek: 480, curve: 0, chain: 2, weight: 0.7,
+      // Held, three seeking sparks a second that each found three bodies emptied rooms by themselves.
+      cooldown_scale: 1.5,
     },
     description:
       "Shock Arc throws a short-lived spark that steers hard onto a body and leaps from it to up to two more nearby, each jump doing less than the last.",
@@ -642,7 +644,10 @@ const ATTACKS: readonly BaseItem[] = [
     id: "quake_ring",
     rarity: "uncommon",
     tags: ["attack", "short", "none", "area", "melee"],
-    mana: 4,
+    // Rank 5 and two and a half times the cooldown its price gives it: every
+    // body round the caster, staggered, twice a second, was the strongest key
+    // in the pool against a crowd.
+    mana: 5,
     params: {
       /*
        * The `ring` pattern: rings of cells round the caster, `step` tiles
@@ -658,7 +663,7 @@ const ATTACKS: readonly BaseItem[] = [
        */
       damage: 9.8, speed: 0, radius: 14, count: 2, spread: 0, lifetime: 0.4, pierce: 0, element: "none",
       seek: 0, curve: 0, weight: 1.4, shape: "eruption", eruption: "earth", pattern: "ring",
-      first: 1.1, step: 1.1, ring_spacing: 2.2, delay_ms: 110, windup_ms: 220, recover_ms: 280, move_scale: 0.5, cooldown_scale: 1.2,
+      first: 1.1, step: 1.1, ring_spacing: 2.2, delay_ms: 110, windup_ms: 220, recover_ms: 280, move_scale: 0.5, cooldown_scale: 2.5,
     },
     description:
       "Quake Ring breaks the ground in rings out from the caster, one after another, hitting and staggering each body once. A wall stops it.",

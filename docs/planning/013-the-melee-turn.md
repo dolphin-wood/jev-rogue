@@ -358,7 +358,7 @@ in numbers: light spells fly fast and heavy ones slow and large. Every shot
 carries a `weight`, its mass: light ones below 1 (a seeker 0.3, a spark 0.4, a
 pellet 0.5), the bolt 1, heavy ones above. It multiplies the knockback, and a
 shot of 1.2 or more **staggers** what it hits for its weight times the sword's
-stagger, interrupting a windup as a swing does; a heavy one also lengthens the
+stagger, interrupting a windup, which a swing does not; a heavy one also lengthens the
 hit freeze, shakes the room and throws a larger burst. A light shot only
 pushes. A spell may scale its own cooldown (`cooldown_scale`), so a slow, heavy
 shot is thrown seldom whatever it costs.
@@ -452,7 +452,7 @@ dead draw dressed as a choice is worse than a smaller pool.
 | affix | hook | fits |
 |---|---|---|
 | Fork, Shatter, Pierce, Seek, Ricochet | hit / wall / cast | bolt |
-| Chain, Brand, Harvest, Echo, Haste | hit / kill | bolt, orbit, boomerang, orb, enchant |
+| Chain, Brand, Harvest, Haste | hit / kill | bolt, orbit, boomerang, orb, enchant |
 | Bloom | expire | bolt, orbit, enchant |
 | Repeat | cast | bolt, eruption, boomerang |
 | Scatter | cast | bolt, field, pillar, vortex, dash, eruption, boomerang |
@@ -773,12 +773,17 @@ with no turn holds a ring *further out* than it strikes from, so the floor
 around the player stays theirs and the two that came closer are legible as the
 two that are committed.
 
-**A hit staggers.** The body stops, whatever it was doing is cancelled, and its
-turn goes back to the pool. Damage that does not interrupt reads as damage that
-did not land. Armour is the exception and it is a pool rather than immunity,
-because **an enemy whose state the player cannot touch is an obstacle, not an
-opponent**: a tank's armour means the right to interrupt it is earned two hits
-into the fight, and the break is its own moment.
+**A sword hit flinches; it does not cancel an attack.** A body that is not
+attacking stops for a moment and its turn goes back to the pool, once a second
+at most. An attack already under way — a windup, a lunge, a shot being aimed —
+is finished through the blows. Every hit used to cancel whatever the body was
+doing, and a held sword swings faster than any windup, so holding the button
+kept everything in reach from ever attacking: the tell is there to be dodged,
+not out-clicked. What does cancel an attack is a heavy spell (weight 1.2 and
+up, once in 900 ms) and **breaking a body's armour**, because **an enemy whose
+state the player cannot touch is an obstacle, not an opponent**: a tank's
+armour is the right to interrupt it, earned two hits into the fight, and the
+break is its own moment.
 
 **Bodies have mass.** Acceleration is 320 px/s² scaled by weight, so every
 archetype takes about a third of a second to reach its speed and the same to

@@ -194,10 +194,22 @@ export const SPELL_COST_MAX_FRACTION = 0.35;
  * (`MANA_PER_HIT_FRACTION`) buys correspondingly more — which is the loop the
  * design wants louder, not quieter.
  */
-export const SPELL_COST_BASE = 3.75;
-export const SPELL_COST_PER_RANK = 1.875;
-/** The pool the cooldown scale is written against; see `spellCooldownMs`. */
-export const BASELINE_MANA_MAX = 60;
+/*
+ * **And the quarter back on.** At 3.75 + 1.875 a rank, with the bar full at
+ * the start of every room and the sword refunding a cast every hit or two,
+ * the bar was never the limit: a held cheap key ran all fight, and the mana
+ * upgrades had nothing to buy. 5 + 2.5 a rank is the old price again; the
+ * cooldowns do not move with it (`BASELINE_MANA_MAX`).
+ */
+export const SPELL_COST_BASE = 5;
+export const SPELL_COST_PER_RANK = 2.5;
+/**
+ * The pool the cooldown scale is written against; see `spellCooldownMs`.
+ * 80 rather than 60 since the price rose by a third: the rise is meant to
+ * make the bar the limit, not to slow every key down, so the cooldowns stay
+ * where they were measured.
+ */
+export const BASELINE_MANA_MAX = 80;
 
 /** The doc-006 mana ranks a spell's cost is interpolated between. */
 const RANK_MIN = 1;

@@ -58,7 +58,6 @@ export const JA_CONTENT: ContentTable = {
   chain: { name: "チェイン", description: "当たると近くの次の敵へ、同じ呪文の小さく弱い写しを放つ。敵が固まるほど強い。" },
   brand: { name: "ブランド", description: "1発目で印を付け、2発目で起爆する。一体を狙い続けるほど得。" },
   harvest: { name: "ハーヴェスト", description: "この呪文で倒した敵がはじけ飛ぶ。" },
-  echo: { name: "エコー", description: "この呪文で倒すと、次の1発のマナが戻る。" },
   bloom: { name: "ブルーム", description: "弾が飛び切った場所の床が燃え、上にいる敵を燃やす。外れても無駄にならない。" },
   shatter: { name: "シャッター", description: "壁や障害物に当たっても破片が飛ぶ。散らかった部屋ほど強い。" },
   repeat: { name: "リピート", description: "押してから一拍おいて、そのとき狙っている方向へもう1回撃つ。" },

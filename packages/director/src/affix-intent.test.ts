@@ -107,7 +107,9 @@ describe("the affix intent (doc 007)", () => {
   it("follows the player's typed words: freezing and shattering pulls the elemental lane", () => {
     expect(laneFromText("I want to freeze things and shatter them")).toBe("elemental");
     expect(laneFromText("burn everything down")).toBe("elemental");
-    expect(laneFromText("I keep running out of mana")).toBe("cheaper");
+    // No affix gives mana back, so running dry names no affix lane: it is the stat door's.
+    expect(laneFromText("I keep running out of mana")).toBeNull();
+    expect(laneFromText("I want to cast more")).toBe("cheaper");
     expect(laneFromText("I can never hit anything")).toBe("homing");
     expect(laneFromText("get me in sword range")).toBe("survival");
     expect(laneFromText("one big hit")).toBe("heavier");
@@ -130,7 +132,7 @@ describe("the affix intent (doc 007)", () => {
     const melee = await offers((seed) => ctx({ seed, preset: "melee" }));
     const spam = await offers((seed) => ctx({ seed, preset: "spam" }));
     expect(shareOfLane(melee.ids, "survival")).toBeGreaterThan(shareOfLane(spam.ids, "survival"));
-    expect(shareOfLane(spam.ids, "cheaper")).toBeGreaterThan(shareOfLane(melee.ids, "cheaper"));
+    expect(shareOfLane(spam.ids, "wider")).toBeGreaterThan(shareOfLane(melee.ids, "wider"));
   });
 
   it("answers a hurt player with the lane that keeps them alive", async () => {

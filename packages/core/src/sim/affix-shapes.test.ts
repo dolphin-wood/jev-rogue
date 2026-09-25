@@ -146,7 +146,6 @@ interface Seen {
   arcs: number;
   brands: number;
   harvests: number;
-  echoes: number;
   hastes: number;
   fires: number;
   wards: number;
@@ -191,7 +190,7 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix): Seen {
   const home = bodies.map((e) => ({ x: e.x, y: e.y }));
   const aim = scenario === "wall" ? { x: PX - 600, y: PY } : scenario === "far" ? { x: PX + 700, y: PY } : { x: PX + 150, y: PY };
   const seen: Seen = {
-    damage: 0, made: 0, splits: 0, arcs: 0, brands: 0, harvests: 0, echoes: 0, hastes: 0, fires: 0,
+    damage: 0, made: 0, splits: 0, arcs: 0, brands: 0, harvests: 0, hastes: 0, fires: 0,
     wards: 0, burn: 0, poison: 0, chill: 0, airborne: 0, stationary: 0,
   };
   /*
@@ -229,7 +228,6 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix): Seen {
       if (ev.kind === "shot" && ev.what === "arc") seen.arcs++;
       if (ev.kind === "enemy_hit" && ev.what === "brand") seen.brands++;
       if (ev.kind === "enemy_hit" && ev.what === "harvest") seen.harvests++;
-      if (ev.kind === "pickup" && ev.what === "echo") seen.echoes++;
       if (ev.kind === "pickup" && ev.what === "haste") seen.hastes++;
     }
     seen.wards = Math.max(seen.wards, w.wards.length);
@@ -293,7 +291,6 @@ function observable(a: SpellAffix, bare: Seen, withIt: Seen): boolean {
     case "arc": return withIt.arcs > bare.arcs;
     case "mark": return withIt.brands > bare.brands;
     case "burst": return withIt.harvests > bare.harvests;
-    case "refund": return withIt.echoes > bare.echoes;
     case "haste": return withIt.hastes > bare.hastes;
     case "field": return withIt.fires > bare.fires;
     case "ward": return withIt.wards > bare.wards;

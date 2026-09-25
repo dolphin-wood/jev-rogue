@@ -66,7 +66,6 @@ export const PLAYER_TEXT: Readonly<Record<string, string>> = {
   chain: "The hit releases a smaller, weaker copy of the spell at the next enemy nearby. The tighter they pack, the better.",
   brand: "The first hit marks; the second sets the mark off. Rewards sticking to one target.",
   harvest: "Enemies killed by this spell burst apart.",
-  echo: "Killing with this spell refunds the mana for the next cast.",
   bloom: "Where the shot runs out, the ground catches fire and burns whatever stands in it. Even a miss does something.",
   shatter: "Hitting walls and clutter throws shards too. The messier the room, the better.",
   repeat: "A beat after you cast, the spell fires again wherever you're aiming then.",
