@@ -804,7 +804,8 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
               "One of the portals out of this room offers a spell. Which school should it promise? Weigh the " +
               "player's stated style and their own words, which way the keys lean, the schools already on the " +
               "keys (held schools) and what the last fights measured. Before any fight has been measured, the " +
-              "stated style and the player's own words are the evidence.",
+              "stated style and the player's own words are the evidence. A run is travelled through: over a " +
+              "run, the schools its spell doors promise should not settle into one.",
             options: choices.schools.map((sc) => ({
               ...opt(sc, schoolText(sc)),
               spec: schoolSpec(sc, schoolSpells(sc).split(", "), SCHOOL_STYLES[sc] ?? []),
@@ -2184,10 +2185,17 @@ function encounterQuestions(
          * the facts alone put 0.82 of the mass on `ranged_heavy`, the old
          * sentence 0.51, this one 0.74. What spread the old one was the
          * sentence about the run, which is a sequence property and code's.
+         *
+         * The run's sentence is back, as a principle naming no mix, now
+         * that the briefing prints each fight as it was built: replayed over
+         * two live runs, it took the mass on the previous room's mix from
+         * 0.78 to 0.58 (and a spell door's school, given the same sentence,
+         * from 0.87 to 0.46).
          */
         "Choose the enemy mix for this room, from its tension and from how the player fights: how much of " +
         "the damage the sword does (sword share), what has been taking their health (hurt by) and which way " +
-        "the keys lean. A mix can press the way the player fights, or play into it; either is an answer.",
+        "the keys lean. A mix can press the way the player fights, or play into it; either is an answer. " +
+        "A run is travelled through: over a run, the mixes its fights are built on should not settle into one.",
       options: (compositions.length ? compositions : (["mixed"] as const))
         .map((c) => ({ ...opt(c, COMPOSITION[c]!), spec: COMPOSITION_SPEC[c]! })),
       style,
