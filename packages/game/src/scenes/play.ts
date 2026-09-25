@@ -2415,6 +2415,8 @@ export class PlayScene extends Phaser.Scene {
       if (fight && kind !== "gold" && this.roomCards) {
         // Decided with the door the player came through, against the build they carried through it.
         cards = cardsFor(ITEMS, kind, this.roomCards, promise);
+        const shown = this.roomCards;
+        playtestLog.attach(run.roomIndex, (r) => { r.offers = [...(r.offers ?? []), { label: kind, ids: [...shown] }]; });
         const pool = cardPool(ITEMS, this.ownedFor(kind), kind, held, promise, this.cardNeeds(ctx));
         const hadNeed = this.roomCards.some((id) => pool.candidates.find((c) => c.id === id)?.facts.includes("need"));
         this.needMisses = hadNeed ? 0 : this.needMisses + 1;
@@ -10636,6 +10638,11 @@ export class PlayScene extends Phaser.Scene {
         this.planRecords.set("portals", { decisions: plan.portals.decisions });
         playtestLog.decide(index, "portals", plan.portals.decisions);
       }
+      // The cards behind every kind a door could have been, and how each was chosen, named by the kind.
+      plan.cards.forEach((p, i) => {
+        const prefix = `door_${kinds[i]}__`;
+        playtestLog.decide(index, "portals", p.decisions.map((d) => ({ ...d, question: `${prefix}${d.question ?? ""}` })));
+      });
       doors = (plan.portals?.doors ?? ruleDoors(run, src.stream("offer"), this.portalCount)).map((d) => {
         if (d.npc || d.reward === "gold") return d;
         const ids = plan.cards[kinds.indexOf(d.reward as (typeof kinds)[number])]?.ids ?? [];
