@@ -12,14 +12,14 @@
  * well because it gives a clearer failure message.
  */
 import { GRID_H, GRID_W, Tile } from "../types.ts";
-import type { Cell, DoorSide, SpaceArchetype, SpawnGroup, ZoneSlot } from "../types.ts";
+import type { Cell, DoorSide, Extent, SpaceArchetype, SpawnGroup, ZoneSlot } from "../types.ts";
 import {
-  DOOR_CELL, ENTRY_CELL, at, idx, inInterior, manhattan, maskFloorCount,
+  at, doorCell, entryCell, idx, inInterior, manhattan, maskFloorCount,
 } from "./masks.ts";
 import { floodFill } from "./measure.ts";
 import {
-  BOSS_CENTRE, BOSS_COVER_CLEARANCE, ENTRY_CLEAR_RADIUS, HAZARD_DOOR_CLEARANCE,
-  SPAWN_ENTRY_CLEARANCE,
+  BOSS_COVER_CLEARANCE, ENTRY_CLEAR_RADIUS, HAZARD_DOOR_CLEARANCE,
+  SPAWN_ENTRY_CLEARANCE, bossCentre,
 } from "./archetypes.ts";
 
 /** Reachable floor must be at least this share of the mask's floor. */
@@ -94,8 +94,8 @@ export function deadEnds(grid: Uint8Array): Cell[] {
 }
 
 /** Mask floor cells inside the entry's clear radius, which must stay free. */
-export function entryClearCells(mask: Uint8Array, entry: DoorSide): Cell[] {
-  const door = DOOR_CELL[entry];
+export function entryClearCells(mask: Uint8Array, entry: DoorSide, ext: Extent): Cell[] {
+  const door = doorCell(entry, ext);
   const out: Cell[] = [];
   for (let y = 0; y < GRID_H; y++) {
     for (let x = 0; x < GRID_W; x++) {
@@ -107,9 +107,9 @@ export function entryClearCells(mask: Uint8Array, entry: DoorSide): Cell[] {
 }
 
 /** Manhattan distance from a cell to the nearest cell of the boss centre block. */
-export function bossCentreDistance(x: number, y: number): number {
+export function bossCentreDistance(x: number, y: number, ext: Extent): number {
   let best = Infinity;
-  for (const cell of BOSS_CENTRE) best = Math.min(best, Math.abs(cell[0] - x) + Math.abs(cell[1] - y));
+  for (const cell of bossCentre(ext)) best = Math.min(best, Math.abs(cell[0] - x) + Math.abs(cell[1] - y));
   return best;
 }
 
@@ -120,20 +120,21 @@ export interface ValidateInput {
   readonly entry: DoorSide;
   readonly zones: readonly ZoneSlot[];
   readonly spawnGroups: readonly SpawnGroup[];
+  readonly ext: Extent;
 }
 
 export function validateRoom(input: ValidateInput): ValidationResult {
-  const { grid, mask, archetype: a, entry, zones, spawnGroups } = input;
+  const { grid, mask, archetype: a, entry, zones, spawnGroups, ext } = input;
   const problems: string[] = [];
 
   if (!a.doors.includes(entry)) problems.push(`entry ${entry} is not a supported door`);
 
-  const start = ENTRY_CELL[entry];
+  const start = entryCell(entry, ext);
   const reachable = floodFill(grid, start);
   if (reachable[idx(start[0], start[1])] !== 1) problems.push(`entry cell ${start} is not walkable`);
 
   for (const side of a.doors) {
-    const d = DOOR_CELL[side];
+    const d = doorCell(side, ext);
     if (reachable[idx(d[0], d[1])] !== 1) problems.push(`door ${side} is not reachable from the entry`);
   }
 
@@ -152,7 +153,7 @@ export function validateRoom(input: ValidateInput): ValidationResult {
       if (!free(grid, cell[0], cell[1])) problems.push(`zone ${z.id}: ${cell} is not free floor`);
       else if (reachable[idx(cell[0], cell[1])] !== 1) problems.push(`zone ${z.id}: ${cell} is unreachable`);
       for (const side of a.doors) {
-        if (manhattan(cell, DOOR_CELL[side]) < HAZARD_DOOR_CLEARANCE) {
+        if (manhattan(cell, doorCell(side, ext)) < HAZARD_DOOR_CLEARANCE) {
           problems.push(`zone ${z.id}: ${cell} is within ${HAZARD_DOOR_CLEARANCE} tiles of door ${side}`);
         }
       }
@@ -164,7 +165,7 @@ export function validateRoom(input: ValidateInput): ValidationResult {
       if (!free(grid, cell[0], cell[1])) problems.push(`spawn ${g.id}: ${cell} is not free floor`);
       else if (reachable[idx(cell[0], cell[1])] !== 1) problems.push(`spawn ${g.id}: ${cell} is unreachable`);
       for (const side of a.doors) {
-        if (manhattan(cell, DOOR_CELL[side]) < SPAWN_ENTRY_CLEARANCE) {
+        if (manhattan(cell, doorCell(side, ext)) < SPAWN_ENTRY_CLEARANCE) {
           problems.push(`spawn ${g.id}: ${cell} is within ${SPAWN_ENTRY_CLEARANCE} tiles of entry ${side}`);
         }
       }
@@ -178,7 +179,7 @@ export function validateRoom(input: ValidateInput): ValidationResult {
   const ends = deadEnds(grid);
   if (ends.length > 0) problems.push(`${ends.length} single-tile dead ends, first ${ends[0]}`);
 
-  for (const cell of entryClearCells(mask, entry)) {
+  for (const cell of entryClearCells(mask, entry, ext)) {
     if (!free(grid, cell[0], cell[1])) {
       problems.push(`obstacle at ${cell} inside the ${ENTRY_CLEAR_RADIUS}-tile clearance of entry ${entry}`);
       break;
@@ -186,7 +187,7 @@ export function validateRoom(input: ValidateInput): ValidationResult {
   }
 
   if (a.boss === true) {
-    for (const cell of BOSS_CENTRE) {
+    for (const cell of bossCentre(ext)) {
       if (!free(grid, cell[0], cell[1])) {
         problems.push(`boss centre blocked at ${cell}`);
         break;
@@ -194,10 +195,10 @@ export function validateRoom(input: ValidateInput): ValidationResult {
     }
     for (let y = 0; y < GRID_H; y++) {
       for (let x = 0; x < GRID_W; x++) {
-        if (!inInterior(x, y)) continue;
+        if (!inInterior(x, y, ext)) continue;
         if (mask[idx(x, y)] !== Tile.Floor) continue;
         if (free(grid, x, y)) continue;
-        if (bossCentreDistance(x, y) < BOSS_COVER_CLEARANCE) {
+        if (bossCentreDistance(x, y, ext) < BOSS_COVER_CLEARANCE) {
           problems.push(`boss cover at ${[x, y]} is closer than ${BOSS_COVER_CLEARANCE} tiles to the centre`);
           y = GRID_H;
           break;

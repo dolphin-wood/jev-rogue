@@ -3,6 +3,7 @@ import {
   bucketHealth, bucketRecentDamage, bucketClearSpeed, bucketGold, bucketRunProgress,
   bucketConsistency, dominantTags, showcaseRatio, showcaseRatioWith,
   countersWouldBreachFloor, assertNoRawNumbers, summarize, SHOWCASE_FLOOR,
+  bucketMovementPressure, expectedClearMs, expectedClearMsFor, NEAR_BULLET_HEAVY,
 } from "./summarize.ts";
 import type { CounterScore } from "../types.ts";
 
@@ -25,10 +26,55 @@ describe("buckets", () => {
     expect(bucketGold(0)).toBe("poor");
     expect(bucketGold(30)).toBe("ok");
     expect(bucketGold(100)).toBe("rich");
+    // The fourteen-fight run of doc 014, not the nine-room shape that is gone.
     expect(bucketRunProgress(1)).toBe("early");
+    expect(bucketRunProgress(4)).toBe("early");
     expect(bucketRunProgress(5)).toBe("mid");
-    expect(bucketRunProgress(8)).toBe("late");
-    expect(bucketRunProgress(9)).toBe("pre_boss");
+    expect(bucketRunProgress(9)).toBe("mid");
+    expect(bucketRunProgress(10)).toBe("late");
+    expect(bucketRunProgress(13)).toBe("late");
+    expect(bucketRunProgress(14)).toBe("pre_boss");
+    expect(bucketRunProgress(16)).toBe("pre_boss");
+  });
+
+  /*
+   * Doc 011: `clear_speed` was measured against a flat thirty seconds, which is
+   * the reference player's pace and nobody else's, so every room a person
+   * played read `slow`.
+   */
+  it("measures a room against what a person takes, and then against this player", () => {
+    /*
+     * The human baseline, recalibrated against a full played run: sixteen
+     * rooms in 10:06, so about 38 seconds a fight with a longer opening one.
+     * That run reads `normal`, not `fast` and not `slow` — a label that is
+     * pinned either way is one the Director cannot use.
+     */
+    expect(bucketClearSpeed(55_000, expectedClearMs(1))).toBe("normal");
+    expect(bucketClearSpeed(38_000, expectedClearMs(6))).toBe("normal");
+    expect(bucketClearSpeed(65_000, expectedClearMs(16))).toBe("normal");
+    // And a room that really does go badly still reads slow.
+    expect(bucketClearSpeed(105_000, expectedClearMs(6))).toBe("slow");
+    expect(bucketClearSpeed(105_000, 30_000)).toBe("slow");
+    // It falls after the opening rooms and rises again at the boss.
+    expect(expectedClearMs(6)).toBeLessThan(expectedClearMs(1));
+    expect(expectedClearMs(16)).toBeGreaterThan(expectedClearMs(14));
+    // With three cleared rooms behind it, the expectation is this player's own
+    // median, so a fast player's slow room still reads slow.
+    const fast = [20_000, 24_000, 22_000];
+    expect(expectedClearMsFor(6, fast)).toBe(22_000);
+    expect(bucketClearSpeed(32_000, expectedClearMsFor(6, fast))).toBe("slow");
+    expect(bucketClearSpeed(22_000, expectedClearMsFor(6, fast))).toBe("normal");
+    // Before there is a run to read, the baseline stands.
+    expect(expectedClearMsFor(6, [20_000, 24_000])).toBe(expectedClearMs(6));
+    // And a degenerate run cannot redefine the scale without limit.
+    expect(expectedClearMsFor(6, [200, 200, 200])).toBeGreaterThan(200);
+    expect(expectedClearMsFor(6, [9e6, 9e6, 9e6])).toBeLessThan(9e6);
+  });
+
+  it("reads movement pressure off the time spent under fire", () => {
+    expect(bucketMovementPressure(0)).toBe("light");
+    expect(bucketMovementPressure(NEAR_BULLET_HEAVY - 0.01)).toBe("light");
+    expect(bucketMovementPressure(NEAR_BULLET_HEAVY)).toBe("heavy");
   });
 
   it("calls two consecutive off-plan picks a pivot", () => {
@@ -110,10 +156,7 @@ describe("summarize", () => {
         hearts: 3, heartsLostLastTwoRooms: 1, lastClearMs: 40, expectedClearMs: 60,
         nearMissesPerSecond: 0.2, gold: 30, roomIndex: 5,
         recentPickTags: [["area"]], tagCounts: { area: 2, control: 1 }, preset: "area",
-        build: {
-          archetype: "area", bottleneck: "accuracy", mana_sustain: "tight",
-          range: "long", missing_roles: ["tracking"], dominant_tags: ["area"],
-        },
+        build: { range: "long" },
         tensions: ["build"],
       },
       { tension_cap: "build_allowed", hazard_cap: "low", pressure_cap: 3.5 },

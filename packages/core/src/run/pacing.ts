@@ -70,12 +70,38 @@ export function legalDoorSets(input: PacingInput): DoorSet[] {
   return sets;
 }
 
+/**
+ * How many rooms at the start of a run may not be pitched at `peak`. Two: the
+ * same two `legalDifficulties` withholds the elite door for, and for the same
+ * reason.
+ */
+export const OPENING_ROOMS = 2;
+
 export function pacingLabels(input: PacingInput & { tensions: readonly Tension[] }): PacingLabels {
   const { health, recent_damage, room_index, tensions } = input;
 
   let tension_cap: TensionCap = "peak_allowed";
   const lastTwoPeak = tensions.length >= 2 && tensions.slice(-2).every((t) => t === "peak");
   if (lastTwoPeak || room_index === REGULAR_ROOMS) tension_cap = "build_allowed";
+  /*
+   * **The opening rooms cannot peak.**
+   *
+   * Measured over four reference runs, room 1 came back `peak` every time, on
+   * both arms and at high confidence — and the reason is that it is *correct*
+   * against the state it was given. Nothing has been measured yet, so the
+   * unmeasured defaults read as a player on a full bar who has taken no damage
+   * and cleared fast, which is exactly the state a peak is for. The Director
+   * was answering honestly about a fiction.
+   *
+   * The state is now honest about it (`observed.ts` returns `UNMEASURED`, and
+   * the briefing says "no rooms played yet" in as many words), but an honest
+   * state still leaves a judgement call on the first room of every run, and
+   * this one is not a judgement call: the opening rooms are where the player
+   * finds out what their build does, and the hardest room the run allows is
+   * the wrong place to do it. So it is a bound rather than a question, and
+   * `release` and `build` are both still on the list.
+   */
+  if (room_index <= OPENING_ROOMS) tension_cap = "build_allowed";
   if (health === "critical" || recent_damage === "heavy") tension_cap = "release_only";
 
   const hazard_cap =

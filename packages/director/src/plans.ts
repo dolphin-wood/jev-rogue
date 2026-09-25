@@ -11,12 +11,13 @@
  *   answer.
  */
 import type {
-  AffixId, Anchor, Composition, Density, EliteAffix, EntryPattern, ItemInstance,
-  PatternNode, RestOption, Role, RoomPlan, RoomType, Staff, StaffProfile, Tension,
+  Anchor, Composition, Density, EliteAffix, EntryPattern,
+  PatternNode, RestOption, RoomPlan, RoomType, Staff, Tension,
   WaveStructure,
 } from "@jr/core";
 import type { CardPool, DoorOffer, Distribution, PortalChoices } from "@jr/core";
 import type { Decision, DecisionSource, FallbackPath } from "./types.ts";
+import type { AffixIntent } from "./questions/affixes.ts";
 
 /** Which door of the offered set a room plan belongs to (doc 009). */
 export interface DoorRef {
@@ -74,6 +75,12 @@ export interface CardPlan {
   readonly origins: readonly CardOrigin[];
   readonly blended: Distribution;
   readonly variety: "low" | "medium" | "high";
+  /**
+   * The affix lane this offer was tilted toward (doc 007), or null when the
+   * offer was not affixes or was too small to be a choice. Recorded because
+   * the trace has to say what shaped the offer, not only what came out of it.
+   */
+  readonly affix_intent: AffixIntent | null;
   readonly source: DecisionSource;
   readonly decisions: readonly Decision[];
 }
@@ -88,6 +95,12 @@ export interface CardPlan {
 export interface RoomPlanResult {
   readonly door: DoorRef;
   readonly plan: RoomPlan;
+  /**
+   * The tension this room was built at, decided in round 1 alongside the
+   * room's shape (doc 004). Callers read it here rather than from `planDoors`,
+   * which no longer asks.
+   */
+  readonly tension: Tension;
   readonly source: {
     readonly params: DecisionSource;
     readonly mood: DecisionSource;
@@ -133,58 +146,14 @@ export interface OfferPlan {
 
 /* -------------------------------- rewards --------------------------------- */
 
-export type CardOrigin = "sampled" | "wildcard" | "pity" | "temptation" | "filler" | "forced";
-
-export type OfferCard =
-  | {
-      readonly kind: "item";
-      readonly item: ItemInstance;
-      readonly origin: CardOrigin;
-      /** Rank of the base item in the blended distribution, 1-based. */
-      readonly rank: number;
-      readonly blended: number;
-    }
-  | { readonly kind: "gold"; readonly gold: number; readonly origin: "filler" };
-
-export interface PityRecord {
-  readonly fired: boolean;
-  readonly role: Role | null;
-  /** True when pity triggered but the chosen role had no eligible item (doc 007). */
-  readonly skipped: boolean;
-  readonly source: DecisionSource | null;
-}
-
-export interface TemptationRecord {
-  readonly fired: boolean;
-  readonly base: string | null;
-  /** True when code picked the only candidate without asking (doc 007). */
-  readonly unasked: boolean;
-  readonly source: DecisionSource | null;
-}
-
-export interface RewardPlan {
-  readonly room_index: number;
-  readonly room_type: RoomType;
-  readonly offer: readonly OfferCard[];
-  /** Rank in the blended distribution per offered card, aligned with `offer`. */
-  readonly ranks: readonly number[];
-  readonly blended: Distribution;
-  readonly variety: "low" | "medium" | "high";
-  readonly affix_intent: AffixId | "none";
-  /** Items dropped to fit the request size budget (doc 007). */
-  readonly trimmed_items: readonly string[];
-  readonly pool: readonly string[];
-  readonly pity: PityRecord;
-  readonly temptation: TemptationRecord;
-  readonly source: {
-    readonly overall: DecisionSource;
-    readonly style: DecisionSource;
-    readonly needs: DecisionSource;
-    readonly variety: DecisionSource;
-    readonly affix_intent: DecisionSource;
-  };
-  readonly decisions: readonly Decision[];
-}
+/**
+ * Where a card in a finished offer came from. `guaranteed` is code filling the
+ * last slot to keep a `CardPool.guarantee` — the offer to a full staff that
+ * must hold both an upgrade and a replacement, so the player has the choice
+ * the door is actually offering.
+ */
+export type CardOrigin =
+  | "sampled" | "wildcard" | "pity" | "temptation" | "filler" | "forced" | "promised" | "guaranteed";
 
 /* ---------------------------------- rest ---------------------------------- */
 

@@ -21,7 +21,12 @@ export const DOOR_WEIGHTS = {
   shopWhenPoor: 0.6,
   eliteWhenFull: 1.8,
   eliteWhenLow: 0.3,
-  treasureWhenMissingRole: 1.6,
+  /*
+   * Treasure used to be weighted up "when the build is missing a role", over a
+   * role list that no staff of attacks could ever complete, so it applied in
+   * every state. It is kept as the unconditional weight it always was.
+   */
+  treasure: 1.6,
   perExtraDoor: 1.15,
 } as const;
 
@@ -33,7 +38,7 @@ export function ruleDoorWeights(legalSets: readonly DoorSet[], labels: SummaryLa
     if (set.includes("rest")) w *= hurt ? DOOR_WEIGHTS.restWhenHurt : DOOR_WEIGHTS.restWhenHealthy;
     if (set.includes("shop")) w *= labels.gold === "rich" ? DOOR_WEIGHTS.shopWhenRich : labels.gold === "poor" ? DOOR_WEIGHTS.shopWhenPoor : 1;
     if (set.includes("elite")) w *= labels.health === "full" ? DOOR_WEIGHTS.eliteWhenFull : hurt ? DOOR_WEIGHTS.eliteWhenLow : 1;
-    if (set.includes("treasure") && labels.build.missing_roles.length > 0) w *= DOOR_WEIGHTS.treasureWhenMissingRole;
+    if (set.includes("treasure")) w *= DOOR_WEIGHTS.treasure;
     out[doorSetKey(set)] = w;
   }
   return normalise(out);

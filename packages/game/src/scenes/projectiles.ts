@@ -13,17 +13,12 @@
  * Presentation only. Shapes wobble on the tick and particles use
  * `Math.random`, because nothing here is read back by the simulation.
  */
-import type { Bullet } from "@jr/core";
+import type { Bullet, ProjectileShape, SpellLook } from "@jr/core";
 
-export type ProjectileShape =
-  | "dart" | "lightning" | "orb" | "needle" | "spike" | "flame" | "glob"
-  | "rock" | "pellet" | "spark" | "blade" | "bubbles";
+export type { ProjectileShape };
 
-export interface ProjectileLook {
-  readonly core: number;
-  readonly glow: number;
-  readonly shape: ProjectileShape;
-}
+/** One definition, in core, because the simulation reasons about it too. */
+export type ProjectileLook = SpellLook;
 
 /** One particle a projectile throws off; the scene owns the pool. */
 export interface ShedParticle {
@@ -67,10 +62,15 @@ const rand = (a: number, b: number) => a + Math.random() * (b - a);
 /**
  * Draws one projectile. `glow` is additive (the light), `solid` is normal
  * blend (anything that should read as matter — a rock). Particles go to `emit`.
+ *
+ * `charge` is how far a `charge` spell was held when this shot left, 0 at a
+ * tap to 1 at a full charge (doc 006); every other shot is drawn at 1.
  */
 export function drawProjectile(
   glow: Phaser.GameObjects.Graphics, solid: Phaser.GameObjects.Graphics,
-  b: Bullet, look: ProjectileLook, tick: number, emit: Emit,
+  b: Bullet, look: ProjectileLook, tick: number, emit: Emit, charge = 1,
+  /** A thrown blade's turn so far, in radians, kept by the scene so its spin can slow and quicken without jumping. */
+  spin?: number,
 ): void {
   // A stable per-shot number, from where it was cast, so its wobble and
   // tumble are its own rather than every shot's in step.
@@ -246,6 +246,72 @@ export function drawProjectile(
     case "lightning":
       // Drawn by the scene as a bolt along its path; here only its crackle.
       if (Math.random() < 0.8) crackle(b.x, b.y, look, emit, 2);
+      return;
+    case "cannon": {
+      /*
+       * **A charged shot, drawn at the charge it left with.** Its radius
+       * already grows with the charge (the sim scales it), so the body is
+       * drawn from the radius like every shot; what the charge adds on top is
+       * heat and wake. A tap is a dim violet slug with a short tail. Past half
+       * a charge the core whitens and the tail lengthens; a full charge — the
+       * one that staggers — burns white at the heart, throws a wider light and
+       * crackles as it goes, so a player can tell a full shot from a hurried
+       * one as it crosses the room.
+       */
+      const c = Math.max(0, Math.min(1, charge));
+      const r = 3.6 * s;
+      const len = (10 + 22 * c) * s;
+      fillPoly(glow, place(b, angle, comet(r * 1.9, len * 1.1)), look.glow, 0.1 + 0.08 * c);
+      fillPoly(glow, place(b, angle, comet(r * 1.25, len * 0.8)), look.glow, 0.3 + 0.15 * c);
+      // A violet body with a pale heart: the light is the void's, and only the very middle burns white.
+      solid.fillStyle(0x3a1a70, 0.9);
+      solid.fillCircle(b.x, b.y, r * 0.95);
+      glow.fillStyle(look.glow, 0.7);
+      glow.fillCircle(b.x, b.y, r * 0.85);
+      glow.fillStyle(look.core, 0.55 + 0.3 * c);
+      glow.fillCircle(b.x + Math.cos(angle) * r * 0.15, b.y + Math.sin(angle) * r * 0.15, r * (0.4 + 0.15 * c));
+      if (c > 0.5) {
+        glow.fillStyle(0xffffff, (c - 0.5) * 1.6);
+        glow.fillCircle(b.x + Math.cos(angle) * r * 0.2, b.y + Math.sin(angle) * r * 0.2, r * 0.25);
+      }
+      if (c >= 1) {
+        glow.fillStyle(look.glow, 0.1);
+        glow.fillCircle(b.x, b.y, r * 3);
+        drawCrackle(glow, b.x, b.y, look);
+        if (Math.random() < 0.7) crackle(b.x, b.y, look, emit, 1);
+      }
+      if (Math.random() < 0.3 + 0.5 * c) {
+        const a = Math.random() * Math.PI * 2;
+        const d = r * (2 + c);
+        emit({ x: b.x + Math.cos(a) * d, y: b.y + Math.sin(a) * d, vx: -Math.cos(a) * d * 4 + b.vx * 0.6, vy: -Math.sin(a) * d * 4 + b.vy * 0.6, ms: 0, life: 200, size: rand(0.8, 1.2 + c * 0.6), colour: look.core, gravity: 0 });
+      }
+      return;
+    }
+    case "sigil": {
+      /*
+       * A bolt carrying a mark: a dark violet dart whose head is the diamond
+       * the body will wear, solid and pale, so what is in flight already says
+       * "this one marks".
+       */
+      fillPoly(glow, place(b, angle, comet(4.4, 15), s), look.glow, 0.22);
+      fillPoly(glow, place(b, angle, comet(2.4, 10), s), look.glow, 0.55);
+      const d = 2.8 * s;
+      fillPoly(solid, [[b.x, b.y - d - 1], [b.x + d + 1, b.y], [b.x, b.y + d + 1], [b.x - d - 1, b.y]], 0x0d0b1f, 1);
+      fillPoly(solid, [[b.x, b.y - d], [b.x + d, b.y], [b.x, b.y + d], [b.x - d, b.y]], 0x3a1a70, 1);
+      fillPoly(glow, [[b.x, b.y - d * 0.6], [b.x + d * 0.6, b.y], [b.x, b.y + d * 0.6], [b.x - d * 0.6, b.y]], look.core, 0.95);
+      if (Math.random() < 0.4)
+        emit({ x: b.x + back[0] * 5, y: b.y + back[1] * 5, vx: rand(-12, 12), vy: rand(-12, 12), ms: 0, life: rand(200, 300), size: rand(0.8, 1.2), colour: look.glow, gravity: 0 });
+      return;
+    }
+    case "frost_orb":
+    case "ball":
+      // Their painted atlas frames are placed by the scene.
+      return;
+    case "edge":
+      // A thrown sword is the delivered sword sprite, turned by the scene (`drawThrownSword`).
+      return;
+    case "crescent":
+      // An enchant's wave is the swing's own edge, thrown, and the scene draws it with the swing (`drawWaves`).
       return;
   }
 }

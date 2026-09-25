@@ -1,14 +1,17 @@
 /** Public surface of room generation (doc 004). */
 export {
-  DOOR_CELL, ENTRY_CELL, INTERIOR_X0, INTERIOR_X1, INTERIOR_Y0, INTERIOR_Y1,
+  INTERIOR_X0, INTERIOR_Y0, doorCell, entryCell, interiorX1, interiorY1,
   arenaMask, corridorMask, crossMask, ringMask, maskFor, maskFloorCount,
   applyDoors, at, idx, inBounds, inInterior, isFloor, manhattan, mirrorX, rect, walkable,
 } from "./masks.ts";
+export {
+  BASE_EXTENT, areaScale, baseCellOf, cellAt, cellX, cellY, edgeX, edgeY, rectAt, slotAt,
+} from "./extent.ts";
 
 export {
-  BOSS_ARCHETYPES, BOSS_CENTRE, BOSS_COVER_CLEARANCE, ENTRY_CLEAR_RADIUS,
+  BOSS_ARCHETYPES, BOSS_COVER_CLEARANCE, ENTRY_CLEAR_RADIUS,
   HAZARD_DOOR_CLEARANCE, PLAYABLE_ARCHETYPES, SPACE_ARCHETYPES, SPAWN_ENTRY_CLEARANCE,
-  archetype, checkArchetypeDeclarations,
+  archetype, archetypeAt, bossCentre, checkArchetypeDeclarations,
 } from "./archetypes.ts";
 
 export {
@@ -24,7 +27,7 @@ export {
 export type { ValidateInput, ValidationResult } from "./validate.ts";
 
 export {
-  AUTHORED_ROOMS, FALLBACK_ARENA, FALLBACK_CORRIDOR, FALLBACK_CROSS, authoredFor,
+  AUTHORED_ROOMS, FALLBACK_ARENA, FALLBACK_CORRIDOR, FALLBACK_CROSS, authoredFor, authoredGrid,
 } from "./authored.ts";
 export type { AuthoredRoom } from "./authored.ts";
 
@@ -35,7 +38,7 @@ export {
 export type { GeneratedRoom, RoomZone } from "./generate.ts";
 
 export {
-  FEATURES, HAZARD_CAP_BUDGET, feature, featuresByResource, featuresForCap, featuresForZone,
+  FEATURES, HAZARD_CAP_BUDGET, feature, featureCells, featuresByResource, featuresForCap, featuresForZone,
   centralZone, assignZoneFeatures, SPIKE_PERIOD_MS, spikesOut,
   isHazard, totalHazardBudget,
 } from "./features.ts";
@@ -45,3 +48,6 @@ export {
   SKELETONS, inSkeleton, skeletonById, skeletonFits, skeletonMask, skeletonSymmetric, skeletonsFor,
 } from "./skeletons.ts";
 export type { Skeleton } from "./skeletons.ts";
+export { throneHall, merchantHall, THRONE_CELLS } from "./fixed.ts";
+export { BIOMES, biomeFor } from "./biome.ts";
+export type { Biome } from "./biome.ts";

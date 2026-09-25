@@ -14,3 +14,5 @@ export * from "./fire.ts";
 export * from "./attacks.ts";
 export * from "./exits.ts";
 export * from "./affix-hooks.ts";
+export * from "./beat.ts";
+export * from "./shapes.ts";

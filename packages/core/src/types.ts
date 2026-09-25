@@ -3,16 +3,40 @@
  * and must not redefine these. Sources are cited as `doc NNN`.
  */
 import type {
-  Archetype, BuildArchetype, Bottleneck, ClearSpeed, Consistency, CounterScore,
-  Element, Gold, HazardCap, Health, ManaSustain, Range as RangeTag, Rarity,
-  RecentDamage, Role, RunProgress, Scatter, Suitability, Tension, TensionCap,
+  Archetype, BuildArchetype, ClearSpeed, Consistency, CounterScore,
+  Element, ElementPowers, Gold, HazardCap, Health, Range as RangeTag, Rarity,
+  StatusElement,
+  RecentDamage, Role, RunProgress, Suitability, Tension, TensionCap,
 } from "./content/tags.ts";
+import type { ObservedLabels } from "./run/observed.ts";
 
 /* ============================ geometry (doc 004) ============================ */
 
-export const GRID_W = 21;
-export const GRID_H = 13;
+/**
+ * The grid every room is stored in: the largest room's extent. A room's own
+ * extent (`RoomPlan.extent`) sits in its top-left and everything past it is
+ * wall, so indexing is one stride for every room and nothing that walks the
+ * grid needs to know how large the room is (doc 017).
+ */
+export const GRID_W = 33;
+export const GRID_H = 19;
 export const TILE_PX = 32;
+
+/** A room's size in cells, walls included. */
+export interface Extent { readonly w: number; readonly h: number }
+
+/**
+ * A room's size, a round-1 room parameter (doc 017): how many views of the
+ * 16 x 9-tile viewport it spans a side — half again, three quarters again,
+ * twice — each rounded to an odd number of cells.
+ */
+export type RoomSize = "compact" | "standard" | "vast";
+export const ROOM_SIZES: readonly RoomSize[] = ["compact", "standard", "vast"];
+export const ROOM_EXTENT: Readonly<Record<RoomSize, Extent>> = {
+  compact: { w: 25, h: 13 },
+  standard: { w: 29, h: 15 },
+  vast: { w: 33, h: 19 },
+};
 
 export type Cell = readonly [x: number, y: number];
 export type DoorSide = "N" | "E" | "S" | "W";
@@ -70,6 +94,7 @@ export interface Mood {
 export interface RoomParams {
   readonly space: SpaceArchetypeId;
   readonly symmetry: Symmetry;
+  readonly size: RoomSize;
   readonly mood: Mood;
 }
 
@@ -88,6 +113,8 @@ export interface RoomPlan {
   readonly params: RoomParams;
   readonly measured: RoomMeasurements;
   readonly grid: Uint8Array;
+  /** The room's size in cells, in the grid's top-left; wall beyond it. */
+  readonly extent: Extent;
   /** The outline it was built in (doc 004, "Skeletons"); absent for a fixed room. */
   readonly skeleton?: string;
   readonly doors: readonly DoorSide[];
@@ -96,6 +123,12 @@ export interface RoomPlan {
   readonly spawn_groups: readonly SpawnGroup[];
   readonly encounter: EncounterPlan | null;
   readonly reward_kind: RewardKind;
+  /**
+   * Destructibles placed where the room says (the throne hall's columns and
+   * candelabra, `rooms/fixed.ts`), beside the ones scattered and the ones a
+   * zone stands.
+   */
+  readonly standing?: readonly { readonly kind: "column" | "candelabrum"; readonly gx: number; readonly gy: number }[];
   readonly source: {
     params: "jev" | "rule" | "random";
     layout: "generated" | "authored";
@@ -127,9 +160,12 @@ export interface RoomPlan {
  * - `slow_tick` — damage for *staying*, on a long clock and with no charge for
  *   crossing. The poison pool, whose description already said so.
  * - `slip` — no damage at all; the player slides. The ice patch, likewise.
- * - `collapse` — no charge for crossing, and a fall for camping on it.
+ *
+ * `collapse` was here, for the crumbling floor. Both are gone: it charged for
+ * dwelling exactly as the spike strip does, so the pool held two floor
+ * hazards asking the player the same question.
  */
-export type HazardEffect = "none" | "contact" | "slow_tick" | "slip" | "collapse";
+export type HazardEffect = "none" | "contact" | "slow_tick" | "slip" | "lava";
 
 /**
  * The solid a feature stands in its zone, if it stands one.
@@ -179,8 +215,29 @@ export type EnemyId =
    * player, a burrower, a coal that feeds on fire, and a drifting mine-layer.
    */
   | "warden" | "bellringer" | "rifter" | "snarecaster" | "delver" | "cinderling" | "sower"
+  /**
+   * The **subspecies** (doc 019): one per base archetype, each a known body
+   * with one verb of its kit changed, so the player must answer it differently
+   * without learning a new body. The lancer above is the rusher's and predates
+   * them. They are ordinary roster entries gated by the ramp (`rampAllows`),
+   * not a separate tier of enemy.
+   */
+  | "pinner" | "wisp" | "beacon" | "watcher" | "fusilier" | "pealer" | "quaker"
+  | "chainer" | "burrower" | "emberling" | "planter" | "breaker" | "brooder"
   /** Placed by the boss room only; never assembled into an encounter. */
   | "boss";
+
+/**
+ * A base archetype: everything that is not a subspecies and not the boss.
+ *
+ * The mix ratios are keyed on these alone. A subspecies takes a share of its
+ * base's ratio when the Director asks for it (doc 019), so a composition is
+ * still a statement about *kinds of fight* rather than a table that grows by
+ * one row every time a body gains a variant.
+ */
+export type BaseEnemyId =
+  | "rusher" | "shooter" | "turret" | "orbiter" | "tank" | "summoner" | "sentinel"
+  | "warden" | "bellringer" | "rifter" | "snarecaster" | "delver" | "cinderling" | "sower";
 
 /**
  * The bodies an encounter may be built from.
@@ -224,7 +281,8 @@ export type Behaviour = "chase" | "keep_distance" | "orbit" | "stationary";
  * property the Director reads, and defined as a union rather than imported
  * from `sim/melee.ts` to keep the dependency pointing one way.
  */
-export type MeleeKind = "thrust" | "slash" | "whirlwind" | "charge" | "lance" | "cleave" | "bristle";
+export type MeleeKind = "thrust" | "slash" | "whirlwind" | "charge" | "lance" | "cleave" | "bristle"
+  | "claw" | "slam" | "sweep" | "bash" | "maul" | "greatsweep" | "greatcleave" | "greatslash" | "dashcut";
 
 /**
  * What an archetype does at range, when it is not bullets.
@@ -291,7 +349,18 @@ export interface EnemyArchetype {
 
 export type Composition = "melee_heavy" | "ranged_heavy" | "mixed" | "siege";
 export type Density = "sparse" | "normal" | "dense";
-export type WaveStructure = "single" | "two_waves" | "trickle";
+/**
+ * **How hard a room presses** (doc 019): the room's pacing, and the question
+ * the Director answers about it.
+ *
+ * It used to name the *shape* a roster was split into — a single burst, two
+ * waves, a trickle — which is a planning detail the player never sees as
+ * such. What they feel is how quickly the next beat arrives once they have
+ * dealt with this one, so that is what is asked: `breathe` lets the floor
+ * clear first, `relentless` sends the next beat while they are still fighting.
+ * The mapping to the two knobs that decide it is `PACING` in `world.ts`.
+ */
+export type WaveStructure = "breathe" | "steady" | "relentless";
 export type Anchor = "none" | "tank" | "summoner";
 export type EntryPattern = "far_front" | "flanks" | "surround" | "turrets_center";
 
@@ -308,7 +377,37 @@ export interface EncounterProfile {
    * structure). Set by code from the room's tension, never asked; 1 when absent.
    */
   readonly rounds?: number;
+  /**
+   * The subspecies this room shows, at most two (doc 019). Asked as two slot
+   * questions, because doc 002 asks scarce slots per slot: a room has two
+   * subspecies slots and each is filled with one id or with `none`.
+   *
+   * Two rather than more because doc 005 holds a room to three or four enemy
+   * types the player can tell apart and a subspecies counts as a type: a room
+   * where every base has become something else has no baseline left to read
+   * the strangeness against.
+   */
+  readonly subspecies?: readonly EnemyId[];
+  /** How much of the eligible roster they take. Absent means `none`. */
+  readonly subspecies_weight?: SubspeciesWeight;
+  /**
+   * How many elites a **normal** room hides. An elite room is placed by code —
+   * its door already promised it, so there is nothing left to prefer.
+   */
+  readonly elite_presence?: ElitePresence;
 }
+
+/**
+ * How heavily a room leans on its subspecies (doc 019).
+ *
+ * A label, not a number: doc 002 allows a quantity chosen from a short option
+ * list as a Choice, and keeps the number that label means in code, where the
+ * ramp can clamp it.
+ */
+export type SubspeciesWeight = "none" | "some" | "many";
+
+/** How many elites a normal room hides (doc 019). Code holds the cap at two. */
+export type ElitePresence = "none" | "one" | "two";
 
 export interface Wave {
   readonly at_ms: number;
@@ -326,76 +425,40 @@ export interface EncounterPlan {
   readonly source: "jev" | "rule" | "random";
 }
 
-/* ============================= spells (doc 006) ============================= */
+/* ============================= spells (doc 013) ============================= */
 
-export type ItemKind = "attack" | "boost" | "passive" | "payload" | "multicast";
-export type PayloadTrigger = "on_hit" | "on_expire" | "on_wall";
-export type AffixId = "homing" | "cheaper" | "wider" | "heavier" | "elemental";
-
+/**
+ * A spell in the pool. Every base item is an attack: a self-contained spell
+ * that goes on one of the three keys and modifies nothing else.
+ */
 export interface BaseItem {
   readonly id: string;
-  readonly kind: ItemKind;
   readonly rarity: Rarity;
   readonly tags: readonly string[];
   readonly description: string;
+  /** The spell's cost **rank**, 1 to 7; `spellCost` turns it into mana. */
   readonly mana: number;
-  /** Kind-specific numeric parameters, validated per kind by the content schema. */
+  /** The spell's numeric and shape parameters; see `spells/items.ts`. */
   readonly params: Readonly<Record<string, number | string>>;
-  readonly jev_hints?: { favor_when?: readonly string[]; avoid_when?: readonly string[] };
   readonly resource?: string;
   readonly numeric_ok?: boolean;
 }
 
-/** An affix produces an instance, not a new base item (doc 006). */
+/** One copy of a base item, as a slot holds it and an offer hands it out. */
 export interface ItemInstance {
   readonly uid: string;
   readonly base: string;
-  readonly affix: AffixId | null;
-  readonly magnitude: number;
-  readonly modifier: Readonly<Record<string, number>> | null;
   readonly rarity: Rarity;
 }
 
-export interface StaffProfile {
-  readonly slots: "few" | "many";
-  readonly mana: "low" | "high";
-  readonly tempo: "quick" | "steady";
-  readonly special: "none" | "regen" | "crit";
-}
-
+/**
+ * The run's mana pool and key count. Doc 013 retired the staff as a thing the
+ * player chooses: every run plays the same one (`runStaff`), and the run's
+ * stat upgrades scale its pool.
+ */
 export interface Staff {
-  readonly profile: StaffProfile;
   readonly slots: number;
   readonly mana_max: number;
-  readonly mana_regen: number;
-  readonly cast_interval: number;
-  readonly cooldown: number;
-  readonly crit_bonus: number;
-}
-
-/** Parsed cast tree (doc 006, "Parse"). A unit occupies one cast tick. */
-export type CastUnit =
-  | { kind: "attack"; slot: number; item: ItemInstance; boosts: readonly ItemInstance[] }
-  | { kind: "payload"; slot: number; item: ItemInstance; boosts: readonly ItemInstance[]; child: CastUnit | null }
-  | { kind: "multicast"; slot: number; item: ItemInstance; boosts: readonly ItemInstance[]; units: readonly CastUnit[]; n: number };
-
-export interface CastTree {
-  readonly units: readonly CastUnit[];
-  readonly passives: readonly ItemInstance[];
-  /** Slots dropped because the depth cap was hit; surfaced by the staff editor. */
-  readonly droppedForDepth: readonly number[];
-}
-
-export interface StaffSim {
-  readonly dps_stationary: number;
-  readonly dps_moving: number;
-  readonly mana_sustain: ManaSustain;
-  readonly cycle_time: number;
-  readonly scatter: Scatter;
-  readonly archetype: BuildArchetype;
-  readonly bottleneck: Bottleneck;
-  readonly missing_roles: readonly Role[];
-  readonly dominant_tags: readonly string[];
 }
 
 /* =========================== run and plans (doc 003) ======================== */
@@ -414,24 +477,136 @@ export interface SummaryLabels {
   readonly hazard_cap: HazardCap;
   readonly pressure_cap: number;
   readonly build: {
-    readonly archetype: BuildArchetype;
-    readonly bottleneck: Bottleneck;
-    readonly mana_sustain: ManaSustain;
+    /** The range the build fights at, for the counter score (doc 005). */
     readonly range: RangeTag;
-    readonly missing_roles: readonly Role[];
-    readonly dominant_tags: readonly string[];
   };
+  /**
+   * `dominant`: the most common style tags on the held spells, most first
+   * (`heldDominantTags`). `consistency`: how the last picks sat against the
+   * stated style (`bucketConsistency`).
+   */
   readonly preference: { readonly dominant: readonly string[]; readonly consistency: Consistency };
+  /**
+   * How far the build has **taken shape** (`build-shape.ts`). Optional because
+   * it needs the spell levels and affixes, which live on the world's slots.
+   * Absent reads as `forming`, the middle.
+   */
+  readonly build_shape?: BuildShape;
+  /**
+   * **What the last two fights measured** (`run/observed.ts`). Optional
+   * because a caller that has not fought yet has nothing to report; absent
+   * reads as `UNMEASURED`.
+   */
+  readonly observed?: ObservedLabels;
+}
+
+/** Doc 007's bucket for how much of the build is filled in (`build-shape.ts`). */
+export type BuildShape = "raw" | "forming" | "formed";
+
+export type { ObservedLabels };
+
+
+
+/**
+ * **One room the run has already played**, as a designer would want it read
+ * back: what it was, how it went, what it cost and what the player chose.
+ *
+ * Every field is a measurement, never a verdict — `health_lost: 9` and not
+ * "a rough room" — and every one is optional, because the two callers that
+ * fill it (the scene and the harness) know different amounts at different
+ * moments and a briefing drops a phrase it has no number for.
+ */
+export interface RunJournalEntry {
+  readonly index: number;
+  /** combat, elite, merchant, smith, fountain, shop, boss. */
+  readonly type: string;
+  readonly tension?: Tension;
+  readonly space?: string;
+  readonly symmetry?: Symmetry;
+  readonly mood?: Mood;
+  /** Health lost in the room, in points of the health bar. */
+  readonly health_lost?: number;
+  /** The lowest the bar reached inside the room, in points. */
+  readonly health_low?: number;
+  /** How long the fight took, and what a run at this index usually takes. */
+  readonly seconds?: number;
+  readonly expected_seconds?: number;
+  /** Which family took the most health here: shots, blades or hazards. */
+  readonly hurt_by?: string;
+  /**
+   * What took the most, by the cause the hit named: the body's archetype for a
+   * blade or a contact hit, the bullet's family for a shot, the feature's id
+   * for a hazard.
+   */
+  readonly hurt_most_by?: string;
+  /** The bodies the room actually put on the floor, by archetype id. */
+  readonly enemies?: readonly string[];
+  /** The reward kinds on the doors out, and the one the player walked through. */
+  readonly doors_offered?: readonly string[];
+  readonly door_taken?: string;
+  /** Cards taken and cards left on the screen, by id. */
+  readonly picked?: readonly string[];
+  readonly passed_over?: readonly string[];
+  /** A room whose reward was a purse rather than a card. */
+  readonly took_gold_instead?: boolean;
 }
 
 export interface RunHistory {
   readonly rooms: readonly RoomType[];
   readonly tensions: readonly Tension[];
+  /**
+   * Hearts lost in each room so far, in room order. Optional, because the
+   * scene and the harness populate it independently and neither should break
+   * without it; a Director that cannot see it reads the trend as `steady`.
+   * `recent_damage` is already the *sum* over the last two rooms, so a trend
+   * cannot be recovered from the labels alone — it needs the series.
+   */
+  readonly hearts_lost?: readonly number[];
   readonly profiles: readonly EncounterProfile[];
   readonly spaces: readonly SpaceArchetypeId[];
   /** The skeletons of the rooms so far, most recent first; see `generateRoom`'s `avoid`. */
   readonly skeletons?: readonly string[];
   readonly counter_scores: readonly CounterScore[];
+  /**
+   * **What the doors have been offering, and what the player did with them.**
+   *
+   * Reported from play: once the affix slots opened, the affix door won
+   * essentially every offer, so the player stopped choosing and simply walked
+   * through whichever badge said affix. Nothing in the state could see it —
+   * the Director answers each room from that room's labels, and a badge shown
+   * six rooms running looks identical to one shown for the first time.
+   *
+   * Jev cannot count, so none of this reaches it as a list. Code walks these
+   * and emits one label each (`director/questions/history.ts`): which kind has
+   * been on the badge several rooms running, which the player leans toward,
+   * and which they keep passing over.
+   *
+   * The reward kinds on each room's portals, in room order.
+   */
+  readonly doors_offered?: readonly (readonly string[])[];
+  /** The kind of door the player walked through into each room, in room order. */
+  readonly doors_taken?: readonly string[];
+  /**
+   * The mood and the symmetry of each room built so far, **most recent first**
+   * as `spaces` is. Without them the four look-only questions were decided by
+   * the same three health labels as each other, so a healthy player got the
+   * same warm, dim, busy, asymmetric room sixteen times.
+   */
+  readonly moods?: readonly Mood[];
+  readonly symmetries?: readonly Symmetry[];
+  /** Every stat upgrade taken this run, by id, for `mana_stats_taken`. */
+  readonly stats_taken?: readonly string[];
+  /**
+   * **The run written down room by room**, for the Director's briefing.
+   *
+   * The arrays above are each one fact per room, sliced apart so a label
+   * function can walk one of them. A briefing needs them back together: what
+   * room 4 was, how long it took, what it cost, which bodies were in it and
+   * what the player did with its reward, all on one line. Optional, because a
+   * caller with nothing to report should get a briefing that says so rather
+   * than an exception.
+   */
+  readonly journal?: readonly RunJournalEntry[];
   readonly shop_entered: boolean;
   readonly rests_entered: number;
   readonly treasures_entered: number;
@@ -444,11 +619,73 @@ export interface RunContext {
   readonly seed: string;
   readonly room_index: number;
   readonly labels: SummaryLabels;
+  /**
+   * **The bar and the purse as numbers**, beside the buckets in `labels`.
+   *
+   * Doc 002 keeps raw numbers out of the *labels*, and that rule is about
+   * labels: a bucket is what an option is grounded on. The Director's briefing
+   * is not a set of labels — it is the run written out for a reader — and a
+   * reader told "health is low" and never told how low cannot judge whether a
+   * fountain is worth a room, nor whether 38 gold buys anything. `max_health`
+   * tracks the upgrades the run has taken, so the denominator is the bar the
+   * player actually has.
+   *
+   * Optional, because a caller with only the labels should still get a
+   * briefing; it then reads the middle of the bucket and says so.
+   */
+  readonly health?: number;
+  readonly max_health?: number;
+  readonly gold?: number;
+  /**
+   * **The body's level, and how far into the next one** (`run/levels.ts`).
+   *
+   * Kills pay experience and levels arrive on their own, so this is a fact
+   * about the player the Director cannot read off anything else: two runs in
+   * room 10 with the same cards can be a level apart because one of them has
+   * been clearing rooms whole. Numbers rather than a bucket, for the reason
+   * `health` is a number here — the briefing is prose for a reader, and
+   * "level 4, 60 of 180 into the next" is a fact where "mid" is a verdict.
+   *
+   * Nothing in the Director reacts to it: no question is grounded on it and
+   * no option mentions it. It is in the briefing because the briefing is the
+   * run written out, and the level is part of the run.
+   */
+  readonly level?: number;
+  readonly xp_into?: number;
+  readonly xp_to_next?: number;
+  /**
+   * The figures behind `labels.observed`, over the same two-fight window
+   * (`observedFigures`). The buckets are what an option is grounded on; the
+   * briefing prints both, because "steady" alone cannot distinguish a rotation
+   * at the bottom of the band from one at the top.
+   */
+  readonly observed_figures?: {
+    readonly castsPerMinute: number;
+    readonly damagePerSecond: number;
+    readonly bodiesPerShot: number;
+    readonly swordShare: number;
+  };
   readonly staff: Staff;
   readonly slots: readonly (ItemInstance | null)[];
   readonly inventory: readonly ItemInstance[];
   readonly history: RunHistory;
   readonly intent: { readonly preset: Archetype; readonly free_text?: string };
+  /**
+   * **What the keys are actually holding.** `slots` says which spells; this
+   * says at what level, with what on them, and how big the bar they are cast
+   * from is. Without it the Director could not be told that a key is at level
+   * 5 with three affixes while another is bare at level 1 — the fact the
+   * offer question is most about (`run/build-facts.ts`).
+   *
+   * Optional, because a caller that has no levels or affixes to report (a
+   * test, the first room) should get a sane build rather than an exception;
+   * absent reads as three bare keys at level 1.
+   */
+  readonly power?: {
+    readonly levels: readonly number[];
+    readonly affixes: readonly (readonly { readonly id: string; readonly tier: number }[])[];
+    readonly mana_max: number;
+  };
 }
 
 export type DoorSet = readonly RoomType[];
@@ -461,7 +698,7 @@ export interface PacingLabels {
 
 /** Re-exported so domain modules can take everything they need from types.ts. */
 export type {
-  Archetype, BuildArchetype, Bottleneck, ClearSpeed, Consistency, CounterScore,
-  Element, Gold, HazardCap, Health, ManaSustain, RangeTag, Rarity,
-  RecentDamage, Role, RunProgress, Scatter, Suitability, Tension, TensionCap,
+  Archetype, BuildArchetype, ClearSpeed, Consistency, CounterScore,
+  Element, ElementPowers, Gold, HazardCap, Health, RangeTag, Rarity,
+  RecentDamage, Role, RunProgress, StatusElement, Suitability, Tension, TensionCap,
 };

@@ -18,7 +18,7 @@ for (const a of PLAYABLE_ARCHETYPES) {
   let open = 0, pillars = 0, widest = 0, narrow = 0, interior = 0, n = 0;
   for (let s = 0; s < SEEDS; s++) {
     const g = generateRoom(
-      { space: a.id, symmetry: "mirrored", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
+      { space: a.id, symmetry: "mirrored", size: "standard", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
       "S", "combat", src.stream("r", a.id, String(s)),
     );
     const r = toRoomPlan(g, { id: "r", seed_key: "k", reward_kind: "item", params_source: "rule" });

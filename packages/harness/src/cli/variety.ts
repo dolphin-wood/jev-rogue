@@ -47,7 +47,7 @@ const rows: [string, number, number, number, number][] = [];
 for (const a of SPACE_ARCHETYPES.filter((x) => x.boss !== true)) {
   for (const symmetry of ["mirrored", "asymmetric"] as const) {
     const rooms = Array.from({ length: N }, (_, s) =>
-      generateRoom({ space: a.id, symmetry, mood }, "S", "combat", new RngSource(`variety-${s}`).stream("room")));
+      generateRoom({ space: a.id, symmetry, size: "standard", mood }, "S", "combat", new RngSource(`variety-${s}`).stream("room")));
     const obs = rooms.map((r) => obstacleCells(r.grid, r.mask));
     let jac = 0;
     let same = 0;

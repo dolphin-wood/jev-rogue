@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { RngSource } from "../rng.ts";
 import {
   RUN_BOSS_ROOM, RUN_COMBAT_ROOMS, REWARD_KINDS, RUN_SHOP_ROOM,
-  legalDifficulties, ruleDoors, stageFor,
+  bossExit, fixedExit, legalDifficulties, NPC_OFFERS_MAX, portalChoices, ruleDoors, shopExit, stageFor,
 } from "./doors.ts";
 
 const rng = (seed = "d"): ReturnType<RngSource["stream"]> => new RngSource(seed).stream("doors");
@@ -18,6 +18,48 @@ describe("the run's shape", () => {
     // The merchant is fixed rather than offered, because gold is a reward kind
     // and a run that never reached a shop would make it a dead card.
     expect(RUN_SHOP_ROOM).toBe(RUN_BOSS_ROOM - 1);
+  });
+
+  /*
+   * **The run narrows twice, and neither narrowing is a question.** Both used
+   * to fall through to the rule draw and raise up to three portals with three
+   * different reward badges on them, every one of which opened onto the same
+   * room — the last fight onto the merchant, the merchant onto the boss.
+   */
+  it("leaves the last fight and the vendors' stop exactly one way on each", () => {
+    expect(bossExit()).toEqual([
+      { reward: "gold", elite: false, grade: 1, type: "boss", boss: true, onward: true },
+    ]);
+    expect(shopExit()).toEqual([
+      { reward: "gold", elite: false, grade: 1, type: "shop", onward: true },
+    ]);
+    // The last fight opens onto the stop; the stop opens onto the boss.
+    expect(fixedExit(RUN_COMBAT_ROOMS)).toEqual(shopExit());
+    expect(fixedExit(RUN_SHOP_ROOM)).toEqual(bossExit());
+    // Every other room's portals are the Director's, so there is nothing fixed.
+    expect(fixedExit(RUN_COMBAT_ROOMS - 1)).toBeNull();
+    expect(fixedExit(1)).toBeNull();
+  });
+
+  /*
+   * A door the run's shape fixed promises **no reward**: what is behind it is
+   * the room ahead. The badge read `gold` over both of them, which is the
+   * reward screen naming a currency the room will never hand out.
+   */
+  it("never puts a reward badge on a door that pays nothing", () => {
+    for (const spec of [...bossExit(), ...shopExit()]) expect(spec.onward).toBe(true);
+  });
+
+  /*
+   * Doc 003's early economy: the merchant is offered often while the build is
+   * unformed, so the run needs a ceiling on how often it may be *offered* as
+   * well as on how often it may be entered. Without it a live run put the
+   * merchant on the portal list in nine rooms of sixteen.
+   */
+  it("stops offering a vendor once the run has offered its share", () => {
+    const shape = { roomIndex: 6, lastWasElite: false, critical: false, npcRooms: 0 };
+    expect(portalChoices({ ...shape, npcOffers: NPC_OFFERS_MAX - 1 }, rng("a"), 3).npcKinds).toContain("merchant");
+    expect(portalChoices({ ...shape, npcOffers: NPC_OFFERS_MAX }, rng("b"), 3).npcKinds).not.toContain("merchant");
   });
 });
 

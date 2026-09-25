@@ -10,20 +10,20 @@ import {
 import { makeEnemy } from "./enemy.ts";
 import { acquire } from "./bullets.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
-import { staffFor, plainInstance } from "../spells/index.ts";
+import { plainInstance } from "../spells/index.ts";
 import { RngSource } from "../rng.ts";
 
 const src = new RngSource("fire-test");
 
 function world(): World {
   const g = generateRoom(
-    { space: "open_arena", symmetry: "mirrored", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
+    { space: "open_arena", symmetry: "mirrored", size: "vast", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
     "S", "combat", src.stream("room"), { plain: true },
   );
   const w = createWorld({
     room: toRoomPlan(g, { id: "r", seed_key: "k", reward_kind: "item", params_source: "rule" }),
     encounter: null,
-    staff: staffFor({ slots: "many", mana: "high", tempo: "steady", special: "none" }),
+    staff: { slots: 6, mana_max: 120 },
     slots: [plainInstance("magic_bolt"), null, null, null, null, null],
     hearts: 6, rng: src.stream("world"),
   });

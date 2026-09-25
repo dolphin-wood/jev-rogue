@@ -86,8 +86,7 @@ function spellIcons(): void {
     "venom_spit", "arc_lance", "scatter_shot", "cinder_burst", "glacier_spike",
     "void_orb", "plague_bloom",
   ];
-  const payloads = ["impact_carrier", "fuse_carrier", "wall_carrier", "piercing_carrier", "mortar_carrier"];
-  const names = [...attacks, ...payloads];
+  const names = attacks;
   const colours: Record<string, Colour> = {
     magic_bolt: C.cool, shock_arc: C.cool, spark_spray: C.cool, stone_shard: C.light,
     ember_dart: C.amber, frost_needle: C.cool, venom_spit: C.green, arc_lance: C.cool,
@@ -111,13 +110,6 @@ function spellIcons(): void {
         diamond(p,cx,cy,2,C.bone);
       } else if (name.includes("orb")) { ellipse(p,cx,cy,5,5,C.ink); ellipse(p,cx,cy,3,3,col); px(p,cx-1,cy-1,C.bone); }
       else { line(p,ox+3,oy+12,ox+12,oy+3,C.ink,3); line(p,ox+4,oy+11,ox+11,oy+4,col,2); px(p,ox+11,oy+4,C.bone); }
-    } else {
-      ring(p,cx,cy,5,C.light); ring(p,cx,cy,4,C.ink);
-      if (name.includes("impact")) diamond(p,cx,cy,3,C.amber);
-      if (name.includes("fuse")) { line(p,cx,cy,cx+3,cy-4,C.amber); px(p,cx+3,cy-5,C.bone); }
-      if (name.includes("wall")) rect(p,ox+5,oy+3,5,10,C.cool);
-      if (name.includes("piercing")) line(p,ox+3,cy,ox+12,cy,C.bone,2);
-      if (name.includes("mortar")) { ellipse(p,cx,cy,3,3,C.amber); line(p,cx+2,cy-2,cx+4,cy-5,C.bone); }
     }
   });
   write("spell-icons.png", upscale(p));

@@ -21,9 +21,22 @@ import {
   tileOf, ITEMS, ENEMIES, MELEE_ATTACKS, TILE_PX, hazardAt,
   distanceAt, UNREACHABLE, Tile, GRID_W, GRID_H, MAX_HEARTS,
   riftHits, tetherEnds, MINE_TRIGGER, MINE_BLAST, MUSKET_RANGE, MUSKET_SPREAD_DEG,
+  armDistance, BOSS_LEAP_RADIUS, BOSS_SLAM_IMPACT_PX, spellReady,
 } from "@jr/core";
-import type { EnemyId, FlowField, Input, World } from "@jr/core";
+import { holdsKey, keyWanted } from "./hands.ts";
+/**
+ * How far ahead of a turning arm the model reads the limb: the ground the
+ * sweep will have covered by the time a step is taken. Without it the model
+ * walks out of where the arm *is* and into where it is going, which is not
+ * how a person reads a rotating threat — they read the direction of travel.
+ */
+const ARM_LOOKAHEAD_MS = 260;
+/** How far ahead of a travelling shockwave the model reads its band. */
+const SHOCK_LOOKAHEAD_MS = 320;
+import type { Enemy, EnemyId, FlowField, Input, World } from "@jr/core";
 import { perceive } from "./perception.ts";
+import { SKILL_PROFILES, noise, salt, signedNoise } from "./skill.ts";
+import type { SkillProfile } from "./skill.ts";
 
 /**
  * A field toward the current target, cached on the target's tile.
@@ -53,7 +66,7 @@ function routingGrid(w: World): Uint8Array {
   for (let ty = 0; ty < GRID_H; ty++)
     for (let tx = 0; tx < GRID_W; tx++) {
       const hz = hazardAt(w, (tx + 0.5) * TILE_PX, (ty + 0.5) * TILE_PX);
-      if (hz && hz.effect === "contact") grid[ty * GRID_W + tx] = Tile.Wall;
+      if (hz && (hz.effect === "contact" || hz.effect === "lava")) grid[ty * GRID_W + tx] = Tile.Wall;
     }
   routing = { grid, source: w.room.grid };
   return grid;
@@ -84,11 +97,18 @@ function fieldTo(w: World, tx: number, ty: number): FlowField {
 }
 
 /**
- * The step chosen last frame, for a small preference toward continuing it.
- * Two directions of equal cost otherwise alternate every frame, and a body
- * that alternates between east and west does not move.
+ * How much the step chosen last frame is preferred, so two directions of equal
+ * cost do not alternate every frame — a body that alternates between east and
+ * west does not move.
+ *
+ * The step itself is on the **per-world state** (`ModelState.lastX/lastY`).
+ * It was a module-level `let`, which meant the second world played in a
+ * process started from the first world's last step: two runs of one seed
+ * diverged from their first frame whenever that step broke a tie, which is
+ * exactly the guarantee the harness exists to provide. The `states` WeakMap's
+ * own comment already said why — "one room's hesitation must not leak into
+ * the next" — and this was the one field left outside it.
  */
-let lastMove = { x: 0, y: 0 };
 const PERSISTENCE = 4;
 
 const DIRECTIONS = 16;
@@ -141,16 +161,239 @@ const BLADE_MARGIN = 10;
 /** What the last call decided and why; read by the harness trace only. */
 export const lastDecision = { route: null as { x: number; y: number } | null, bestCost: 0, costs: [] as string[], target: "", here: 0 };
 
-export function referenceInput(live: World): Input {
+/**
+ * What the last **movement plan** knew, for diagnosing a hit after the fact.
+ *
+ * "The novice is hit by rushers half the time" has three different causes with
+ * one symptom: it was standing too close, or it never saw the windup, or it saw
+ * it and was still committed to a dodge chosen before the windup existed. Those
+ * are opposite fixes — spacing, reaction time, decision rate — and nothing in
+ * the hit itself distinguishes them. So the plan records, at the moment it is
+ * made, which attended bodies were visibly winding up or lunging; `run.ts` reads
+ * it at the hit under `JR_MELEE=1`.
+ */
+export const lastPlan = {
+  atMs: 0,
+  /** The ids of attended bodies whose attack was already visible when the plan was made. */
+  sawAttacking: [] as number[],
+  /** Distance to the nearest attended body at plan time, or Infinity. */
+  nearestPx: Infinity,
+};
+
+/**
+ * The part of a player that persists between frames, per world.
+ *
+ * A model that re-derives everything from the current frame has no habits, and
+ * habits are most of what separates a person from a search. Commitment to a
+ * dodge, commitment to a target, a rotation that is not instant, a dash that is
+ * spent late — all of them need somewhere to remember what was already decided.
+ * A `WeakMap` on the world rather than module state, because the harness plays
+ * many worlds and one room's hesitation must not leak into the next.
+ */
+interface ModelState {
+  /** When the movement plan was last redone, and what it decided. */
+  planAtMs: number;
+  moveX: number;
+  moveY: number;
+  /** The step chosen on the last scored frame; see `PERSISTENCE`. */
+  lastX: number;
+  lastY: number;
+  bestCost: number;
+  /** The body being fought, and the nearer one that is trying to steal attention. */
+  targetId: number;
+  candidateId: number;
+  candidateSinceMs: number;
+  /** Health last seen, so a hit can be noticed, and how long it flusters the player. */
+  hearts: number;
+  flusteredUntilMs: number;
+  /** The dash: when it first became worth spending, and whether this one goes unused. */
+  dashWantedAtMs: number;
+  dashSkipped: boolean;
+  /** When the swing became available, for the beat before it is thrown. */
+  swingOnSinceMs: number;
+  /** The rotation: when a key first came up, and the earliest the next press may be. */
+  castableSinceMs: number;
+  nextCastAtMs: number;
+  /**
+   * When each key last went off, and what it looked like the step before, so
+   * the rotation can go round the keys (`pickSpell`) rather than lean on the
+   * first. Read off the live world — a cooldown starting, a bank emptying, a
+   * charge let go — because a press the sim refused is not a cast.
+   */
+  lastCastMs: number[];
+  keySeen: ({ cooldownMs: number; bank: number; base: string } | null)[];
+  chargeKeySeen: number;
+}
+
+const states = new WeakMap<World, ModelState>();
+
+function stateFor(w: World): ModelState {
+  let st = states.get(w);
+  if (!st) {
+    st = {
+      planAtMs: -Infinity, moveX: 0, moveY: 0, lastX: 0, lastY: 0, bestCost: 0,
+      targetId: -1, candidateId: -1, candidateSinceMs: 0,
+      hearts: w.player.hearts, flusteredUntilMs: -Infinity,
+      dashWantedAtMs: -1, dashSkipped: false, swingOnSinceMs: -1,
+      castableSinceMs: -1, nextCastAtMs: -Infinity,
+      lastCastMs: [], keySeen: [], chargeKeySeen: -1,
+    };
+    states.set(w, st);
+  }
+  return st;
+}
+
+/**
+ * The threats the model is currently paying attention to.
+ *
+ * Built once per movement decision and handed to every candidate direction, so
+ * all sixteen are scored against the same picture — which is what "attention"
+ * means. Bullets carry a perturbed velocity (`velocityErr`), because reading a
+ * trajectory by eye is not the same as reading `vx`.
+ *
+ * Room hazards, rifts, mines and the rest are deliberately **not** budgeted:
+ * they sit still, and a player learns where the spikes are after walking on
+ * them once. What overflows attention in this game is things that move.
+ */
+interface Attention {
+  readonly bullets: readonly { x: number; y: number; vx: number; vy: number }[];
+  readonly enemies: readonly Enemy[];
+}
+
+function attend(w: World, prof: SkillProfile): Attention {
+  const p = w.player;
+  const tick = w.tick | 0;
+
+  const seen: { x: number; y: number; vx: number; vy: number; key: number }[] = [];
+  for (let i = 0; i < w.enemyBullets.length; i++) {
+    const b = w.enemyBullets[i]!;
+    if (!b.alive) continue;
+    const dx = p.x - b.x;
+    const dy = p.y - b.y;
+    const d = Math.hypot(dx, dy);
+    // Salience, not distance alone: a bullet already past the player is not
+    // what a person is looking at, however near it still is.
+    const closing = b.vx * dx + b.vy * dy > 0;
+    const err = prof.velocityErr > 0 ? 1 + prof.velocityErr * signedNoise(tick, i ^ salt("bullet")) : 1;
+    seen.push({ x: b.x, y: b.y, vx: b.vx * err, vy: b.vy * err, key: d + (closing ? 0 : 400) });
+  }
+  seen.sort((a, b) => a.key - b.key);
+
+  const bodies = w.enemies.filter((e) => e.hp > 0 && e.spawnFadeMs <= 0);
+  if (Number.isFinite(prof.attentionEnemies))
+    bodies.sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y));
+
+  return {
+    bullets: Number.isFinite(prof.attentionBullets) ? seen.slice(0, prof.attentionBullets) : seen,
+    enemies: Number.isFinite(prof.attentionEnemies) ? bodies.slice(0, prof.attentionEnemies) : bodies,
+  };
+}
+
+/**
+ * The body the model is fighting, which is not always the nearest one.
+ *
+ * Swapping to whatever is closest on this frame is free re-planning by another
+ * name: it lets the model carve a crowd in whatever order is optimal at each
+ * instant. A person finishes what they started, or takes a beat to change their
+ * mind, and `targetSwitchMs` is that beat.
+ */
+function committedTarget(w: World, st: ModelState, prof: SkillProfile): Target | null {
+  const fresh = nearestEnemy(w);
+  if (prof.targetSwitchMs <= 0) {
+    st.targetId = fresh ? fresh.id : -1;
+    return fresh;
+  }
+  const now = w.stats.elapsedMs;
+  const held = st.targetId >= 0 ? enemyById(w, st.targetId) : null;
+  if (!held) {
+    st.targetId = fresh ? fresh.id : -1;
+    st.candidateId = -1;
+    return fresh;
+  }
+  if (!fresh || fresh.id === held.id) {
+    st.candidateId = -1;
+    return held;
+  }
+  if (st.candidateId !== fresh.id) {
+    st.candidateId = fresh.id;
+    st.candidateSinceMs = now;
+  }
+  if (now - st.candidateSinceMs >= prof.targetSwitchMs) {
+    st.targetId = fresh.id;
+    st.candidateId = -1;
+    return fresh;
+  }
+  return held;
+}
+
+function enemyById(w: World, id: number): Target | null {
+  for (const e of w.enemies) {
+    if (e.id !== id || e.hp <= 0 || e.spawnFadeMs > 0) continue;
+    return { ...e, visible: hasLineOfSight(w.room.grid, w.player.x, w.player.y, e.x, e.y) };
+  }
+  return null;
+}
+
+/** Nothing pressed: the door-reading pause at entry, and the beat after a hit. */
+function idleInput(w: World): Input {
+  return {
+    dash: false, moveX: 0, moveY: 0,
+    aimX: w.player.x + 1, aimY: w.player.y,
+    swing: false, spell: null,
+  };
+}
+
+/**
+ * The model's input, with the spell key held the way doc 006's options ask
+ * (`holdsKey`): a `charge` spell that has started charging is **held to a
+ * full charge and then let go**, whatever the rest of the model decided about
+ * the key this step. Without this the model would press a charge spell for
+ * the one frame its rotation allows and fire every shot as a tap — a quarter
+ * of the spell, for its whole cost — and the harness would measure a spell
+ * nobody plays. The dash still wins: dashing is how a charge is cancelled,
+ * and a model that dodges mid-charge loses the charge, as a player does.
+ * A `charges` spell is pressed only when a press would fire, so its bank
+ * refills between presses as the game's does.
+ */
+export function referenceInput(live: World, profile: SkillProfile = SKILL_PROFILES.expert): Input {
+  const input = decideInput(live, profile);
+  const p = live.player;
+  if (p.chargeKey >= 0 && !input.dash)
+    return { ...input, spell: holdsKey(live, p.chargeKey) ? p.chargeKey : null };
+  if (input.spell !== null && input.spell !== undefined && !holdsKey(live, input.spell)) return { ...input, spell: null };
+  return input;
+}
+
+function decideInput(live: World, profile: SkillProfile): Input {
   /*
    * Everything below reads a **delayed** view of the threats and a live view
    * of the player and the room. See `perception.ts`: the model used to dodge
    * attacks on the frame they were declared, which made every number the
    * harness produced describe a difficulty nobody plays at.
    */
-  const w = perceive(live);
+  const prof = profile;
+  const w = perceive(live, prof);
   const p = w.player;
-  const target = nearestEnemy(w);
+  const st = stateFor(live);
+  const now = w.stats.elapsedMs;
+  noteCasts(live, st, now);
+
+  // Reading the room from the door. A new player stops and looks at what is in
+  // front of them before walking into it; the model charged in from frame one.
+  if (now < prof.entryIdleMs) return idleInput(w);
+
+  // Hit: for a moment the plan is gone. Chains of hits are most of what a bad
+  // run is made of, and they exist because the second hit lands while the
+  // player is still reacting to the first.
+  if (p.hearts < st.hearts && prof.recoverMs > 0) st.flusteredUntilMs = now + prof.recoverMs;
+  st.hearts = p.hearts;
+  if (now < st.flusteredUntilMs) {
+    st.moveX = 0;
+    st.moveY = 0;
+    return idleInput(w);
+  }
+
+  const target = committedTarget(w, st, prof);
   const hurt = p.hearts <= 2;
   const distance = target ? Math.hypot(target.x - p.x, target.y - p.y) : Infinity;
 
@@ -199,9 +442,36 @@ export function referenceInput(live: World): Input {
     }
   }
 
-  let bestX = 0;
-  let bestY = 0;
-  let bestCost = Infinity;
+  /*
+   * **The decision clock.** The plan is only redone every `decisionMs`; between
+   * decisions the model holds the direction it committed to.
+   *
+   * This is the single biggest difference between the model and a person, and
+   * the reason the model cleared room one in five seconds. Scoring sixteen
+   * directions at 60 Hz means it can reverse into a gap that opened one frame
+   * ago and be back out of it before anything arrives. A human picks a way out,
+   * commits, and lives with it — which is what being hit is mostly made of.
+   */
+  const replan = prof.decisionMs <= 0 || now - st.planAtMs >= prof.decisionMs;
+  let bestX = st.moveX;
+  let bestY = st.moveY;
+  let bestCost = st.bestCost;
+  if (!replan) {
+    lastDecision.route = route;
+    lastDecision.bestCost = bestCost;
+    return finish(w, st, prof, target, distance, bestX, bestY);
+  }
+  st.planAtMs = now;
+  const att = attend(w, prof);
+  if (process.env.JR_MELEE === "1") {
+    lastPlan.atMs = now;
+    lastPlan.sawAttacking = att.enemies.filter((e) => e.attack !== "approach").map((e) => e.id);
+    lastPlan.nearestPx = att.enemies.reduce(
+      (best, e) => Math.min(best, Math.hypot(e.x - p.x, e.y - p.y)), Infinity);
+  }
+  bestX = 0;
+  bestY = 0;
+  bestCost = Infinity;
 
   // Standing still is a candidate too, so the model does not jitter when
   // every direction is worse than holding position.
@@ -220,7 +490,7 @@ export function referenceInput(live: World): Input {
     const nx = probe.x;
     const ny = probe.y;
 
-    let cost = score(w, nx, ny, stalled ? null : target, hurt) + (i === DIRECTIONS ? 0.5 : 0);
+    let cost = score(w, nx, ny, stalled ? null : target, hurt, att, prof) + (i === DIRECTIONS ? 0.5 : 0);
     // Stalled: a step from which the sword's own line to the body is blocked
     // (it swings from a little above the feet) is not worth standing on.
     if (stalled && target && !hasLineOfSight(w.room.grid, nx, ny - 7, target.x, target.y)) cost += 120;
@@ -231,7 +501,7 @@ export function referenceInput(live: World): Input {
       const weight = ROUTE_WEIGHT * (1 + 1.6 * (1 - threatScale(w)));
       cost -= (dx * route.x + dy * route.y) * weight;
     }
-    cost -= (dx * lastMove.x + dy * lastMove.y) * PERSISTENCE;
+    cost -= (dx * st.lastX + dy * st.lastY) * PERSISTENCE;
     if (cost < bestCost) {
       bestCost = cost;
       bestX = dx;
@@ -245,14 +515,42 @@ export function referenceInput(live: World): Input {
     lastDecision.target = target ? `${target.archetype}@${Math.round(target.x)},${Math.round(target.y)} vis=${target.visible}` : "none";
     lastDecision.here = target ? distanceAt(fieldTo(w, target.x, target.y), p.x, p.y) : -9;
   }
-  lastMove = { x: bestX, y: bestY };
+  st.lastX = bestX;
+  st.lastY = bestY;
+  st.moveX = bestX;
+  st.moveY = bestY;
+  st.bestCost = bestCost;
+  return finish(w, st, prof, target, distance, bestX, bestY);
+}
+
+/**
+ * Everything that is decided from the committed movement plan: whether to turn
+ * into the target, whether to swing, what to cast and where to aim.
+ *
+ * Split out of `referenceInput` because it runs on **every** frame while the
+ * movement plan runs on the decision clock. Facing, the swing window and the
+ * dash all have to be answered at 60 Hz even when the direction is held: the
+ * simulation reads them every step, and a person's hands do keep working
+ * between the moments they change their mind about where to stand.
+ */
+function finish(
+  w: World,
+  st: ModelState,
+  prof: SkillProfile,
+  target: Target | null,
+  distance: number,
+  moveX: number,
+  moveY: number,
+): Input {
+  const p = w.player;
+  let bestX = moveX;
+  let bestY = moveY;
+  const bestCost = st.bestCost;
 
   // Aims where the target will be. A player leads instinctively; a model
   // that does not cannot hit anything moving across its line.
   const lead = target ? leadPoint(p.x, p.y, target) : null;
-  // Dashes when the best available step is still dangerous: that is exactly
-  // the case movement alone cannot answer, and the reason the dash exists.
-  const dash = bestCost > DASH_THRESHOLD && p.dashCooldownMs <= 0 && p.dashMs <= 0;
+  const dash = wantsDash(w, st, prof, bestCost);
 
   /*
    * In range but facing the wrong way: turn, by stepping toward it.
@@ -285,7 +583,7 @@ export function referenceInput(live: World): Input {
   if (target && target.visible) {
     const reachable = distance <= ARC_REACH + target.radius + 3;
     const safeToCommit = bestCost <= COMMIT_COST;
-    if (reachable && safeToCommit && !wantsSwing(w, target, distance, bestX, bestY)) {
+    if (reachable && safeToCommit && !swingIsOn(w, target, distance, bestX, bestY)) {
       const dx = target.x - p.x;
       const dy = target.y - p.y;
       if (Math.abs(dx) > Math.abs(dy)) { bestX = Math.sign(dx); bestY = 0; }
@@ -296,19 +594,17 @@ export function referenceInput(live: World): Input {
   // Thrown at what the sword cannot reach, which is not necessarily the body
   // the model is standing next to.
   const far = spellTarget(w);
-  const cast = pickSpell(w, far);
+  const cast = wantsCast(w, st, prof, far, bestX !== 0 || bestY !== 0);
   const aimAt = far ? leadPoint(p.x, p.y, far) : lead;
+  const aimed = aimAt ? offAim(p.x, p.y, aimAt, far ?? target, prof) : null;
   return {
     dash,
     moveX: bestX,
     moveY: bestY,
-    aimX: aimAt ? aimAt.x : p.x + 1,
-    aimY: aimAt ? aimAt.y : p.y,
-    swing: wantsSwing(w, target, distance, bestX, bestY),
+    aimX: aimed ? aimed.x : p.x + 1,
+    aimY: aimed ? aimed.y : p.y,
+    swing: wantsSwing(w, st, prof, target, distance, bestX, bestY),
     spell: cast,
-    // Retained on the Input for the auto-firing staff doc 006 defined, which
-    // the world no longer steps. Spells are keyed now; see `spell` above.
-    fire: false,
   };
 }
 
@@ -331,6 +627,30 @@ export function referenceInput(live: World): Input {
  * should spend the frame moving instead.
  */
 function wantsSwing(
+  w: World,
+  st: ModelState,
+  prof: SkillProfile,
+  target: Target | null,
+  distance: number,
+  moveX: number,
+  moveY: number,
+): boolean {
+  const on = swingIsOn(w, target, distance, moveX, moveY);
+  /*
+   * The beat before the swing. The model threw one on the first frame the arc
+   * covered a body, which is not a decision so much as the absence of one; a
+   * person sees the opening and then acts on it. The delay is not only slower,
+   * it misses, because both bodies keep moving through it.
+   */
+  if (!on) { st.swingOnSinceMs = -1; return false; }
+  if (prof.swingReactionMs <= 0) return true;
+  const now = w.stats.elapsedMs;
+  if (st.swingOnSinceMs < 0) st.swingOnSinceMs = now;
+  return now - st.swingOnSinceMs >= prof.swingReactionMs;
+}
+
+/** The three conditions themselves, unchanged; see `wantsSwing`. */
+function swingIsOn(
   w: World,
   target: Target | null,
   distance: number,
@@ -400,39 +720,168 @@ function wantsSwing(
  *
  * `aim` is free for this because the sword does not use it: a swing takes its
  * direction from the facing, which comes from movement.
+ *
+ * **But out of reach is a preference, not a condition.** It was a condition,
+ * and the one fight in the game that is a single body standing on top of the
+ * player — the boss — therefore had no spell target at all: the model swung
+ * ninety times and cast four in a fifty-second fight, and the boss measured
+ * as a pure melee test whatever build was handed to it. That made the one
+ * encounter the whole run builds toward the one the build could not be
+ * measured on. Nobody stops casting because the thing is close.
  */
 function spellTarget(w: World): Target | null {
-  let best: Target | null = null;
-  let bestD = Infinity;
+  let far: Target | null = null;
+  let farD = Infinity;
+  let near: Target | null = null;
+  let nearD = Infinity;
   const p = w.player;
   for (const e of w.enemies) {
     if (e.hp <= 0 || e.spawnFadeMs > 0 || e.airborne) continue;
-    const d = Math.hypot(e.x - p.x, e.y - p.y);
-    if (d <= ARC_REACH + e.radius) continue;
     if (!hasLineOfSight(w.room.grid, p.x, p.y, e.x, e.y)) continue;
-    if (d < bestD) { bestD = d; best = { ...e, visible: true }; }
+    const d = Math.hypot(e.x - p.x, e.y - p.y);
+    if (d > ARC_REACH + e.radius) {
+      if (d < farD) { farD = d; far = { ...e, visible: true }; }
+    } else if (d < nearD) { nearD = d; near = { ...e, visible: true }; }
   }
-  return best;
+  return far ?? near;
 }
 
 /**
  * Which spell key to press, or null.
  *
- * The first available slot rather than the best one. A reference player exists
- * to calibrate encounters, so it should play competently and not optimally:
- * picking the strongest affordable spell every time would measure the ceiling
- * of the build rather than the difficulty of the room. Cooldowns stagger on
- * their own, so first-available rotates through all three by itself.
+ * The next key in the rotation rather than the best one. A reference player
+ * exists to calibrate encounters, so it should play competently and not
+ * optimally: picking the strongest affordable spell every time would measure
+ * the ceiling of the build rather than the difficulty of the room.
+ *
+ * **The rotation goes round the keys** (`rotation`): of the keys that are
+ * ready, the one that went off longest ago is pressed first. It used to be
+ * the first ready key, on the reasoning that cooldowns stagger on their own —
+ * and they do not whenever a key's cooldown is shorter than its own windup
+ * and recovery, or shorter than the rotation's human gap (`castGapMs`): the
+ * first key is then ready again every time the hands are free, and the other
+ * two are never pressed. Measured, an expert Heavy run cast Earth Spikes 214
+ * times and its second and third keys 11 and 0; an `average` player never
+ * pressed anything but the first key in any style. A person with three keys
+ * plays all three.
  */
-function pickSpell(w: World, target: Target | null): number | null {
+function pickSpell(w: World, st: ModelState, target: Target | null, moving: boolean): number | null {
   if (!target) return null;
-  for (let i = 0; i < w.spells.length; i++) {
+  for (const i of rotation(w, st)) {
     const slot = w.spells[i];
-    if (!slot || !slot.unit || slot.cooldownMs > 0) continue;
+    // Ready means off cooldown and, for a spell that banks charges, holding one.
+    if (!slot || !spellReady(slot, ITEMS)) continue;
     if (w.player.mana < slotCost(slot, ITEMS, w.staff)) continue;
+    /*
+     * And pressed at its moment, for the shapes whose key only makes sense
+     * at one (`keyWanted`): a stance as a hit is about to land, an enchant
+     * before closing to swing, a trail while moving, a thrown blade at a
+     * body it reaches. A key that is not wanted now is passed over, and the
+     * next ready one is pressed instead.
+     */
+    if (!keyWanted(w, i, { moving, target })) continue;
     return i;
   }
   return null;
+}
+
+/** The keys in the order the rotation tries them: least recently cast first, then by key. */
+function rotation(w: World, st: ModelState): number[] {
+  const keys = w.spells.map((_, i) => i);
+  const last = (i: number) => st.lastCastMs[i] ?? -Infinity;
+  return keys.sort((a, b) => last(a) - last(b) || a - b);
+}
+
+/**
+ * Notes which keys went off since the last step, off the live world: a
+ * cooldown that started, a bank that emptied, a charge that was let go. A
+ * spell newly bound to a key starts as never cast, so it is tried first.
+ */
+function noteCasts(live: World, st: ModelState, now: number): void {
+  live.spells.forEach((slot, i) => {
+    const seen = st.keySeen[i] ?? null;
+    if (!slot) { st.keySeen[i] = null; return; }
+    const bank = slot.bank ?? -1;
+    if (seen && seen.base !== slot.item.base) st.lastCastMs[i] = -Infinity;
+    else if (seen && (slot.cooldownMs > seen.cooldownMs + 1
+      || (seen.bank >= 1 && bank >= 0 && bank < 1)
+      || (st.chargeKeySeen === i && live.player.chargeKey !== i)))
+      st.lastCastMs[i] = now;
+    st.keySeen[i] = { cooldownMs: slot.cooldownMs, bank, base: slot.item.base };
+  });
+  st.chargeKeySeen = live.player.chargeKey;
+}
+
+/**
+ * The rotation, at human speed.
+ *
+ * The model pressed every key on the frame it came off cooldown, which nobody
+ * runs: there is a beat before you notice a key is up (`castReactionMs`) and a
+ * rhythm you settle into rather than a metronome (`castGapMs`). This matters
+ * more than it sounds, because a slower rotation is less damage per second, and
+ * less damage per second is a longer room, and a longer room is more time under
+ * fire. The three compound, which is why the effect is worth two parameters.
+ */
+function wantsCast(w: World, st: ModelState, prof: SkillProfile, target: Target | null, moving: boolean): number | null {
+  const pick = pickSpell(w, st, target, moving);
+  if (pick === null) {
+    st.castableSinceMs = -1;
+    return null;
+  }
+  if (prof.castReactionMs <= 0 && prof.castGapMs <= 0) return pick;
+  const now = w.stats.elapsedMs;
+  if (st.castableSinceMs < 0) st.castableSinceMs = now;
+  if (now - st.castableSinceMs < prof.castReactionMs) return null;
+  if (now < st.nextCastAtMs) return null;
+  st.nextCastAtMs = now + prof.castGapMs;
+  st.castableSinceMs = -1;
+  return pick;
+}
+
+/**
+ * The dash, spent late or not at all.
+ *
+ * The model dashed on the frame the best available step was still dangerous,
+ * which is the theoretically correct moment and not one people find. They dash
+ * after the shot is already on them (`dashDelayMs`), or they were saving it, or
+ * they simply did not think of it (`dashSkipChance`). The skip is rolled once
+ * per opportunity from the world clock, so a seed always skips the same ones.
+ */
+function wantsDash(w: World, st: ModelState, prof: SkillProfile, bestCost: number): boolean {
+  const p = w.player;
+  if (bestCost <= DASH_THRESHOLD) {
+    st.dashWantedAtMs = -1;
+    return false;
+  }
+  const now = w.stats.elapsedMs;
+  if (st.dashWantedAtMs < 0) {
+    st.dashWantedAtMs = now;
+    st.dashSkipped = prof.dashSkipChance > 0
+      && noise(Math.round(now), salt("dash")) < prof.dashSkipChance;
+  }
+  if (st.dashSkipped) return false;
+  if (now - st.dashWantedAtMs < prof.dashDelayMs) return false;
+  return p.dashCooldownMs <= 0 && p.dashMs <= 0;
+}
+
+/**
+ * The aim, a few degrees out.
+ *
+ * Rotated about the player rather than jittered at the destination, so the
+ * error grows with range the way a mis-aimed throw does. Seeded on the target's
+ * id, so it is held for as long as the target is — a player aiming slightly
+ * wrong, not a hand shaking at 60 Hz.
+ */
+function offAim(
+  px: number, py: number, at: { x: number; y: number }, target: Target | null, prof: SkillProfile,
+): { x: number; y: number } {
+  if (prof.aimErrorDeg <= 0 || !target) return at;
+  const err = ((prof.aimErrorDeg * Math.PI) / 180) * signedNoise(target.id, salt("aim"));
+  const dx = at.x - px;
+  const dy = at.y - py;
+  const c = Math.cos(err);
+  const s = Math.sin(err);
+  return { x: px + dx * c - dy * s, y: py + dx * s + dy * c };
 }
 
 /**
@@ -495,10 +944,18 @@ function threatReach(archetype: EnemyId): number {
  * a reliable hit are not in tension here: there is a whole band between the
  * two reaches, and the middle of it is both.
  */
-function standoff(t: Target): number {
+function standoff(t: Target, prof: SkillProfile): number {
   const inner = threatReach(t.archetype) + PLAYER_RADIUS;
   const outer = ARC_REACH + t.radius - SPACING_MARGIN;
-  return inner >= outer ? outer : (inner + outer) / 2;
+  const band = inner >= outer ? outer : (inner + outer) / 2;
+  /*
+   * Sloppy spacing, biased **inward**. The band where the player's arc lands
+   * and the enemy's does not is about fifteen px wide, so a player who is off
+   * by twenty px is not slightly worse at this, they are standing inside the
+   * blade. Inward rather than either way because closing feels like attacking:
+   * nobody's error is to stand too far back.
+   */
+  return band + prof.timidityPx + prof.spacingSlopPx * signedNoise(t.id, salt("spacing"));
 }
 
 function score(
@@ -507,12 +964,14 @@ function score(
   y: number,
   target: Target | null,
   hurt: boolean,
+  att: Attention,
+  prof: SkillProfile,
 ): number {
   let cost = 0;
 
-  // Incoming fire, weighted by how near the bullet's path passes.
-  for (const b of w.enemyBullets) {
-    if (!b.alive) continue;
+  // Incoming fire, weighted by how near the bullet's path passes. Only the
+  // bullets attention is on: see `attend`.
+  for (const b of att.bullets) {
     if (Math.abs(b.x - x) > THREAT_RANGE || Math.abs(b.y - y) > THREAT_RANGE) continue;
     for (const t of [0.1, 0.25, 0.45]) {
       const d = Math.hypot(b.x + b.vx * t - x, b.y + b.vy * t - y);
@@ -536,8 +995,28 @@ function score(
    * nearness would make the model refuse to stand where it can swing, which is
    * the contradiction that killed the first melee version of this model.
    */
-  for (const e of w.enemies) {
-    if (e.hp <= 0 || e.spawnFadeMs > 0) continue;
+  for (const e of att.enemies) {
+    /*
+     * **Fear of the body itself**, which is a beginner's mistake and an
+     * expensive one. See `SkillProfile.bodyFearPx`: contact costs nothing in
+     * this game, so a player who backs away from bodies rather than from blades
+     * spends the fight in the open, kills nothing, and is shot the whole time.
+     */
+    if (prof.bodyFearPx > 0) {
+      const d = Math.hypot(e.x - x, e.y - y);
+      /*
+       * But **not** for a body already inside the player's own reach. Backing
+       * away from something faster than you is not an escape, it is a chase you
+       * lose: measured, the novice was hit by rushers at a median 33 px — dead
+       * inside a 32 px thrust — while fleeing them, and swinging less than twice
+       * a room because it was always running. Somebody who has just been caught
+       * turns and mashes the attack button, which is both what people do and
+       * the only thing that works. So fear is what keeps a beginner out of a
+       * fight, and it stops mattering once the fight has arrived.
+       */
+      const arrived = d <= ARC_REACH + e.radius;
+      if (!arrived && d < prof.bodyFearPx) cost += (prof.bodyFearPx - d) * 2;
+    }
 
     /*
      * The attack's own hitbox, tested against the same function the simulation
@@ -637,13 +1116,80 @@ function score(
     const k = Math.max(0, Math.min(1, ((x - ends.x0) * vx + (y - ends.y0) * vy) / len2));
     if (Math.hypot(x - (ends.x0 + vx * k), y - (ends.y0 + vy * k)) < PLAYER_RADIUS + 12) cost += 240;
   }
-  for (const f of w.slowFields) {
-    if (f.alive && Math.hypot(f.x - x, f.y - y) < f.radius) cost += 35;
+  /*
+   * A travelling shockwave (the boss's slam). The band the ring will occupy
+   * over the next third of a second is what the model steps out of — the
+   * live band alone is already too late to price, because by the time a
+   * candidate step is taken the ring has moved.
+   */
+  for (const s of w.shockwaves) {
+    if (!s.alive) continue;
+    const d = Math.hypot(s.x - x, s.y - y);
+    const lead = s.chargeMs > 0 ? 0 : (s.speed * SHOCK_LOOKAHEAD_MS) / 1000;
+    // A sword wave is one arc of the ring; outside its arc is safe, and is the answer.
+    if (s.facing !== undefined && s.half !== undefined) {
+      let off = Math.atan2(y - s.y, x - s.x) - s.facing;
+      while (off > Math.PI) off -= Math.PI * 2;
+      while (off < -Math.PI) off += Math.PI * 2;
+      if (Math.abs(off) > s.half + Math.asin(Math.min(1, (PLAYER_RADIUS + 8) / Math.max(d, 1)))) continue;
+    }
+    if (d >= s.inner - PLAYER_RADIUS && d <= s.inner + s.thickness + lead + PLAYER_RADIUS)
+      cost += s.chargeMs > 0 ? 200 : 320;
   }
 
-  // Burning ground, which is the one hazard that persists.
+  /*
+   * **A turning arm.** Priced along its spine and along the spine it will
+   * have swung to, so the cost is a wedge rather than a line and the model
+   * leaves *against* the rotation or crosses it, which is the move.
+   */
+  for (const a of w.arms) {
+    if (!a.alive) continue;
+    /*
+     * Laid on the floor, the chain's sweep is drawn as the wedge it will cross
+     * (the renderer's tell), so a player reads that wedge, not the line: priced
+     * the same, between the ground under his body it passes over and its reach.
+     */
+    if (a.teleMs > 0) {
+      const span = (a.spin * a.activeMaxMs) / 1000;
+      const d = Math.hypot(x - a.x, y - a.y);
+      let off = (Math.atan2(y - a.y, x - a.x) - a.angle) * Math.sign(span || 1);
+      while (off < 0) off += Math.PI * 2;
+      while (off >= Math.PI * 2) off -= Math.PI * 2;
+      const pad = Math.asin(Math.min(1, (PLAYER_RADIUS + a.width / 2) / Math.max(d, 1)));
+      if (d > a.inner - PLAYER_RADIUS && d < a.length + PLAYER_RADIUS + 10
+        && (off <= Math.abs(span) + pad || off >= Math.PI * 2 - pad)) cost += 220;
+      continue;
+    }
+    const lead = (a.spin * ARM_LOOKAHEAD_MS) / 1000;
+    const here = armDistance(a, x, y);
+    const soon = armDistance({ ...a, angle: a.angle + lead }, x, y);
+    const near = Math.min(here, soon) <= a.width / 2 + PLAYER_RADIUS + 10;
+    if (near) cost += a.teleMs > 0 ? 160 : 300;
+  }
+
+  /*
+   * **The leap's landing.** The mark is drawn on the floor from the gather,
+   * and the shadow closes on it, so the ground under it is priced for the
+   * whole of the move — the model had no term for it and stood under the king.
+   */
+  for (const e of w.enemies) {
+    if (e.archetype !== "boss" || e.hp <= 0 || e.bossCastMs <= 0) continue;
+    if (e.bossCast === "leap" && Math.hypot(e.bossTargetX - x, e.bossTargetY - y) <= BOSS_LEAP_RADIUS + PLAYER_RADIUS + 10) cost += 280;
+    // And the slam's: the sword is driven into the ground round his feet, drawn filled from the raise.
+    if (e.bossCast === "slam" && Math.hypot(e.x - x, e.y - y) <= BOSS_SLAM_IMPACT_PX + PLAYER_RADIUS + 10) cost += 280;
+  }
+
+  /*
+   * Burning ground, which is the one hazard that persists — **somebody
+   * else's**. The player's own ground never burns the player (doc 006), and
+   * a player who knows that walks through it: the model priced every patch
+   * alike and so stepped round its own fields, trails and burning floors,
+   * which gave the fight away to the spells built to be stood in. Burning
+   * grass is the room's fire whatever lit it, and priced as such.
+   */
   for (const f of w.fires) {
     if (!f.alive) continue;
+    if (f.owner === "player" && !f.fromGrass) continue;
     if (Math.hypot(f.x - x, f.y - y) < f.radius + PLAYER_RADIUS + 4) cost += 160;
   }
 
@@ -656,7 +1202,8 @@ function score(
    * leave, not a place never to step.
    */
   const hz = hazardAt(w, x, y);
-  if (hz) cost += hz.effect === "contact" ? 220 : hz.effect === "slip" ? 30 : 120;
+  // Lava costs as much as spikes to walk on; the model does not plan dashes over it, so it goes round.
+  if (hz) cost += hz.effect === "contact" || hz.effect === "lava" ? 220 : hz.effect === "slip" ? 30 : 120;
 
   // Walls are not damage, but they remove the room to dodge into, which is
   // what actually kills a cornered player.
@@ -674,7 +1221,7 @@ function score(
     // Holding range only makes sense against something it can see; out of
     // sight, the route term above is what moves it.
     if (target.visible) {
-      const edge = standoff(target);
+      const edge = standoff(target, prof);
       const want = hurt ? edge * 1.6 : edge;
       const d = Math.hypot(target.x - x, target.y - y);
       /*
@@ -765,3 +1312,4 @@ function nearestEnemy(w: World): Target | null {
   if (visible) return { ...visible, visible: true };
   return any ? { ...any, visible: false } : null;
 }
+

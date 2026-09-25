@@ -5,16 +5,38 @@ export type DecisionSource = "jev" | "rule" | "random";
 
 export type FallbackPath =
   | "timeout" | "http" | "invalid" | "declined" | "late"
-  | "retry_exhausted" | "commit_check" | "deadline";
+  | "retry_exhausted" | "commit_check" | "deadline"
+  /** Not asked: the state holds nothing yet that could decide it (the first room's look). */
+  | "no_history";
 
 /** The escape option every question carries (doc 002). */
 export const FALLBACK = "fallback";
 
+/**
+ * **An option written out rather than matched.**
+ *
+ * The string form of an option is a sentence ending in "Fits when health is
+ * low or critical" — a clause built to be matched against a state of labels.
+ * With the briefing the state is no longer a table of labels, so there is
+ * nothing for that clause to match and it reads as an assertion about a field
+ * that is not there.
+ *
+ * The object form is what the choice API offers instead: what the option is,
+ * what it is *not* for, and a few examples in the same words the state uses.
+ * A negative is something a description can carry and a fit clause cannot,
+ * and examples are how a classifier is shown a boundary rather than told one.
+ */
+export interface OptionSpec {
+  readonly what: string;
+  readonly not_for?: string;
+  readonly examples?: readonly string[];
+}
+
 export interface ChoiceQuestion {
   readonly type: "choice";
   readonly instructions: string;
-  /** Option key to description. Must include `fallback`. */
-  readonly criteria: Readonly<Record<string, string>>;
+  /** Option key to its description, as a sentence or as a spec. Must include `fallback`. */
+  readonly criteria: Readonly<Record<string, string | OptionSpec>>;
 }
 
 export interface ChoiceAnswer {
@@ -26,6 +48,14 @@ export interface ChoiceAnswer {
 export interface Evaluation {
   readonly answers: Readonly<Record<string, ChoiceAnswer>>;
   readonly usage: { readonly input_tokens: number | null };
+  /**
+   * Attempts beyond the first that the evaluator had to make — an overloaded
+   * upstream answering `529`, backed off and asked again inside the room's
+   * deadline. Recorded because a run that quietly retried half its requests
+   * and a run that did not are the same run in every other number, and the
+   * first one is a warning (doc 011).
+   */
+  readonly retries?: number;
 }
 
 export interface RequestMeta {
@@ -48,9 +78,12 @@ export type Evaluator = (req: EvaluatorRequest) => Promise<Evaluation>;
 /** Thrown for every failure the fallback contract routes to RuleDirector. */
 export class EvaluatorError extends Error {
   readonly path: FallbackPath;
-  constructor(path: FallbackPath, message: string) {
+  /** Attempts beyond the first that were made before giving up. */
+  readonly retries: number;
+  constructor(path: FallbackPath, message: string, retries = 0) {
     super(message);
     this.path = path;
+    this.retries = retries;
     this.name = "EvaluatorError";
   }
 }

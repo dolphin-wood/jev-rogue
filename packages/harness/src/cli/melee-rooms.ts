@@ -9,7 +9,7 @@
  * Run: `pnpm melee-rooms [seeds]`
  */
 import {
-  generateRoom, PLAYABLE_ARCHETYPES, RngSource, ENTRY_CELL, measureMelee,
+  generateRoom, PLAYABLE_ARCHETYPES, RngSource, entryCell, measureMelee,
 } from "@jr/core";
 import type { Cell } from "@jr/core";
 
@@ -44,12 +44,13 @@ for (const a of PLAYABLE_ARCHETYPES) {
     const g = generateRoom(
       {
         space: a.id, symmetry: "mirrored",
+        size: "standard",
         mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" },
       },
       "S", "combat", src.stream("r", a.id, String(s)),
     );
     const spawns: Cell[] = g.spawn_groups.flatMap((sg) => [...sg.cells]);
-    const m = measureMelee(g.grid, ENTRY_CELL[g.entry], spawns, TILES_PER_S);
+    const m = measureMelee(g.grid, entryCell(g.entry, g.extent), spawns, TILES_PER_S);
     acc.detour += m.detour;
     acc.tight += m.width.tight;
     acc.open += m.width.open;

@@ -1,34 +1,24 @@
 import { describe, it, expect } from "vitest";
-import { isKnownTag, isKnownLabelRef, RARITIES } from "../content/tags.ts";
-import { BASE_ITEMS, ITEMS, plainInstance } from "./items.ts";
+import { ARCHETYPES, isKnownTag, RARITIES } from "../content/tags.ts";
+import { BASE_ITEMS, ITEMS, STYLE_START, plainInstance } from "./items.ts";
 
-/**
- * Doc 006's table, with one correction the design forced.
- *
- * The three `multicast` items are `boost`s now. Doc 006's `multicast N`
- * consumes the next N units *of a staff sequence* and fires them together; doc
- * 013 replaced that sequence with three independently keyed spells holding one
- * item each, so all three had nothing to consume and did nothing at all —
- * measured by `pnpm spell-check`, which fired every item in the pool.
- *
- * They kept their names and their place in the rarity ladder and became
- * `repeat` modifiers: the same spell, cast again. The `multicast` *kind* stays
- * in the schema, unused, because it is the right shape for a future item that
- * fires two genuinely different spells at once.
+/*
+ * Thirty-nine attacks: twelve projectiles, the chaining shock arc, the six
+ * shapes that are not projectiles (orbit, field, pillar, dash, vortex, summon),
+ * the three role spells (frost nova, seeker swarm, fault line), the three
+ * ground eruptions (earth spikes, flame pillars, cinder geysers), the
+ * eight spells on doc 006's newer options (mana darts, arcane cannon, doom
+ * sigil, frozen orb, contagion, meteor, quake ring, leap slam) and the six
+ * on its newer shapes (ball lightning, returning edge, crescent edge, counter
+ * stance, cinder stride, toxic cloud). Every item is a self-contained spell:
+ * nothing in the pool modifies another.
  */
-// Thirteen attacks, not twelve: `shock_arc` is the second starting spell and
-// the pool's only chaining attack. See doc 006's table.
-// Nineteen attacks: twelve projectiles, the chaining shock arc, and the six
-// shapes that are not projectiles (orbit, field, pillar, dash, vortex, summon).
-// Twenty-two with the three role spells: frost nova, seeker swarm, fault line.
-const COUNTS = { attack: 22, boost: 15, passive: 8, payload: 5, multicast: 0 } as const;
+const ATTACKS = 39;
 
-describe("base items (doc 006 and doc 010)", () => {
-  it("ships exactly the 50 items of doc 006's table", () => {
-    expect(BASE_ITEMS).toHaveLength(50);
-    for (const [kind, n] of Object.entries(COUNTS)) {
-      expect(BASE_ITEMS.filter((i) => i.kind === kind), kind).toHaveLength(n);
-    }
+describe("base items (doc 013 and doc 010)", () => {
+  it("ships exactly the thirty-nine attacks", () => {
+    expect(BASE_ITEMS).toHaveLength(ATTACKS);
+    expect(ITEMS.size).toBe(ATTACKS);
   });
 
   it("has unique snake_case ids", () => {
@@ -40,18 +30,9 @@ describe("base items (doc 006 and doc 010)", () => {
   it("tags only from the closed vocabulary", () => {
     for (const item of BASE_ITEMS) {
       for (const tag of item.tags) expect(isKnownTag(tag), `${item.id}: ${tag}`).toBe(true);
-      // The kind is always among the role tags, so role queries and kind
-      // queries never disagree.
-      expect(item.tags, item.id).toContain(item.kind);
+      // Every spell attacks, so role queries for `attack` cover the pool.
+      expect(item.tags, item.id).toContain("attack");
       expect(RARITIES).toContain(item.rarity);
-    }
-  });
-
-  it("references only known labels from jev_hints", () => {
-    for (const item of BASE_ITEMS) {
-      for (const ref of [...(item.jev_hints?.favor_when ?? []), ...(item.jev_hints?.avoid_when ?? [])]) {
-        expect(isKnownLabelRef(ref), `${item.id}: ${ref}`).toBe(true);
-      }
     }
   });
 
@@ -66,34 +47,20 @@ describe("base items (doc 006 and doc 010)", () => {
     }
   });
 
-  it("gives every kind the numeric params its executor reads", () => {
+  it("gives every spell the numeric params its executor reads", () => {
     for (const item of BASE_ITEMS) {
-      const p = item.params;
-      if (item.kind === "attack" || item.kind === "payload") {
-        for (const key of ["damage", "speed", "radius", "lifetime"]) {
-          expect(typeof p[key], `${item.id}.${key}`).toBe("number");
-        }
+      for (const key of ["damage", "speed", "radius", "lifetime"]) {
+        expect(typeof item.params[key], `${item.id}.${key}`).toBe("number");
       }
-      if (item.kind === "payload") {
-        expect(["on_hit", "on_expire", "on_wall"]).toContain(p["trigger"]);
-      }
-      if (item.kind === "multicast") expect([2, 3]).toContain(p["n"]);
-      if (item.kind === "passive") expect(item.mana).toBe(0);
     }
   });
 
-  it("covers all three payload triggers", () => {
-    const triggers = new Set(
-      BASE_ITEMS.filter((i) => i.kind === "payload").map((i) => i.params["trigger"]),
-    );
-    expect([...triggers].sort()).toEqual(["on_expire", "on_hit", "on_wall"]);
+  it("starts every style on one spell of the pool", () => {
+    expect(Object.keys(STYLE_START).sort()).toEqual([...ARCHETYPES].sort());
+    for (const id of Object.values(STYLE_START)) expect(ITEMS.has(id), id).toBe(true);
   });
 
   it("makes plain instances that carry the base rarity", () => {
-    const inst = plainInstance("void_orb");
-    expect(inst).toEqual({
-      uid: "void_orb", base: "void_orb", affix: null, magnitude: 0, modifier: null, rarity: "rare",
-    });
-    expect(ITEMS.get("void_orb")?.kind).toBe("attack");
+    expect(plainInstance("void_orb")).toEqual({ uid: "void_orb", base: "void_orb", rarity: "rare" });
   });
 });

@@ -33,7 +33,7 @@ export interface EncounterPreset {
 const RELEASE: EncounterPreset = {
   tier: "release",
   band: [1.4, 3.4],
-  profile: { composition: "mixed", density: "sparse", wave_structure: "single", anchor: "none", entry: "far_front" },
+  profile: { composition: "mixed", density: "sparse", wave_structure: "relentless", anchor: "none", entry: "far_front" },
   roster: ["rusher", "shooter", "rusher", "orbiter", "rusher", "rusher"],
   description: "A handful of bodies and one aimed gun: room to breathe.",
 };
@@ -41,7 +41,7 @@ const RELEASE: EncounterPreset = {
 const BUILD: EncounterPreset = {
   tier: "build",
   band: [3.2, 4.6],
-  profile: { composition: "mixed", density: "normal", wave_structure: "single", anchor: "none", entry: "far_front" },
+  profile: { composition: "mixed", density: "normal", wave_structure: "relentless", anchor: "none", entry: "far_front" },
   roster: ["rusher", "shooter", "orbiter", "rusher", "shooter", "turret", "tank"],
   description: "A working fight: chip damage from range while rushers close.",
 };
@@ -56,15 +56,15 @@ const BUILD: EncounterPreset = {
 const PEAK: EncounterPreset = {
   tier: "peak",
   band: [4.4, 6.1],
-  profile: { composition: "mixed", density: "dense", wave_structure: "single", anchor: "tank", entry: "flanks" },
+  profile: { composition: "mixed", density: "dense", wave_structure: "relentless", anchor: "tank", entry: "flanks" },
   roster: ["tank", "rusher", "shooter", "orbiter", "rusher", "shooter", "turret", "orbiter", "rusher"],
   description: "A full room with a tank screening the shooters behind it.",
 };
 
 const ELITE_LOW: EncounterPreset = {
   tier: "elite_low",
-  band: [6.0, 7.0],
-  profile: { composition: "mixed", density: "dense", wave_structure: "two_waves", anchor: "tank", entry: "surround" },
+  band: [5.5, 6.9],
+  profile: { composition: "mixed", density: "dense", wave_structure: "steady", anchor: "tank", entry: "surround" },
   roster: [
     "tank", "rusher", "shooter", "orbiter", "rusher", "shooter",
     "turret", "orbiter", "rusher", "shooter", "orbiter",
@@ -74,22 +74,38 @@ const ELITE_LOW: EncounterPreset = {
 
 const ELITE_MID: EncounterPreset = {
   tier: "elite_mid",
-  band: [7.0, 8.0],
-  profile: { composition: "mixed", density: "dense", wave_structure: "two_waves", anchor: "tank", entry: "surround" },
+  band: [6.9, 7.6],
+  profile: { composition: "mixed", density: "dense", wave_structure: "steady", anchor: "tank", entry: "surround" },
+  /*
+   * A sentinel and a warden where two rushers were. The three elite presets
+   * have to measure in order, and the middle one is the smallest of them —
+   * ten bodies against the low tier's eleven — so once the ranged archetypes
+   * were repriced it fell behind the tier below it. It rises by weight rather
+   * than by count, which is what a middle elite room should be: fewer bodies,
+   * each of them worth reading.
+   */
   roster: [
     "tank", "summoner", "turret", "orbiter", "orbiter", "shooter",
-    "shooter", "rusher", "rusher", "rusher",
+    "shooter", "sentinel", "warden", "rusher",
   ],
   description: "Elite middle: one of each heavy, and the summoner keeps the floor full.",
 };
 
 const ELITE_HIGH: EncounterPreset = {
   tier: "elite_high",
-  band: [8.0, 9.0],
-  profile: { composition: "mixed", density: "dense", wave_structure: "two_waves", anchor: "tank", entry: "surround" },
+  band: [7.6, 9.0],
+  profile: { composition: "mixed", density: "dense", wave_structure: "steady", anchor: "tank", entry: "surround" },
+  /*
+   * A warden in place of the third rusher. The ceiling preset has to measure
+   * above the one below it, and at the concurrency cap it cannot do that by
+   * being bigger — twelve bodies in one wave take a larger concurrency
+   * discount than ten, so the extra rusher was costing it pressure. It gets
+   * there by being *heavier* instead, which is also what "the hardest legal
+   * room" should mean.
+   */
   roster: [
     "tank", "summoner", "turret", "orbiter", "orbiter", "orbiter",
-    "shooter", "shooter", "shooter", "rusher", "rusher", "rusher",
+    "shooter", "shooter", "shooter", "warden", "rusher", "rusher",
   ],
   description: "Elite ceiling: every heavy once and the room full behind them, the hardest legal room in the run.",
 };

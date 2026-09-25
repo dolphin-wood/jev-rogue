@@ -21,32 +21,29 @@
  *
  * ### The hooks are real, which is what separates this from a wishlist
  *
- * Each one is a place the simulation already reaches, and `firePayloadChild`
- * is the primitive that fires an effect at a position — the payload mechanism
- * generalised. Nothing here needs a new kind of thing to exist:
+ * Each one is a place the simulation already reaches, and `fireUnit` with an
+ * origin is the primitive that fires the spell at a position. Nothing here
+ * needs a new kind of thing to exist:
  *
- * | hook | where it fires | already used by |
- * |---|---|---|
- * | `hit` | a player projectile overlaps a body | `on_hit` carriers |
- * | `expire` | a projectile's lifetime ends | `on_expire` carriers |
- * | `wall` | a projectile stops on geometry | `on_wall` carriers |
- * | `kill` | a body's hp reaches zero | the `enemy_killed` event |
- * | `cast` | the spell is fired | `fireUnit` |
- * | `hurt` | the player takes a hit | the `player_hit` event |
- * | `dash` | the player dashes | the `dash` event |
+ * | hook | where it fires |
+ * |---|---|
+ * | `hit` | a player projectile overlaps a body |
+ * | `expire` | a projectile's lifetime ends |
+ * | `wall` | a projectile stops on geometry |
+ * | `kill` | a body a projectile hit reaches zero hp |
+ * | `cast` | the spell is fired |
+ * | `hurt` | the player takes a hit |
+ * | `dash` | the player dashes through a body |
+ * | `swing` | the sword connects |
  *
- * ### Three things are called "affix" in this repository
+ * ### Two things are called "affix" in this repository
  *
  * They are different and the names here are deliberate:
  *
  * - **`SPELL_AFFIXES`, this file.** Doc 013's affixes: three per spell, event
  *   changing, three tiers, duplicates upgrade. What a reward card offers.
- * - **`AffixId` in `affix.ts`** — doc 006's *instance rolls*: `homing`,
- *   `cheaper`, `wider`, `heavier`, `elemental`. A numeric modifier Jev picks
- *   an intent for and code calibrates into a rarity band. A property of a
- *   dropped item, not something the player slots.
  * - **`AFFIXES` in `encounters/affixes.ts`** — *elite affixes*, which modify
- *   an enemy. Unrelated to both.
+ *   an enemy. Unrelated.
  *
  * ### Three tiers, one ladder
  *
@@ -59,14 +56,47 @@
 import type { BaseItem, Element } from "../types.ts";
 
 /**
- * The shapes a spell can have; see `fireOnce` in `sim/cast.ts` and doc 013,
+ * The shapes a spell can have; see `fireUnit` in `sim/cast.ts` and doc 013,
  * "Spell shapes". An affix names the shapes it works on, because a hook is
  * only reachable from some of them: a bolt hits, expires and meets walls, a
  * field does none of those, and a card that attaches to a field and does
  * nothing is a lie told in the reward screen.
+ *
+ * `eruption` is the ground going off in cells (`stepEruptions` in
+ * `sim/world.ts`): it hurts and fills element gauges, and fires none of the
+ * projectile hooks — no hit, kill, expire or wall event — so only the affixes
+ * that act at the cast or through the element gauges list it.
+ *
+ * The five newer shapes (doc 006) sort the same way, by what the simulation
+ * actually fires on them:
+ *
+ * - A `boomerang` is a projectile that hits (twice a body) and kills, but is
+ *   caught rather than running out and turns on a wall rather than stopping
+ *   on one, and it already passes through everything — so the hit and kill
+ *   affixes list it, and the expire, wall and pierce ones do not.
+ * - An `orb` strikes: each strike is a hit and can kill, so the hit and kill
+ *   affixes list it. The orb itself is no projectile and never runs out on a
+ *   body or a wall.
+ * - An `enchant`'s waves are projectiles that pass through every body and
+ *   run out at their reach, so the hit, kill and expire affixes list it.
+ * - A `trail` and a `stance` put no projectile into the world at all — a
+ *   trail is ground, a stance's answer is a cut round the caster — so only
+ *   the affixes that act at the cast, through the element gauges, or by
+ *   casting the spell free list them.
  */
-export type SpellShape = "bolt" | "orbit" | "field" | "pillar" | "dash" | "vortex" | "summon";
-export const SPELL_SHAPES: readonly SpellShape[] = ["bolt", "orbit", "field", "pillar", "dash", "vortex", "summon"];
+export type SpellShape =
+  | "bolt" | "orbit" | "field" | "pillar" | "dash" | "vortex" | "summon" | "eruption"
+  | "boomerang" | "orb" | "trail" | "enchant" | "stance";
+export const SPELL_SHAPES: readonly SpellShape[] = [
+  "bolt", "orbit", "field", "pillar", "dash", "vortex", "summon", "eruption",
+  "boomerang", "orb", "trail", "enchant", "stance",
+];
+
+/**
+ * The shapes whose projectiles hit and kill: where `chain`, `brand`,
+ * `harvest`, `echo` and `haste` do something. See `SpellShape`.
+ */
+const HITTING: readonly SpellShape[] = ["bolt", "orbit", "boomerang", "orb", "enchant"];
 
 /** The moments an affix can attach to. Every one already exists in `sim`. */
 export type AffixHook = "hit" | "expire" | "wall" | "kill" | "cast" | "hurt" | "dash" | "swing";
@@ -129,8 +159,11 @@ export interface SpellAffix {
    * The spell shapes this affix does something on. Decided by where the hook
    * fires: `hit`, `kill` and `expire` need a projectile (a bolt or an orbiting
    * blade), `wall` needs one that flies, `cast` needs a cast that placing in
-   * more directions or firing again changes, `hurt` and `dash` need a spell
-   * that can be fired *at* a body.
+   * more directions or firing again changes. `hurt`, `dash` and `swing` fire
+   * the spell *at* a body, and every shape has an answer to that (`fireUnit`,
+   * cast with an origin). An eruption fires no projectile hook; see
+   * `SpellShape`. `affix-shapes.test.ts` casts every affix on every shape it
+   * lists and fails on any that does nothing there.
    */
   readonly shapes: readonly SpellShape[];
   /**
@@ -161,29 +194,35 @@ const BASE_AFFIXES: SpellAffix[] = [
       { effect: { kind: "split", count: 4 }, text: "splits in four on impact" },
     ],
     description:
-      "Impact breaks the projectile into shards that carry on forward. Turns a "
-      + "single accurate shot into a reason to fight things in a line.",
+      "Impact breaks the projectile into shards that carry on forward.",
   },
   {
     id: "chain",
     name: "Chain",
     hook: "hit",
-    shapes: ["bolt", "orbit"],
+    shapes: [...HITTING],
     element: null,
     tiers: [
-      { effect: { kind: "arc", jumps: 1, rangePx: 120 }, text: "arcs to one more body" },
-      { effect: { kind: "arc", jumps: 2, rangePx: 140 }, text: "arcs to two more bodies" },
-      { effect: { kind: "arc", jumps: 3, rangePx: 160 }, text: "arcs to three more bodies" },
+      { effect: { kind: "arc", jumps: 1, rangePx: 120 }, text: "releases a lesser copy of itself at one more body" },
+      { effect: { kind: "arc", jumps: 2, rangePx: 140 }, text: "releases a lesser copy of itself at two more bodies" },
+      { effect: { kind: "arc", jumps: 3, rangePx: 160 }, text: "releases a lesser copy of itself at three more bodies" },
     ],
+    /*
+     * **A copy of the spell, not an arc.** The effect used to be one generic
+     * white streak whatever it was attached to, so the affix read the same on
+     * all twelve attacks and told the player nothing about their own build.
+     * What it releases now is the spell itself again — the same shape, the
+     * same element, the same light — smaller and weaker, at the next body.
+     */
     description:
-      "The hit jumps to whatever else is close. Rewards letting a group gather "
-      + "rather than picking it apart.",
+      "The hit releases a smaller copy of the spell, doing less damage, at the "
+      + "next body nearby.",
   },
   {
     id: "brand",
     name: "Brand",
     hook: "hit",
-    shapes: ["bolt", "orbit"],
+    shapes: [...HITTING],
     element: null,
     tiers: [
       { effect: { kind: "mark", radiusPx: 32 }, text: "a second hit detonates the mark" },
@@ -191,14 +230,14 @@ const BASE_AFFIXES: SpellAffix[] = [
       { effect: { kind: "mark", radiusPx: 58 }, text: "a second hit detonates the mark wide" },
     ],
     description:
-      "The first hit marks, the second sets the mark off. Pays for staying on "
-      + "one target while everything else is asking you not to.",
+      "The first hit marks the body; the next hit on it sets the mark off in a "
+      + "burst that hits the bodies round it.",
   },
   {
     id: "harvest",
     name: "Harvest",
     hook: "kill",
-    shapes: ["bolt", "orbit"],
+    shapes: [...HITTING],
     element: null,
     tiers: [
       { effect: { kind: "burst", radiusPx: 44 }, text: "kills burst" },
@@ -206,38 +245,39 @@ const BASE_AFFIXES: SpellAffix[] = [
       { effect: { kind: "burst", radiusPx: 84 }, text: "kills burst wide" },
     ],
     description:
-      "A body killed by this spell comes apart. The first kill in a pack is "
-      + "worth more than the last, which is the opposite of how a fight usually goes.",
+      "A body killed by this spell bursts where it falls, hitting the bodies "
+      + "round it.",
   },
   {
     id: "echo",
     name: "Echo",
     hook: "kill",
-    shapes: ["bolt", "orbit"],
+    shapes: [...HITTING],
     element: null,
     tiers: [
       { effect: { kind: "refund", fraction: 0.5 }, text: "a kill returns half the mana" },
       { effect: { kind: "refund", fraction: 1 }, text: "a kill returns the mana" },
-      { effect: { kind: "refund", fraction: 1.5 }, text: "a kill returns more than it cost" },
+      { effect: { kind: "refund", fraction: 1.5 }, text: "a kill returns one and a half times the mana" },
     ],
     description:
-      "Killing with this spell pays for the next one. Makes a finisher into an "
-      + "engine, and only while it is actually finishing.",
+      "A kill with this spell gives back mana: part of what the killing cast "
+      + "cost, all of it, or more, by tier.",
   },
   {
     id: "bloom",
     name: "Bloom",
     hook: "expire",
-    shapes: ["bolt", "orbit"],
+    // An enchant's wave runs out at its reach; a boomerang is caught and an orb's strike lands.
+    shapes: ["bolt", "orbit", "enchant"],
     element: null,
     tiers: [
-      { effect: { kind: "field", radiusPx: 36, durationMs: 1400 }, text: "leaves a field" },
-      { effect: { kind: "field", radiusPx: 46, durationMs: 2000 }, text: "leaves a field" },
-      { effect: { kind: "field", radiusPx: 58, durationMs: 2600 }, text: "leaves a lasting field" },
+      { effect: { kind: "field", radiusPx: 36, durationMs: 1400 }, text: "leaves burning ground" },
+      { effect: { kind: "field", radiusPx: 46, durationMs: 2000 }, text: "leaves burning ground" },
+      { effect: { kind: "field", radiusPx: 58, durationMs: 2600 }, text: "leaves lasting burning ground" },
     ],
     description:
-      "Where the shot runs out, something stays. Turns a miss into area denial, "
-      + "so range becomes a placement decision instead of a failure.",
+      "Where the shot runs out, hit or miss, the ground catches fire for a "
+      + "moment and burns what stands in it.",
   },
   {
     id: "shatter",
@@ -251,14 +291,20 @@ const BASE_AFFIXES: SpellAffix[] = [
       { effect: { kind: "split", count: 7 }, text: "breaks into seven on a wall" },
     ],
     description:
-      "Hitting the room instead of a body is no longer wasted. The one affix "
-      + "that makes a cluttered room better to fight in than an open one.",
+      "A projectile that stops on a wall or a prop breaks into shards there, "
+      + "which fly on into the room.",
   },
   {
     id: "repeat",
     name: "Repeat",
     hook: "cast",
-    shapes: ["bolt"],
+    /*
+     * An echo is a whole cast again, so an eruption erupts again and a
+     * boomerang is thrown again. Not an orb: a key keeps its cap of orbs up
+     * already, and an echo's orb only replaces one of them. Not a trail, an
+     * enchant or a stance: an echo renews what the press just started.
+     */
+    shapes: ["bolt", "eruption", "boomerang"],
     element: null,
     tiers: [
       { effect: { kind: "repeat", extra: 1 }, text: "casts again a beat later" },
@@ -266,15 +312,25 @@ const BASE_AFFIXES: SpellAffix[] = [
       { effect: { kind: "repeat", extra: 3 }, text: "casts three times more, a beat apart" },
     ],
     description:
-      "The spell fires again a beat after the press, on where you are aiming "
-      + "then. This is where the old multicast items belong: attached to a spell "
-      + "the player named, rather than being a spell of their own.",
+      "The spell casts again a beat after the press, aimed where the caster is "
+      + "facing by then.",
   },
   {
     id: "scatter",
     name: "Scatter",
     hook: "cast",
-    shapes: ["bolt", "field", "pillar"],
+    /*
+     * Every shape whose side casts land somewhere new. A side cast is the
+     * spell's real shape aimed along another direction (`freeCastReach`):
+     * more shots, more patches, more pulls, more cuts round the caster, more
+     * ground going off. Not an orbit or a summon: those renew the one ring
+     * or the one companion the key keeps, so three more casts of either are
+     * the same ring and the same companion — measured, nothing changes.
+     * A boomerang thrown to the sides is more blades; an orb to the sides is
+     * one of the key's capped orbs moved, and a trail, an enchant or a stance
+     * is on the caster, so a side cast renews the one already running.
+     */
+    shapes: ["bolt", "field", "pillar", "vortex", "dash", "eruption", "boomerang"],
     element: null,
     tiers: [
       { effect: { kind: "spread", dirs: 1 }, text: "also casts behind you" },
@@ -282,8 +338,8 @@ const BASE_AFFIXES: SpellAffix[] = [
       { effect: { kind: "spread", dirs: 5 }, text: "casts in six directions" },
     ],
     description:
-      "The cast goes outward as well as forward. The answer to being surrounded, "
-      + "and useless when you are not.",
+      "The cast also goes out behind the caster, and at higher tiers to the "
+      + "sides as well, beside the one sent forward.",
   },
   {
     id: "ward",
@@ -297,14 +353,15 @@ const BASE_AFFIXES: SpellAffix[] = [
       { effect: { kind: "ward", shots: 3 }, text: "leaves a rune that eats three shots" },
     ],
     description:
-      "Casting plants a rune where you stood that stops enemy fire. The only "
-      + "affix that makes standing still correct, briefly.",
+      "Casting leaves a rune where the caster stood that stops enemy shots "
+      + "reaching it, a few at most, for a short while.",
   },
   {
     id: "retort",
     name: "Retort",
     hook: "hurt",
-    shapes: ["bolt", "field", "vortex"],
+    // Every shape: a free cast is the spell's own shape at the body (`fireUnit`).
+    shapes: [...SPELL_SHAPES],
     element: null,
     tiers: [
       { effect: { kind: "riposte", targets: 1 }, text: "being hit fires back" },
@@ -312,23 +369,22 @@ const BASE_AFFIXES: SpellAffix[] = [
       { effect: { kind: "riposte", targets: 3 }, text: "being hit fires back at three" },
     ],
     description:
-      "Taking a heart casts this spell at whatever took it, free. Does not "
-      + "reward being hit — it stops one mistake from becoming three.",
+      "Taking a hit casts this spell at whatever dealt it, free.",
   },
   {
     id: "slipstream",
     name: "Slipstream",
     hook: "dash",
-    shapes: ["bolt", "field", "vortex"],
+    // Every shape: a free cast is the spell's own shape at the body (`fireUnit`).
+    shapes: [...SPELL_SHAPES],
     element: null,
     tiers: [
       { effect: { kind: "riposte", targets: 1 }, text: "dashing through a body casts" },
       { effect: { kind: "riposte", targets: 2 }, text: "dashing through two bodies casts" },
-      { effect: { kind: "riposte", targets: 3 }, text: "dashing through a crowd casts" },
+      { effect: { kind: "riposte", targets: 3 }, text: "dashing through three bodies casts" },
     ],
     description:
-      "The dash already passes through bodies. This makes passing through one "
-      + "an attack, which is the most aggressive way to use a defensive button.",
+      "Dashing through a body casts this spell at it, free.",
   },
 ];
 
@@ -344,6 +400,9 @@ const BASE_AFFIXES: SpellAffix[] = [
  * - **Tempo** — `haste`: a finisher that comes back sooner, the cooldown's
  *   counterpart to `echo`'s mana.
  */
+/** The one sentence all three element affixes end with; see `STATUS_BREADTH_MULT`. */
+const BREADTH = " A body carrying two different elements takes more from every hit.";
+
 BASE_AFFIXES.push(
   {
     id: "pierce", name: "Pierce", hook: "cast", shapes: ["bolt"], element: null,
@@ -352,7 +411,7 @@ BASE_AFFIXES.push(
       { effect: { kind: "shape", pierce: 2 }, text: "passes through two bodies" },
       { effect: { kind: "shape", pierce: 3 }, text: "passes through three bodies" },
     ],
-    description: "The shot keeps going through what it hits. Lines the room up for you: a corridor fight becomes one cast.",
+    description: "The shot keeps going through the bodies it hits.",
   },
   {
     id: "seek", name: "Seek", hook: "cast", shapes: ["bolt"], element: null,
@@ -361,7 +420,7 @@ BASE_AFFIXES.push(
       { effect: { kind: "shape", homing: 0.55 }, text: "turns toward bodies" },
       { effect: { kind: "shape", homing: 0.8 }, text: "hunts bodies down" },
     ],
-    description: "The shot curves onto the nearest body. Buys accuracy with nothing but a slot, so it suits a spell you cannot afford to miss.",
+    description: "The shot turns toward the nearest body as it flies.",
   },
   {
     id: "ricochet", name: "Ricochet", hook: "wall", shapes: ["bolt"], element: null,
@@ -370,7 +429,7 @@ BASE_AFFIXES.push(
       { effect: { kind: "shape", bounce: 2 }, text: "bounces twice off walls" },
       { effect: { kind: "shape", bounce: 3 }, text: "bounces three times" },
     ],
-    description: "Walls send the shot back into the room. The more cluttered the room, the more each cast is worth.",
+    description: "The shot bounces off walls back into the room instead of stopping.",
   },
   {
     id: "kindle", name: "Kindle", hook: "cast", shapes: [...SPELL_SHAPES], element: "fire",
@@ -379,7 +438,7 @@ BASE_AFFIXES.push(
       { effect: { kind: "shape", element: "fire", power: 0.9 }, text: "burns what it hits" },
       { effect: { kind: "shape", element: "fire", power: 1.2 }, text: "burns hard" },
     ],
-    description: "Any spell becomes a fire spell: its hits fill the burn gauge. A fire build no longer waits for a fire spell to drop.",
+    description: "The spell's hits fill the burn gauge, on top of whatever element it already carries." + BREADTH,
   },
   {
     id: "rime", name: "Rime", hook: "cast", shapes: [...SPELL_SHAPES], element: "ice",
@@ -388,7 +447,7 @@ BASE_AFFIXES.push(
       { effect: { kind: "shape", element: "ice", power: 0.9 }, text: "chills hard" },
       { effect: { kind: "shape", element: "ice", power: 1.2 }, text: "freezes fast" },
     ],
-    description: "Any spell becomes an ice spell: its hits fill the chill gauge toward a freeze, and a frozen body shatters for triple.",
+    description: "The spell's hits slow a body and fill its chill gauge toward a freeze, alongside any element it carries; a frozen body's next hit lands for triple." + BREADTH,
   },
   {
     id: "blight", name: "Blight", hook: "cast", shapes: [...SPELL_SHAPES], element: "poison",
@@ -397,37 +456,108 @@ BASE_AFFIXES.push(
       { effect: { kind: "shape", element: "poison", power: 0.9 }, text: "poisons hard" },
       { effect: { kind: "shape", element: "poison", power: 1.2 }, text: "poisons deep" },
     ],
-    description: "Any spell becomes a poison spell: its hits fill the poison gauge, which slows and wears a body down.",
+    description: "The spell's hits fill the poison gauge, alongside any element it already carries; a poisoned body loses health over time." + BREADTH,
   },
   {
-    id: "haste", name: "Haste", hook: "kill", shapes: ["bolt", "orbit"], element: null,
+    id: "haste", name: "Haste", hook: "kill", shapes: [...HITTING], element: null,
     tiers: [
       { effect: { kind: "haste", fraction: 0.5 }, text: "a kill halves the cooldown" },
-      { effect: { kind: "haste", fraction: 0.75 }, text: "a kill nearly resets it" },
+      { effect: { kind: "haste", fraction: 0.75 }, text: "a kill takes three quarters off the cooldown" },
       { effect: { kind: "haste", fraction: 1 }, text: "a kill resets the cooldown" },
     ],
-    description: "Killing with this spell brings it back sooner. A heavy spell that finishes a body is ready for the next.",
+    description: "A kill with this spell takes part of its cooldown off, or all of it, by tier.",
   },
 );
 
 export const SPELL_AFFIXES: readonly SpellAffix[] = BASE_AFFIXES;
 
 /**
- * What an affix does to its spell's **mana cost**, per tier (task 7).
+ * What an affix does to its spell's **mana cost**, per tier.
  *
- * `repeat` fired whole extra casts for nothing, and with `scatter` it
- * multiplied: a tier-three pair was twenty-four shots for one press at one
- * price. `repeat` now costs for the casts it adds. `scatter` stays free and
- * its side casts land at half (`SPREAD_DAMAGE`): costing it made the spell
- * *worse* in front — measured at 0.57 of the bare bolt — which is a card that
- * punishes taking it, and the harness lost eight more runs to it. Free and
- * half-strength, it is no loss in front and the answer when surrounded.
- * Everything else is free: it changes what a cast does, not how many there are.
+ * ### One rule: an affix that multiplies the hits pays for them
+ *
+ * `fork`, `chain`, `scatter`, `pierce` and `repeat` all answer one press with
+ * more damage events than the press bought — a shard per body, a copy at the
+ * next body, a cast to each side, a body further down the line, the whole cast
+ * again. They pay `SURCHARGE_PER_TIER` a tier for it, multiplied together, so
+ * stacking two of them costs like stacking two of them: three tiers of fork
+ * and three of repeat on one spell cost about twice the bare cast, which is
+ * the shape the user asked for: the build still happens, and the bar decides
+ * how often.
+ *
+ * `repeat` used to be the only one that paid, at 35% a tier, and it paid alone
+ * because it was the only affix that added whole *casts*. That was the wrong
+ * line: a fork at tier three turns one hit into four and a chain at tier three
+ * reaches three more bodies, and neither cost anything. Folded into this rule,
+ * `repeat` is charged the same 15% a tier as the rest.
+ *
+ * ### And an affix that only changes a shot's path pays nothing
+ *
+ * `seek`, `ricochet`, the element affixes, `brand`, `harvest`, `haste`, `ward`,
+ * `echo`, `bloom`, `retort`, `slipstream`, `resonance`, `shatter` — none of
+ * them multiplies what a press is worth against what is in front of the
+ * player, and several are defensive.
+ *
+ * **`seek`'s surcharge was removed on purpose and does not come back.** It used
+ * to charge 25% a tier for "accuracy", and measured at **0.56 of the bare
+ * bolt** on a dummy the shot was already aimed at: three quarters more mana on
+ * a spell the mana bar rations is a quarter fewer casts, and homing buys
+ * nothing against something standing still. So the card the player took to stop
+ * missing made them do half the damage. Accuracy is paid for with the affix
+ * slot, which is the scarcest thing a spell has; charging mana on top charged
+ * twice.
+ *
+ * `shatter` is left free although it splits: it only fires on a *miss*, so
+ * charging it would be charging the player for hitting the wall.
+ *
+ * ### Except the ones that only pay on a crowd
+ *
+ * `chain`, `scatter` and `pierce` were charged with the rest and measured at
+ * **0.67 of the bare bolt** on one body: they add nothing to a lone target, so
+ * the surcharge was all they did there — a card that is a loss in front of the
+ * player at an elite. Their payoff is the pack, which is the build the user
+ * wants to feel enormous, and the proc weights already stop them multiplying
+ * the element gauges. So they are free, and only the two that multiply what
+ * one press does to **one** body pay: `fork` (a shard per hit) and `repeat`
+ * (the whole cast again). The sections above still describe why those two pay.
  */
+export const SURCHARGE_PER_TIER = 0.15;
+
+/**
+ * The affixes that multiply how many times one press lands, and so pay
+ * `SURCHARGE_PER_TIER` a tier for the privilege. The card says so
+ * (`affixSurchargeText`), because a cost the player only meets at the mana bar
+ * is a cost they were not offered.
+ */
+export const COUNT_AFFIXES: readonly string[] = ["fork", "repeat"];
+
 export function affixCostMult(id: string, tier: number): number {
   const t = Math.max(1, Math.min(3, tier));
-  return id === "repeat" ? 1 + 0.35 * t : 1;
+  return COUNT_AFFIXES.includes(id) ? 1 + SURCHARGE_PER_TIER * t : 1;
 }
+
+/**
+ * What the card says the affix adds to the spell's mana, at this tier — or
+ * null for an affix that adds nothing, which says nothing rather than "+0%".
+ *
+ * The percentage rather than the multiplier, because the card is attached to
+ * an affix and not yet to a spell: what a slotted spell will actually cost is
+ * `slotCost`, and a reward screen that knows which spell the card would go on
+ * prints that figure too.
+ */
+export function affixSurchargePct(id: string, tier: number): number | null {
+  const mult = affixCostMult(id, tier);
+  return mult === 1 ? null : Math.round((mult - 1) * 100);
+}
+
+/** The same, as the one clause a card appends to its tier line. */
+export function affixSurchargeText(id: string, tier: number): string | null {
+  const pct = affixSurchargePct(id, tier);
+  return pct === null ? null : `+${pct}% mana cost`;
+}
+
+/** The identifier a renderer looks that clause up by. */
+export const AFFIX_SURCHARGE_KEY = "affix.surcharge";
 
 /*
  * The melee build's affix. A spell with it is cast by the **sword**: every
@@ -439,7 +569,22 @@ BASE_AFFIXES.push({
   id: "resonance",
   name: "Resonance",
   hook: "swing",
-  shapes: [...SPELL_SHAPES],
+  /*
+   * Every shape. A cast from the sword is the spell's own shape aimed at the
+   * body struck (`fireUnit`): a line of ground toward it, a pull or a patch
+   * under it, a cut at it, the ring of blades or the companion renewed at
+   * the caster. It used to leave as a projectile whatever the spell was,
+   * which for every shape with no speed was a bolt standing still at the
+   * player's feet — on Spirit Blades, the style's own starter, five of them
+   * and no damage — so it was kept off the eruptions and quietly broken on
+   * the rest.
+   *
+   * **Every shape but the stance.** A stance forbids the swing for as long as
+   * it holds (doc 006), so a sword hit that raised one would switch off the
+   * very hits the affix counts: the sword stops, and the card is a way to
+   * lose the sword for a second rather than a guard.
+   */
+  shapes: SPELL_SHAPES.filter((s) => s !== "stance"),
   element: null,
   tiers: [
     { effect: { kind: "resonate", every: 5 }, text: "every fifth sword hit casts it" },
@@ -447,8 +592,8 @@ BASE_AFFIXES.push({
     { effect: { kind: "resonate", every: 3 }, text: "every third sword hit casts it" },
   ],
   description:
-    "The sword casts this spell for you: every few connecting hits, free, at the "
-    + "body struck. Turns a spell into part of the combo.",
+    "The sword casts this spell: every few connecting hits, free, at the body "
+    + "struck.",
 });
 
 export const AFFIX_TIERS = 3;
@@ -468,10 +613,65 @@ export function affixFits(affix: SpellAffix, shape: SpellShape): boolean {
   return affix.shapes.includes(shape);
 }
 
+/**
+ * Whether an affix may go on this spell alongside the affixes it holds: its
+ * shape, and two rules about spread and homing. **A spread does not home** —
+ * a fan of shots that all bend onto one body is every shot of the fan on
+ * that body, which made every scatter spell a single heavy bolt that never
+ * missed — so `seek` does not go on a spell that fires several shots, nor
+ * with `scatter`, and `scatter` not with `seek`.
+ */
+export function affixFitsSpell(affix: SpellAffix, item: Pick<BaseItem, "params"> | null | undefined, held: readonly string[]): boolean {
+  if (!affixFits(affix, itemShape(item))) return false;
+  const count = Number(item?.params["count"] ?? 1);
+  if (affix.id === "seek" && (count > 1 || held.includes("scatter"))) return false;
+  if (affix.id === "scatter" && held.includes("seek")) return false;
+  /*
+   * **And a spell that already goes out all round cannot also be cast to all
+   * sides.** Frost Nova throws eleven shards across 330 degrees; `scatter` at
+   * tier three casts it in six directions, which is sixty-six shards for one
+   * press and free, and it measured at nearly five times the sword where the
+   * next best build was one and a half. A ring is already the answer to being
+   * surrounded — that is the card's own promise — so the two are the same
+   * card twice.
+   */
+  if (affix.id === "scatter" && Number(item?.params["spread"] ?? 0) >= 180) return false;
+  return true;
+}
+
 /** What the card and the staff screen say about where an affix goes. */
 export function affixFitsLine(affix: SpellAffix): string {
-  if (affix.shapes.length >= SPELL_SHAPES.length) return "fits any spell";
-  return `fits ${affix.shapes.join(", ")}`;
+  return affixFitsPart(affix).text;
+}
+
+/**
+ * The same line with the identifier a renderer translates it through. The
+ * shapes travel as their ids, comma-separated, so the renderer names each one
+ * from its own table and joins them with its own punctuation.
+ */
+export function affixFitsPart(affix: SpellAffix): {
+  readonly text: string;
+  readonly key: string;
+  readonly args?: Readonly<Record<string, string | number>>;
+} {
+  if (affix.shapes.length >= SPELL_SHAPES.length)
+    return { text: "fits any spell", key: "affix.fitsAny" };
+  return {
+    text: `fits ${affix.shapes.join(", ")}`,
+    key: "affix.fits",
+    args: { shapes: affix.shapes.join(",") },
+  };
+}
+
+/**
+ * The identifier for what an affix's tier says on a card and in a slot.
+ *
+ * The English lives on the tier itself (`tiers[n].text`), because that is what
+ * the schema test and the Director read; this is the handle a renderer looks
+ * the same sentence up by. Tiers are one-based, as the player counts them.
+ */
+export function affixTierKey(affixId: string, tier: number): string {
+  return `affixtier.${affixId}.${Math.max(1, Math.min(AFFIX_TIERS, Math.round(tier)))}`;
 }
 
 /** The icon frame an affix's card and slot are drawn with. */

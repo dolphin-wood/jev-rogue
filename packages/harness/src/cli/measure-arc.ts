@@ -39,7 +39,7 @@ for (const a of PLAYABLE_ARCHETYPES) {
 
   for (let s = 0; s < SEEDS; s++) {
     const g = generateRoom(
-      { space: a.id, symmetry: "mirrored", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
+      { space: a.id, symmetry: "mirrored", size: "standard", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
       "S", "combat", src.stream("r", a.id, String(s)),
     );
     const r = toRoomPlan(g, { id: "r", seed_key: "k", reward_kind: "item", params_source: "rule" });
@@ -109,7 +109,7 @@ console.log(spread >= 1.5
  * has to be measured by letting enemies actually path in.
  * ------------------------------------------------------------------------- */
 
-const { createWorld, step, makeEnemy, staffFor, plainInstance, NO_INPUT } = await import("@jr/core");
+const { createWorld, step, makeEnemy, plainInstance, NO_INPUT } = await import("@jr/core");
 
 console.log("\nenemies caught per connecting swing, four chasers pathing in:");
 console.log("archetype            hits/swing  swings  total");
@@ -118,13 +118,13 @@ for (const a of PLAYABLE_ARCHETYPES) {
   let hits = 0, swings = 0;
   for (let s = 0; s < SEEDS; s++) {
     const g = generateRoom(
-      { space: a.id, symmetry: "mirrored", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
+      { space: a.id, symmetry: "mirrored", size: "standard", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
       "S", "combat", src.stream("sim", a.id, String(s)),
     );
     const room = toRoomPlan(g, { id: "r", seed_key: "k", reward_kind: "item", params_source: "rule" });
     const w = createWorld({
       room, encounter: null,
-      staff: staffFor({ slots: "many", mana: "high", tempo: "steady", special: "none" }),
+      staff: { slots: 6, mana_max: 120 },
       slots: [plainInstance("magic_bolt"), null, null, null, null, null],
       hearts: 999, rng: src.stream("w", a.id, String(s)),
     });

@@ -43,7 +43,7 @@ describe("content rules", () => {
 
   it("rejects a jev_hints label that is not in the summary vocabulary", () => {
     expect(rules(checkLibrary("f", [{ ...ok, jev_hints: { favor_when: ["vibes:good"] } }]))).toContain("hint-label");
-    expect(checkLibrary("f", [{ ...ok, jev_hints: { favor_when: ["bottleneck:accuracy"] } }])).toEqual([]);
+    expect(checkLibrary("f", [{ ...ok, jev_hints: { favor_when: ["recent_damage:heavy"] } }])).toEqual([]);
   });
 
   it("rejects a resource group of one, which cannot express exclusivity", () => {

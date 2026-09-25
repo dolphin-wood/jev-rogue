@@ -10,32 +10,33 @@ const root = resolve(import.meta.dirname, "../..");
  * server, so development forwards exactly as production does — the key from
  * `.env.local` and the model are added server-side and never reach the
  * browser, and TypeSafe's CORS allowlist is sidestepped (doc 009).
+ *
+ * `/api/invite/verify` is the same handler on its other path, so the invite
+ * dialog answers here too — with no `INVITE_CODES` it reports `needed: false`,
+ * which is what makes the dialog say a code is not needed locally.
  */
 function decideProxy(key: string | undefined): Plugin {
   return {
     name: "jr-decide-proxy",
     configureServer(server) {
-      server.middlewares.use("/api/decide", async (req, res) => {
-        if (!key) {
-          res.statusCode = 503;
-          res.setHeader("Content-Type", "application/json");
-          res.end(JSON.stringify({ error: "TYPESAFE_API_KEY is not set in .env.local" }));
-          return;
-        }
-        const chunks: Buffer[] = [];
-        for await (const chunk of req) chunks.push(chunk as Buffer);
-        const origin = req.headers.origin ?? "";
-        const request = new Request("http://dev.local/api/decide", {
-          method: req.method ?? "POST",
-          headers: Object.fromEntries(Object.entries(req.headers).flatMap(([k, v]) =>
-            typeof v === "string" ? [[k, v]] : [])),
-          ...(req.method === "POST" ? { body: Buffer.concat(chunks).toString("utf8") } : {}),
+      for (const path of ["/api/decide", "/api/invite/verify"]) {
+        server.middlewares.use(path, async (req, res) => {
+          const chunks: Buffer[] = [];
+          for await (const chunk of req) chunks.push(chunk as Buffer);
+          const origin = req.headers.origin ?? "";
+          const request = new Request(`http://dev.local${path}`, {
+            method: req.method ?? "POST",
+            headers: Object.fromEntries(Object.entries(req.headers).flatMap(([k, v]) =>
+              typeof v === "string" ? [[k, v]] : [])),
+            ...(req.method === "POST" ? { body: Buffer.concat(chunks).toString("utf8") } : {}),
+          });
+          // On the developer's own machine: no invite gate.
+          const reply = await handle(request, { TYPESAFE_API_KEY: key ?? "", ALLOWED_ORIGIN: origin });
+          res.statusCode = reply.status;
+          reply.headers.forEach((v, k) => { res.setHeader(k, v); });
+          res.end(await reply.text());
         });
-        const reply = await handle(request, { TYPESAFE_API_KEY: key, ALLOWED_ORIGIN: origin });
-        res.statusCode = reply.status;
-        reply.headers.forEach((v, k) => { res.setHeader(k, v); });
-        res.end(await reply.text());
-      });
+      }
     },
   };
 }

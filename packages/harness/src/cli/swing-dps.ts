@@ -6,14 +6,14 @@
  * the attrition the player is taking meanwhile.
  */
 import {
-  createWorld, step, makeEnemy, generateRoom, toRoomPlan, staffFor,
+  createWorld, step, makeEnemy, generateRoom, toRoomPlan,
   plainInstance, RngSource, NO_INPUT, ENEMIES, SWING_TOTAL_MS, SWING_DAMAGE,
 } from "@jr/core";
 import type { EnemyId } from "@jr/core";
 
 const src = new RngSource("dps");
 const g = generateRoom(
-  { space: "open_arena", symmetry: "mirrored", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
+  { space: "open_arena", symmetry: "mirrored", size: "standard", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
   "S", "combat", src.stream("r"), { plain: true },
 );
 const room = toRoomPlan(g, { id: "r", seed_key: "k", reward_kind: "item", params_source: "rule" });
@@ -23,7 +23,7 @@ console.log("archetype   hp   swings  seconds");
 for (const id of Object.keys(ENEMIES) as EnemyId[]) {
   const w = createWorld({
     room, encounter: null,
-    staff: staffFor({ slots: "many", mana: "high", tempo: "steady", special: "none" }),
+    staff: { slots: 6, mana_max: 120 },
     slots: [plainInstance("magic_bolt"), null, null, null, null, null],
     hearts: 999, rng: src.stream("w", id),
   });

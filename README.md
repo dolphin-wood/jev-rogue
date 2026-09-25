@@ -20,10 +20,13 @@ Individually:
 | Command | Checks |
 |---|---|
 | `pnpm typecheck` | TypeScript strict across every package |
-| `pnpm test` | 390 unit and property tests |
+| `pnpm test` | 1200+ unit and property tests |
 | `pnpm assets:check` | the sprite delivery against `docs/asset-spec.md`, and writes `assets/palette.json` |
 | `pnpm content:check` | the doc 010 content rules over every library, plus the build-time staff and affix resolutions |
 | `pnpm harness` | headless balance: room generation, encounter assembly, staff spread and charter compliance |
+| `pnpm route-review <arm> <seeds>` | a whole run's doors and cards, room by room, with the offers that do not make sense flagged; then the badge mix, the longest run of one badge, the affix histogram, the levels by room and the look-only answers (doc 011) |
+| `pnpm route-review:jev <seeds> [profile] [budget] [labels\|briefing]` | the same against the live model, with the last argument (or `JR_STATE`) choosing which of the two state formats Jev is sent (doc 002) |
+| `pnpm answer-stats <log.jsonl>` | per question, how often each option was chosen, the mean confidence, and how often it was declined, over a `route-review:jev` log — what catches a question answered the same way every time (doc 011) |
 | `pnpm assets:art` | packs the approved raster source art at 2× world resolution and validates the delivery |
 | `pnpm assets:art` | rebuilds the sprite sheet from `assets/source/`, then checks it |
 | `pnpm assets:placeholder` | regenerates the procedural placeholder sheet |
@@ -51,21 +54,22 @@ packages/core     simulation, generators, summarizers, samplers; no DOM, no Phas
 packages/director Director interface, Jev evaluator, rule and random controls, traces
 packages/harness  asset checker, content rules, balance harness, CLIs
 packages/game     Phaser client: rendering and input only, owns no game state
-server/worker.ts  stateless proxy that holds the API key
+server/worker.ts  stateless proxy that adds the key server-side
 ```
 
 `core`, `director` and `harness` never import Phaser or a DOM API, which is what lets the balance harness and the staff simulator run the same code the game runs rather than an approximation of it.
 
 ## Running against Jev
 
-The game logic runs entirely in the browser. One stateless proxy exists outside it for two reasons: `TYPESAFE_API_KEY` must not ship in client code, and TypeSafe rejects browser origins by CORS, so a page cannot call the API directly whatever key it holds.
+The game logic runs entirely in the browser, and the rule Director plays the whole game without Jev. To play with the Jev Director, clone this repository and run it locally with your own [TypeSafe](https://docs.typesafe.ai/) key:
 
 ```sh
 echo 'TYPESAFE_API_KEY=...' >> .env.local
-pnpm dev
+pnpm install
+pnpm dev          # then turn Jev Director on in the title menu
 ```
 
-In development Vite proxies `/api/decide` and adds the key. Hosted, the game is a static bundle and the proxy is a Cloudflare Worker (`server/worker.ts`); see [009](docs/planning/009-technical-architecture.md).
+TypeSafe rejects browser origins by CORS, and a key must not ship in client code, so a stateless proxy (`server/worker.ts`) sits between the game and the API. Locally, Vite serves it at `/api/decide` and adds the key from `.env.local`.
 
 Building with `DIRECTOR_DEFAULT=random` or `rule` produces a fully static site that never calls Jev, which is also how the blind test's control arms run.
 

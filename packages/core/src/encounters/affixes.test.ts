@@ -31,9 +31,20 @@ const openContext = { roster_size: 6, rooms_seen: 4, shielded_rooms: 0, build_el
 describe("affix table (doc 005)", () => {
   it("is the doc's six affixes with their effects", () => {
     expect(ELITE_AFFIX_IDS).toEqual(["armored", "swift", "burning", "splitting", "shielded", "volatile"]);
-    expect(AFFIXES.armored.hp_mult).toBeCloseTo(1.6, 6);
-    expect(AFFIXES.swift.speed_mult).toBeCloseTo(1.35, 6);
-    expect(AFFIXES.swift.interval_mult).toBeCloseTo(0.8, 6);
+    /*
+     * Doc 019 reworked two of them. `armored` grants **armour** rather than
+     * health, because at the elite's own ×2 health it was 3.2 tanks and
+     * because armour changes a verb — the right to interrupt — instead of a
+     * bar. `swift` adds **no speed**, because the enrage's ×1.15 is the cap
+     * that keeps an elite from outrunning a retreat; it presses on the rest
+     * between turns instead, which is the one cadence doc 019 lets move.
+     */
+    expect(AFFIXES.armored.hp_mult).toBe(1);
+    expect(AFFIXES.armored.armour).toBeGreaterThan(0);
+    expect(AFFIXES.swift.speed_mult).toBe(1);
+    expect(AFFIXES.swift.rest_mult).toBeCloseTo(0.8, 6);
+    // No affix may raise speed at all: the elite's own 1.15 is the whole of it.
+    for (const id of ELITE_AFFIX_IDS) expect(AFFIXES[id].speed_mult).toBe(1);
     expect(AFFIXES.shielded.max_enemies).toBe(1);
     for (const id of ELITE_AFFIX_IDS) expect(AFFIXES[id].description.length).toBeGreaterThan(10);
   });
@@ -47,8 +58,16 @@ describe("affix table (doc 005)", () => {
   });
 
   it("multiplies stats across a set", () => {
-    expect(affixStats(["armored", "swift"])).toEqual({ hp_mult: 1.6, speed_mult: 1.35, interval_mult: 0.8 });
-    expect(affixStats([])).toEqual({ hp_mult: 1, speed_mult: 1, interval_mult: 1 });
+    /*
+     * `affixStats` carries the enrage as well (doc 019): an elite is health
+     * ×2, damage ×1.3, speed ×1.15 and rests ×0.85 before its affix is read,
+     * so what an elite *is* has one answer rather than two.
+     */
+    expect(affixStats(["armored", "swift"])).toEqual({
+      hp_mult: 2, speed_mult: 1.15, rest_mult: 0.68, armour: 18, damage_mult: 1.3,
+    });
+    // A body with no affixes is untouched, which is most of the roster.
+    expect(affixStats([])).toEqual({ hp_mult: 1, speed_mult: 1, rest_mult: 1, armour: 0, damage_mult: 1 });
   });
 
   it("prices a capped affix for the share of the roster that carries it", () => {
@@ -115,7 +134,7 @@ describe("legal set enumeration", () => {
 
 describe("re-measurement after applying a set", () => {
   const profile: EncounterProfile =
-    { composition: "mixed", density: "dense", wave_structure: "single", anchor: "tank", entry: "surround" };
+    { composition: "mixed", density: "dense", wave_structure: "relentless", anchor: "tank", entry: "surround" };
 
   it("never leaves the elite band, for every legal set in every room", () => {
     const degradations = new Set<string>();

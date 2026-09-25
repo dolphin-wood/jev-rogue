@@ -1,14 +1,13 @@
 /**
  * Headless balance harness (design doc 011). It runs `packages/core` without
  * Phaser and reports the numbers calibration needs, rather than only passing
- * or failing: a preset rate or a DPS spread is something a designer reads and
+ * or failing: a preset rate or a relax rate is something a designer reads and
  * acts on, and hiding it behind a green tick would waste the run.
  */
 import { peakConcurrency,
   assembleEncounterDetailed, PRESSURE_BANDS, inBand,
-  ALL_PROFILES, STAFF_TABLE, staffFor, simulateStaff, ITEMS, plainInstance,
   RngSource, MAX_CONCURRENT_ENEMIES, filterForCharter, tallyShowcase,
-  generateRoom, PLAYABLE_ARCHETYPES, validateRoom,
+  generateRoom, PLAYABLE_ARCHETYPES, ROOM_SIZES, validateRoom,
 } from "@jr/core";
 import type {
   Anchor, Composition, Density, EncounterProfile, EntryPattern,
@@ -17,7 +16,7 @@ import type {
 
 const COMPOSITIONS: Composition[] = ["melee_heavy", "ranged_heavy", "mixed", "siege"];
 const DENSITIES: Density[] = ["sparse", "normal", "dense"];
-const WAVES: WaveStructure[] = ["single", "two_waves", "trickle"];
+const WAVES: WaveStructure[] = ["relentless", "steady", "breathe"];
 const ANCHORS: Anchor[] = ["none", "tank", "summoner"];
 const ENTRIES: EntryPattern[] = ["far_front", "flanks", "surround", "turrets_center"];
 
@@ -88,26 +87,6 @@ function encounterSweep(): boolean {
   return outOfBand === 0 && concurrencyBreaches === 0;
 }
 
-function staffSweep(): boolean {
-  const attack = plainInstance("magic_bolt");
-  const boost = plainInstance("power_rune");
-  const dps: number[] = [];
-  for (const profile of ALL_PROFILES) {
-    const staff = staffFor(profile);
-    const slots = [boost, attack, ...Array<null>(Math.max(0, staff.slots - 2)).fill(null)];
-    dps.push(simulateStaff(staff, slots, ITEMS).dps_moving);
-  }
-  const lo = Math.min(...dps);
-  const hi = Math.max(...dps);
-  const spread = hi / lo;
-  console.log(`staffs: ${STAFF_TABLE.size} profiles, reference dps ${lo.toFixed(1)} to ${hi.toFixed(1)}, spread ${spread.toFixed(2)}x`);
-  // Profiles are shapes, not power levels, but an order of magnitude apart
-  // would mean the starting staff decides the run before the player does.
-  const ok = spread <= 3;
-  if (!ok) console.log("  FAIL: starting staffs differ by more than 3x, which makes the profile choice a power choice");
-  return ok;
-}
-
 /**
  * Doc 011: over simulated runs, the showcase floor must hold in every run.
  * This is a bug check, not a metric, so any single breach fails the harness.
@@ -159,7 +138,7 @@ function roomSweep(seeds = 20): boolean {
       for (let seed = 0; seed < seeds; seed++) {
         const entry = arch.doors[seed % arch.doors.length]!;
         const room = generateRoom(
-          { space: arch.id, symmetry, mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
+          { space: arch.id, symmetry, size: ROOM_SIZES[seed % ROOM_SIZES.length]!, mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
           entry, "combat", src.stream("room", arch.id, symmetry, seed),
         );
         total++;
@@ -174,6 +153,7 @@ function roomSweep(seeds = 20): boolean {
           entry: room.entry,
           zones: room.zones,
           spawnGroups: room.spawn_groups,
+          ext: room.extent,
         });
         if (!check.ok) { invalid++; if (invalid <= 2) console.log(`    invalid ${arch.id}/${symmetry}/${seed}: ${check.problems.join("; ")}`); }
       }
@@ -191,7 +171,6 @@ function roomSweep(seeds = 20): boolean {
 let ok = true;
 ok = roomSweep() && ok;
 ok = encounterSweep() && ok;
-ok = staffSweep() && ok;
 ok = charterSweep() && ok;
 
 console.log(ok ? "harness: OK" : "harness: FAIL");

@@ -49,8 +49,7 @@ export const STAT_UPGRADES: readonly StatUpgrade[] = [
     family: "movement",
     magnitude: 0.08,
     description:
-      "Move faster. The only stat that improves every part of the game at once, "
-      + "which is why its step is the smallest in the pool.",
+      "Move faster.",
   },
   {
     id: "second_wind",
@@ -58,8 +57,7 @@ export const STAT_UPGRADES: readonly StatUpgrade[] = [
     family: "movement",
     magnitude: -0.12,
     description:
-      "The dash comes back sooner. Worth most to a player who is already using "
-      + "it to attack rather than to escape.",
+      "The dash comes back sooner.",
   },
   {
     id: "long_stride",
@@ -67,8 +65,7 @@ export const STAT_UPGRADES: readonly StatUpgrade[] = [
     family: "movement",
     magnitude: 0.15,
     description:
-      "The dash travels further. Turns a dodge into a repositioning tool, and "
-      + "makes crossing a room between volleys a plan rather than a gamble.",
+      "The dash travels further.",
   },
   {
     id: "wrath",
@@ -76,9 +73,7 @@ export const STAT_UPGRADES: readonly StatUpgrade[] = [
     family: "survival",
     magnitude: 1,
     description:
-      "One more segment on the rage gauge, so the spin can be held in reserve "
-      + "twice as often. Worth most to a player whose answer to a crowd is to "
-      + "stand in it.",
+      "One more segment on the rage gauge, so one more spin can be held in reserve.",
   },
   {
     id: "vigour",
@@ -86,8 +81,7 @@ export const STAT_UPGRADES: readonly StatUpgrade[] = [
     family: "survival",
     magnitude: 1,
     description:
-      "More health, filled. The run's attrition budget is thin, so every point "
-      + "of it is a large share of the whole margin.",
+      "More health, filled.",
   },
   {
     id: "steady_nerve",
@@ -95,8 +89,7 @@ export const STAT_UPGRADES: readonly StatUpgrade[] = [
     family: "survival",
     magnitude: 0.2,
     description:
-      "Longer invulnerability after a hit. Buys the moment needed to leave a "
-      + "bad position, which is when a second hit usually arrives.",
+      "Longer invulnerability after a hit.",
   },
   {
     id: "deep_well",
@@ -104,9 +97,7 @@ export const STAT_UPGRADES: readonly StatUpgrade[] = [
     family: "mana",
     magnitude: 0.18,
     description:
-      "A larger mana pool. Everything that earns or spends mana is a percentage "
-      + "of this, so it raises the ceiling of the whole economy rather than one "
-      + "part of it.",
+      "A larger mana bar. What a sword hit returns and what trickles back on its own are shares of the bar, so both rise with it.",
   },
   {
     id: "quickening",
@@ -114,8 +105,7 @@ export const STAT_UPGRADES: readonly StatUpgrade[] = [
     family: "mana",
     magnitude: 0.25,
     description:
-      "Mana returns faster on its own. The stat for a build that wants to cast "
-      + "between fights rather than during them.",
+      "Mana trickles back faster on its own.",
   },
   {
     id: "leeching_edge",
@@ -123,8 +113,7 @@ export const STAT_UPGRADES: readonly StatUpgrade[] = [
     family: "mana",
     magnitude: 0.22,
     description:
-      "The sword returns more mana per hit. Pays for closing distance, which is "
-      + "the risk the whole design asks the player to take.",
+      "The sword returns more mana per connecting hit.",
   },
   {
     id: "keen_edge",
@@ -132,8 +121,7 @@ export const STAT_UPGRADES: readonly StatUpgrade[] = [
     family: "sword",
     magnitude: 0.15,
     description:
-      "The sword hits harder. Never runs out and never costs anything, which is "
-      + "what makes it the floor the rest of the build stands on.",
+      "The sword hits harder.",
   },
   {
     id: "long_reach",
@@ -141,8 +129,7 @@ export const STAT_UPGRADES: readonly StatUpgrade[] = [
     family: "sword",
     magnitude: 0.12,
     description:
-      "The swing's crescent spreads further. Reach is the one thing that changes "
-      + "which fights are winnable rather than how fast they end.",
+      "The swing's crescent reaches further.",
   },
   {
     id: "swift_hand",
@@ -150,8 +137,7 @@ export const STAT_UPGRADES: readonly StatUpgrade[] = [
     family: "sword",
     magnitude: -0.1,
     description:
-      "The swing recovers sooner. More swings is more mana as well as more "
-      + "damage, so this one compounds with everything else.",
+      "The swing recovers sooner, so the sword swings more often.",
   },
 ];
 
@@ -174,12 +160,37 @@ export function statIcon(s: StatUpgrade): string {
  * units rather than in hearts, because the bar is what the player sees.
  */
 export function statLine(s: StatUpgrade, times = 1): string {
+  return statLinePart(s, times).text;
+}
+
+/**
+ * The same line with the identifier a renderer translates it through.
+ *
+ * `label` travels as the id of what the stat touches (`move_speed`,
+ * `max_mana`), never as the English word, so a translation names it from its
+ * own table rather than having to parse the sentence back apart.
+ */
+export function statLinePart(s: StatUpgrade, times = 1): {
+  readonly text: string;
+  readonly key: string;
+  readonly args: Readonly<Record<string, string | number>>;
+} {
   // The two flat entries. `wrath` is survival-family and magnitude 1 like
   // `vigour`, and read as "+10 health" — while what it does is add a spin
   // charge. Said by id, so a flat entry says what it is.
   const n = Math.max(1, times);
-  if (s.id === "wrath") return `+${s.magnitude * n} spin charge${s.magnitude * n === 1 ? "" : "s"}`;
-  if (s.id === "vigour") return `+${s.magnitude * HP_PER_HEART * n} health`;
+  if (s.id === "wrath") {
+    const v = s.magnitude * n;
+    return {
+      text: `+${v} spin charge${v === 1 ? "" : "s"}`,
+      key: v === 1 ? "statup.spinCharge" : "statup.spinCharges",
+      args: { n: v },
+    };
+  }
+  if (s.id === "vigour") {
+    const v = s.magnitude * HP_PER_HEART * n;
+    return { text: `+${v} health`, key: "statup.health", args: { n: v } };
+  }
   // Applied `times` over, it compounds (see `applyStat`), so the line states
   // the compounded change rather than "x2" beside the single one.
   const pct = Math.round(Math.abs(Math.pow(1 + s.magnitude, n) - 1) * 100);
@@ -189,7 +200,12 @@ export function statLine(s: StatUpgrade, times = 1): string {
     mana: s.id === "deep_well" ? "max mana" : s.id === "quickening" ? "mana regen" : "mana per hit",
     sword: s.id === "keen_edge" ? "sword damage" : s.id === "long_reach" ? "reach" : "swing recovery",
   };
-  return `${s.magnitude < 0 ? "-" : "+"}${pct}% ${label[s.family]}`;
+  const v = `${s.magnitude < 0 ? "-" : "+"}${pct}`;
+  return {
+    text: `${v}% ${label[s.family]}`,
+    key: "statup.pct",
+    args: { v, label: label[s.family].replace(/ /g, "_") },
+  };
 }
 
 /**

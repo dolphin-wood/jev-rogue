@@ -3,7 +3,7 @@ import {
   ARC_DEG, ARC_REACH, BLADE_DEG, BLADE_REACH, MANA_PER_HIT_FRACTION,
   SPREAD_BASE, SWEEP_DEG, SWING_ACTIVE_MS, SWING_TOTAL_MS, SWING_WINDUP_MS,
   beginSwing, fullReach, makeSpin, makeSwingBox, manaPerHit, sectorHits,
-  snapFacing, stepSwing, sweepFor, swingMoveScale, swingPhase, totalCoverageDeg,
+  snapFacing, stepSwing, sweepFor, SWING_CHAIN_MS, swingMoveScale, swingPhase, totalCoverageDeg,
   wallSlamSquareness,
 } from "./melee.ts";
 import { createWorld, step } from "./world.ts";
@@ -11,7 +11,7 @@ import { NO_INPUT, PLAYER_RADIUS, STEP_MS } from "./types.ts";
 import type { Input, World } from "./types.ts";
 import { makeEnemy } from "./enemy.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
-import { staffFor, plainInstance } from "../spells/index.ts";
+import { plainInstance } from "../spells/index.ts";
 import { RngSource } from "../rng.ts";
 import { TILE_PX } from "../types.ts";
 
@@ -19,7 +19,7 @@ const src = new RngSource("melee-test");
 
 function world(): World {
   const g = generateRoom(
-    { space: "open_arena", symmetry: "mirrored", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
+    { space: "open_arena", symmetry: "mirrored", size: "vast", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
     "S", "combat", src.stream("room"), { plain: true },
   );
   const w = createWorld({
@@ -28,7 +28,7 @@ function world(): World {
     // No destructibles: a swing aimed at empty floor would otherwise be able
     // to earn mana from a pot the test never asked for.
     props: 0,
-    staff: staffFor({ slots: "many", mana: "high", tempo: "steady", special: "none" }),
+    staff: { slots: 6, mana_max: 120 },
     slots: [plainInstance("magic_bolt"), null, null, null, null, null],
     hearts: 6,
     rng: src.stream("world"),
@@ -193,6 +193,18 @@ describe("every swing is identical", () => {
       for (let i = 0; i < 20; i++) stepSwing(w, STEP_MS);
     }
     expect(sweeps).toEqual([1, 1, 1, 1]);
+  });
+
+  it("marks a swing that follows closely as continuing the chain, and one after a pause as not", () => {
+    const w = world();
+    beginSwing(w.player, w);
+    expect(w.swing.chained).toBe(false);
+    for (let i = 0; i < 20; i++) stepSwing(w, STEP_MS);
+    beginSwing(w.player, w);
+    expect(w.swing.chained).toBe(true);
+    for (let i = 0; i < 20 + Math.ceil(SWING_CHAIN_MS / STEP_MS) + 1; i++) stepSwing(w, STEP_MS);
+    beginSwing(w.player, w);
+    expect(w.swing.chained).toBe(false);
   });
 
   it("reverses in world space for the facing that is drawn mirrored", () => {

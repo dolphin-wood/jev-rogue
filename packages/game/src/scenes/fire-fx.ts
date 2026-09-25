@@ -18,6 +18,11 @@
  * | front tongues | 8.6 | flames from the near half, over every body, additive so a body shows through |
  * | sparks, smoke | 8.7, 8.8 | embers thrown up, and a thin smoke |
  *
+ * A **poison cloud** is a `Fire` of the poison element and is drawn by the
+ * same slots with none of a fire's layers: a wet green bed that bubbles, gas
+ * puffs behind and in front of the bodies, and no tongues, sparks, smoke,
+ * light or scorch (`cloud`).
+ *
  * ### Cost
  *
  * The scene rebuilds most of what it draws every frame; this does not.
@@ -43,12 +48,14 @@ import Phaser from "phaser";
 import type { Fire, World } from "@jr/core";
 import { fireProgress } from "@jr/core";
 
-/** The art's pixel, in world pixels: delivered sprites are drawn at 1 / ART_SCALE. */
+/** The fire texture's pixel, in world pixels: it is baked at two texels to one. */
 const PX = 0.5;
 const TEX = "fx_fire";
 
 /** Past this many live fires, each one's emission is scaled down so the total holds. */
 const BUDGET_FIRES = 6;
+/** The share of a player fire's life over which it kindles to full flame (`burn`). */
+const KINDLE_SHARE = 0.14;
 /** How long the char outlives its fire. */
 const CHAR_FADE_MS = 2600;
 
@@ -61,6 +68,8 @@ const BANDS_ENEMY = [0xa8201a, 0xe8521f, 0xffa23a, 0xfff0b8];
 const BANDS_PLAYER = [0xc26a18, 0xffa630, 0xffd96a, 0xffffff];
 /** What a flame is multiplied by over its life: itself, then cooling to a dark red. */
 const COOLING = [0xffffff, 0xfff0e0, 0xffb090, 0xd05038];
+/** The bed a cloud sits on: the coals' texture, tinted a dark wet green, not lit. */
+const BED_POISON = 0x6fcf52;
 const GLOW_ENEMY = 0xff5a1e;
 const GLOW_PLAYER = 0xffb040;
 
@@ -156,6 +165,17 @@ const FRAMES: FrameSpec[] = [
       }
     },
   },
+  {
+    // A bubble, 5 x 5: a darker skin, a lighter body and one lit texel. No rim line.
+    name: "bubble", w: 5, h: 5,
+    draw: (put) => {
+      for (let y = 0; y < 5; y++) for (let x = 0; x < 5; x++) {
+        if (!inEllipse(x, y, 5, 5)) continue;
+        put(x, y, grey(inEllipse(x, y, 5, 5, 0.6) ? 0.9 : 0.6), 1);
+      }
+      put(1, 1, 0xffffff, 1);
+    },
+  },
   // Two beds of coals, alternated for the flicker: 2 x 2 clumps, not noise.
   ...[11, 23].map((seed, i): FrameSpec => ({
     name: `coals${i}`, w: ELLIPSE_W, h: ELLIPSE_H,
@@ -227,6 +247,19 @@ export class FireFx {
   private readonly bodyPlayer: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly spark: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly smoke: Phaser.GameObjects.Particles.ParticleEmitter;
+  /**
+   * **A poison cloud** (`Fire.element === "poison"`, doc 006's poison
+   * field): gas, not flame. It has a back and a front as a fire does, so a
+   * body stands in it — low puffs drifting sideways and swelling, the far
+   * ones under the bodies, the near ones over their feet and thinner — and
+   * bubbles swelling out of the bed and popping into droplets. Matter, so
+   * opaque rather than additive; nothing of a fire's is drawn for it: no
+   * tongues, no sparks, no smoke, no light, and no scorch after it thins.
+   */
+  private readonly gasBack: Phaser.GameObjects.Particles.ParticleEmitter;
+  private readonly gasFront: Phaser.GameObjects.Particles.ParticleEmitter;
+  private readonly bubbles: Phaser.GameObjects.Particles.ParticleEmitter;
+  private readonly droplets: Phaser.GameObjects.Particles.ParticleEmitter;
   /** Flame thrown along a direction: the warden's fire-shot. See `jet`. */
   private readonly jetEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   private jetAngle = 0;
@@ -236,8 +269,14 @@ export class FireFx {
   private world: World | null = null;
   private clock = 0;
 
-  constructor(private readonly scene: Phaser.Scene) {
+  constructor(private readonly scene: Phaser.Scene, spellTexture: string) {
     ensureTexture(scene);
+    if (!scene.anims.exists("vfx_gas_puff")) scene.anims.create({
+      key: "vfx_gas_puff",
+      frames: Array.from({ length: 4 }, (_, i) => ({ key: spellTexture, frame: `vfx_gas_puff_${i}` })),
+      frameRate: 4,
+      repeat: 0,
+    });
     /*
      * Flames are **opaque**, not additive: over a pale floor an additive
      * flame washes out to white and stops reading as fire. The light is the
@@ -283,6 +322,42 @@ export class FireFx {
       alpha: { start: 0.32, end: 0 },
       tint: 0x2a2233,
     }).setDepth(8.8);
+    const gas = (depth: number, alpha: number) =>
+      scene.add.particles(0, 0, spellTexture, {
+        frame: "vfx_gas_puff_0", anim: "vfx_gas_puff", emitting: false,
+        lifespan: { min: 900, max: 1500 },
+        // Drifting, not rising: gas creeps along the floor.
+        speedX: { min: -9, max: 9 },
+        speedY: { min: -5, max: 1 },
+        scale: PX,
+        alpha: { onEmit: () => alpha, onUpdate: (_p: unknown, _k: string, t: number) => (t < 0.2 ? alpha * 0.55 : stepFade(t, alpha)) },
+      }).setDepth(depth);
+    this.gasBack = gas(5.8, 0.62);
+    this.gasFront = gas(8.6, 0.42);
+    this.bubbles = scene.add.particles(0, 0, TEX, {
+      frame: "bubble", emitting: false,
+      lifespan: { min: 380, max: 620 },
+      speedX: { min: -2, max: 2 },
+      speedY: { min: -9, max: -3 },
+      // Swelling until it pops.
+      scale: { start: PX * 0.5, end: PX * 1.25 },
+      alpha: { onEmit: () => 1, onUpdate: (_p: unknown, _k: string, t: number) => (t < 0.9 ? 1 : 0) },
+      tint: [0x8fe06a, 0x6fdc5a, 0xb8f090],
+    }).setDepth(5.9);
+    this.droplets = scene.add.particles(0, 0, TEX, {
+      frame: "ember", emitting: false,
+      lifespan: { min: 180, max: 300 },
+      speedX: { min: -22, max: 22 },
+      speedY: { min: -30, max: -12 },
+      accelerationY: 140,
+      scale: PX,
+      alpha: { start: 1, end: 0.4 },
+      tint: [0xa8f07a, 0x6fdc5a],
+    }).setDepth(5.95);
+    // A bubble popping throws a few droplets where it was.
+    this.bubbles.onParticleDeath((p: Phaser.GameObjects.Particles.Particle) => {
+      this.droplets.emitParticleAt(p.x, p.y, 3);
+    });
     /*
      * The same tongues, thrown: each born at the muzzle and flung along a ray
      * of the gout at the speed that carries it to the ray's end within its
@@ -347,8 +422,15 @@ export class FireFx {
         fl.x = fire.x;
         fl.y = fire.y;
         fl.radius = fire.radius;
-        fl.charMs = CHAR_FADE_MS;
-        this.burn(fire, fl, dt, share);
+        if (fire.element === "poison") {
+          // A cloud leaves no scorch (`Fire.element`): nothing to fade once it thins.
+          fl.charMs = 0;
+          fl.char.setVisible(false);
+          this.cloud(fire, fl, dt, share);
+        } else {
+          fl.charMs = CHAR_FADE_MS;
+          this.burn(fire, fl, dt, share);
+        }
       } else if (fl.lit) {
         fl.lit = false;
         fl.coals.setVisible(false);
@@ -372,7 +454,8 @@ export class FireFx {
 
   private emitters(): Phaser.GameObjects.Particles.ParticleEmitter[] {
     return [this.back.enemy, this.back.player, this.front.enemy, this.front.player,
-      this.bodyEnemy, this.bodyPlayer, this.spark, this.smoke, this.jetEmitter];
+      this.bodyEnemy, this.bodyPlayer, this.spark, this.smoke, this.jetEmitter,
+      this.gasBack, this.gasFront, this.bubbles, this.droplets];
   }
 
   private floor(i: number): Floor {
@@ -399,7 +482,16 @@ export class FireFx {
     const t = fireProgress(fire);
     // Held at full strength, then drawn in toward its base over the last half.
     const out = t < 0.5 ? 0 : (t - 0.5) / 0.5;
-    const life = 1 - out * out;
+    /*
+     * The player's fire **kindles**: it grows up out of its coals over its
+     * first moment rather than standing at full height on the frame it is
+     * lit. A trail drops its patch at the caster's feet, and a patch at full
+     * flame there drew the caster standing in a fire — the picture of a
+     * burning player — when the fire is behind them by the time it is tall.
+     * Enemy fire is at full height at once: a threat is never late.
+     */
+    const kindle = fire.owner === "player" ? Math.min(1, t / KINDLE_SHARE) : 1;
+    const life = (1 - out * out) * kindle;
     const rx = fire.radius;
     const ry = fire.radius * 0.55;
     const sx = (rx * 2) / ELLIPSE_W;
@@ -409,11 +501,11 @@ export class FireFx {
 
     const bed = 0.4 + 0.6 * life;
     fl.char.setVisible(true).setPosition(fire.x, fire.y + 1).setScale(sx * 1.05, sy * 1.1).setAlpha(0.7);
-    fl.coals.setVisible(true).setPosition(fire.x, fire.y + 1)
+    fl.coals.setVisible(true).setBlendMode(Phaser.BlendModes.ADD).setPosition(fire.x, fire.y + 1)
       .setFrame(((this.clock / 110 + fl.phase) | 0) & 1 ? "coals1" : "coals0")
       .setScale(sx * bed, sy * bed)
       .setTint(hot).setAlpha(0.9 * life);
-    fl.glow.setVisible(true).setPosition(fire.x, fire.y)
+    fl.glow.setVisible(true).setBlendMode(Phaser.BlendModes.ADD).setPosition(fire.x, fire.y)
       .setScale(sx * 1.9, sy * 1.9)
       .setTint(hot).setAlpha(0.3 * life * flicker);
 
@@ -444,6 +536,56 @@ export class FireFx {
       const [x, y] = at(0);
       this.smoke.emitParticleAt(x, y - ry * 1.4, 1);
     }
+  }
+
+  /**
+   * A poison cloud, one frame: a dark wet bed under it that bubbles, and gas
+   * puffs emitted over the patch, far half behind the bodies and near half
+   * in front. It swells in over its first moment and thins over its last
+   * third — fewer puffs, a paler bed — so a cloud about to go is seen going.
+   */
+  private cloud(fire: Fire, fl: Floor, dt: number, share: number): void {
+    const t = fireProgress(fire);
+    const grow = Math.min(1, t / 0.08);
+    const out = t < 0.66 ? 0 : (t - 0.66) / 0.34;
+    const life = grow * (1 - out * out);
+    const rx = fire.radius;
+    const ry = fire.radius * 0.55;
+    const sx = (rx * 2) / ELLIPSE_W;
+    const sy = (ry * 2) / ELLIPSE_H;
+    /*
+     * The ground it holds: a pool of the venom's dark in the glow's stepped
+     * bands — matter, so normal blend, not light — out to the cloud's own
+     * radius, so where it poisons is where it is seen. Over it the wet bed
+     * glints, flickering slowly as it bubbles.
+     */
+    fl.glow.setVisible(true).setBlendMode(Phaser.BlendModes.NORMAL).setPosition(fire.x, fire.y)
+      .setScale(sx * 1.1, sy * 1.1)
+      .setTint(0x2a7a22).setAlpha(Math.min(1, 1.4 * life));
+    fl.coals.setVisible(true).setBlendMode(Phaser.BlendModes.NORMAL).setPosition(fire.x, fire.y + 1)
+      .setFrame(((this.clock / 260 + fl.phase) | 0) & 1 ? "coals1" : "coals0")
+      .setScale(sx * (0.7 + 0.3 * life), sy * (0.7 + 0.3 * life))
+      .setTint(BED_POISON).setAlpha(life);
+
+    const area = rx / 27;
+    const rate = 30 * area * life * share;
+    const s = dt / 1000;
+    fl.owedBack += rate * s;
+    fl.owedFront += rate * 0.7 * s;
+    fl.owedSpark += 7 * area * life * share * s;
+    const at = (half: -1 | 0 | 1, spread = 0.85): [number, number] => {
+      for (;;) {
+        const u = Math.random() * 2 - 1;
+        const v = Math.random() * 2 - 1;
+        if (u * u + v * v > 1) continue;
+        const vy = half === 0 ? v : half * Math.abs(v);
+        return [fire.x + u * rx * spread, fire.y + vy * ry * spread];
+      }
+    };
+    for (; fl.owedBack >= 1; fl.owedBack--) { const [x, y] = at(-1); this.gasBack.emitParticleAt(x, y - 3, 1); }
+    for (; fl.owedFront >= 1; fl.owedFront--) { const [x, y] = at(1); this.gasFront.emitParticleAt(x, y - 2, 1); }
+    // `owedSpark` carries the bubbles here: a cloud throws no sparks.
+    for (; fl.owedSpark >= 1; fl.owedSpark--) this.bubbles.emitParticleAt(...at(0, 0.7), 1);
   }
 
   /** Flames off anything burning: a few tongues from the shoulders, on the body's own layer. */

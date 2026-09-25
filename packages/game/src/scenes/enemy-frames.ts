@@ -76,6 +76,15 @@ const MIN_WALK_FPS = 8;
 const IDLE_FRAME_TICKS = 24;
 
 /**
+ * How much of the commit is still the strike rather than the follow-through.
+ *
+ * The lunge runs 190 ms (`MELEE.lungeMs`), and a few bodies longer. Roughly
+ * half of it is the blow landing and the rest is the body carrying past it,
+ * which is the half the delivered sheets never drew.
+ */
+const LUNGE_FOLLOW_MS = 90;
+
+/**
  * Speed above which a body is walking rather than standing, in px/s.
  *
  * Low, because it is measured against smoothed velocity and the roster's slow
@@ -90,6 +99,8 @@ const WALKING_PX_PER_S = 10;
 /** Enough of an enemy to choose a frame for it. */
 export interface FramedEnemy {
   readonly awake: boolean;
+  /** Unaware and asleep (the sleeper idle role): drawn in the dormant pair. */
+  readonly sleeping?: boolean;
   /** Counts down while a charge is skidding to a halt. See `enemyPose`. */
   readonly brakeMs: number;
   /**
@@ -108,6 +119,16 @@ export interface FramedEnemy {
    */
   readonly roused: boolean;
   readonly attack: string;
+  /** False for a body that holds its frame when struck, flashed but not recoiling (the boss). Default true. */
+  readonly flinches?: boolean;
+  /**
+   * True for a body that stands in its stride rather than in an idle: at a
+   * stop it holds the walk frame it stopped on (the boss, who paces between
+   * turns and whose idle held the sword where no step of his walk does).
+   */
+  readonly idlesInStride?: boolean;
+  /** Milliseconds left in the current attack phase, which splits the commit from its follow-through. */
+  readonly attackMs?: number;
   /**
    * Whether this body is an emplacement: it never moves, so it cannot show
    * that it has noticed the player by moving. See `enemyPose`.
@@ -126,6 +147,18 @@ export interface FramedEnemy {
    * Null for none. See `specialPose` in the scene.
    */
   readonly special?: string | null;
+  /**
+   * Whether this body is in the moment of noticing: head up, not yet moving.
+   *
+   * The sim owns this — a sleeper waking, a guard catching a sound — and the
+   * field it exposes may be a flag or a named action, so both are read. Until
+   * the sim sets either, the pose is simply never chosen and nothing else
+   * changes; a `stir` drawing exists for every body, so the day it is set the
+   * frame is already there.
+   */
+  readonly stirring?: boolean;
+  /** A named idle action from the sim, `"stir"` among them. See `stirring`. */
+  readonly idleAction?: string | null;
 }
 
 /**
@@ -179,36 +212,76 @@ export function enemyPose(
    * that is moving.
    */
   const moving = Math.hypot(e.vx, e.vy) > WALKING_PX_PER_S;
-  const canWalk = ready("walk0") && ready("walk1") && ready("walk2") && ready("walk3");
+  /*
+   * As many frames as the sheet has, in every cycle.
+   *
+   * The counts are read rather than assumed because they are now a property
+   * of the art: a body rebuilt as a sprite model composes as many walk or
+   * idle frames as its `anims.json` asks for (doc 016), and a body still on
+   * its delivered sheets has the four or six it was drawn with. Assuming a
+   * length is how the walk came to be capped at four while eight were drawn.
+   */
+  const cycleLength = (name: string, max: number): number => {
+    let n = 0;
+    while (n < max && ready(`${name}${n}`)) n++;
+    return n;
+  };
+  const walkFrames = cycleLength("walk", 8);
+  const canWalk = walkFrames >= 4;
+  const idleFrames = cycleLength("idle", 8);
+  const dormantFrames = cycleLength("dormant", 8);
+  const watchFrames = cycleLength("watch", 8);
+  /** The frame of a cycle at the idle clock, which is slow enough to read as breathing. */
+  const onIdleClock = (name: string, n: number, slow = 1): string =>
+    `${name}${((tick / (IDLE_FRAME_TICKS * slow)) | 0) % n}`;
   if (!e.awake) {
-    if (moving && canWalk) return `walk${((e.travelled / strideFor(e.radius, e.speed)) | 0) % 4}`;
+    if (moving && canWalk) return `walk${((e.travelled / strideFor(e.radius, e.speed)) | 0) % walkFrames}`;
     /*
      * Moving with no walk cycle drawn — the orbiter, which circles constantly
      * and has none — falls back to the *idle pair* rather than to the single
      * dormant frame. It is not a gait, but it is two frames instead of one,
      * which is the difference between a body and a decal.
      */
-    if (moving) return ((tick / IDLE_FRAME_TICKS) | 0) % 2 === 0 ? "idle0" : "idle1";
+    if (moving && idleFrames >= 2) return onIdleClock("idle", idleFrames);
     /*
-     * Standing and unaware: the drawn idle pair.
+     * Noticing.
      *
-     * Every archetype has `idle0`/`idle1`, which are two frames of one motion
-     * and therefore actually animate. `dormant` is one drawing per facing, so
-     * it cannot — and the two attempts to work around that both failed in
-     * instructive ways. Alternating `dormant` with `idle0` made the body stand
-     * up and sit down once a second, because they are different poses rather
-     * than a cycle. Faking a breath with a scale was invisible at this size,
-     * and faking it with a one-pixel bob is a hack standing in for art that
-     * already exists.
-     *
-     * So the pair is used and the hacks are gone. `dormant` needs a second
-     * frame of its own pose before it is usable; that is in the art work
-     * order.
+     * The moment between unaware and awake, when the head comes up and
+     * nothing else has moved yet. It is one drawing and it is held, because
+     * what it says is "this thing has heard you" and a cycle would blur that
+     * into idling. The sim names it; until it does, this branch never fires.
      */
-    if (ready("dormant") && ready("dormant1"))
-      return ((tick / IDLE_FRAME_TICKS) | 0) % 2 === 0 ? "dormant" : "dormant1";
-    if (ready("idle0") && ready("idle1"))
-      return ((tick / IDLE_FRAME_TICKS) | 0) % 2 === 0 ? "idle0" : "idle1";
+    if ((e.stirring || e.idleAction === "stir") && ready("stir")) return "stir";
+    /*
+     * Asleep: its own breathing loop, not the awake one.
+     *
+     * A dormant body used to be a single drawing, so a sleeping room was a
+     * room of statues — and the two attempts to work around that both failed
+     * instructively. Alternating `dormant` with `idle0` made the body stand
+     * up and sit down once a second, because they are different poses rather
+     * than a cycle; faking a breath with a scale was invisible at this size.
+     * The answer was art, not a trick: each model composes a four-frame sleep
+     * around a slumped drawing (doc 016), run at half the idle clock so it is
+     * slower than waking breath. Only a sleeper, and an emplacement powered
+     * down — a guard or an idler between steps is awake and looking about,
+     * and drawn dozing it read as a body switched off.
+     */
+    if (e.sleeping || e.stationary) {
+      if (dormantFrames >= 2) return onIdleClock("dormant", dormantFrames, 2);
+      if (ready("dormant") && ready("dormant1")) return ((tick / (IDLE_FRAME_TICKS * 2)) | 0) % 2 === 0 ? "dormant" : "dormant1";
+    }
+    /*
+     * Standing and unaware: its own loop, not the awake one.
+     *
+     * A body that has not seen the player is looking for one — the weight
+     * shifts, the head goes further than the body — and a body that has is
+     * holding its guard and breathing. They are the difference between safe
+     * and not, so they are two drawn loops rather than one loop at two
+     * speeds; a model composes both (doc 016). A body still on its delivered
+     * sheets has only the one, slowed, which is what it had.
+     */
+    if (watchFrames >= 2) return onIdleClock("watch", watchFrames, 2);
+    if (idleFrames >= 2) return onIdleClock("idle", idleFrames, 2);
     if (ready("dormant")) return "dormant";
   }
   /*
@@ -232,10 +305,24 @@ export function enemyPose(
   if (e.brakeMs > 0 && ready("windup")) return "windup";
   if (e.attack === "windup" && ready("windup")) return "windup";
   if (e.attack === "recover" && e.recoversBraced && ready("windup")) return "windup";
+  /*
+   * The commit has three drawings where the model composes them: the strike,
+   * the frame it carries past the strike, and the way back to standing. A
+   * single `lunge` held for the whole commit and the whole recovery is what
+   * made every attack in the roster read as a pose rather than as a move —
+   * the follow-through is the frame that sells the weight, and the recovery
+   * is the one that says the body is open. A body still on its delivered
+   * sheets has only `lunge`, and keeps the behaviour it had.
+   */
+  if (e.attack === "lunge" && ready("follow") && ready("lunge"))
+    return (e.attackMs ?? 0) > LUNGE_FOLLOW_MS ? "lunge" : "follow";
+  if (e.attack === "recover" && ready("recover")) return "recover";
   if ((e.attack === "lunge" || e.attack === "recover") && ready("lunge")) return "lunge";
   // Every body now has a two-frame recoil, which interrupts the gait so the
-  // damage reads even under the white contact flash.
-  if (e.hitFlashMs > 0 && ready("hit0") && ready("hit1"))
+  // damage reads even under the white contact flash. Not the king: he holds
+  // the frame he is on and only the flash marks the hit — a boss that flinched
+  // at every cut snapped out of his own moves (doc 020).
+  if (e.hitFlashMs > 0 && e.flinches !== false && ready("hit0") && ready("hit1"))
     return ((tick >> 1) & 1) === 0 ? "hit0" : "hit1";
   /*
    * A live emplacement **holds** its lit frame.
@@ -264,16 +351,18 @@ export function enemyPose(
     if (ready("tele1")) return ((tick / IDLE_FRAME_TICKS) | 0) % 2 === 0 ? "tele" : "tele1";
     return "tele";
   }
-  if (moving && canWalk) return `walk${((e.travelled / strideFor(e.radius, e.speed)) | 0) % 4}`;
+  if ((moving || e.idlesInStride) && canWalk) return `walk${((e.travelled / strideFor(e.radius, e.speed)) | 0) % walkFrames}`;
   /*
    * A full idle cycle takes about a second, not half of one.
    *
    * At 14 ticks a frame the pair alternated a bit over twice a second, which
    * does not read as breathing — it reads as a twitch, and on a body with
    * tentacles it read as a seizure. Two frames can only imply an idle at all
-   * if the change is slow enough to be a settle rather than a flicker.
+   * if the change is slow enough to be a settle rather than a flicker; four
+   * frames of a drawn breath read as one at the same rate per frame.
    */
-  return ((tick / IDLE_FRAME_TICKS) | 0) % 2 === 0 ? "idle0" : "idle1";
+  if (idleFrames >= 2) return onIdleClock("idle", idleFrames);
+  return "idle0";
 }
 
 export interface FrameChoice {

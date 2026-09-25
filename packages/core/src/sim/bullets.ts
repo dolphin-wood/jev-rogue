@@ -6,6 +6,7 @@
  * would erase a safe lane the player is already committed to; player bullets
  * recycle the oldest, because losing one costs damage, not a life.
  */
+import { clearPowers, noPowers } from "../content/tags.ts";
 import { ENEMY_BULLET_CAP, PLAYER_BULLET_POOL, BULLET_LIFETIME_S } from "../encounters/enemies.ts";
 
 const BULLET_LIFETIME_MS = BULLET_LIFETIME_S * 1000;
@@ -20,12 +21,15 @@ function blankBullet(): Bullet {
   return {
     alive: false, x: 0, y: 0, vx: 0, vy: 0, radius: 4, damage: 0,
     affixes: [], spellIndex: -1, manaSpent: 0, weight: 1, arcLeft: 0,
-    originX: 0, originY: 0, targetId: -1, seekDegPerS: 0,
+    originX: 0, originY: 0, targetId: -1, seekDegPerS: 0, seekMs: 0,
     orbitMs: 0, orbitAngle: 0, orbitRadius: 0, orbitDegPerS: 0, rehitMs: 0,
     lifeMs: 0, pierce: 0, bounce: 0, homing: 0, split: 0,
-    element: "none", elementPower: 0, payloadUnit: null,
-    passthrough: false, hitIds: [],
+    element: "none", elementPower: 0, powers: noPowers(), proc: 1, statusMult: 1, hitIds: [],
     leavesFire: false, from: "",
+    doomMs: 0, doomDamage: 0, doomRadius: 0,
+    emitMs: 0, emitClock: 0, emitAngle: 0, emitDamage: 0, emitRing: 0,
+    contagion: 0, contagionReach: 0,
+    delivery: "shot", returning: false, outPx: 0, outLeftPx: 0, launchSpeed: 0, returnSpeed: 0,
   };
 }
 
@@ -57,8 +61,9 @@ function reset(b: Bullet): void {
   b.split = 0;
   b.element = "none";
   b.elementPower = 0;
-  b.payloadUnit = null;
-  b.passthrough = false;
+  clearPowers(b.powers);
+  b.proc = 1;
+  b.statusMult = 1;
   b.from = "";
   // Cleared, or a recycled slot keeps it: the pool is shared, so one thrown
   // flame would have made every later bullet out of that slot light the floor.
@@ -75,11 +80,32 @@ function reset(b: Bullet): void {
   b.originY = b.y;
   b.targetId = -1;
   b.seekDegPerS = 0;
+  b.seekMs = 0;
   b.orbitMs = 0;
   b.orbitAngle = 0;
   b.orbitRadius = 0;
   b.orbitDegPerS = 0;
   b.rehitMs = 0;
+  // A recycled slot keeps none of doc 006's shot options: a plain shard out
+  // of a frozen orb's old slot must not mark, throw shards or spread poison.
+  b.doomMs = 0;
+  b.doomDamage = 0;
+  b.doomRadius = 0;
+  b.emitMs = 0;
+  b.emitClock = 0;
+  b.emitAngle = 0;
+  b.emitDamage = 0;
+  b.emitRing = 0;
+  b.contagion = 0;
+  b.contagionReach = 0;
+  // Nor its shape's: a recycled boomerang's slot must not fly home, or an
+  // orb's strike slot be drawn as an arc.
+  b.delivery = "shot";
+  b.returning = false;
+  b.outPx = 0;
+  b.outLeftPx = 0;
+  b.launchSpeed = 0;
+  b.returnSpeed = 0;
 }
 
 export function liveCount(pool: readonly Bullet[]): number {
@@ -93,7 +119,7 @@ export function hasRoom(pool: readonly Bullet[], needed: number): boolean {
 }
 
 export interface IntegrateResult {
-  /** Bullets that stopped this step, for payload triggers and particles. */
+  /** Bullets that stopped this step, for the expiry hooks and particles. */
   readonly expired: Bullet[];
   readonly hitWall: Bullet[];
 }
@@ -120,6 +146,15 @@ export function integrate(
      * goes where the player goes, through walls and bodies alike, and only
      * its clocks run here.
      */
+    /*
+     * A boomerang is flown by the world too (`stepBoomerangs`): its path is
+     * out, a turn and a return to wherever the caster has got to, and it
+     * turns on a wall rather than dying on one, which is not a straight line
+     * this loop could integrate.
+     */
+    if (b.delivery === "boomerang") continue;
+    // So is an enchant's wave (`stepWaves`): an arc that flies over the room's geometry.
+    if (b.delivery === "wave") continue;
     if (b.orbitMs > 0) {
       b.orbitMs -= dtMs;
       b.lifeMs -= dtMs;
@@ -131,7 +166,18 @@ export function integrate(
       continue;
     }
 
-    const seeking = b.homing > 0 || b.seekDegPerS > 0;
+    /*
+     * A **bounded** curl runs out; an unbounded one steers for the whole
+     * flight. 0 is unlimited, which is what a seeking spell wants and what
+     * every bullet resets to; a positive budget counts down and is spent as
+     * -1, so "never set" and "used up" are different states rather than the
+     * same zero.
+     */
+    if (b.seekMs > 0) {
+      b.seekMs -= dtMs;
+      if (b.seekMs <= 0) b.seekMs = -1;
+    }
+    const seeking = (b.homing > 0 || b.seekDegPerS > 0) && b.seekMs >= 0;
     const to = seeking
       ? (typeof homingTarget === "function" ? homingTarget(b) : homingTarget ?? null)
       : null;
@@ -142,7 +188,7 @@ export function integrate(
       if (len > 0.001) {
         const speed = Math.hypot(b.vx, b.vy);
         /*
-         * Two steerings, one turn. `homing` is the seeker rune's soft pull, a
+         * Two steerings, one turn. `homing` is the `seek` affix's soft pull, a
          * share of the remaining error per step; `seekDegPerS` is the spell's
          * own curve, a **bounded turn rate**, which is what keeps an arc an
          * arc: a shot that may turn ninety degrees a second traces a readable

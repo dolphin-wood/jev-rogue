@@ -9,5 +9,6 @@ export * from "./patterns.ts";
 export * from "./pressure.ts";
 export * from "./presets.ts";
 export * from "./assemble.ts";
+export * from "./ramp.ts";
 export * from "./affixes.ts";
 export * from "./counter.ts";

@@ -3,7 +3,7 @@ id: 003
 title: Run Structure and Game Loop
 status: proposed
 date: 2026-09-21
-summary: Fourteen fights, a merchant-and-blacksmith room, then the boss. Every room is a fight; there are no room types. What a portal promises is a reward kind crossed with a difficulty, plus a grade and a spell school or a stat family. Exits are portals standing on open floor, and a room ends in two beats: the offer appears as three cards in the UI, and choosing one raises the portals. Both beats are answered by a key press, never by walking into something. Code enumerates the legal portals, Jev answers per portal, code assembles them; Jev also picks the next room's tension. Defines the room state machine with wave-aware clearing, speculative versus committed plans, prefetch triggers, and the gold economy.
+summary: Fourteen fights, a merchant-blacksmith-and-fountain room, then the boss. Every room is a fight bar the rare stop with no fight in it. What a portal promises is a reward kind crossed with a difficulty, plus a grade and a spell school or a stat family. Exits are portals standing on open floor, and a room ends in two beats: the offer appears as three cards in the UI, and choosing one raises the portals. Both beats are answered by a key press, never by walking into something. Code enumerates the legal portals, Jev answers per portal, code assembles them; Jev also picks the next room's tension. Kills pay experience and levels arrive on their own, each adding five health, a whole point of sword damage and 3% mana. Defines the room state machine with wave-aware clearing, speculative versus committed plans, prefetch triggers, and the gold economy.
 depends_on: [001, 002]
 ---
 
@@ -12,13 +12,14 @@ depends_on: [001, 002]
 ## Shape of a run
 
 ```
-fight x 14  →  the merchant and the blacksmith  →  boss
+fight x 14  →  the merchant, the blacksmith and the fountain  →  boss
 ```
 
-Sixteen rooms. Rooms 1 to 14 are fights, room 15 holds the two vendors and no
-enemies, room 16 is the boss (`RUN_COMBAT_ROOMS`, `stageFor`). Fourteen is doc
-014's count: the number a twenty-minute run of 30 to 40 second fights was sized
-against.
+Sixteen rooms. Rooms 1 to 14 are fights, room 15 holds the two vendors and the
+fountain and no enemies, room 16 is the boss (`RUN_COMBAT_ROOMS`, `stageFor`).
+Fourteen is doc 014's count: the number a twenty-minute run of 30 to 40 second
+fights was sized against. One or two of the fourteen may be given up for a room
+with no fight in it, which is what the portal that leads to one costs.
 
 - Linear progression with branching exits: after a room is cleared **and its
   reward taken**, 1 to 3 portals rise on the open floor, each carrying a badge
@@ -26,18 +27,35 @@ against.
   rooms are gone.
 - No map, no backtracking.
 
+**The run narrows twice, and neither narrowing is a question** (`fixedExit`).
+Room 14 is the last fight and everything past it leads to the vendors' stop;
+room 15 is the stop and everything past it leads to the boss. So each of those
+two rooms ends with **exactly one portal**, and that portal wears **no reward
+badge** — it names the room ahead, because it promises nothing else. Neither
+costs a Director question: with one legal answer there is nothing to choose
+(002, "a question with one option is not asked").
+
+Both used to fall through to the rule draw and raise up to three portals with
+three different reward badges on them, every one of which opened onto the same
+room and none of which paid what it said. The stop was fixed first; the last
+fight was not, and it was reported from play in the same words — random doors
+around the shop.
+
 **The room type is not a choice. The reward is.** There are no room types to
-enumerate. Every room before the vendors is a fight, and what differs between
-them, which is what the player chooses at a portal, is two axes:
+enumerate. Every room before the vendors is a fight bar the rare stop with no
+fight in it, and what differs between the fights, which is what the player
+chooses at a portal, is two axes:
 
 | Axis | Options |
 |---|---|
 | reward kind | stat, spell, affix, gold |
 | difficulty | normal, elite |
 
-That is the whole taxonomy. Healing lives in the stat pool as `Vigour`
-(`+1 heart, filled`): taking it costs the other two cards on that screen, so
-recovery is a **trade** made at a moment of the player's choosing rather than a
+That is the whole taxonomy for a fight. Two things are not on it, and both are
+rooms with **no fight in them**, reached through a portal like anything else:
+the **vendors**, who trade gold for power, and the **fountain**, which trades
+this room's reward for health. Healing also lives in the stat pool as `Vigour`,
+so recovery is a trade made at a moment of the player's choosing rather than a
 free stop. Gold has one place to go, the vendors, so the merchant stop is fixed
 at the room before the boss rather than something the player could decline into
 a run with no way to spend.
@@ -46,10 +64,41 @@ Three layers of decision at every portal:
 
 | Layer | Owner | Decides |
 |---|---|---|
-| What may be offered | code (`portalChoices`) | portal count, legal kind sets, whether an elite is allowed, whether a vendor is |
-| Which of the legal answers, per portal, and the next tension | Jev (`planPortals`, `planDoors`) | e.g. "a flame spell behind an elite, a stat, gold" |
+| What may be offered | code (`portalChoices`) | portal count, which reward kinds are legal, whether an elite is allowed, whether a vendor or the fountain is |
+| **Which reward the player needs most**, ranked | Jev (`portal_need`) | one option per badge — stat, spell, affix, gold, merchant, blacksmith, fountain |
+| Which of the ranked answers become doors | code | the top `count` distinct: the first drawn at `PORTAL_NEED_TEMPERATURE`, the rest at `PORTAL_TAIL_TEMPERATURE`; a constraint makes an option fall through to the next |
+| What each door promises, and the next tension | Jev (round 2) | the spell door's school, the stat door's family — asked only for the doors that exist |
 | Which portal to enter | player | the visible choice |
 | What the room behind each portal contains | Jev, per room | 004, 005, 007 |
+
+### One question, ranked, instead of a menu of combinations
+
+The portal question used to enumerate every legal **set** of kinds and ask Jev
+to pick a whole set. With three doors drawn from four kinds every set shares
+two thirds of its content with every other, so the options were near-identical
+sentences and the answer went to whichever carried one more matching clause;
+and a set says nothing about which of its members the player needs *most*,
+which is the one thing a reward offer wants to know.
+
+So it asks for the **need**, over single kinds, and code assigns the doors from
+the ranking.
+
+**The first door is sharp, the rest are spread**, and that needs two
+temperatures rather than one. A single value sharp enough to make the first
+door reliably the top need also makes the second and third reliably the second
+and third — and with three doors drawn from four reward kinds, that is the same
+three badges in every room of the run. Measured on the live model with one
+temperature: a run put an affix badge on twelve consecutive offers and gold on
+none at all. The player's first door was answering their build; the offer as a
+whole had stopped being a choice. So the top answer is drawn at
+`PORTAL_NEED_TEMPERATURE`, which sharpens, and the rest of the ranking at
+`PORTAL_TAIL_TEMPERATURE`, which spreads.
+
+The rooms with no fight in them are options of the same question, so a
+vendor takes a door by outranking a reward rather than through a question of
+its own — and the elite door is drawn from the same distribution restricted to
+the kinds that won, which removed `elite_kind` as a question of its own. A
+vendor replaces the **last** door, the lowest-ranked reward, never the first.
 
 ## Before the run: the intent screen
 
@@ -95,12 +144,14 @@ portal names a **school**, a stat portal a **family**:
 
 | grade | spell | affix | stat | gold |
 |---|---|---|---|---|
-| 1 | level 1 | tier I | applied once | 14 coins |
-| 2 | level 2 | tier II | applied twice | 28 coins |
-| 3 | level 3 | tier III | applied twice | 42 coins |
+| 1 | level 1 | tier I | applied once | 8 coins |
+| 2 | level 2 | tier II | applied twice | 16 coins |
+| 3 | level 3 | tier III | applied twice | 24 coins |
 
-Schools: flame, frost, venom, storm, void, spirit, stone; a school of two spells
-fills the third card from the rest of the pool. Families: movement, survival,
+Schools: flame, frost, venom, storm, void, spirit, stone. A school or family on
+the portal promises **one card** of it; the other cards are drawn from the
+whole pool as any offer's are, so a school of three spells does not deal the
+same three cards every time. Families: movement, survival,
 mana, sword, three stats each. The badge shows the school or family in its
 colour under the portal and the grade as stars, and the prompt reads
 "E  ELITE flame spell ★★". A graded-up reward is why an elite portal is worth
@@ -125,10 +176,13 @@ Four reasons this shape is what a portal promises:
   categorical choice, no counting, no numeric comparison. "A flame spell" is a
   plan; "a spell" is a lottery ticket.
 - **No empty rooms.** Every reward kind sits behind a fight, so the reward is
-  always paid for, and no room is thirty seconds of walking.
+  always paid for, and no room is thirty seconds of walking. The rooms with no
+  fight are not exceptions to this: a vendor or the fountain is what the room is
+  *for*, and it is paid for with the fight's reward rather than with a fight.
 
 Two constraints follow. **Difficulty applies only to rooms with a fight**, so
-the vendor stop and the boss take none — elite is a description of an encounter.
+the vendor stop, a fountain room and the boss take none — elite is a
+description of an encounter.
 And **the stat pool must be build-agnostic**: a portal the player can choose has
 to give something usable whatever they are building, or it is a trap for half
 the builds in the game. So the pool is movement speed, dash cooldown, maximum
@@ -143,46 +197,138 @@ whether a grade-up is, whether a vendor is); the **Director** answers, in the
 room's round-1 request ("When a room is planned", below); code assembles the
 portals (`assemblePortals`). The questions, independent of one another:
 
-| Question | Options | Rule-arm lean |
-|---|---|---|
-| `portal_kinds` | every legal kind set, e.g. `stat+spell+gold` | gold when poor, stat when hurt, spell early, affix later |
-| `elite_portal` | none, elite (when legal) | elite most of the time with several portals, a third with one; rarely when hurt |
-| `elite_kind` | the four kinds, renormalised over the set chosen | even, gold a little less |
-| `elite_grade` | 2, 3 | 65 / 35 |
-| `normal_grade` | 1, 2 (from room 8) | 75 / 25 |
-| `spell_school` | the seven schools, each option naming its spells | half the mass on the schools of the chosen style |
-| `stat_family` | the four families | survival when hurt, mana when mana is tight, sword for melee |
-| `npc_room` | none, merchant, smith (when legal) | about one in eight, more with gold to spend |
+| Question | Round | Options | Rule-arm lean |
+|---|---|---|---|
+| `portal_need` | 1 | one per badge: stat, spell, affix, gold, and the merchant, the blacksmith and the fountain where code allows them | spell for a raw build, affix for a forming one, stat and gold for a formed one; the merchant below a reward the build still needs; the fountain by health alone |
+| `elite_portal` | 1 | none, elite (when legal) | elite most of the time with several portals, a third with one; rarely when hurt |
+| `elite_grade` | 1 | raised, best | 65 / 35 |
+| `normal_grade` | 1 | ordinary, raised (from room 8) | 75 / 25 |
+| `spell_school` | 2 | the seven schools, each option naming its spells | half the mass on the schools of the chosen style |
+| `stat_family` | 2 | the four families | survival when hurt, mana when the bar spent the fight under the cheapest key, sword when the blade did the damage |
+
+The two promises are asked in **round 2**, and only for the doors the ranking
+actually produced: asked in round 1 they were answered for a door two rooms in
+three did not have. Which door is the elite one is no longer a question at all
+— it is the need distribution restricted to the kinds that won.
 
 Elite is legal from room 3 — the first two rooms are where the player learns
-what their build does — never immediately after an elite room, and never while
-`health` is `critical`. At most one portal is elite, and the elite goes **last**
+what their build does — never while `health` is `critical`, never within
+`ELITE_GAP_FIGHTS` ordinary fights of the last elite room, and at most
+`ELITE_ROOMS_MAX` a run. The gap and the cap are what "the elite is the run's
+spike" means as a number: the older rule was only "not two in a row", which
+over fourteen fights permits seven, and a spike every other room is the run's
+ordinary pitch with a badge on it. Both are read from the room the player is
+standing in, because these portals decide the next one.
+At most one portal is elite, and the elite goes **last**
 in the assembled order, so the leftmost portal is never the hard one taken by
 accident. Every kind appears at most once, because two portals promising the
 same currency is one portal with extra steps. `ruleDoors` and `ruleOffer`
 remain as the fallback if the Director cannot answer at all; a failed Jev call
 already falls back to the rule table per question (002).
 
-## The last stop mends
+## The fountain
 
-The merchant-and-blacksmith room before the boss restores **three hearts**, up
-to the cap (`PREBOSS_MEND_HEARTS`). Health does not come back inside a run and
-that is the design's tension — but a boss entered on a third of a health bar
-is a slog no build can prevent, and measured, the runs that lost to the boss
-arrived with 3.6 hearts against the winners' 5.6. The mend is at the stop the
-player chose to reach, not a room they can choose to take, and it comes with
-the blacksmith, so the stop is where a build is finished before the fight.
+A fountain is a stone basin the player walks to and drinks from with **E**. One
+drink restores **50% of maximum health**, capped at full, and the fountain then
+stands **dry**: full and dry are two drawings, and the water's three-frame
+shimmer stops, so the state is read rather than remembered. A drink at a full
+bar is **refused rather than spent** — the prompt says the bar is already full
+before the press, and the press does nothing — because a fountain lost to a key
+tapped while walking past is a loss the player cannot see happen and cannot
+undo.
+
+It is a percentage rather than a fixed amount so that a run which has raised
+its maximum gets a bigger drink; a flat figure goes proportionally worthless as
+the cap grows, which is the same scale-invariance reason doc 013 gives for the
+stat cards.
+
+There are two fountains in a run, and they are the same object.
+
+### The last stop mends, and the player does the mending
+
+The room before the boss holds the merchant, the blacksmith **and a fountain**,
+in front of the two of them. Health does not otherwise come back inside a run
+and that is the design's tension — but a boss entered on a third of a bar is a
+slog no build can prevent, and measured, the runs that lost to the boss arrived
+on a third of a bar against the winners' most of one.
+
+The mend is at the stop the player chose to reach, not a room they can choose
+to take. It is an **act** rather than a number: the room used to top the bar up
+on entry while it was still fading in, so the one moment the run gives back was
+a change nobody was looking at. Walking to the basin and pressing E is the same
+heal, seen.
+
+### The mid-run fountain is a portal the Director offers
+
+The other is behind a portal, offered as an option of `portal_need` alongside the
+two vendors, and it is **the Director's answer to a run that is going badly**
+rather than a random roll. Its option is grounded in the labels that say so —
+it fits when `health` is `low` or `critical`, and when `recent_damage` is
+`heavy` — and the rule arm weights it by health alone: near nothing at a full
+bar, where the drink would be refused anyway, and heavier than the escape
+option at critical, where a card the run will not live to cast is worth less
+than the bar.
+
+The portal **says where it goes**: the fountain's own badge over it and its
+name under it, because a room that costs a fight's reward has to be chosen on
+purpose.
+
+The hard rules are code's, not the Director's (`portalChoices`):
+
+- never as the only portal, and never straight after another room with no fight
+  in it, which would be two rooms in a row where nothing happens;
+- at most **one** mid-run fountain a run — a second would make the bar
+  something the player tops up rather than the budget doc 001 spends;
+- never before room 3, and never from the last fight's doors, which open onto
+  the vendors' stop and its own fountain.
+
+It costs a fight and that fight's reward, which is what makes it a decision: on
+a full bar it is the worst portal on offer, and one hit from dying it is the
+only one.
 
 ## Vendor rooms
 
-Rarely, one portal leads to a room with the merchant or the blacksmith alone and
-no fight: never before room 3, never as the only portal, never twice running, at
-most twice a run, and never from the last fight, whose portals open onto the
-vendors anyway. A vendor replaces the first *normal* portal, so the elite one
-survives it. The merchant sells the same one card of each kind as the pre-boss
-stop; the blacksmith raises a spell's level. The room costs a fight's reward, so
-it is worth taking only with gold to spend — which is exactly when the rule arm
-offers it more.
+One portal can lead to a room with the merchant or the blacksmith alone and no
+fight, and it is **rarer than any reward**: only between `NPC_FIRST_ROOM` and
+`NPC_LAST_ROOM`, never as the only portal, never straight after another room
+with no fight in it, at most `NPC_ROOMS_MAX` entered a run, at most
+`NPC_OFFERS_MAX` *offered* a run, and never from the last fight, whose portals
+open onto the vendors anyway. The window is the honest part of it: a vendor
+before it is a shelf the player cannot afford, and one after it is a purchase
+the fixed stop is a few rooms from making anyway. A vendor replaces the first *normal*
+portal, so the elite one survives it — as the fountain does. The merchant sells
+the same one card of each kind as the pre-boss stop; the blacksmith raises a
+spell's level. The room costs a fight's reward.
+
+### The early economy
+
+Gold pays for nothing on its own. A run that met its first vendor at room 3 at
+best and usually not at all was a run where the gold portal promised a currency
+with nowhere to go, which is why it was the door players liked least — and the
+answer is not only to pay more for it (007) but to make somewhere to spend it.
+
+So while `build_shape` is `raw` or `forming`:
+
+- **kills pay more.** `createWorld`'s `coinBoost` raises a kill's coin chance,
+  ×2 at `raw` and ×1.4 at `forming`, capped at `COIN_BOOST_MAX`. A room of
+  twelve bodies goes from about ten gold to about twenty, which is a vendor stop
+  over four rooms rather than a second income.
+- **the merchant is worth most here.** It is the one place the player
+  *chooses* what they get instead of choosing between what they are given,
+  which is worth most to a build that has not taken shape; the option is
+  grounded on exactly that (007), and it is ranked against the rewards rather
+  than against an escape option, so it takes a door only by outranking one.
+  It is still bounded by the window and the caps above: worth most is not the
+  same as often.
+
+Both are bounded by code and decided inside the bound by the Director: the
+multiplier is a cap, and which portals actually lead to a vendor is
+`portal_need`'s ranking. The window and the two caps are what the whole thing
+sits inside — without them a live Jev run put the merchant on the portal list
+in nine rooms of sixteen, and a played run met a vendor three times, which is
+not generosity, it is nagging. A vendor badge is now rarer on the offer than
+a gold one, which is the shape a roguelike's shop keeps: apart from the fixed
+stop, a room with no fight in it is a find.
 
 ## Tension (Jev)
 
@@ -197,9 +343,34 @@ room just played, and the next room's round 1 reads its answer:
 Options are `release`, `build`, `peak` and `fallback`, filtered by
 `tension_cap`; a single permitted tension is not a decision and is not asked.
 Temperature 0.6. `pacingLabels(runState)` produces the caps: `tension_cap`
-(peak is disallowed twice in a row and disallowed in the last fight),
-`hazard_cap` (from `recent_damage` and `health`) and `pressure_cap` (used by 005
-to filter encounters; never lowers an elite room below tier 4).
+(peak is disallowed twice in a row, in the **first two rooms**, and in the last
+fight), `hazard_cap` (from `recent_damage` and `health`) and `pressure_cap`
+(used by 005 to filter encounters; never lowers an elite room below tier 4).
+
+**The opening rooms cannot peak** (`OPENING_ROOMS`). Measured over four
+reference runs, room 1 came back `peak` every time on both arms and at high
+confidence — correctly, against the state it was given, because nothing has
+been measured yet and the unmeasured defaults read as a player on a full bar
+who has taken nothing and cleared fast. The state is honest about that now
+(002), and an honest state still leaves a judgement call on the first room of
+every run that is not a judgement call: the opening rooms are where the player
+learns what their build does, and the hardest room the run allows is the wrong
+place for it. Same two rooms the elite door is withheld for, same reason.
+
+**A badge shown four offers running leaves the list** (`DOOR_STREAK_CAP`).
+This is the bound the Director is given every chance to make unnecessary, and
+does not. It is told: the briefing counts how many offers running each badge
+has been on and how many times each was offered against walked through (002),
+each reward kind's spec says it is not for a run whose badge has been on
+several offers running (010), and `DIRECTOR_BRIEF` states the variety principle
+and says outright that nothing in code holds it. Measured over eight seeds with
+the cap off, the longest same-kind streak was 7 before those facts existed and
+10 after them, against 5 with the cap on — telling it louder made it worse.
+The fourth offer is therefore where code stops offering the kind, which still
+leaves three reward kinds and any vendor on the list. Where the ranking runs
+short and code has to fill the remaining doors, it fills from the kind least
+recently offered rather than in the order the kinds happen to be written in —
+gold was last in that order and reached 2% of every portal shown.
 
 ## A note on entry sides
 
@@ -222,7 +393,8 @@ DOORS_OPEN  → portals rise with their badges; the next room's plans are reques
 TRANSITION  → fade, load the committed RoomPlan for the chosen portal, fade in → ENTERING
 ```
 
-The vendor room never enters FIGHTING and goes ENTERING → REWARDING directly.
+A room with no fight in it — the vendors' stop, a vendor's room or a
+fountain's — never enters FIGHTING and goes ENTERING → REWARDING directly.
 The clear condition counts pending waves, so a room with waves at 0 s and 2.5 s
 cannot clear before the second wave has spawned and died.
 
@@ -255,7 +427,7 @@ flagged on the room plan page and in the debug sidebar.
 
 | Room | Planned at | Time available |
 |---|---|---|
-| fight or vendor room | previous room's DOORS_OPEN, per portal | the walk to a portal, typically 3 to 10 s |
+| any room a portal leads to | previous room's DOORS_OPEN, per portal | the walk to a portal, typically 3 to 10 s |
 | first room | intent screen submit | up to 6 s visible wait |
 
 If a plan is not back at TRANSITION, that portal uses the `RuleDirector` plan
@@ -271,18 +443,21 @@ the room, and one that is solid with no art is an invisible wall.
 
 Three reasons this is better rather than merely easier:
 
-- **All the options are visible at once**, from the middle of the room where the
-  fight ended, which is what Sid Meier's objection to the blind choice actually
-  asks for. A door at the edge of the camera puts the decision behind the player,
-  with one option in comfortable view at a time.
-- **A portal can be positioned behind enemies.** The level-design rule is that
-  enemies belong between the player and the goal to encourage engagement; a door
-  at the player's back cannot be used that way and a floor portal can. Portals
-  are therefore **scattered across the open floor**, spread as far apart as the
-  room allows, clear of the entry and of the spawn groups — which is also a
-  reason to cross the room just fought in. The badges do not need to be adjacent
-  to be read, because a badge says only what is behind its own portal; comparing
-  options side by side is the card screen's job.
+- **All the options are visible at once**, which is what Sid Meier's objection
+  to the blind choice actually asks for. A door at the edge of the camera puts
+  the decision behind the player, with one option in comfortable view at a time.
+- **They rise in front of the player.** The camera follows the player and the
+  room is larger than the screen (doc 008), so the portals are **made when the
+  way out opens**, as one straight row inside the view: level or upright,
+  three tiles apart, on reachable open floor clear of the zones' hazards, the
+  row nearest the spot three tiles ahead of the player, one across their
+  facing before one along it. Only a view with no such row takes each portal
+  to the nearest open cell to its place. They used to be scattered across the room at
+  its start, behind the enemies on the level-design rule that the goal belongs
+  across the threat; with the room off the screen that was a search once the
+  fight was over, and there is nothing to hide during it if they do not exist
+  yet. The badges are read side by side; comparing what is behind them is the
+  card screen's job.
 - **The fiction it gives up was not being paid for.** Previous rooms are gone
   and there is no map, so the sense of walking through a dungeon was never
   supported by anything. A portal is more honest about the structure that exists.
@@ -304,7 +479,8 @@ What the portals need from the rest of the game:
 
 1. **The room clears**, and the room gets a beat to itself — about a second,
    long enough for the last death to finish and the dropped gold to fly in. A
-   reward object settles on the central floor under a beam of light, and
+   reward object settles **beside the player**, on the reachable open cell
+   nearest two and a half tiles from them, under a beam of light, and
    standing by it and pressing E opens doc 007's offer as **three cards in the
    UI**. A gold room instead scatters coins that magnetise in, because there is
    nothing to choose.
@@ -333,9 +509,10 @@ card partly for where it lets them go. Two further things the beat does:
 
 - **It gives the cleared room something to do.** Doc 014 asks for a trough of 30
   to 45 seconds after each peak; this is what goes in it.
-- **The reward in the centre pulls the player off wherever they won** — the
-  Reward for Risk pattern, a prize in the middle of an arena drawing the player
-  away from the foothold they held during the fight.
+- **The reward rises where the player won.** It was in the middle of the room,
+  after the Reward for Risk pattern — a prize in the arena drawing the player off
+  the foothold they held; with the room larger than the screen, the middle was
+  as often off it, and the prize had to be looked for.
 
 **Declining is taking the gold.** Gating the portals on taking a reward would be
 a problem if every offer were a commitment. It is not: gold is one of the four
@@ -371,8 +548,10 @@ Across a run of 14 fights at roughly five kills each, heart drops offset about a
 fifth of the run's attrition — enough to make aggression pay without making the
 health bar irrelevant. That is also why healing has to survive somewhere else:
 kill drops alone would leave the run a monotonic decline in which two early hits
-decide the outcome. `Vigour` in the stat pool is what stops that, and it puts
-recovery against progress at a moment of the player's choosing.
+decide the outcome. `Vigour` in the stat pool and the fountain are what stop
+that, and both put recovery against progress at a moment of the player's
+choosing: `Vigour` costs the other two cards on its screen, the fountain costs
+a fight and its reward.
 
 Two rules about collection, because a pickup that interrupts a dodge is worse
 than no pickup:
@@ -383,14 +562,150 @@ than no pickup:
   be walked over. Sweeping a cleared room for currency is a chore, not a
   decision, and the beat after a fight belongs to the reward choice.
 
+## Experience and levels
+
+Every number on the player's body came from the `stat` door, and a measured
+run takes **1.8 stat cards** against 10.7 spell levels and 6 affixes. One of
+the thirteen stats is health. So the body a player reached the boss with was
+very nearly the body they started the run in, while the ramp (005) took a
+body's health to ×1.78 and its damage to ×1.3. Only one side of the fight
+was growing, and the side that was not is the one the player *is*.
+
+**Kills pay experience, and levels arrive on their own.** There is no screen
+and no choice: the `stat` door is where the player decides what their body
+becomes, and a second, more frequent version of that decision would drown it.
+A level is the floor under the build rather than a part of it.
+
+### What a body pays is derived from the body
+
+A hand-written number per archetype goes stale the moment a body's health
+moves, and there are twenty-nine bodies. So a kill is worth
+
+    round(base health × kit × variant ÷ 4)
+
+read off the roster's own definition (`core/run/levels.ts`).
+
+- **Base health, before the ramp.** A late room already holds more bodies and
+  heavier ones; experience that also rode the ramp would make the last levels
+  the fastest, which is the opposite of the curve below. The XP table is the
+  only brake on the pace of levelling, and a second one would fight it.
+- **Kit**, ×1.4 for a body that summons, ×1.2 for one with a pattern or a
+  ranged attack, ×1 for a chaser. Health is what a body costs to kill, not
+  what it costs to fight.
+- **Variant**, ×1.15 for a subspecies: one verb changed (019) is a different
+  question and not a bigger one.
+
+That is 5 for a rusher, 8 for a shooter, 9 for a tank, 12 for a warden, 18 for
+a summoner. On top of it sit the two multipliers that are about the encounter
+rather than the body:
+
+| | |
+|---|---|
+| an elite body | ×2.5 — the risk the room was built around |
+| a body another body put on the floor | **0** — a summoner is an infinite tap, and a run that could farm one would have no curve at all |
+| the boss, and anything in its hall | **0** — the run ends there, so a level earned on it is a number on the results screen |
+| scenery | 0 |
+
+### The curve is the run's kill counts
+
+A measured fight is 10 to 14 bodies, so 70 to 110 experience. The table is
+written against that: **45** to reach level 2, then 85, 130, 180, 235, 295,
+360, 430, 505, widening by 85 a level beyond that.
+
+The first entry is inside one room's takings, deliberately — the opening rooms
+are where a run is most fragile and where the player has least reason to
+believe it is going anywhere, so the first level-up lands in room 1 or 2. The
+gaps then climb faster than the takings do, which is the brake: measured on the
+fitted `player` profile the run reaches **level 2 in room 1, level 4 by room 4,
+level 6 by room 10 and level 7 by room 13**, and the seventh is something a run
+has to have cleared well to reach.
+
+### What a level gives
+
+**Five health, one whole point of sword damage, 3% of the bar.** Over six or
+seven levels that is the boss met on **90 health instead of 60** and a sword
+hitting for **15 instead of 9**, against a ramp that has been taking bodies to
+×2.2 health and ×1.65 damage since room 14. On reaching a level the player is
+handed back **the health it just added** — not a full heal, which would make
+levelling the way out of a bad room, and not nothing, which reads as losing
+health while the maximum grows away from the bar.
+
+**Every level moves a number the player can see.** The first version made all
+three gains percentages, and the sword's 5% came straight back as a bug report:
+"at level 4 the sword still hits 9". It was not wrong, it was invisible — a
+swing is 9, damage numbers over a body are whole, and 5% compounding prints 9,
+9, 10, 10, 11. Three levels in a row told the player, in the one place they
+were looking, that nothing had happened. So the sword's gain is a whole point,
+health is five, and the level-up banner names the new figure — "sword 9 → 10" —
+rather than a percentage nobody can check. The mana bar is the one percentage
+left and it passes the same test by arithmetic: a 90-point staff rounds to 93,
+96, 98, 101, 104, 107, so the gauge moves every level too.
+
+Half a heart rather than a whole one so that **the stat cards stay the better
+version of the same thing**. `Vigour` is a whole heart, twice a level, taken by
+choice at a door the player walked through for it; `deep_well` is six levels of
+bar, and `keen_edge`'s 15% passes a level's point as soon as the flat gains
+have grown the base it multiplies. A level is what happens anyway; a card is a
+decision, and a card the player could have had by waiting is not one.
+
+### Where it lives
+
+In the simulation, so that both callers get it by playing the game. The run
+carries one number across the portal — the total — exactly as it carries gold,
+rage and the stat modifiers; `createWorld` derives the level from it and folds
+it into the body, and the world pays kills and raises levels mid-fight. That is
+what makes a headless balance run and a browser run grow the same body at the
+same moments, and it is pinned by a test that reads both callers.
+
+**The Director is told the level and nothing acts on it.** It is a fact in the
+briefing like the health and the purse, with the term explained in the
+briefing's glossary; no question is grounded on it and no option mentions it.
+
+### On screen
+
+A third bar under health and mana, thinner and with no number on it, and the
+level in the column the heart and the mana pip stand in. It is the one of the
+three that is never urgent, and the only questions it answers are "what level
+am I" and "am I nearly there".
+
+**No floating `+N XP` at the corpse.** A kill already puts a damage number
+there, a burst, a hitstop and a sound, and a second number over the same body
+at the same instant competes with the one that says whether the swing was
+enough — at six bodies on the floor it is six more strings in the busiest
+half-second of the room. The gain goes to the bar instead, which lights the
+band it was just paid: several kills in one beat merge into one wider band by
+construction, nothing is drawn over the fight, and the feedback lands where the
+player will look for the level rather than where the body fell.
+
+A level itself is a toast on the strip that already announces what was gained,
+a burst on the player in the character screen's green — gold is the staff,
+green is the body, and the two happen in the same run — and `level_up`, the one
+rising figure in the sound set.
+
+### What it cost the rest of the run
+
+A bar half again as large is a run half again as survivable, and more than
+that: the fountain at the fixed stop refills half of it and an elite's heal is
+a tenth of it, so every source of recovery grew with the maximum. Measured, the
+`player` profile went from 45% of runs won to **100%**. The ramp's late bands
+answer it — health ×1.52/1.62/1.78 → **×1.75/1.95/2.2** and damage
+×1.1/1.2/1.3 → **×1.25/1.45/1.65** over rooms 6–9, 10–13 and 14–15 — and the
+boss now takes the boss band's `power` like every other body, which the band
+was always written to do ("only the beat is the boss's"). His **health** is
+untouched: scaling that would make the fight longer rather than harder, and its
+length is 020's. That lands the run back at **55%**, with the boss fight where
+nine runs in twenty still end.
+
 ## Gold economy
 
 | Source | Amount |
 |---|---|
 | a coin | 3 gold |
-| kill | a coin 22% of the time per unit of threat weight |
-| breakable | 1 to 3 coins, four times in five |
-| a gold portal's room | 14 coins per grade: 42, 84 or 126 gold |
+| kill | a coin 22% of the time per unit of threat weight, ×`coinBoost` while the build is unformed |
+| breakable | 1 or 2 coins, one time in three |
+| a gold portal's room | `GOLD_ROOM_COINS` (16) coins per grade: 48, 96 or 144 gold |
+| the gold card | 12 gold a grade |
+| a dismantled spell | its value, as coins that burst from it and fly to the player |
 | starting gold | 0 |
 
 | Cost | Amount |
@@ -398,8 +713,12 @@ than no pickup:
 | merchant: stat / affix / spell | 20 / 30 / 45 |
 | blacksmith: spell level 1→2 / 2→3 | 35 / 60 |
 
-**The vendors' room** holds the merchant and the blacksmith and no reward
-pedestal, and its portals are open from the start. The **merchant** sells one
+**The vendors' room** holds the merchant, the blacksmith and a fountain, and no
+reward pedestal, and its portals are open from the start. It has exactly **one
+portal, and it is the boss** (`bossExit`), as the room before it has exactly one
+portal and it is this room (`shopExit`); see "Shape of a run". The fountain stands in
+front of the two of them, four tiles clear of either, so each of the three has
+its own spot and its own prompt. The **merchant** sells one
 card of each kind gold can buy — a stat, an affix at base tier, a spell — bought
 one at a time for as long as the player can pay, and never the kind of the portal
 that led there, since what the player came to do is spend. An affix or a spell is
@@ -431,6 +750,7 @@ the screen says which.
 | elite fight | 60 to 90 s |
 | reward beat and card screen | 10 to 30 s |
 | the vendors' room | 10 to 30 s |
+| a fountain's room | 5 to 15 s |
 | boss | 2 to 3 min |
 | run | about 20 min (014) |
 

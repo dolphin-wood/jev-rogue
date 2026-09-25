@@ -35,8 +35,8 @@ describe("the affix pool", () => {
   it("hooks every affix onto a moment the simulation already has", () => {
     /*
      * This is the assertion that keeps the pool implementable. Each of these
-     * is a place `sim` already reaches — three are the payload triggers, the
-     * rest are world events — so an affix is a use of `firePayloadChild`
+     * is a place `sim` already reaches — a projectile's hit, expiry and wall,
+     * and the world's events — so an affix is a use of existing moments
      * rather than a request for new machinery.
      */
     const real: readonly AffixHook[] = ["hit", "expire", "wall", "kill", "cast", "hurt", "dash", "swing"];
@@ -114,7 +114,7 @@ describe("the affix pool", () => {
     // A hook that needs a projectile is not offered to a spell without one.
     for (const a of SPELL_AFFIXES)
       if (a.hook === "hit" || a.hook === "kill" || a.hook === "expire" || a.hook === "wall")
-        for (const s of a.shapes) expect(["bolt", "orbit"], `${a.id} on ${s}`).toContain(s);
+        for (const s of a.shapes) expect(["bolt", "orbit", "boomerang", "orb", "enchant"], `${a.id} on ${s}`).toContain(s);
     expect(affixFits(spellAffixById("shatter")!, "field")).toBe(false);
     expect(affixFits(spellAffixById("ward")!, "summon")).toBe(true);
     // Every shape in the pool has at least one affix that fits it.
@@ -126,12 +126,13 @@ describe("the affix pool", () => {
     expect(itemShape(ITEMS.get("magic_bolt"))).toBe("bolt");
     expect(itemShape(ITEMS.get("spirit_blades"))).toBe("orbit");
     expect(itemShape(ITEMS.get("wildfire_field"))).toBe("field");
+    expect(itemShape(ITEMS.get("earth_spikes"))).toBe("eruption");
     expect(itemShape(null)).toBe("bolt");
   });
 
   it("says where it fits, in words the card can carry", () => {
     expect(affixFitsLine(spellAffixById("ward")!)).toBe("fits any spell");
-    expect(affixFitsLine(spellAffixById("chain")!)).toBe("fits bolt, orbit");
+    expect(affixFitsLine(spellAffixById("chain")!)).toBe("fits bolt, orbit, boomerang, orb, enchant");
   });
 
   it("fits nine slots with room to choose", () => {
@@ -142,5 +143,25 @@ describe("the affix pool", () => {
      * are supposed to be common, because a duplicate is an upgrade.
      */
     expect(SPELL_AFFIXES.length).toBeGreaterThanOrEqual(12);
+  });
+});
+
+describe("a spread does not seek", () => {
+  it("keeps seek off spells of several shots and apart from scatter", async () => {
+    const { affixFitsSpell, spellAffixById } = await import("./affixes.ts");
+    const seek = spellAffixById("seek")!;
+    const scatter = spellAffixById("scatter")!;
+    expect(affixFitsSpell(seek, ITEMS.get("magic_bolt"), [])).toBe(true);
+    expect(affixFitsSpell(seek, ITEMS.get("scatter_shot"), [])).toBe(false);
+    expect(affixFitsSpell(seek, ITEMS.get("magic_bolt"), ["scatter"])).toBe(false);
+    expect(affixFitsSpell(scatter, ITEMS.get("magic_bolt"), ["seek"])).toBe(false);
+  });
+
+  it("gives no spell of several shots a seek of its own, but the swarm", () => {
+    for (const item of ITEMS.values()) {
+      const count = Number(item.params["count"] ?? 1);
+      if (count <= 1 || item.id === "seeker_swarm") continue;
+      expect(Number(item.params["seek"] ?? 0), item.id).toBe(0);
+    }
   });
 });

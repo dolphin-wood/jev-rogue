@@ -10,8 +10,9 @@
  * `1 - open_ratio` and is reported as `obstacle_ratio`.
  */
 import { GRID_W, Tile } from "../types.ts";
-import type { Cover, Openness, RoomMeasurements, SpaceArchetype, Symmetry } from "../types.ts";
+import type { Cover, Extent, Openness, RoomMeasurements, SpaceArchetype, Symmetry } from "../types.ts";
 import { at, idx, inInterior, maskFloorCount, mirrorX } from "./masks.ts";
+import { areaScale } from "./extent.ts";
 
 export type Band = readonly [lo: number, hi: number];
 
@@ -30,7 +31,7 @@ export const OPENNESS_BANDS: Readonly<Record<Openness, Band>> = {
   tight: [0.16, 0.26],
 };
 
-/** Pillar-count bands per cover (doc 004 step 2). */
+/** Pillar-count bands per cover (doc 004 step 2), on the base grid; `bandsFor` scales them. */
 export const COVER_BANDS: Readonly<Record<Cover, Band>> = {
   none: [0, 0],
   sparse: [2, 4],
@@ -83,14 +84,14 @@ export function countPillars(grid: Uint8Array): number {
 }
 
 /** Share of interior cells whose mirror across x holds a different tile. */
-export function symmetryError(grid: Uint8Array): number {
+export function symmetryError(grid: Uint8Array, ext: Extent): number {
   let total = 0;
   let bad = 0;
-  for (let y = 0; y < grid.length / GRID_W; y++) {
-    for (let x = 0; x < GRID_W; x++) {
-      if (!inInterior(x, y)) continue;
+  for (let y = 0; y < ext.h; y++) {
+    for (let x = 0; x < ext.w; x++) {
+      if (!inInterior(x, y, ext)) continue;
       total++;
-      if (at(grid, x, y) !== at(grid, mirrorX(x), y)) bad++;
+      if (at(grid, x, y) !== at(grid, mirrorX(x, ext), y)) bad++;
     }
   }
   return total === 0 ? 0 : bad / total;
@@ -125,6 +126,7 @@ export function measureRoom(
   grid: Uint8Array,
   mask: Uint8Array,
   entryCell: readonly [number, number],
+  ext: Extent,
 ): RoomMetrics {
   const maskFloor = maskFloorCount(mask);
   const reached = floodFill(grid, entryCell);
@@ -142,7 +144,7 @@ export function measureRoom(
     open_ratio: maskFloor === 0 ? 0 : free / maskFloor,
     obstacle_ratio: maskFloor === 0 ? 0 : obstacles / maskFloor,
     pillar_count: countPillars(grid),
-    symmetry_error: symmetryError(grid),
+    symmetry_error: symmetryError(grid, ext),
     reachable_ratio: maskFloor === 0 ? 0 : reachable / maskFloor,
     mask_floor: maskFloor,
     free_floor: free,
@@ -151,8 +153,17 @@ export function measureRoom(
   };
 }
 
-export function bandsFor(a: SpaceArchetype): { obstacle: Band; pillars: Band } {
-  return { obstacle: OPENNESS_BANDS[a.openness], pillars: COVER_BANDS[a.cover] };
+/**
+ * The bands at a room's extent. The obstacle ratio is a share and holds at
+ * every size; the pillar count is a count, written for the base grid, and
+ * grows with the floor — a little slower than it, since the 3-tile lanes do
+ * not grow: in proportion, a mirrored gallery in the pinched corridor at the
+ * standard size relaxed 26 rooms in 100, and at the 0.85 power 6.
+ */
+export function bandsFor(a: SpaceArchetype, ext: Extent): { obstacle: Band; pillars: Band } {
+  const s = areaScale(ext) ** 0.85;
+  const [lo, hi] = COVER_BANDS[a.cover];
+  return { obstacle: OPENNESS_BANDS[a.openness], pillars: [Math.round(lo * s), Math.round(hi * s)] };
 }
 
 /**
@@ -163,9 +174,10 @@ export function measurementProblems(
   m: RoomMetrics,
   a: SpaceArchetype,
   symmetry: Symmetry,
+  ext: Extent,
 ): string[] {
   const problems: string[] = [];
-  const bands = bandsFor(a);
+  const bands = bandsFor(a, ext);
   if (!inMetricBand(m.obstacle_ratio, bands.obstacle)) {
     problems.push(
       `obstacle ratio ${m.obstacle_ratio.toFixed(3)} outside ${a.openness} band ` +

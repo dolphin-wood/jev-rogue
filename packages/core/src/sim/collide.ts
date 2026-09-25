@@ -5,6 +5,7 @@
  * spatial index would cost more to keep correct than it saves.
  */
 import { GRID_W, GRID_H, TILE_PX, Tile } from "../types.ts";
+import type { Extent } from "../types.ts";
 import type { Vec } from "./types.ts";
 
 export const WORLD_W = GRID_W * TILE_PX;
@@ -147,15 +148,15 @@ export function cellCentre(cell: readonly [number, number]): Vec {
   return { x: (cell[0] + 0.5) * TILE_PX, y: (cell[1] + 0.5) * TILE_PX };
 }
 
-/** Where the player stands when entering through a side. */
-export function entryPosition(side: "N" | "E" | "S" | "W"): Vec {
-  const mid = { x: WORLD_W / 2, y: WORLD_H / 2 };
+/** Where the player stands when entering a room of this extent through a side. */
+export function entryPosition(side: "N" | "E" | "S" | "W", ext: Extent): Vec {
+  const w = ext.w * TILE_PX, h = ext.h * TILE_PX;
   const inset = TILE_PX * 1.5;
   switch (side) {
-    case "N": return { x: mid.x, y: inset };
-    case "S": return { x: mid.x, y: WORLD_H - inset };
-    case "W": return { x: inset, y: mid.y };
-    case "E": return { x: WORLD_W - inset, y: mid.y };
+    case "N": return { x: w / 2, y: inset };
+    case "S": return { x: w / 2, y: h - inset };
+    case "W": return { x: inset, y: h / 2 };
+    case "E": return { x: w - inset, y: h / 2 };
   }
 }
 

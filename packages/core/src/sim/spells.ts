@@ -8,11 +8,11 @@
  * default, and a spell has to be **a decision at a moment**, which a button
  * held down cannot be.
  *
- * What is kept from doc 006 is the effect. A spell's projectiles, payload and
- * elements are still an `ItemInstance` fired through `fireUnit`, so "a summon
- * is a spell and a thrown bolt is a spell" costs nothing to be true: the
- * delivery is what the item already describes, and this module only owns when
- * it happens and what it costs.
+ * A spell is one `ItemInstance` fired through `fireUnit`, so "a summon is a
+ * spell and a thrown bolt is a spell" costs nothing to be true: the delivery
+ * is what the item already describes, and this module only owns when it
+ * happens and what it costs. Spells are self-contained: nothing on one key
+ * modifies another.
  *
  * ### Mana is a fraction of the cap, not an amount
  *
@@ -29,17 +29,20 @@
  * dearest about four, so a room entered on a full bar buys two to six casts
  * before the sword has to earn the next one.
  */
-import type { BaseItem, CastUnit, ItemInstance, Staff } from "../types.ts";
+import type { BaseItem, ItemInstance, Staff } from "../types.ts";
 import type { ItemRegistry } from "../spells/items.ts";
-import { parseCastTree } from "../spells/parse.ts";
-import { REFERENCE_STAFF } from "../spells/staff.ts";
-import { fireUnit } from "./cast.ts";
-import { emptyScope } from "../spells/execute.ts";
+import { emptyScope, fireUnit, freeCastReach } from "./cast.ts";
 import { castAdditions, onCast, spreadDirections } from "./affix-hooks.ts";
+import { addPowers, dominantElement, noPowers } from "../content/tags.ts";
 import { affixCostMult } from "../spells/affixes.ts";
+import {
+  BURN_DPS, ENEMY_BURN_MS, ENEMY_BURN_SOURCES, ENEMY_FREEZE_MS, ENEMY_POISON_MS,
+  ENEMY_POISON_STACKS, POISON_DPS_PER_STACK, SHATTER_MULT,
+} from "./enemy.ts";
 import type { AttachedAffix } from "./affix-hooks.ts";
 import type { FiredShot } from "./cast.ts";
 import type { World } from "./types.ts";
+import { GROUND_STATUS_POWER } from "./fire.ts";
 
 /** Spells the player may hold at once, bound to keys in order. */
 export const SPELL_SLOTS = 3;
@@ -60,18 +63,81 @@ export function buildPerHit(item: BaseItem): number {
 }
 
 /**
+ * What this spell's element is **worth**, in the numbers a card can show:
+ * how many hits fill the gauge, how long the status then runs, and what it
+ * deals over that run.
+ *
+ * A card used to say "Burn: 36% of the gauge a hit, 3 hits to ignite", which
+ * is the mechanism and not the value — the player still could not tell
+ * whether igniting was worth three hits. Every figure here is read off the
+ * simulation's own constants, so a balance pass that moves `BURN_DPS` or
+ * `ENEMY_POISON_MS` moves the card with it and cannot leave the two
+ * disagreeing.
+ *
+ * The damage is the status **as it ignites**, on an unresisting body: a burn
+ * at one source, a poison at two stacks (`applyElementTo`). Hits landed while
+ * it runs stack it higher, and a resistant body takes less; both are the
+ * enemy's property rather than the spell's, so neither belongs on the card.
+ *
+ * Ice deals nothing and says the freeze instead: its payoff is the shatter,
+ * which is a multiplier on the next hit.
+ */
+export interface StatusForecast {
+  readonly element: "fire" | "poison" | "ice";
+  /** Hits to fill an empty gauge and trigger the status. */
+  readonly hits: number;
+  /** How long the status runs, in seconds. */
+  readonly seconds: number;
+  /** What it deals over that run, in whole damage. Zero for ice. */
+  readonly damage: number;
+  /** What the hit that breaks a freeze is multiplied by. Ice only. */
+  readonly shatter: number;
+}
+
+/**
+ * The share of the gauge one hit — or, for ground, one tick — of this item
+ * fills. A field or a trail builds with its ground's own power, whatever its
+ * `element_power` says: the ground does its element by its nature
+ * (`GROUND_STATUS_POWER`), and a card that read the item's power said a
+ * burning patch took eight hits to light what it lights on the second tick.
+ */
+export function statusPerHit(item: BaseItem): number {
+  const ground = item.params.shape === "field" || item.params.shape === "trail";
+  const element = item.params.element;
+  if (ground && (element === "fire" || element === "poison")) return ENEMY_BUILD_PER_HIT * GROUND_STATUS_POWER;
+  return buildPerHit(item);
+}
+
+export function statusForecast(item: BaseItem): StatusForecast | null {
+  const per = statusPerHit(item);
+  if (per <= 0) return null;
+  const element = item.params.element;
+  if (element !== "fire" && element !== "poison" && element !== "ice") return null;
+  // The same count `statusLine` says: the hit that takes the gauge to full.
+  const hits = Math.ceil(1 / per - 1e-9);
+  if (element === "ice")
+    return { element, hits, seconds: ENEMY_FREEZE_MS / 1000, damage: 0, shatter: SHATTER_MULT };
+  const [ms, dps] = element === "fire"
+    ? [ENEMY_BURN_MS, BURN_DPS * ENEMY_BURN_SOURCES]
+    : [ENEMY_POISON_MS, POISON_DPS_PER_STACK * ENEMY_POISON_STACKS];
+  const seconds = ms / 1000;
+  // `stepEnemy` accrues `dps` a second and pays it out twice a second as a
+  // whole number, carrying the remainder, so the run totals exactly this —
+  // times the spell's own `status_scale` (`fireOnce`).
+  const scale = typeof item.params.status_scale === "number" ? item.params.status_scale : 1;
+  return { element, hits, seconds, damage: Math.round(dps * seconds * scale), shatter: 1 };
+}
+
+/**
  * **The one staff every run plays.** Doc 013 retired the staff as a thing the
  * player has — there is a sword and there are three keyed spells — so the
  * record that carries the mana pool and the slot count is fixed rather than
- * chosen. It used to be the Director's first question of a run, answered
- * uniformly on the rule arm over 24 profiles, which silently set the mana pool
- * anywhere from 60 to 120 and the slot count to 4 or 6 against three keys.
+ * chosen.
  */
-// 90, measured: 70 left half the runs dead at the boss, 120 was no better
-// than 90, and 90 matches the survival the random profiles averaged out to.
+// 90, measured: 70 left half the runs dead at the boss and 120 was no better.
 export const RUN_MANA_MAX = 90;
 export function runStaff(): Staff {
-  return { ...REFERENCE_STAFF, slots: SPELL_SLOTS, mana_max: RUN_MANA_MAX };
+  return { slots: SPELL_SLOTS, mana_max: RUN_MANA_MAX };
 }
 
 /**
@@ -111,8 +177,25 @@ export const SPELL_COST_MAX_FRACTION = 0.35;
  * everywhere else — a bigger well is now more casts, which is what a player
  * reads it as.
  */
-export const SPELL_COST_BASE = 5;
-export const SPELL_COST_PER_RANK = 2.5;
+/**
+ * **A quarter off every cast**, from 5 + 2.5 a rank.
+ *
+ * This is where the pool's level against the sword had to come from. Damage
+ * per second is damage a hit times casts a second, and the hit is pinned at
+ * the top by the first room: a hit big enough to reach the sword's damage per
+ * second at the old prices killed a room-1 body outright, and a hit small
+ * enough not to left the whole pool at a quarter of the sword and the harness
+ * losing every run. Neither is any spell's damage number's fault, so neither
+ * was fixed there.
+ *
+ * A cheaper cast fixes both at once: the same hit, thrown half again as
+ * often. A full bar is about eleven casts of the starting bolt and four of
+ * the largest spell, against eight and under three, and the sword's refund
+ * (`MANA_PER_HIT_FRACTION`) buys correspondingly more — which is the loop the
+ * design wants louder, not quieter.
+ */
+export const SPELL_COST_BASE = 3.75;
+export const SPELL_COST_PER_RANK = 1.875;
 /** The pool the cooldown scale is written against; see `spellCooldownMs`. */
 export const BASELINE_MANA_MAX = 60;
 
@@ -141,32 +224,13 @@ const COOLDOWN_FLOOR_MS = 240;
 const COOLDOWN_PER_FRACTION_MS = 1300;
 
 /**
- * One of the three keyed spells: **an attack, plus what is attached to it.**
- *
- * The `mods` are doc 013's three affix slots. They were missing entirely and
- * their absence made twenty items inert: `makeSpell` parsed a *single* item, so
- * a boost or a passive in a staff slot became its own "spell" that did nothing
- * when pressed, and could not reach the attack in the next slot either. Doc
- * 006's boost scoping — "boosts affect items to their right" — only works
- * across a sequence, and doc 013 replaced the sequence with three keys.
- *
- * Parsing `[...mods, attack]` as one little staff restores it. The scope rules
- * are unchanged and now apply where the design says they should: **inside one
- * spell**, to the attack the player attached them to.
+ * One of the three keyed spells: **an attack, plus the event affixes on it.**
  */
 export interface SpellSlot {
   /** The attack this key fires. */
   readonly item: ItemInstance;
-  /** Up to `AFFIX_SLOTS` modifiers attached to it, in application order. */
-  readonly mods: readonly ItemInstance[];
-  /**
-   * Doc 013's event affixes on this spell, each at a tier. Distinct from
-   * `mods`, which are numbers: see `spells/affixes.ts` for why the two pools
-   * are kept apart by type rather than by discipline.
-   */
+  /** Doc 013's event affixes on this spell, each at a tier; up to `AFFIX_SLOTS`. */
   readonly affixes: readonly AttachedAffix[];
-  /** The parsed unit that produces the effect; null while unresolvable. */
-  readonly unit: CastUnit | null;
   cooldownMs: number;
   /**
    * The spell's **level**, 1 to `SPELL_LEVEL_MAX` (doc 013: "spells have a
@@ -174,23 +238,36 @@ export interface SpellSlot {
    * by an elite room's spell card; it scales damage only.
    */
   readonly level: number;
-}
-
-export const SPELL_LEVEL_MAX = 3;
-
-/** What a level does to damage: +40% a level. It never changes the spell's shape. */
-export function levelDamageMult(level: number): number {
-  return 1 + 0.4 * (Math.max(1, Math.min(SPELL_LEVEL_MAX, level)) - 1);
+  /**
+   * A `charges` spell's bank (doc 006): the charges held, and how far the
+   * next one has come. Unset reads as a full bank, so a spell put on a key —
+   * or carried into a new room — starts with every charge ready. See
+   * `refillBanks`.
+   */
+  bank?: number;
+  bankMs?: number;
 }
 
 /**
- * **A level costs mana too**, at half the rate it adds damage: +20% a level,
- * so a level-3 spell hits 1.8x as hard for 1.4x the mana. More power has to
+ * Five levels: the same reach from first to last as three were — 1.8 times
+ * the damage for 1.4 times the mana at the top — in smaller steps, so a run
+ * raises its spells more often and each raise is a smaller decision.
+ */
+export const SPELL_LEVEL_MAX = 5;
+
+/** What a level does to damage: +20% a level. It never changes the spell's shape. */
+export function levelDamageMult(level: number): number {
+  return 1 + 0.2 * (Math.max(1, Math.min(SPELL_LEVEL_MAX, level)) - 1);
+}
+
+/**
+ * **A level costs mana too**, at half the rate it adds damage: +10% a level,
+ * so a level-5 spell hits 1.8x as hard for 1.4x the mana. More power has to
  * be paid for or a level is free, and paying less than it gives is what keeps
  * a level worth taking.
  */
 export function levelManaMult(level: number): number {
-  return 1 + 0.2 * (Math.max(1, Math.min(SPELL_LEVEL_MAX, level)) - 1);
+  return 1 + 0.1 * (Math.max(1, Math.min(SPELL_LEVEL_MAX, level)) - 1);
 }
 
 /** The slot at `level`. */
@@ -203,7 +280,7 @@ export function withLevel(slot: SpellSlot, level: number): SpellSlot {
  * it, at a lossy rate (doc 013, "Replacing a spell dismantles it into gold").
  */
 export function dismantleValue(level: number, affixTiers: readonly number[] = []): number {
-  return 12 + 14 * (Math.max(1, level) - 1) + 6 * affixTiers.reduce((a, b) => a + b, 0);
+  return 12 + 8 * (Math.max(1, level) - 1) + 6 * affixTiers.reduce((a, b) => a + b, 0);
 }
 
 /** Doc 013: three affix slots per spell, nine in the run. */
@@ -227,9 +304,54 @@ export function spellCost(_item: ItemInstance | null, base: number): number {
   return SPELL_COST_BASE + (rank - RANK_MIN) * SPELL_COST_PER_RANK;
 }
 
+/**
+ * A spell's own multiple of the cooldown its cost gives it (`cooldown_scale`
+ * in its params): a slow, heavy shot is meant to be thrown seldom, whatever
+ * it costs.
+ */
+export function cooldownScale(items: ItemRegistry, base: string): number {
+  const v = Number((items.get(base)?.params as Record<string, unknown> | undefined)?.cooldown_scale);
+  return Number.isFinite(v) && v > 0 ? v : 1;
+}
+
 /** How long this spell is unavailable after a cast. */
 export function spellCooldownMs(costFraction: number): number {
   return COOLDOWN_FLOOR_MS + costFraction * COOLDOWN_PER_FRACTION_MS;
+}
+
+/**
+ * **What a cast of this spell leaves behind, and for how long** — the floor
+ * under its cooldown (doc 006): "a spell whose damage keeps coming after the
+ * press has a cooldown at least as long as what it leaves behind lasts, so a
+ * held key keeps one of it up rather than stacking several".
+ *
+ * Held here for the three shapes that are nothing but what they leave: a
+ * trail and an enchant last their `trail_ms` and `enchant_ms`, so a held key
+ * renews each as it ends; an orb lasts its `lifetime` and a key may keep
+ * `max_alive` of them up, so the floor is the lifetime over that cap — a
+ * held key keeps its cap of orbs up and never replaces one before it has
+ * run. The field and the summon keep the cooldowns they were levelled on
+ * (a body pays a field's toll once however many patches it stands in, and
+ * a summon renews its one companion), and a field that wants the rule — Toxic
+ * Cloud — carries it in its own `cooldown_scale`.
+ */
+export function lastingMs(items: ItemRegistry, base: string): number {
+  const params = (items.get(base)?.params ?? {}) as Record<string, unknown>;
+  const n = (k: string, d = 0) => (typeof params[k] === "number" ? (params[k] as number) : d);
+  switch (params.shape) {
+    case "trail": return n("trail_ms", 4000);
+    case "enchant": return n("enchant_ms", 5000);
+    case "orb": return (n("lifetime", 3) * 1000) / Math.max(1, Math.round(n("max_alive", 3)));
+    default: return 0;
+  }
+}
+
+/** The cooldown a cast of this slot starts, at `cost`: the cost's, the spell's own scale, and what it leaves behind. */
+export function slotCooldownMs(slot: SpellSlot, items: ItemRegistry, cost: number): number {
+  return Math.max(
+    spellCooldownMs(cost / BASELINE_MANA_MAX) * cooldownScale(items, slot.item.base),
+    lastingMs(items, slot.item.base),
+  );
 }
 
 /**
@@ -240,7 +362,7 @@ export function spellCooldownMs(costFraction: number): number {
  * costs" rather than being rewritten across four packages for nothing.
  */
 export function slotCost(slot: SpellSlot | null, items: ItemRegistry, _staff: Staff): number {
-  if (!slot || !slot.unit) return Infinity;
+  if (!slot) return Infinity;
   const base = items.get(slot.item.base)?.mana ?? RANK_MAX;
   // What the attached affixes add: see `affixCostMult`.
   const affixes = (slot.affixes ?? []).reduce((m, a) => m * affixCostMult(a.id, a.tier), 1);
@@ -250,72 +372,15 @@ export function slotCost(slot: SpellSlot | null, items: ItemRegistry, _staff: St
 export interface SpellStep {
   readonly shots: readonly FiredShot[];
   /** Set when a key was pressed and the cast did not happen, and why. */
-  readonly refused: "cooldown" | "mana" | "empty" | null;
+  readonly refused: "cooldown" | "mana" | "empty" | "busy" | null;
 }
 
 /**
- * Binds an item to a key as a self-contained spell.
- *
- * Parsed **alone**, which is the whole of doc 013's "self-contained": the unit
- * a spell fires is built from its own item and nothing else, so a spell's
- * behaviour does not depend on what sits next to it in a list. Doc 006's tree
- * was the opposite by design — a boost modified whatever followed it, and the
- * order of the slots was the build. That is a fine wand-building game and a
- * bad fit for three keys, because the player cannot press a relationship.
+ * Binds an item to a key as a self-contained spell: its behaviour depends on
+ * the item and the affixes attached to it, never on what sits on another key.
  */
-/**
- * Whether an item can be a keyed spell **on its own**.
- *
- * Doc 013 binds three spells to three keys, each slot holding one item. Doc
- * 006's model was a staff *sequence*, where a container wrapped the items that
- * followed it — and the three multicast items were authored for that model and
- * never revisited. Parsed alone a multicast yields a unit with no children, so
- * `fireUnit` iterates an empty list and returns: the key does nothing, spends
- * no mana, and reports no refusal. A player given one has a dead key.
- *
- * That made it worse than useless, because the reward pool offered them as
- * spell cards: taking one was a trap that also cost the player the two real
- * options on that screen.
- *
- * The rule is therefore a property of the *pool*, checked here rather than at
- * the offer, because the offer is not the only thing that hands out items — a
- * shop and a starting staff will too.
- */
-export function castableAlone(base: BaseItem): boolean {
-  return base.kind === "attack" || base.kind === "payload";
-}
-
-export function makeSpell(
-  item: ItemInstance, items: ItemRegistry, mods: readonly ItemInstance[] = [],
-): SpellSlot {
-  /*
-   * The mods go **first**, because doc 006's boosts apply to what follows them.
-   * Parsed as `[...mods, attack]` the whole thing is a one-attack staff, which
-   * is exactly the structure the scope rules were written for.
-   */
-  const tree = parseCastTree([...mods, item], items);
-  // The attack is the last unit: a boost is not a unit and a passive is lifted
-  // out of the sequence, so whatever units survive, the attack is the one that
-  // fires.
-  const unit = tree.units[tree.units.length - 1] ?? null;
-  return { item, mods, affixes: [], unit, cooldownMs: 0, level: 1 };
-}
-
-/**
- * Attaches a modifier to a spell, or reports that the slots are full.
- *
- * Returns a new slot rather than mutating, because the parsed unit has to be
- * rebuilt and a half-updated slot — new mods, old unit — is a spell that says
- * one thing and does another.
- */
-export function attachMod(
-  slot: SpellSlot, mod: ItemInstance, items: ItemRegistry,
-): SpellSlot | null {
-  if (slot.mods.length >= AFFIX_SLOTS) return null;
-  const next = makeSpell(slot.item, items, [...slot.mods, mod]);
-  // The cooldown carries over: attaching something must not be a free recharge.
-  next.cooldownMs = slot.cooldownMs;
-  return { ...next, affixes: slot.affixes };
+export function makeSpell(item: ItemInstance): SpellSlot {
+  return { item, affixes: [], cooldownMs: 0, level: 1 };
 }
 
 /**
@@ -368,42 +433,310 @@ export function stepSpells(
     p.mana + staff.mana_max * MANA_REGEN_FRACTION_PER_S * p.mods.manaRegen * (dtMs / 1000),
   );
   for (const slot of world.spells) if (slot && slot.cooldownMs > 0) slot.cooldownMs -= dtMs;
+  if (p.castRecoverMs > 0) p.castRecoverMs -= dtMs;
+  refillBanks(world, items, dtMs);
+
+  /*
+   * **What the mana bar actually cost the player**, measured here because this
+   * is the only place that knows both the bar and what a cast is worth.
+   *
+   * Doc 002's state is facts, not verdicts: `mana_sustain` used to be a
+   * *prediction* from an offline cast loop firing on cooldown, which is not
+   * how anyone plays — it read "tight" for nine builds in ten while real runs
+   * refused no press at all. These two counters are what the player would say
+   * if asked: how often the bar said no, and how much of the fight they spent
+   * unable to afford anything.
+   */
+  {
+    let cheapest = Infinity;
+    for (const slot of world.spells)
+      if (slot) cheapest = Math.min(cheapest, slotCost(slot, items, staff));
+    if (Number.isFinite(cheapest) && p.mana < cheapest) world.stats.manaBelowKeyMs += dtMs;
+  }
+
+  // A windup running: the spell leaves when it ends, already paid for.
+  if (p.castPending >= 0) {
+    p.castWindupMs -= dtMs;
+    if (p.castWindupMs > 0) return { shots: [], refused: null };
+    const at = p.castPending;
+    p.castPending = -1;
+    const held = world.spells[at];
+    if (!held) return { shots: [], refused: null };
+    return release(world, items, held, at, p.castCost);
+  }
+
+  // A press is the key going down: the same key held from last step is not one.
+  const fresh = pressed !== null && pressed !== world.lastSpellKey;
+  world.lastSpellKey = pressed;
+
+  // A charge put out by a dash or a stun: its key does nothing until it comes up.
+  if (p.chargeVoid >= 0) {
+    if (pressed === p.chargeVoid) return { shots: [], refused: null };
+    p.chargeVoid = -1;
+  }
+  /*
+   * **A `charge` spell being held** (doc 006). Holding is the charge: the
+   * clock runs while its key is the one held, and the shot leaves the moment
+   * it is not — the key coming up, or another key taking its place, which is
+   * the same release. Nothing else is cast meanwhile: the charge is this
+   * key's cast, and one spell at a time is the rule.
+   */
+  if (p.chargeKey >= 0) {
+    const at = p.chargeKey;
+    const held = world.spells[at];
+    if (!held) { cancelCharge(p); return { shots: [], refused: null }; }
+    if (pressed === at) {
+      p.chargeMs = Math.min(chargeMsOf(items, held.item.base), p.chargeMs + dtMs);
+      return { shots: [], refused: null };
+    }
+    return releaseCharge(world, items, held, at);
+  }
 
   if (pressed === null) return { shots: [], refused: null };
   const slot = world.spells[pressed];
-  if (!slot || !slot.unit) return { shots: [], refused: "empty" };
-  if (slot.cooldownMs > 0) return { shots: [], refused: "cooldown" };
+  if (!slot) return { shots: [], refused: "empty" };
 
+  /*
+   * **Counted on the press, not on the cast** (doc 011).
+   *
+   * Every press of a key that holds a spell counts, and a press whose cost the
+   * bar cannot meet counts as refused — whatever else would also have stopped
+   * it. Counting only presses that were otherwise ready measured the wrong
+   * thing twice over: the browser's player presses anyway and wants to know
+   * why nothing came out, and the reference model *declines* to press what it
+   * cannot afford, so the refusal rate came back 0 of 27,978 and said mana was
+   * free when the bar was the reason the model stayed quiet.
+   *
+   * The bar rarely reaches zero, which is the other half of the report: it
+   * sits in single figures and the cast is refused because what is left is
+   * under the key's cost. So the test is against **the cost of the key
+   * pressed**, never against zero.
+   */
   const cost = slotCost(slot, items, staff);
+  /*
+   * On the key going down only. The input carries a held key every step, so
+   * counting each step counted sixty presses a second of holding — a room
+   * read 290 presses and 27 refusals for 22 casts.
+   */
+  if (fresh) {
+    world.stats.castPresses++;
+    if (p.mana < cost) world.stats.castRefusedMana++;
+  }
+
+  // One spell at a time: nothing is cast while another recovers.
+  if (p.castRecoverMs > 0) return { shots: [], refused: "busy" };
+  if (slot.cooldownMs > 0) return { shots: [], refused: "cooldown" };
+  /*
+   * An empty bank is a cooldown in all but name: the key comes back when a
+   * charge does, and the player is told so in the same words.
+   */
+  const banked = chargesOf(items, slot.item.base) > 0;
+  if (banked && bankOf(slot, items) < 1) return { shots: [], refused: "cooldown" };
   if (p.mana < cost) return { shots: [], refused: "mana" };
 
+  /*
+   * **The key going down starts a charge, and costs nothing yet** (doc 006).
+   * The bar is checked here so the player is not left holding a charge the
+   * bar cannot pay for, and paid on release, so a charge put out by a dash
+   * costs nothing. The caster moves at the spell's `move_scale` while it is
+   * held (`stepPlayer`).
+   */
+  if (chargeMsOf(items, slot.item.base) > 0) {
+    p.chargeKey = pressed;
+    p.chargeMs = 0;
+    p.castMoveScale = castTiming(items, slot.item.base).moveScale;
+    return { shots: [], refused: null };
+  }
+
   p.mana -= cost;
+  /*
+   * A `charges` press looses the whole bank for one cast's cost, and the
+   * bank, not a cooldown, is what says when the key is back: the charge rate
+   * is the spell's ceiling on damage per second, so tapping each charge is
+   * the fastest and dearest way to use it and banking the full five the
+   * slowest and cheapest (doc 006).
+   */
+  if (banked) {
+    const volley = bankOf(slot, items);
+    slot.bank = 0;
+    slot.bankMs = 0;
+    p.castMoveScale = castTiming(items, slot.item.base).moveScale;
+    return release(world, items, slot, pressed, cost, { volley });
+  }
   // Against the baseline pool, not this staff's: a cooldown that shortened
   // because the player found a deeper well would make the well twice a reward.
-  slot.cooldownMs = spellCooldownMs(cost / BASELINE_MANA_MAX);
+  slot.cooldownMs = slotCooldownMs(slot, items, cost);
+  const timing = castTiming(items, slot.item.base);
+  p.castMoveScale = timing.moveScale;
+  if (timing.windupMs > 0) {
+    p.castPending = pressed;
+    p.castWindupMs = timing.windupMs;
+    p.castCost = cost;
+    return { shots: [], refused: null };
+  }
+  return release(world, items, slot, pressed, cost);
+}
+
+/**
+ * A spell's **windup and recovery**, and how fast the caster moves through
+ * them. Read from its params (`windup_ms`, `recover_ms`, `move_scale`), and
+ * otherwise from its mass: a spark leaves at once and is shaken off in a
+ * blink; a bolt takes a breath; a stone or a void orb is heaved — longer to
+ * leave, longer to recover, the caster slowed to half or less — so the
+ * weight of a spell is felt in the hand as well as on the target.
+ */
+export function castTiming(items: ItemRegistry, base: string): { windupMs: number; recoverMs: number; moveScale: number } {
+  const params = (items.get(base)?.params ?? {}) as Record<string, unknown>;
+  const weight = Number(params.weight ?? 1) || 1;
+  const own = (k: string) => (Number.isFinite(Number(params[k])) && params[k] !== undefined ? Number(params[k]) : null);
+  const windupMs = own("windup_ms") ?? (weight < 1 ? 0 : weight <= 1 ? 40 : Math.round(60 + 80 * (weight - 1)));
+  const recoverMs = own("recover_ms") ?? Math.round(80 + 100 * weight);
+  const moveScale = own("move_scale") ?? Math.max(0.35, Math.min(0.95, 1 - 0.25 * weight));
+  return { windupMs, recoverMs, moveScale };
+}
+
+/**
+ * The `charge` a spell has, in ms to a full charge, or 0 for a spell that is
+ * cast on the press like every other (doc 006).
+ */
+export function chargeMsOf(items: ItemRegistry, base: string): number {
+  const v = Number((items.get(base)?.params as Record<string, unknown> | undefined)?.charge);
+  return Number.isFinite(v) && v > 0 ? v : 0;
+}
+
+/** The most charges a `charges` spell banks, or 0 for a spell without a bank. */
+export function chargesOf(items: ItemRegistry, base: string): number {
+  const v = Number((items.get(base)?.params as Record<string, unknown> | undefined)?.charges);
+  return Number.isFinite(v) && v > 0 ? Math.round(v) : 0;
+}
+
+/** How long a `charges` spell takes to bank one charge, in ms. */
+export function chargeIntervalMs(items: ItemRegistry, base: string): number {
+  const v = Number((items.get(base)?.params as Record<string, unknown> | undefined)?.charge_ms);
+  return Number.isFinite(v) && v > 0 ? v : 500;
+}
+
+/** The charges this slot holds now: its bank, or a full one where it has not been touched. */
+export function bankOf(slot: SpellSlot, items: ItemRegistry): number {
+  const max = chargesOf(items, slot.item.base);
+  return max > 0 ? Math.min(max, slot.bank ?? max) : 0;
+}
+
+/**
+ * Whether a press of this key would find the spell ready: off cooldown, and
+ * holding a charge if it banks them. The mana is a separate question — the
+ * bar and the key are two different reasons, and the player is told which.
+ */
+export function spellReady(slot: SpellSlot, items: ItemRegistry): boolean {
+  if (slot.cooldownMs > 0) return false;
+  return chargesOf(items, slot.item.base) === 0 || bankOf(slot, items) >= 1;
+}
+
+/**
+ * **A bank fills on its own clock** (doc 006): one charge every `charge_ms`,
+ * up to `charges`, whether or not the key is down. A held key therefore
+ * behaves like every other held key — it casts the moment it can, which for a
+ * bank is each charge as it arrives — and the choice stays the same one:
+ * spend the charges as they come, or let them pile up and loose them at once.
+ * It used to fill only while the key was up, so a held key banked nothing and
+ * fired nothing, and read as a cooldown that had stopped.
+ */
+function refillBanks(world: World, items: ItemRegistry, dtMs: number): void {
+  world.spells.forEach((slot) => {
+    if (!slot) return;
+    const max = chargesOf(items, slot.item.base);
+    if (max === 0) return;
+    let bank = bankOf(slot, items);
+    if (bank >= max) { slot.bank = bank; slot.bankMs = 0; return; }
+    const every = chargeIntervalMs(items, slot.item.base);
+    let ms = (slot.bankMs ?? 0) + dtMs;
+    while (ms >= every && bank < max) { bank++; ms -= every; }
+    slot.bank = bank;
+    slot.bankMs = bank >= max ? 0 : ms;
+  });
+}
+
+/**
+ * Puts a held charge out, **at no cost** (doc 006): a dash cancels it, and
+ * so does anything that takes the hands away — a stun, a key emptied under
+ * it. The cooldown does not start either, because nothing was cast.
+ */
+export function cancelCharge(p: World["player"]): void {
+  // The key stays dead until it comes up: see `Player.chargeVoid`.
+  if (p.chargeKey >= 0) p.chargeVoid = p.chargeKey;
+  p.chargeKey = -1;
+  p.chargeMs = 0;
+}
+
+/** How far through its charge the held key is, 0 to 1; 0 when nothing is held. */
+export function chargeShare(world: World, items: ItemRegistry): number {
+  const p = world.player;
+  if (p.chargeKey < 0) return 0;
+  const slot = world.spells[p.chargeKey];
+  const full = slot ? chargeMsOf(items, slot.item.base) : 0;
+  return full > 0 ? Math.min(1, p.chargeMs / full) : 0;
+}
+
+/**
+ * **The key came up**: a held charge leaves, and is paid for now (doc 006).
+ * The share is the time held over the full charge; the cost is the key's
+ * whole cost however short the hold, which is the price of a tap. A bar
+ * that dropped under the cost while the key was down — another key's mana
+ * went, a refund was spent — refuses the release, and the charge goes out
+ * unpaid rather than firing on credit.
+ */
+function releaseCharge(world: World, items: ItemRegistry, slot: SpellSlot, at: number): SpellStep {
+  const p = world.player;
+  const share = chargeShare(world, items);
+  p.chargeKey = -1;
+  p.chargeMs = 0;
+  const cost = slotCost(slot, items, world.staff);
+  if (p.mana < cost) return { shots: [], refused: "mana" };
+  p.mana -= cost;
+  slot.cooldownMs = slotCooldownMs(slot, items, cost);
+  return release(world, items, slot, at, cost, { charge: share });
+}
+
+/** A paid-for spell leaving the hand, and its recovery starting. */
+function release(
+  world: World, items: ItemRegistry, slot: SpellSlot, pressed: number, cost: number,
+  /** How far a `charge` spell was held, and how many shots a `charges` spell looses. */
+  opts: { charge?: number; volley?: number } = {},
+): SpellStep {
+  const p = world.player;
+  p.castRecoverMs = castTiming(items, slot.item.base).recoverMs;
   const shots: FiredShot[] = [];
 
   /*
    * The cast-time affixes go onto the scope the spell fires with, and the
    * spell's identity rides along so every projectile knows what it carries.
-   * `repeat` and `fork`'s split count are scope fields the cast already reads;
-   * `spread` fires the unit again in other directions; `ward` leaves a rune.
+   * `fork`'s split count is a scope field the cast already reads; `repeat` is
+   * owed as echoes below; `spread` fires the spell again in other directions;
+   * `ward` leaves a rune.
    */
   const extra = castAdditions(slot.affixes);
   const scope = {
     ...shaped(emptyScope(), extra.mods),
     damageMult: levelDamageMult(slot.level ?? 1) * extra.mods.damageMult,
-    // The affix's repeat is not put on the scope: it is owed as echoes below.
-    // A repeat *inside* the item (a doc-006 multicast boost) still recurses.
-    repeat: 0,
     split: extra.split,
     affixes: slot.affixes,
     spellIndex: pressed,
     manaSpent: cost,
+    charge: opts.charge ?? 1,
+    volley: opts.volley ?? 0,
   };
   fireSpread(world, slot, scope, items, shots, extra.spreadDirs);
   for (let i = 1; i <= extra.repeat; i++)
-    world.echoes.push({ slot: pressed, delayMs: REPEAT_GAP_MS * i });
+    /*
+     * An echo is the cast that was made: a charge released at the share it
+     * was held to. But **not the volley** of a `charges` press — the press
+     * spent the bank, and an echo is the spell cast again on an empty one,
+     * which is the spell's own single shot. Echoing the volley made the bank
+     * a multiplier on `repeat`: measured, a finished Mana Darts with
+     * `repeat` went past five times the sword, because a bar that could not
+     * keep up let the bank fill and every echo fired all of it again.
+     */
+    world.echoes.push({ slot: pressed, delayMs: REPEAT_GAP_MS * i, n: i, charge: opts.charge });
   onCast(world, slot);
   return { shots, refused: null };
 }
@@ -417,30 +750,93 @@ export function stepSpells(
  */
 export const REPEAT_GAP_MS = 110;
 
-/** The unit fired on the aim, and in the scatter directions if any. */
+/**
+ * The scope a **free** cast fires with: an echo, a `resonance` answer to a
+ * sword hit, a `retort` fired back at whatever hurt the player.
+ *
+ * It is the pressed cast's scope minus the mana and minus the echoes, and the
+ * reason it is a function rather than three copies is what went wrong without
+ * it. `resonance` and `retort` fired through an **empty** scope, so their
+ * shots carried `spellIndex: -1`, no affixes, no element and no level. A
+ * projectile with no slot behind it cannot be looked up, so the renderer fell
+ * through to the element's generic dart and the impact sound to the element's
+ * generic thud: the same spell, cast by an affix, came out as a pale cyan bolt
+ * with none of its own colour or shape. The spell's identity is not a
+ * decoration on the cast, it *is* the cast, so every path that fires a slot
+ * builds it the same way.
+ *
+ * A free cast is one cast: an affix `repeat` owes echoes to the press that
+ * paid for it, not to every hook that fires after.
+ */
+export function freeCastScope(
+  slot: SpellSlot, spellIndex: number, damageMult = 1, procMult = 1,
+): ReturnType<typeof emptyScope> {
+  const extra = castAdditions(slot.affixes);
+  return {
+    ...shaped(emptyScope(), extra.mods),
+    damageMult: levelDamageMult(slot.level ?? 1) * extra.mods.damageMult * damageMult,
+    procMult,
+    split: extra.split,
+    affixes: slot.affixes,
+    spellIndex,
+    manaSpent: 0,
+  };
+}
+
+/** The spell fired on the aim, and in the scatter directions if any. */
 function fireSpread(
   world: World, slot: SpellSlot, scope: ReturnType<typeof emptyScope>,
   items: ItemRegistry, shots: FiredShot[], spreadDirs: number,
 ): void {
-  if (!slot.unit) return;
   const p = world.player;
-  fireUnit(world, slot.unit, scope, items, shots);
+  fireUnit(world, slot.item, scope, items, shots);
   if (spreadDirs > 0) {
     const ax = p.aim.x - p.x;
     const ay = p.aim.y - p.y;
     // The other directions land at half: `scatter` is cover, not a second main cast.
     const side = { ...scope, damageMult: scope.damageMult * SPREAD_DAMAGE };
+    /*
+     * Each side cast is aimed at a point the spell's own reach out along its
+     * direction (`freeCastReach`): a shot only needs the direction, but a
+     * field, a pull or a burst of ground has to land somewhere, and where a
+     * press would have put it, turned, is where it goes.
+     */
+    const base = items.get(slot.item.base);
+    const reach = base ? freeCastReach(base) : 64;
     for (const d of spreadDirections(ax, ay, spreadDirs))
-      fireUnit(world, slot.unit, side, items, shots, p, { x: p.x + d.x * 64, y: p.y + d.y * 64 });
+      fireUnit(world, slot.item, side, items, shots, p, { x: p.x + d.x * reach, y: p.y + d.y * reach });
   }
 }
 
-/** What a `repeat` echo and a `scatter` side cast deal, of the main cast. */
+/**
+ * What a `repeat` echo deals, of the main cast: four fifths for the first,
+ * and four fifths of the one before for each after it (0.8, 0.64, 0.51).
+ *
+ * It fell flat at 0.8 once, and with the mana surcharge charged the same 15%
+ * a tier as fork and chain, `repeat` became the strongest affix in the pool
+ * (×2.27 of the bare bolt, where fork sat at ×1.00): a third copy was worth
+ * as much as the first. The user kept the cost — "if it costs as much as a
+ * recast the affix is worthless" — and had the copies weaken instead.
+ */
+export function echoDamage(n: number): number {
+  return ECHO_DAMAGE ** Math.max(1, n);
+}
 const ECHO_DAMAGE = 0.8;
+/**
+ * What an echo is worth to an on-hit effect, of the main cast's proc weight.
+ * Half: every copy carried the spell's affixes whole, so `kindle` + `repeat`
+ * filled the burn gauge four times a press and was the top build in the
+ * ladder. An echo still burns; it no longer lights as fast as a press does.
+ */
+export const ECHO_PROC = 0.5;
+/** What a `scatter` side cast deals, of the main cast. */
 const SPREAD_DAMAGE = 0.5;
 
 /** A scope with the `shape` affixes' projectile changes applied. */
 function shaped(scope: ReturnType<typeof emptyScope>, mods: ReturnType<typeof castAdditions>["mods"]): ReturnType<typeof emptyScope> {
+  const elements = noPowers();
+  addPowers(elements, scope.elements);
+  addPowers(elements, mods.elements);
   return {
     ...scope,
     pierceAdd: scope.pierceAdd + mods.pierceAdd,
@@ -448,7 +844,8 @@ function shaped(scope: ReturnType<typeof emptyScope>, mods: ReturnType<typeof ca
     bounce: scope.bounce + mods.bounce,
     radiusMult: scope.radiusMult * mods.radiusMult,
     speedMult: scope.speedMult * mods.speedMult,
-    ...(mods.element ? { element: mods.element, elementPower: mods.elementPower } : {}),
+    // The affixes' elements add to whatever the scope already carried.
+    ...(elements ? { elements, element: dominantElement(elements), elementPower: elements[dominantElement(elements) as "fire"] ?? 0 } : {}),
   };
 }
 
@@ -472,19 +869,11 @@ export function stepEchoes(world: World, items: ItemRegistry, dtMs: number): Fir
   world.echoes = keep;
   for (const e of due) {
     const slot = world.spells[e.slot];
-    if (!slot || !slot.unit || world.player.hearts <= 0) continue;
-    const extra = castAdditions(slot.affixes);
-    const scope = {
-      ...shaped(emptyScope(), extra.mods),
-      // An echo lands at four fifths: `repeat` is more casts, not more copies of the first.
-      damageMult: levelDamageMult(slot.level ?? 1) * extra.mods.damageMult * ECHO_DAMAGE,
-      repeat: 0,
-      split: extra.split,
-      affixes: slot.affixes,
-      spellIndex: e.slot,
-      manaSpent: 0,
-    };
-    fireSpread(world, slot, scope, items, shots, extra.spreadDirs);
+    if (!slot || world.player.hearts <= 0) continue;
+    // Each echo lands weaker than the last, and fills gauges at half: `repeat`
+    // is more casts, not more copies of the first (`echoDamage`, `ECHO_PROC`).
+    const scope = { ...freeCastScope(slot, e.slot, echoDamage(e.n ?? 1), ECHO_PROC), charge: e.charge ?? 1, volley: e.volley ?? 0 };
+    fireSpread(world, slot, scope, items, shots, castAdditions(slot.affixes).spreadDirs);
   }
   return shots;
 }

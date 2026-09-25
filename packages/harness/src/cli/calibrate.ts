@@ -6,21 +6,21 @@
  */
 import {
   MAX_HEARTS, RngSource, contextFor, createWorld, measurePressure, plainInstance,
-  staffFor, step, worldCleared, STEP_MS, generateRoom, toRoomPlan, PLAYABLE_ARCHETYPES,
+  step, worldCleared, STEP_MS, generateRoom, toRoomPlan, PLAYABLE_ARCHETYPES,
 } from "@jr/core";
 import type { EncounterPlan, EnemyId, RoomPlan } from "@jr/core";
 import { referenceInput } from "../play/player-model.ts";
 
 const TIMEOUT_MS = 90_000;
 const REPS = 3;
-const staff = staffFor({ slots: "many", mana: "high", tempo: "steady", special: "none" });
+const staff = { slots: 6, mana_max: 120 };
 const slots = [plainInstance("magic_bolt"), plainInstance("stone_shard"), null, null, null, null];
 
 function roomFor(i: number): RoomPlan {
   const arch = PLAYABLE_ARCHETYPES[i % PLAYABLE_ARCHETYPES.length]!;
   const src = new RngSource(`cal-room-${i}`);
   const g = generateRoom(
-    { space: arch.id, symmetry: "mirrored", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
+    { space: arch.id, symmetry: "mirrored", size: "standard", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
     arch.doors[0]!, "combat", src.stream("r"),
   );
   return toRoomPlan(g, { id: `c${i}`, seed_key: `c${i}`, reward_kind: "item", params_source: "rule" });
@@ -52,7 +52,7 @@ for (const [mixName, mix] of Object.entries(MIXES)) {
       }];
       const pressure = measurePressure(waves, contextFor(room, "mixed"));
       const plan: EncounterPlan = {
-        profile: { composition: "mixed", density: "normal", wave_structure: "single", anchor: "none", entry: "far_front" },
+        profile: { composition: "mixed", density: "normal", wave_structure: "relentless", anchor: "none", entry: "far_front" },
         waves, measured_pressure: pressure, band: [0, 99],
         elite_affixes: [], source: "rule",
       };

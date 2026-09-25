@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { leafKinds } from "./patterns.ts";
 import type { Cell, RoomPlan, Tension, Wave } from "../types.ts";
 import { DASH_SPEED, PLAYER_SPEED } from "../sim/types.ts";
-import { ENEMIES, ENEMY_IDS, MAX_CONCURRENT_ENEMIES } from "./enemies.ts";
+import { BASE_ENEMY_IDS, ENEMIES, ENEMY_IDS, MAX_CONCURRENT_ENEMIES, baseArchetype } from "./enemies.ts";
 import {
   ASSUMED_TTK_MS, CONCURRENCY_SCALE, PRESSURE_BANDS, bandForRoom, bandForTier, concurrencyFactor,
   contextFor, coverFactor, coverOfRoom, inBand, measurePressure, measureRoster, opennessFactor,
@@ -30,9 +30,9 @@ describe("enemy table (doc 005)", () => {
     // is the hardest attack for a melee player to answer, and at the roster
     // floor it was packing the lowest-pressure rooms. See `RUSHER`.
     expect(ENEMIES.rusher).toMatchObject({ behaviour: "chase", pattern: null, threat_weight: 1.25 });
-    expect(ENEMIES.shooter).toMatchObject({ behaviour: "keep_distance", threat_weight: 1.5 });
+    expect(ENEMIES.shooter).toMatchObject({ behaviour: "keep_distance", threat_weight: 2.2 });
     expect(ENEMIES.turret).toMatchObject({ behaviour: "stationary", threat_weight: 2.0 });
-    expect(ENEMIES.orbiter).toMatchObject({ behaviour: "orbit", threat_weight: 2.0 });
+    expect(ENEMIES.orbiter).toMatchObject({ behaviour: "orbit", threat_weight: 2.6 });
     // Weights are calibration values, not doc constants: the play harness
     // raised tank and summoner because durability is exposure time.
     expect(ENEMIES.tank).toMatchObject({ behaviour: "chase", threat_weight: 5.0 });
@@ -126,11 +126,22 @@ describe("enemy table (doc 005)", () => {
      * bullets per second at where they stand, it is bullets in flight over the
      * whole trip.
      */
-    const emitters = ENEMY_IDS.filter((id) => ENEMIES[id].pattern !== null);
+    /*
+     * Counted over **base** archetypes (doc 019). A subspecies is its base
+     * with one verb changed and never a new source of fire: a pinner puts two
+     * shots down the lane the shooter put one down, and a room holds a shooter
+     * or a pinner, not both. What this test guards is how many *kinds* of
+     * bullet stream a room can be asked to cross, which is a count of bases.
+     */
+    const emitters = BASE_ENEMY_IDS.filter((id) => ENEMIES[id].pattern !== null);
     // Three, not two, since the sentinel: a third emitter was admitted on
     // purpose because its shot is one slow lane at a time, and a lane is the
     // one bullet shape a melee player can arrive through.
     expect(emitters.length).toBeLessThanOrEqual(3);
+    // And every subspecies of one is still that one emitter, not a fourth.
+    for (const id of ENEMY_IDS) {
+      if (ENEMIES[id].pattern !== null) expect(emitters).toContain(baseArchetype(id));
+    }
   });
 
   it("gives every archetype stats, tags and a description", () => {
@@ -138,7 +149,14 @@ describe("enemy table (doc 005)", () => {
       const e = ENEMIES[id];
       expect(e.hp).toBeGreaterThan(0);
       expect(e.radius).toBeGreaterThan(0);
-      expect(e.melee === null || e.behaviour === "chase").toBe(true);
+      /*
+       * A blade belongs to a body that closes — or, for the warden alone, to
+       * one that holds a range and shoves whatever walks inside it. A gunner
+       * whose answer to being stood on is nothing at all is a free kill, and
+       * the shove is contact-range only, so it never makes an archer into a
+       * chaser (doc 005, the warden).
+       */
+      expect(e.melee === null || e.behaviour === "chase" || baseArchetype(id) === "warden").toBe(true);
       expect(e.speed).toBeGreaterThanOrEqual(0);
       expect(e.tags.length).toBeGreaterThan(0);
       expect(e.description.length).toBeGreaterThan(10);
@@ -195,7 +213,7 @@ describe("bands", () => {
   it("labels profile options for the tension they push toward", () => {
     expect(optionSuitability("density", "dense", "release")).toBe("harder_than_tension");
     expect(optionSuitability("density", "sparse", "release")).toBe("matches_tension");
-    expect(optionSuitability("wave_structure", "trickle", "peak")).toBe("softer_than_tension");
+    expect(optionSuitability("wave_structure", "breathe", "peak")).toBe("softer_than_tension");
     expect(optionSuitability("anchor", "summoner", "peak")).toBe("matches_tension");
   });
 });

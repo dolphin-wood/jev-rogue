@@ -220,9 +220,34 @@ export function peakConcurrency(waves: readonly Wave[]): number {
   return peak;
 }
 
+/**
+ * How much a roster's own **length** adds, on top of the concurrency-weighted
+ * sum, per body past `EXPOSURE_FREE`.
+ *
+ * Concurrency answers "how many at once", which is what a fight's intensity
+ * is — and a trickle is deliberately cheap in it, because three bodies at a
+ * time is three bodies at a time however many times it happens. But hearts
+ * are not spent per body, they are spent per **second of exposure**, and a
+ * trickle spends the player's health by lasting.
+ *
+ * Measured, that gap was the single worst thing in the calibration: a
+ * thirty-four body dense trickle measured about 6 — comfortably inside peak —
+ * and cost the reference player four and a half hearts over seventy seconds,
+ * where a twelve-body single wave at the same measured pressure costs one and
+ * takes twenty. So a room could be sized correctly and still be three times
+ * the fight the band describes.
+ *
+ * A small per-body term is enough to price it, because the concurrency factor
+ * has already taken most of the sum out: it leaves a short roster untouched
+ * and makes a long one pay for the minutes it adds.
+ */
+const EXPOSURE_FREE = 10;
+const EXPOSURE_PER_BODY = 0.15;
+
 /** Doc 005 step 5. */
 export function measurePressure(waves: readonly Wave[], ctx: PressureContext): number {
   let total = 0;
+  let bodies = 0;
   for (let i = 0; i < waves.length; i++) {
     const cf = concurrencyFactor(waves, i);
     for (const spawn of waves[i]!.spawns) {
@@ -232,9 +257,10 @@ export function measurePressure(waves: readonly Wave[], ctx: PressureContext): n
         opennessFactor(ctx.open_ratio, spawn.archetype) *
         coverFactor(ctx.cover, ctx.composition, spawn.archetype);
       total += per * spawn.count;
+      bodies += spawn.count;
     }
   }
-  return round3(total);
+  return round3(total + Math.max(0, bodies - EXPOSURE_FREE) * EXPOSURE_PER_BODY);
 }
 
 /** Same sum against a bare roster placed in one wave; used while sizing. */
@@ -272,7 +298,7 @@ export const OPTION_TIERS = {
     mixed: "peak",
   },
   density: { sparse: "release", normal: "build", dense: "peak" },
-  wave_structure: { trickle: "release", two_waves: "build", single: "peak" },
+  wave_structure: { breathe: "release", steady: "build", relentless: "peak" },
   anchor: { none: "release", tank: "build", summoner: "peak" },
   entry: { far_front: "release", turrets_center: "build", flanks: "build", surround: "peak" },
 } as const satisfies Record<string, Record<string, PressureTier>>;

@@ -55,7 +55,7 @@
  * rooms are gone and there is no map.
  */
 import { TILE_PX, Tile, GRID_W, GRID_H } from "../types.ts";
-import type { RoomType } from "../types.ts";
+import type { Extent, RoomType } from "../types.ts";
 import type { Rng } from "../rng.ts";
 
 /**
@@ -94,8 +94,18 @@ export interface OfferCard {
    * pressure still wants first.
    */
   readonly stats: string;
-  /** The same line in parts, each with the kind of thing it says, for colouring. */
-  readonly statParts?: readonly { readonly text: string; readonly tone: string }[];
+  /**
+   * The same line in parts, each with the kind of thing it says, for
+   * colouring — and with the identifier a renderer says it in another
+   * language through (`run/offer.ts`, `StatPart`). `text` is the English and
+   * stays authoritative; a renderer with no entry for `key` shows it.
+   */
+  readonly statParts?: readonly {
+    readonly text: string;
+    readonly tone: string;
+    readonly key?: string;
+    readonly args?: Readonly<Record<string, string | number>>;
+  }[];
   /** Doc 010's rules text. The whole reason the offer is a screen. */
   readonly description: string;
   /**
@@ -177,7 +187,19 @@ export interface Portal {
   readonly family?: string;
   readonly grade?: number;
   /** A vendor's room rather than a fight; see `DoorOffer.npc`. */
-  readonly npc?: "merchant" | "smith";
+  readonly npc?: "merchant" | "smith" | "fountain";
+  /** The vendors' stop's one exit; see `bossExit`. */
+  readonly boss?: boolean;
+  /**
+   * **A door that promises no reward, only the room ahead** (`fixedExit`).
+   *
+   * The run narrows twice — the last fight opens onto the vendors' stop, the
+   * stop opens onto the boss — and both of those doors used to be dressed as
+   * reward portals, because every portal was. A badge reading "gold" over a
+   * door that pays nothing is a lie the player catches within one room, so
+   * these are drawn as the room ahead instead.
+   */
+  readonly onward?: boolean;
   x: number;
   y: number;
   /** Shut until the offer is answered. A shut portal is not drawn. */
@@ -210,11 +232,181 @@ export const PORTAL_RISE_MS = 420;
  * laid out around its centre — exactly where this looks first.
  */
 export function placeReward(
-  grid: Uint8Array, kind: RewardCardKind, avoid: Set<number> = new Set(),
+  grid: Uint8Array, ext: Extent, kind: RewardCardKind, avoid: Set<number> = new Set(),
 ): RewardDrop {
-  const [gx, gy] = nearestOpen(grid, Math.round(GRID_W / 2), Math.round(GRID_H / 2), avoid);
+  const [gx, gy] = nearestOpen(grid, (ext.w - 1) / 2, (ext.h - 1) / 2, avoid);
   return { kind, x: (gx + 0.5) * TILE_PX, y: (gy + 0.5) * TILE_PX, riseMs: 0 };
 }
+
+/**
+ * The reward, **beside the player** when the room is cleared: the open cell
+ * reachable from where they stand that is nearest to `REWARD_NEAR` away.
+ * With the camera near, the room is larger than the screen, and a reward in
+ * the middle of it was often off the view and had to be looked for.
+ */
+export function placeRewardNear(
+  grid: Uint8Array, kind: RewardCardKind, near: { x: number; y: number }, avoid: Set<number> = new Set(),
+): RewardDrop {
+  const cell = nearCell(grid, near, REWARD_NEAR, [], avoid) ?? nearestOpen(grid, Math.floor(near.x / TILE_PX), Math.floor(near.y / TILE_PX), avoid);
+  return { kind, x: (cell[0] + 0.5) * TILE_PX, y: (cell[1] + 0.5) * TILE_PX, riseMs: 0 };
+}
+
+/** How far from the player the reward rises. */
+const REWARD_NEAR = TILE_PX * 2.5;
+
+/** Cells the player can walk to from where they stand. */
+function reachableFrom(grid: Uint8Array, from: { x: number; y: number }): Set<number> {
+  const start = Math.floor(from.y / TILE_PX) * GRID_W + Math.floor(from.x / TILE_PX);
+  const seen = new Set<number>([start]);
+  const queue = [start];
+  for (let i = 0; i < queue.length; i++) {
+    const k = queue[i]!;
+    const x = k % GRID_W, y = (k / GRID_W) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= GRID_W || ny >= GRID_H) continue;
+      const n = ny * GRID_W + nx;
+      if (seen.has(n) || grid[n] !== Tile.Floor) continue;
+      seen.add(n);
+      queue.push(n);
+    }
+  }
+  return seen;
+}
+
+/**
+ * An open cell, with floor all round, reachable from `near`, whose distance
+ * from it is as close to `want` as can be (or inside `want` when it is a
+ * range, nearest its middle), at least `apart` from each point in `others`.
+ */
+function nearCell(
+  grid: Uint8Array, near: { x: number; y: number }, want: number | readonly [number, number],
+  others: readonly { x: number; y: number; apart: number }[], avoid: Set<number>,
+  /** When given, the cell nearest this point instead. */
+  toward?: { x: number; y: number },
+): [number, number] | null {
+  const reach = reachableFrom(grid, near);
+  const [lo, hi] = typeof want === "number" ? [want, want] : want;
+  const mid = (lo + hi) / 2;
+  let best: [number, number] | null = null;
+  let bestCost = Infinity;
+  for (const k of reach) {
+    const gx = k % GRID_W, gy = (k / GRID_W) | 0;
+    if (avoid.has(k) || !open(grid, gx, gy)) continue;
+    if (!open(grid, gx - 1, gy) || !open(grid, gx + 1, gy) || !open(grid, gx, gy - 1) || !open(grid, gx, gy + 1)) continue;
+    const cx = (gx + 0.5) * TILE_PX, cy = (gy + 0.5) * TILE_PX;
+    if (others.some((o) => Math.hypot(o.x - cx, o.y - cy) < o.apart)) continue;
+    const d = Math.hypot(cx - near.x, cy - near.y);
+    const cost = toward ? Math.hypot(cx - toward.x, cy - toward.y)
+      : d < lo ? (lo - d) * 3 : d > hi ? d - hi : Math.abs(d - mid) * 0.1;
+    if (cost < bestCost) { bestCost = cost; best = [gx, gy]; }
+  }
+  return best;
+}
+
+/**
+ * The portals, made **when the way out opens, in front of the player**: a row
+ * across their facing three tiles ahead, each on the reachable open cell
+ * nearest its place, clear of the others and of the reward. With the room
+ * larger than the view, portals scattered across it at its start — on the
+ * rule that the goal belongs across the threat — were ones the player had to
+ * go and look for once the fight was over; and made then, there is nothing
+ * to hide during it.
+ */
+export function portalsBefore(
+  grid: Uint8Array, ext: Extent, specs: readonly PortalSpec[], player: { x: number; y: number; facing: number },
+  keepClear: readonly { x: number; y: number }[] = [], avoid: Set<number> = new Set(),
+  viewHalf?: { x: number; y: number },
+): Portal[] {
+  // A straight row in view, when the floor there has one.
+  const row = viewHalf ? portalRow(grid, ext, specs.length, player, keepClear, avoid, viewHalf) : null;
+  if (row) return specs.map((spec, i) => makePortal(spec, (row[i]![0] + 0.5) * TILE_PX, (row[i]![1] + 0.5) * TILE_PX));
+  const out: Portal[] = [];
+  const taken: { x: number; y: number; apart: number }[] = keepClear.map((c) => ({ ...c, apart: TILE_PX * 2 }));
+  const ax = Math.cos(player.facing), ay = Math.sin(player.facing);
+  const wants = specs.map((_, i) => {
+    const across = (i - (specs.length - 1) / 2) * PORTAL_ROW_GAP;
+    return { x: player.x + ax * PORTAL_AHEAD - ay * across, y: player.y + ay * PORTAL_AHEAD + ax * across };
+  });
+  // The row slides as a whole to fit inside the room, rather than one end of
+  // it being pushed back onto the player by a wall.
+  const fit = (vals: number[], lo: number, hi: number) => {
+    const a = Math.min(...vals), b = Math.max(...vals);
+    return b - a > hi - lo ? (lo + hi) / 2 - (a + b) / 2 : a < lo ? lo - a : b > hi ? hi - b : 0;
+  };
+  const sx = fit(wants.map((w) => w.x), TILE_PX * 2.5, (ext.w - 2.5) * TILE_PX);
+  const sy = fit(wants.map((w) => w.y), TILE_PX * 2.5, (ext.h - 2.5) * TILE_PX);
+  specs.forEach((spec, i) => {
+    const want = { x: wants[i]!.x + sx, y: wants[i]!.y + sy };
+    const used = new Set([...avoid, ...out.map((p) => Math.floor(p.y / TILE_PX) * GRID_W + Math.floor(p.x / TILE_PX))]);
+    const cell = nearCell(grid, player, [0, Infinity], taken, avoid, want)
+      ?? nearestOpen(grid, Math.floor(want.x / TILE_PX), Math.floor(want.y / TILE_PX), used);
+    const x = (cell[0] + 0.5) * TILE_PX, y = (cell[1] + 0.5) * TILE_PX;
+    taken.push({ x, y, apart: PORTAL_MIN_SEPARATION });
+    out.push(makePortal(spec, x, y));
+  });
+  return out;
+}
+
+/**
+ * The portals' cells as **one straight row in view**: across the room's grid,
+ * level or upright, `PORTAL_ROW_CELLS` apart, every cell reachable open
+ * floor with open floor round it, out of the hazards and clear of what must
+ * be kept clear, and all of it inside the view the camera frames the player
+ * in, a tile and a half in from its edges. The row nearest the spot three
+ * tiles ahead of the player wins, one across their facing before one along
+ * it. Null when the view holds no such row.
+ */
+function portalRow(
+  grid: Uint8Array, ext: Extent, n: number, player: { x: number; y: number; facing: number },
+  keepClear: readonly { x: number; y: number }[], avoid: Set<number>, half: { x: number; y: number },
+): [number, number][] | null {
+  if (n === 0) return [];
+  const roomW = ext.w * TILE_PX, roomH = ext.h * TILE_PX;
+  const cx = half.x * 2 >= roomW ? roomW / 2 : Math.max(half.x, Math.min(roomW - half.x, player.x));
+  const cy = half.y * 2 >= roomH ? roomH / 2 : Math.max(half.y, Math.min(roomH - half.y, player.y));
+  const inset = TILE_PX * 1.5;
+  const inView = (gx: number, gy: number) => {
+    const x = (gx + 0.5) * TILE_PX, y = (gy + 0.5) * TILE_PX;
+    return Math.abs(x - cx) <= half.x - inset && Math.abs(y - cy) <= half.y - inset;
+  };
+  const reach = reachableFrom(grid, player);
+  const good = (gx: number, gy: number) => {
+    const k = gy * GRID_W + gx;
+    if (!reach.has(k) || avoid.has(k) || !inView(gx, gy)) return false;
+    if (!open(grid, gx, gy) || !open(grid, gx - 1, gy) || !open(grid, gx + 1, gy) || !open(grid, gx, gy - 1) || !open(grid, gx, gy + 1)) return false;
+    const x = (gx + 0.5) * TILE_PX, y = (gy + 0.5) * TILE_PX;
+    if (Math.hypot(x - player.x, y - player.y) < TILE_PX * 1.5) return false;
+    return !keepClear.some((c) => Math.hypot(c.x - x, c.y - y) < TILE_PX * 2);
+  };
+  const ax = Math.cos(player.facing), ay = Math.sin(player.facing);
+  const want = { x: player.x + ax * PORTAL_AHEAD, y: player.y + ay * PORTAL_AHEAD };
+  // Across the facing: a level row when facing up or down, upright when facing sideways.
+  const across: "level" | "upright" = Math.abs(ay) >= Math.abs(ax) ? "level" : "upright";
+  let best: [number, number][] | null = null;
+  let bestCost = Infinity;
+  for (const dir of ["level", "upright"] as const) {
+    const [dx, dy] = dir === "level" ? [PORTAL_ROW_CELLS, 0] : [0, PORTAL_ROW_CELLS];
+    for (let gy = 1; gy < ext.h - 1; gy++)
+      for (let gx = 1; gx < ext.w - 1; gx++) {
+        const cells: [number, number][] = [];
+        for (let i = 0; i < n; i++) cells.push([gx + dx * i, gy + dy * i]);
+        if (!cells.every(([x, y]) => good(x, y))) continue;
+        const mx = cells.reduce((s, c) => s + c[0] + 0.5, 0) / n * TILE_PX;
+        const my = cells.reduce((s, c) => s + c[1] + 0.5, 0) / n * TILE_PX;
+        const cost = Math.hypot(mx - want.x, my - want.y) + (dir === across ? 0 : TILE_PX * 2);
+        if (cost < bestCost) { bestCost = cost; best = cells; }
+      }
+  }
+  return best;
+}
+
+/** Cells between neighbouring portals in a row: clear of each other's entering reach. */
+const PORTAL_ROW_CELLS = 3;
+
+/** How far ahead of the player the row of portals stands, and how far apart they are in it. */
+const PORTAL_AHEAD = TILE_PX * 3;
+const PORTAL_ROW_GAP = TILE_PX * 2.4;
 
 export function stepReward(drop: RewardDrop | null, dtMs: number): void {
   if (drop) drop.riseMs += dtMs;
@@ -238,27 +430,6 @@ function open(grid: Uint8Array, gx: number, gy: number): boolean {
     && grid[gy * GRID_W + gx] === Tile.Floor;
 }
 
-/**
- * Scatters one portal per offered room type across the open floor.
- *
- * Scattered rather than in a row, which is the second time this has changed
- * and the reasoning is worth keeping. A row is the better shape for comparing
- * three options *when comparing them is the work* — and it is not, any more:
- * the offer screen carries the build decision, and a portal's badge says only
- * which kind of room is behind it. Three badges do not need to be side by side
- * to be read, and putting them on a row meant the room's geometry had to
- * guarantee a clear span, which turned a two-line placement into a constraint
- * on the level generator.
- *
- * Scattering also buys back what the row gave up: the level-design rule that
- * the goal belongs on the far side of the threat, and a reason for the player
- * to cross the room they just fought in.
- *
- * Placement is maximum spread subject to hard minimums — reachable floor with
- * floor all round it, clear of the entry, and far enough from each other that
- * two interact circles cannot overlap, because a press must never be
- * ambiguous.
- */
 export interface PortalSpec {
   readonly reward: RewardCardKind;
   readonly elite: boolean;
@@ -268,93 +439,32 @@ export interface PortalSpec {
   readonly family?: string;
   /** The reward's grade, 1 to 3: a spell's level, an affix's tier, a stat or gold multiple. */
   readonly grade?: number;
-  readonly npc?: "merchant" | "smith";
+  readonly npc?: "merchant" | "smith" | "fountain";
+  /**
+   * The boss door at the vendors' stop. It promises no currency — what is
+   * behind it is the end of the run — so the badge says the boss rather than
+   * naming a reward the room will never hand out (`bossExit`).
+   */
+  readonly boss?: boolean;
+  /** No reward behind it, only the room ahead; see `PortalSpec.onward`. */
+  readonly onward?: boolean;
 }
 
-export function placePortals(
-  grid: Uint8Array,
-  specs: readonly PortalSpec[],
-  entry: { x: number; y: number },
-  spawns: readonly { x: number; y: number }[],
-  rng: Rng,
-): Portal[] {
-  const candidates: [number, number][] = [];
-  for (let gy = 1; gy < GRID_H - 1; gy++)
-    for (let gx = 1; gx < GRID_W - 1; gx++) {
-      if (!open(grid, gx, gy)) continue;
-      // Floor all round, so a portal is never the plug in a gap the generator
-      // sized deliberately and is always approachable from a turn.
-      if (!open(grid, gx - 1, gy) || !open(grid, gx + 1, gy)) continue;
-      if (!open(grid, gx, gy - 1) || !open(grid, gx, gy + 1)) continue;
-      candidates.push([gx, gy]);
-    }
-
-  const placed: Portal[] = [];
-  const keepAway = [
-    // Not on the doorstep: a badge over the player's head on arrival, and an
-    // exit they reach before the room has happened.
-    { x: entry.x, y: entry.y, min: TILE_PX * 4 },
-    ...spawns.map((s) => ({ x: s.x, y: s.y, min: TILE_PX * 1.5 })),
-  ];
-
-  for (const spec of specs) {
-    let best: [number, number] | null = null;
-    let bestScore = -1;
-    for (const [gx, gy] of candidates) {
-      const cx = (gx + 0.5) * TILE_PX;
-      const cy = (gy + 0.5) * TILE_PX;
-      let worst = Infinity;
-      let legal = true;
-      for (const a of keepAway) {
-        const d = Math.hypot(a.x - cx, a.y - cy);
-        if (d < a.min) { legal = false; break; }
-        worst = Math.min(worst, d - a.min);
-      }
-      if (!legal) continue;
-      for (const p of placed) {
-        const d = Math.hypot(p.x - cx, p.y - cy);
-        if (d < PORTAL_MIN_SEPARATION) { legal = false; break; }
-        worst = Math.min(worst, d - PORTAL_MIN_SEPARATION);
-      }
-      if (!legal) continue;
-      // A stable tiebreak, so two equally good cells do not depend on scan
-      // order — which would make the layout shift under an unrelated edit.
-      const score = worst + rng.next() * TILE_PX * 0.5;
-      if (score > bestScore) { bestScore = score; best = [gx, gy]; }
-    }
-
-    if (!best) {
-      /*
-       * Nothing legal left. Falls back to the nearest open cell to the corner
-       * furthest from the entry, which is at least not on top of anything.
-       *
-       * This matters more than it looks: a room that produced fewer portals
-       * than types offered would silently drop a door the Director chose, and
-       * a room that produced none would end the run.
-       */
-      const fx = entry.x < (GRID_W * TILE_PX) / 2 ? GRID_W - 2 : 1;
-      const fy = entry.y < (GRID_H * TILE_PX) / 2 ? GRID_H - 2 : 1;
-      const taken = new Set(placed.map(
-        (p) => Math.floor(p.y / TILE_PX) * GRID_W + Math.floor(p.x / TILE_PX),
-      ));
-      best = nearestOpen(grid, fx, fy, taken);
-    }
-
-    placed.push({
-      reward: spec.reward,
-      elite: spec.elite,
-      type: spec.type,
-      ...(spec.school ? { school: spec.school } : {}),
-      ...(spec.family ? { family: spec.family } : {}),
-      grade: spec.grade ?? 1,
-      ...(spec.npc ? { npc: spec.npc } : {}),
-      x: (best[0] + 0.5) * TILE_PX,
-      y: (best[1] + 0.5) * TILE_PX,
-      open: false,
-      riseMs: 0,
-    });
-  }
-  return placed;
+function makePortal(spec: PortalSpec, x: number, y: number): Portal {
+  return {
+    reward: spec.reward,
+    elite: spec.elite,
+    type: spec.type,
+    ...(spec.boss ? { boss: true } : {}),
+    ...(spec.onward ? { onward: true } : {}),
+    ...(spec.school ? { school: spec.school } : {}),
+    ...(spec.family ? { family: spec.family } : {}),
+    grade: spec.grade ?? 1,
+    ...(spec.npc ? { npc: spec.npc } : {}),
+    x, y,
+    open: false,
+    riseMs: 0,
+  };
 }
 
 /**

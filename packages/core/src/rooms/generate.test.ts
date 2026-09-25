@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { DOOR_SIDES, GRID_H, GRID_W, Tile } from "../types.ts";
-import type { DoorSide, Mood, RoomParams, SpaceArchetypeId, Symmetry } from "../types.ts";
+import { DOOR_SIDES, GRID_H, GRID_W, ROOM_EXTENT, ROOM_SIZES, Tile } from "../types.ts";
+import type { DoorSide, Mood, RoomParams, RoomSize, SpaceArchetypeId, Symmetry } from "../types.ts";
 import { RngSource } from "../rng.ts";
 import { BOSS_ARCHETYPES, PLAYABLE_ARCHETYPES, archetype } from "./archetypes.ts";
-import { ENTRY_CELL, idx, maskFor } from "./masks.ts";
+import { entryCell, idx } from "./masks.ts";
 import { bandsFor, inMetricBand, measureRoom, measurementProblems } from "./measure.ts";
 import { validateRoom } from "./validate.ts";
 import { generateRoom, relaxArchetype, renderGrid, resolveEntry, toRoomPlan } from "./generate.ts";
@@ -13,26 +13,35 @@ const MOOD: Mood = { temperature: "cold", brightness: "dim", particle_intensity:
 const SYMMETRIES: readonly Symmetry[] = ["mirrored", "asymmetric"];
 const SEEDS = 20;
 
-function params(space: SpaceArchetypeId, symmetry: Symmetry): RoomParams {
-  return { space, symmetry, mood: MOOD };
+function params(space: SpaceArchetypeId, symmetry: Symmetry, size: RoomSize): RoomParams {
+  return { space, symmetry, size, mood: MOOD };
 }
+
+/** Every size in turn across the seeds, so each sweep covers all three. */
+const sizeFor = (seed: number): RoomSize => ROOM_SIZES[seed % ROOM_SIZES.length]!;
 
 function build(space: SpaceArchetypeId, symmetry: Symmetry, entry: DoorSide, seed: number): GeneratedRoom {
   const rng = new RngSource("room-sweep").stream("decision", space, symmetry, entry, seed);
-  return generateRoom(params(space, symmetry), entry, "combat", rng);
+  return generateRoom(params(space, symmetry, sizeFor(seed)), entry, "combat", rng);
 }
 
 function checkRoom(room: GeneratedRoom, label: string): void {
   const a = room.effective;
   const mask = room.mask;
+  const ext = room.extent;
   const v = validateRoom({
     grid: room.grid, mask, archetype: a, entry: room.entry,
-    zones: a.zoneSlots, spawnGroups: a.spawnGroups,
+    zones: a.zoneSlots, spawnGroups: a.spawnGroups, ext,
   });
   expect({ label, problems: v.problems }).toEqual({ label, problems: [] });
-  const m = measureRoom(room.grid, mask, ENTRY_CELL[room.entry]);
-  expect({ label, problems: measurementProblems(m, a, room.params.symmetry) })
+  const m = measureRoom(room.grid, mask, entryCell(room.entry, ext), ext);
+  expect({ label, problems: measurementProblems(m, a, room.params.symmetry, ext) })
     .toEqual({ label, problems: [] });
+  // The room is its extent; the grid past it is wall.
+  expect(ext).toEqual(ROOM_EXTENT[room.params.size]);
+  for (let y = 0; y < GRID_H; y++)
+    for (let x = 0; x < GRID_W; x++)
+      if (x >= ext.w || y >= ext.h) expect(room.grid[idx(x, y)], `${label} ${x},${y}`).toBe(Tile.Wall);
 }
 
 describe("generateRoom", () => {
@@ -93,7 +102,7 @@ describe("generateRoom", () => {
               if (tile !== Tile.Floor) {
                 throw new Error(
                   `${a.id}/${symmetry}/${entry}/${seed}: ${id} cell ${x},${y} is tile ${tile}\n` +
-                  renderGrid(room.grid),
+                  renderGrid(room.grid, room.extent),
                 );
               }
             }
@@ -121,7 +130,10 @@ describe("generateRoom", () => {
     for (const a of PLAYABLE_ARCHETYPES) {
       if (a.cover === "none" && a.openness === "open") continue; // near-empty by design
       const seen = new Set<string>();
-      for (let seed = 0; seed < SEEDS; seed++) seen.add(renderGrid(build(a.id, "asymmetric", "N", seed).grid));
+      for (let seed = 0; seed < SEEDS; seed++) {
+        const room = build(a.id, "asymmetric", "N", seed * ROOM_SIZES.length);
+        seen.add(renderGrid(room.grid, room.extent));
+      }
       expect({ id: a.id, distinct: seen.size > 1 }).toEqual({ id: a.id, distinct: true });
     }
   });
@@ -140,11 +152,11 @@ describe("generateRoom", () => {
       for (let seed = 0; seed < SEEDS; seed++) {
         const entry = DOOR_SIDES[seed % DOOR_SIDES.length]!;
         const rng = new RngSource("boss").stream("decision", a.id, entry, seed);
-        const room = generateRoom(params(a.id, "mirrored"), entry, "boss", rng);
+        const room = generateRoom(params(a.id, "mirrored", sizeFor(seed)), entry, "boss", rng);
         checkRoom(room, `${a.id}/${entry}/${seed}`);
         expect(room.zones).toEqual([]);
         expect(room.spawn_groups.map((g) => g.id)).toEqual(["surround"]);
-        expect(inMetricBand(room.measured.pillar_count, bandsFor(a).pillars)).toBe(true);
+        expect(inMetricBand(room.measured.pillar_count, bandsFor(a, room.extent).pillars)).toBe(true);
       }
     }
   });

@@ -32,17 +32,18 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { PNG } from "pngjs";
-import { ENEMIES } from "@jr/core";
+import { ENEMIES, fillSubspecies } from "@jr/core";
 import type { EnemyId } from "@jr/core";
 import { enemyFrame } from "../../../game/src/scenes/enemy-frames.ts";
 import type { FramedEnemy } from "../../../game/src/scenes/enemy-frames.ts";
 
 const SHEET_PNG = new URL("../../../../assets/sprites.png", import.meta.url);
 const SHEET_JSON = new URL("../../../../assets/sprites.json", import.meta.url);
-const OUT = new URL("../../../../docs/facing-check.png", import.meta.url);
+// A review image, not a delivery: written beside the other review boards, which git ignores.
+const OUT = new URL("../../../../art-review/facing-check.png", import.meta.url);
 
 /** Frame base per archetype, matching the play scene's table. */
-const ENEMY_FRAME: Record<EnemyId, string> = {
+const ENEMY_FRAME: Record<EnemyId, string> = fillSubspecies<string>({
   rusher: "enemy_rusher", shooter: "enemy_shooter", turret: "enemy_turret",
   orbiter: "enemy_orbiter", tank: "enemy_tank", summoner: "enemy_summoner",
   lancer: "enemy_lancer", sentinel: "enemy_sentinel",
@@ -50,7 +51,7 @@ const ENEMY_FRAME: Record<EnemyId, string> = {
   snarecaster: "enemy_snarecaster", delver: "enemy_delver", cinderling: "enemy_cinderling", sower: "enemy_sower",
   // Undirected and three-phase, like the turret is undirected.
   boss: "boss_p1",
-};
+});
 
 const FACINGS: readonly { name: string; deg: number; dx: number; dy: number }[] = [
   { name: "east", deg: 0, dx: 1, dy: 0 },

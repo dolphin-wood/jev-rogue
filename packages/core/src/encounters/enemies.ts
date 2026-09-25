@@ -5,8 +5,8 @@
  * weight is the only field the pressure formula reads; it is an estimate until
  * the harness (011) calibrates it against hearts lost.
  */
-import type { EnemyArchetype, EnemyId, PatternNode, AssemblableId, MeleeKind } from "../types.ts";
-import { burst, fan, rest, ring, sequence, single, spiral } from "./patterns.ts";
+import type { EnemyArchetype, EnemyId, PatternNode, AssemblableId, BaseEnemyId, EliteAffix, MeleeKind } from "../types.ts";
+import { burst, fan, parallel, rest, ring, sequence, single, spiral } from "./patterns.ts";
 
 /* ------------------------------- caps (005) ------------------------------- */
 
@@ -43,6 +43,35 @@ export interface SummonRule {
 }
 
 export interface EnemyDef extends EnemyArchetype {
+  /**
+   * The archetype this is a **subspecies** of (doc 019), or absent for a base
+   * body. A subspecies is a known body with one verb changed, so it keeps its
+   * base's behaviour, health, reach and aggro range; `base` is what lets the
+   * roster cap, the mix ratios and the renderer treat the pair as one kind.
+   */
+  readonly base?: EnemyId;
+  /**
+   * The rig part its **mark** hangs from (doc 019): a horn, a plume, a lens.
+   * A subspecies is drawn as its base's frames plus this one small decal at
+   * the model's `mark` anchor, and its own palette, which is 39 atlas frames
+   * against the 58% a model apiece measured at.
+   *
+   * The drawing side of this lives in the base's rig (`rig.marks.mark`), which
+   * also carries the offset; this is the same fact stated where the roster is
+   * read, and `marks.test.ts` holds the two to each other so the pair cannot
+   * drift into naming different parts.
+   */
+  readonly mark_anchor?: string;
+  /**
+   * Affixes that may never ride on this body (doc 019).
+   *
+   * One rule, stated per body: **an affix may never touch the thing the
+   * subspecies changed.** A second death burst on a lancer is two rings the
+   * player cannot tell apart; `burning` on a beacon is a second fire nobody
+   * can see on top of the first; `shielded` on an emberling nullifies the ice
+   * that is its stated answer, which doc 001 forbids outright.
+   */
+  readonly affix_excluded?: readonly EliteAffix[];
   readonly summon: SummonRule | null;
   /**
    * How close the player must come, with a clear line, before this enemy
@@ -56,6 +85,28 @@ export interface EnemyDef extends EnemyArchetype {
    * gets the shortest so it never opens a fight it cannot reach.
    */
   readonly aggro_range: number;
+  /**
+   * Floats clear of the floor: burning ground and lava pass under it. Only
+   * what the art draws off the ground flies — the shooter's winged lens, the
+   * orbiter's wisp, the sower's pod.
+   */
+  readonly flying?: true;
+  /**
+   * What each element does to it, as a multiple of the damage: 1 when not
+   * named, 0 immune — no damage and no status from that element. A body's
+   * make decides it: a construct cannot be poisoned, a coal cannot burn.
+   */
+  readonly resist?: Readonly<Partial<Record<ResistElement, number>>>;
+}
+
+/** The elements a body can resist; lava is fire. */
+export type ResistElement = "fire" | "ice" | "poison";
+
+/** A body's multiple for an element's damage (`EnemyDef.resist`). */
+export function resistOf(id: EnemyId, element: string): number {
+  const el = element === "lava" ? "fire" : element;
+  if (el !== "fire" && el !== "ice" && el !== "poison") return 1;
+  return ENEMIES[id].resist?.[el] ?? 1;
 }
 
 /*
@@ -113,7 +164,7 @@ const RUSHER: EnemyDef = {
   melee: "bristle",
   ranged: null,
   tags: ["melee_heavy", "movement_pressure", "short"],
-  description: "Walks up and drives its spikes out all round, close; kept at a pace, it is cut before it can.",
+  description: "Stabs from a stride out, then drives its spikes out all round at arm's length, turn and turn about; the spacing that answers one is wrong for the other.",
   summon: null,
 };
 
@@ -123,6 +174,7 @@ const SHOOTER: EnemyDef = {
   // is takes the choice of when to fight away from them, and for the ranged
   // archetypes that choice is most of the tactics they have.
   aggro_range: 230,
+  flying: true,
   behaviour: "keep_distance",
   /**
    * Two textures and two silences. A slow fat spread you walk around, then a
@@ -168,18 +220,54 @@ const SHOOTER: EnemyDef = {
    * shooter the player had decided to ignore was genuinely ignorable, and a
    * room of them was a room of statues.
    */
+  /*
+   * **The silences are longer again, and the burst is a pair.**
+   *
+   * The cycle above was set when the shooter was measured at 9% of every
+   * heart lost in the game — a figure taken while two bugs were silencing it
+   * (see `threat_weight`). Delivering the cadence it was actually written for,
+   * it is the largest source of damage in the game at 28%, which is the
+   * condition this archetype's whole pattern note exists to prevent.
+   *
+   * Nothing about the *shape* changes, because the shape is right: one aimed
+   * bullet at a time, slow, with a gap to travel in. What changes is the
+   * amount of it — a cycle of 11.1 s carrying four bullets rather than 9.2 s
+   * carrying five, which is about a third less fire from the same body. The
+   * silences went out by another 0.3 s each in the second pass, which is what
+   * took it from a quarter of the damage in the game to a fifth.
+   */
   pattern: sequence([
     { pattern: single({ speed: 165, aim: "player", interval: 1.0, size: 1 }), duration: 1.6 },
-    { pattern: rest(), duration: 1.8 },
+    { pattern: rest(), duration: 2.6 },
     { pattern: single({ speed: 260, aim: "player", interval: 1.0, size: 0.8 }), duration: 1.6 },
-    { pattern: rest(), duration: 1.9 },
-    // The second move: a three-shot burst, small and quick, down one aimed
+    { pattern: rest(), duration: 2.7 },
+    // The second move: a two-shot burst, small and quick, down one aimed
     // line. Still one lane to step off — but a lane that has to be stepped
     // off *now*, where the single shots could be walked around.
-    { pattern: single({ speed: 240, aim: "player", interval: 0.22, size: 0.7 }), duration: 0.66 },
-    { pattern: rest(), duration: 2.2 },
+    { pattern: single({ speed: 240, aim: "player", interval: 0.22, size: 0.7 }), duration: 0.44 },
+    { pattern: rest(), duration: 3.1 },
   ]),
-  threat_weight: 1.5,
+  /*
+   * 2.2, from 1.5, in the joint recalibration (doc 011).
+   *
+   * The old figure was measured while two bugs were silencing this body: a
+   * `keep_distance` body that reached point-blank range could never give
+   * ground again, so it sat inside the silence radius doing nothing for the
+   * rest of a fight — and a player closing on a shooter is most of what this
+   * game is. Firing the cadence doc 005 describes it went from 9% of every
+   * heart lost to 25%, three times the next bullet source, which is the exact
+   * failure the note on its pattern is about.
+   *
+   * The pattern is what the doc says it is; what was wrong was the **price**,
+   * so this is one of the two numbers that moved — the weight, so a room buys
+   * fewer shooters, and the silences in the pattern, so each one fires less.
+   *
+   * 2.2 and not higher: at 2.6 the `ranged_heavy` mixes measure past the band
+   * ceilings and thirty-five assemblies fall out of band. The weights and the
+   * bands are calibrated against each other, so the rest of the correction
+   * has to come from the cadence.
+   */
+  threat_weight: 2.2,
   hp: 25,
   speed: 68,
   radius: 9,
@@ -195,6 +283,7 @@ const TURRET: EnemyDef = {
   // Cut from 360, which was most of the room's width: it opened on the player
   // from across the arena, before they had a route or a reason.
   aggro_range: 250,
+  resist: { poison: 0 },
   behaviour: "stationary",
   /**
    * **Lightning, not bullets.** The rotating ring it used to fire was the most
@@ -256,6 +345,12 @@ const TURRET: EnemyDef = {
  */
 const LANCER: EnemyDef = {
   id: "lancer",
+  // Its own death already bursts spikes; a second ring is two rings the
+  // player cannot tell apart.
+  affix_excluded: ["volatile"],
+  // The rusher's subspecies, and the one that predates doc 019's block: the
+  // same spikes, driven from half a tile further out and then let go.
+  base: "rusher",
   aggro_range: 250,
   behaviour: "chase",
   pattern: null,
@@ -275,6 +370,7 @@ const LANCER: EnemyDef = {
 const SENTINEL: EnemyDef = {
   id: "sentinel",
   aggro_range: 250,
+  resist: { poison: 0 },
   behaviour: "stationary",
   pattern: sequence([
     { pattern: single({ speed: 150, aim: "player", interval: 1.3, size: 1.2 }), duration: 1.3 },
@@ -304,6 +400,7 @@ const SENTINEL: EnemyDef = {
 const WARDEN: EnemyDef = {
   id: "warden",
   aggro_range: 230,
+  resist: { poison: 0.5 },
   // Its arm is a gun (the delivered sheet drew it so): a heavy body that holds
   // a middle distance and fires a blunderbuss. See `fireMusket`.
   behaviour: "keep_distance",
@@ -311,7 +408,13 @@ const WARDEN: EnemyDef = {
   // A room-sized threat at 3.2 s and a wider, longer gout, measured by eye:
   // it pressed like a boss. A heavy body's shot should be an event.
   ranged: { kind: "musket", interval_s: 4.2 },
-  melee: null,
+  /**
+   * The plate is a weapon too. A heavy gunner's problem is somebody standing
+   * on it while it reloads, and its answer was nothing at all — so at contact
+   * range it shoves with the shield, which does little damage and a great
+   * deal of knockback: it makes room rather than trading. See `bash`.
+   */
+  melee: "bash",
   threat_weight: 2.6,
   hp: 40,
   speed: 46,
@@ -334,7 +437,7 @@ const BELLRINGER: EnemyDef = {
   speed: 62,
   radius: 9,
   tags: ["ranged_heavy", "ranged_pressure", "long"],
-  description: "Tethers an ally and armours it while the line holds; stand in the line to cut it, or kill the ringer and every ward goes. Rings a slowing field under itself. The elite peals instead, arming everything near it at once.",
+  description: "Armours an ally down a tether. Its toll refills every shield it holds at once and hurries nearby bodies; it does no damage, and a hit during the windup stops it. Cut the line, or interrupt. The elite peals.",
   summon: null,
 };
 
@@ -368,7 +471,7 @@ const SNARECASTER: EnemyDef = {
   speed: 66,
   radius: 9,
   tags: ["ranged_heavy", "movement_pressure", "mid"],
-  description: "Lays its chain on the floor along the line it will throw, then drags you in on a hit. Dash through it or break the line with a pillar. The elite anchors the chain across the floor, a live line that costs to cross.",
+  description: "Lays its chain along the line it will throw, drags you in on a hit, then lashes the ground round its own feet as you land. Dash across the line, or break it with a pillar. The elite anchors the chain instead.",
   summon: null,
 };
 
@@ -385,14 +488,17 @@ const DELVER: EnemyDef = {
   speed: 80,
   radius: 9,
   tags: ["melee_heavy", "movement_pressure", "short"],
-  description: "Fights on the surface for a few seconds, then dives and travels as a mound you can see; where the mound stops, it erupts. Lead it into fire. The elite erupts three times along its line.",
+  description: "Stabs and drives by turns on the surface for a few seconds, then dives and travels as a mound you can see; where the mound stops, it erupts. Lead it into fire. The elite erupts three times along its line.",
   summon: null,
 };
 
 /** A walking coal that is delighted to be set on fire. */
 const CINDERLING: EnemyDef = {
   id: "cinderling",
+  // Fire is what it eats and ice is its stated answer (doc 001: no nullification).
+  affix_excluded: ["burning", "shielded"],
   aggro_range: 220,
+  resist: { fire: 0, ice: 1.5 },
   behaviour: "chase",
   pattern: null,
   ranged: { kind: "lob", interval_s: 3.8 },
@@ -409,10 +515,21 @@ const CINDERLING: EnemyDef = {
 /** A drifting pod that plants seeds which arm after the window a dash covers. */
 const SOWER: EnemyDef = {
   id: "sower",
+  // It sheds its seeds on death already.
+  affix_excluded: ["volatile"],
   aggro_range: 230,
+  flying: true,
+  resist: { fire: 1.5, poison: 0.5 },
   behaviour: "orbit",
   pattern: null,
-  ranged: { kind: "mine", interval_s: 2.2 },
+  /*
+   * A seed every three seconds, not every 2.2. The sower plants under its own
+   * feet, so unlike the shooters it was never silenced by the two bugs the
+   * recalibration is about — but it inherited their share once they stopped
+   * being most of the damage, and at 12% of every heart lost from a body that
+   * asks only that the player not walk into it, it was over its price.
+   */
+  ranged: { kind: "mine", interval_s: 3.0 },
   melee: null,
   threat_weight: 2.0,
   hp: 20,
@@ -426,6 +543,7 @@ const SOWER: EnemyDef = {
 const ORBITER: EnemyDef = {
   id: "orbiter",
   aggro_range: 220,
+  flying: true,
   behaviour: "orbit",
   /**
    * It circles, so its pressure should reward circling with it. The spiral
@@ -445,16 +563,29 @@ const ORBITER: EnemyDef = {
    * a time. The paired shot is there so a player who has cut the corner does
    * not get it entirely for free.
    */
+  /*
+   * Longer silences, for the reason the shooter's are: an orbiter that is
+   * actually circling and firing is 18% of every heart lost against the 5% it
+   * was measured at. The shape — one aimed shot from wherever the circle has
+   * taken it, and a quick pair as its second move — is unchanged.
+   */
   pattern: sequence([
     { pattern: single({ speed: 200, aim: "player", interval: 0.95, size: 0.9 }), duration: 1.3 },
-    { pattern: rest(), duration: 1.3 },
+    { pattern: rest(), duration: 1.7 },
     { pattern: single({ speed: 175, aim: "player", interval: 1.15, size: 0.9 }), duration: 1.5 },
-    { pattern: rest(), duration: 1.4 },
+    { pattern: rest(), duration: 1.8 },
     // The second move: a quick pair from wherever the circle has taken it.
     { pattern: single({ speed: 230, aim: "player", interval: 0.25, size: 0.8 }), duration: 0.5 },
-    { pattern: rest(), duration: 1.6 },
+    { pattern: rest(), duration: 2.0 },
   ]),
-  threat_weight: 2.0,
+  /*
+   * 2.6, from 2.0, for the same reason the shooter moved: the orbiter counted
+   * as "stuck" its whole life, because the jam test asks whether a body is
+   * getting nearer the player and a body holding a radius never is — so it
+   * abandoned its circle, walked in and parked inside the silence radius.
+   * Circling and firing it is 19% of every heart lost rather than 5%.
+   */
+  threat_weight: 2.6,
   hp: 28,
   speed: 84,
   radius: 9,
@@ -468,6 +599,7 @@ const ORBITER: EnemyDef = {
 const TANK: EnemyDef = {
   id: "tank",
   aggro_range: 210,
+  resist: { poison: 0.5 },
   behaviour: "chase",
   /**
    * **No bullets at all.** It had a six-then-four shot shotgun on top of a
@@ -545,7 +677,11 @@ const TANK: EnemyDef = {
 
 const SUMMONER: EnemyDef = {
   id: "summoner",
+  // A body that makes bodies must not also make bodies when it dies: the kill
+  // order is the whole question it asks.
+  affix_excluded: ["splitting"],
   aggro_range: 260,
+  resist: { fire: 0.5 },
   behaviour: "keep_distance",
   /**
    * **Thrown flame, not a ring.** Its ring had the same defect as the
@@ -669,7 +805,32 @@ const BOSS: EnemyDef = {
    * (slam, leap, adds, three phases of pattern) and the armour that returns
    * each phase, not from how long it takes to wear down.
    */
-  hp: 1250,
+  /*
+   * 1900, from 1250. **The boss gated on skill, not on the build.** Measured
+   * over twelve runs each: the expert profile beat it 12 out of 12 in 32
+   * seconds for 1.7 hearts, and the average profile lost 11 out of 11 with
+   * the *same* build — 11.7 spell levels and 6 affixes either way. A fight
+   * the strong player walks through and the weak one cannot touch is a
+   * reaction test, and what the run is supposed to have been building toward
+   * is a build.
+   *
+   * Health is the lever that makes it one, because health is what a build
+   * converts into time. At 1900 a bare staff — one unlevelled key at about
+   * 11 dps — needs nearly three minutes and loses on the clock; a formed
+   * build at fifty or sixty puts it down in half of one. The player's skill
+   * still decides what it costs them; the build decides whether it is
+   * possible at all.
+   */
+  /*
+   * 3750. **Health is what a build turns into time**, and the fight is now
+   * spent mostly getting out of the way: each of his blows costs a tenth of
+   * the bar and is read, dodged and then punished, so the player's damage
+   * comes in the openings rather than all the time. At 6000 that made the
+   * fight far too long to hold attention; at 3000, once he took his turns
+   * one at a time and rested between them, it was over too soon to see his
+   * moves (playtest 2026-09-25): a quarter more (doc 020).
+   */
+  hp: 3750,
   speed: 62,
   radius: 22,
   /** It swings. The arc is wide, which is what its size is for. */
@@ -688,9 +849,9 @@ const BOSS: EnemyDef = {
    */
   tags: ["melee_heavy", "movement_pressure", "area_denial"],
   description:
-    "The floor's master. Three phases, each faster and wider than the last: it "
-    + "walks and shoots, then rams and rings, then spirals; armoured until you "
-    + "break it, and it never stops walking toward you.",
+    "The floor's master. Its arms sweep a circle while it walks and shoots; it slams "
+    + "broken floor out in rings, splits the ground, leaps, and backhands anyone who "
+    + "stays in its reach. Three phases, armoured again at each.",
   summon: null,
 };
 
@@ -713,49 +874,141 @@ export interface BossPhase {
   readonly pattern: PatternNode;
   readonly rate: number;
   readonly speed: number;
-  /** The blade used when far, and when the player is on top of it or behind it. */
+  /**
+   * The blade used when far (`charge` only beyond `farPx`), and when the
+   * player is on top of it or behind it. Between the two the king alternates
+   * the greatsweep and the greatcleave (`chooseMelee`).
+   */
   readonly melee: { readonly far: MeleeKind; readonly near: MeleeKind };
+  /**
+   * **The strings** (doc 020): the blows that follow an opening blow in this
+   * phase, each laid on the music — `at` is when it lands, in eighth notes of
+   * the boss theme after the opening blow landed. The light cuts come close
+   * and the heavy one waits: `x--x----X` is two slashes a beat and a half
+   * apart and the cleave on the next downbeat, and a player who panics and
+   * dashes the second slash has spent the dash the cleave was for. Only the
+   * last blow recovers, and its recovery is the punish window. Phase I has
+   * none: one thing at a time. A cut that follows a cut comes back the other way.
+   */
+  readonly strings: Partial<Record<MeleeKind, readonly BossBlow[]>>;
   /** How far "far" is, in px. */
   readonly farPx: number;
+}
+
+/** One blow of a boss string: what, and when it lands (`BossPhase.strings`). */
+export interface BossBlow {
+  readonly kind: MeleeKind;
+  /** Eighth notes of the boss theme after the string's opening blow lands. */
+  readonly at: number;
 }
 
 export const BOSS_PHASES: readonly BossPhase[] = [
   {
     at: 1, name: "I",
+    /*
+     * **Phase I teaches the three shapes the rest of the fight is built
+     * from**, one at a time, with a rest between each: the aimed shot (step
+     * off the line), the fan (the gaps between the shots are the lanes) and
+     * the holed ring (the hole rotates, so the lane is a place you walk to).
+     * Nothing here is layered — a player meeting the boss for the first time
+     * is answering one question at a time on purpose.
+     */
     pattern: sequence([
       // Aimed and slow: the tell the later phases reuse.
-      { pattern: single({ speed: 200, aim: "player", interval: 1.1, size: 1.2 }), duration: 2.4 },
-      { pattern: rest(), duration: 1.2 },
+      { pattern: single({ speed: 164, aim: "player", interval: 1.0, size: 1.2 }), duration: 2.2 },
+      { pattern: rest(), duration: 1.0 },
       // A spread, so standing directly in front stops being the answer.
-      { pattern: fan({ speed: 215, count: 3, spread_deg: 34, aim: "player", interval: 1.5, size: 1 }), duration: 2.6 },
-      { pattern: rest(), duration: 1.2 },
+      { pattern: fan({ speed: 172, count: 3, spread_deg: 34, aim: "player", interval: 1.4, size: 1 }), duration: 2.4 },
+      { pattern: rest(), duration: 1.0 },
+      /*
+       * **A wall with a hole in it.** The ring's gap sits opposite its own
+       * rotation offset, so it sweeps a quarter-turn per volley: the lane is
+       * never where it was, and the answer is to walk to meet it. This is the
+       * shape phases II and III tighten rather than replace.
+       */
+      { pattern: ring({ speed: 134, count: 8, interval: 2.0, rotate_deg: 24, gap_deg: 46, size: 0.95 }), duration: 2.0 },
+      { pattern: rest(), duration: 1.0 },
     ]),
-    rate: 1, speed: 1.05, melee: { far: "slash", near: "slash" }, farPx: 999,
+    rate: 0.85, speed: 1.05, melee: { far: "greatcleave", near: "greatsweep" }, farPx: 999,
+    strings: {},
   },
   {
     at: 0.6, name: "II",
+    /*
+     * **Phase II layers.** Every step but the rests now asks two questions
+     * whose answers disagree: the holed ring wants the player walking round
+     * the arena to meet its lane, and the aimed shot inside it wants them
+     * stepping off a line that is redrawn every 1.4 s. The spiral that closes
+     * the cycle is the first pattern that decides which way they run.
+     */
     pattern: sequence([
-      { pattern: fan({ speed: 220, count: 5, spread_deg: 48, aim: "player", interval: 1.3, size: 1 }), duration: 2.6 },
+      {
+        pattern: parallel([
+          ring({ speed: 141, count: 9, interval: 1.7, rotate_deg: 26, gap_deg: 42, size: 0.95 }),
+          single({ speed: 204, aim: "player", interval: 1.7, size: 1.1 }),
+        ]),
+        duration: 3.0,
+      },
       { pattern: rest(), duration: 0.9 },
-      // A ring: nowhere is safe, only the gaps are, and it has to be crossed.
-      { pattern: ring({ speed: 180, count: 10, interval: 2.0, rotate_deg: 18, size: 0.9 }), duration: 2.0 },
+      { pattern: fan({ speed: 178, count: 3, spread_deg: 48, aim: "player", interval: 1.1, size: 1 }), duration: 2.2 },
       { pattern: rest(), duration: 0.8 },
-      { pattern: single({ speed: 240, aim: "player", interval: 0.7, size: 1.2 }), duration: 2.1 },
-      { pattern: rest(), duration: 1.0 },
+      /*
+       * **Rotating spokes.** Two arms turning one way: every lane between
+       * them closes from the same side, so a player standing still is caught
+       * and a player running *with* the turn stays in the same lane for as
+       * long as they keep moving. It is the bullet version of the lash, and
+       * the two are deliberately the same lesson at two ranges.
+       */
+      { pattern: spiral({ arms: 2, angular_speed: 94, speed: 141, interval: 0.45, size: 0.85 }), duration: 2.4 },
+      { pattern: rest(), duration: 0.8 },
     ]),
-    rate: 1.15, speed: 1.15, melee: { far: "charge", near: "cleave" }, farPx: 120,
+    rate: 1, speed: 1.15, melee: { far: "dashcut", near: "greatsweep" }, farPx: 120,
+    strings: {
+      // x--x----X
+      greatslash: [{ kind: "greatslash", at: 3 }, { kind: "greatcleave", at: 8 }],
+      greatsweep: [{ kind: "greatcleave", at: 6 }],
+      dashcut: [{ kind: "greatsweep", at: 6 }],
+    },
   },
   {
     at: 0.3, name: "III",
+    /*
+     * **Phase III crosses the layers over.** The counter-rotating spirals are
+     * the one pattern in the game with no standing answer at all: the two
+     * sets of lanes scissor, so the safe ground is a moving intersection and
+     * the player is walking a figure the fight draws for them. Then the ring
+     * comes back with a narrower hole and a slower sweep — the same question
+     * as phase I, asked at a pace that no longer forgives being late — and
+     * the cycle ends on the aimed pair, which is what punishes a player who
+     * has stopped watching the body while reading the floor.
+     */
     pattern: sequence([
-      { pattern: spiral({ arms: 3, angular_speed: 90, speed: 170, interval: 0.35, size: 0.9 }), duration: 3.0 },
+      {
+        pattern: parallel([
+          spiral({ arms: 3, angular_speed: 83, speed: 142, interval: 0.6, size: 0.85 }),
+          spiral({ arms: 3, angular_speed: -86, speed: 117, interval: 0.8, size: 0.85 }),
+        ]),
+        duration: 3.0,
+      },
       { pattern: rest(), duration: 0.7 },
-      { pattern: ring({ speed: 190, count: 14, interval: 1.6, rotate_deg: 12, size: 0.9 }), duration: 1.6 },
+      { pattern: ring({ speed: 154, count: 10, interval: 1.5, rotate_deg: 13, gap_deg: 36, size: 0.9 }), duration: 2.6 },
       { pattern: rest(), duration: 0.6 },
-      { pattern: fan({ speed: 235, count: 5, spread_deg: 60, aim: "player", interval: 1.0, size: 1 }), duration: 2.0 },
+      {
+        pattern: parallel([
+          fan({ speed: 189, count: 4, spread_deg: 62, aim: "player", interval: 1.0, size: 1 }),
+          single({ speed: 228, aim: "player", interval: 1.0, size: 1.15 }),
+        ]),
+        duration: 2.0,
+      },
       { pattern: rest(), duration: 0.7 },
     ]),
-    rate: 1.3, speed: 1.3, melee: { far: "charge", near: "cleave" }, farPx: 110,
+    rate: 1.1, speed: 1.3, melee: { far: "dashcut", near: "greatsweep" }, farPx: 110,
+    strings: {
+      // x--x--x-----X: three slashes, and the cleave held a beat longer than phase II's.
+      greatslash: [{ kind: "greatslash", at: 3 }, { kind: "greatslash", at: 6 }, { kind: "greatcleave", at: 12 }],
+      greatsweep: [{ kind: "greatslash", at: 4 }, { kind: "greatcleave", at: 10 }],
+      dashcut: [{ kind: "greatslash", at: 5 }, { kind: "greatcleave", at: 10 }],
+    },
   },
 ];
 
@@ -766,7 +1019,199 @@ export function bossPhaseAt(hpFraction: number): number {
   return phase;
 }
 
+/* ============================ subspecies (019) ============================= */
+
+/**
+ * **One subspecies per base archetype**: a known body with one verb of its kit
+ * changed, so the player answers it differently without learning a new body.
+ *
+ * The lancer is the rusher's and predates the rest. Everything here is spread
+ * from its base, because that is the design rather than a shortcut: a
+ * subspecies keeps the behaviour, the health, the reach and the aggro range of
+ * the body it varies, and changes **one thing**. What it changes is in
+ * `sim/attacks.ts`, `sim/melee.ts` and `sim/enemy.ts`, keyed on the id.
+ *
+ * Doc 005 gave most of these attacks to *elites*, at about one room in seven.
+ * That is too rare to learn, which is what an attack has to be: a body whose
+ * answer is different is content, and content belongs where it is met. So the
+ * attacks came down to this tier, which the ramp lets a room hold a fifth of,
+ * and the elite tier keeps the enrage and one affix.
+ *
+ * Threat weights are 1.15 to 1.30 times their base's, mean 1.21 — deliberately
+ * narrow, because a subspecies is a different question and not a bigger one.
+ * They are estimates until the harness calibrates them against hearts lost.
+ */
+const SUBSPECIES_DEFS: readonly EnemyDef[] = [
+  {
+    ...SHOOTER,
+    id: "pinner", base: "shooter", threat_weight: 2.6, mark_anchor: "core",
+    /*
+     * One lane, twice. Every window of the shooter's cycle becomes a slow fat
+     * shot and a fast thin one a third of a second behind it, down the line it
+     * last saw the player on.
+     *
+     * The shooter's answer is to step off the lane; the pinner's is to step
+     * off and **keep going**, because the ground the first shot was walked
+     * around is where the second arrives. It costs no new code — a pattern is
+     * data — and it keeps the shooter's whole grammar: one thing to read at a
+     * time, slow, with a silence to travel in.
+     */
+    pattern: sequence([
+      { pattern: single({ speed: 165, aim: "player", interval: 1.0, size: 1 }), duration: 0.9 },
+      { pattern: single({ speed: 300, aim: "player", interval: 1.0, size: 0.7 }), duration: 0.35 },
+      { pattern: rest(), duration: 2.6 },
+      { pattern: single({ speed: 260, aim: "player", interval: 1.0, size: 0.8 }), duration: 0.9 },
+      { pattern: single({ speed: 320, aim: "player", interval: 1.0, size: 0.6 }), duration: 0.35 },
+      { pattern: rest(), duration: 3.1 },
+    ]),
+    description: "Puts two shots down one lane, the second a beat behind the first: step off it, and keep going.",
+  },
+  {
+    ...ORBITER,
+    id: "wisp", base: "orbiter", threat_weight: 3.0, mark_anchor: "core",
+    /*
+     * Its shot **curls**: it steers toward the player for the first half
+     * second of flight and then goes straight (`WISP_SEEK_DEG_PER_S`, in
+     * `release`). The orbiter's answer is to step off the line; the wisp's is
+     * to break the line **late**, because a step taken early is a step the
+     * bullet follows. See `sim/enemy.ts`.
+     */
+    description: "Circles you and curls its shot after you for the first half of its flight: move late, not early.",
+  },
+  {
+    ...TURRET,
+    id: "beacon", affix_excluded: ["burning", "shielded"], base: "turret", threat_weight: 2.5, mark_anchor: "core",
+    /*
+     * Its strike **leaves the ground burning** for a couple of seconds.
+     *
+     * The turret denies a place for an instant, so the player steps out and
+     * steps back; the beacon takes that ground out of play while it burns, so
+     * the answer is to leave and *stay* left. It is the same telegraph and the
+     * same 900 ms, which is what keeps it a turret.
+     *
+     * Doc 005's elite turret fired a rift lance instead. That was the rifter's
+     * attack on the turret's body, and a variant that answers like another
+     * archetype teaches the player nothing.
+     */
+    description: "Never moves, and the ground its lightning hits keeps burning: leave the mark, and stay off it.",
+  },
+  {
+    ...SENTINEL,
+    id: "watcher", base: "sentinel", threat_weight: 2.1, mark_anchor: "core",
+    /*
+     * The sight line **is** the shot: no travel, live for a third of a second
+     * at the end of the aim. The sentinel's slow fat bullet can be walked
+     * around after it is fired; the watcher's cannot, so the whole answer moves
+     * into the aim.
+     */
+    description: "Draws its line and then fires along all of it at once: be out of the lane before it lights, not after.",
+  },
+  {
+    ...WARDEN,
+    id: "fusilier", base: "warden", threat_weight: 3.1, mark_anchor: "head",
+    /*
+     * A **second barrel** a beat after the first, 25 degrees off it. The
+     * warden's blast is left by stepping out of the cone; the fusilier's
+     * second cone covers where that step lands, so the answer is to step
+     * *through* rather than around — or to be on it while it reloads, which is
+     * now the longer opening of the two.
+     */
+    description: "Fires twice, the second barrel a beat later and off to one side: step through the cone, not around it.",
+  },
+  {
+    ...BELLRINGER,
+    id: "pealer", affix_excluded: ["splitting"], base: "bellringer", threat_weight: 2.4, mark_anchor: "head",
+    /*
+     * It **peals** instead of tethering: everything within four tiles is
+     * warded at once, with no line to stand in. The bellringer's answer is to
+     * cut the tether; the pealer's is the kill order — it has to die first,
+     * and it is the body that keeps its distance.
+     */
+    description: "Wards everything near it at once instead of down a line: there is nothing to cut, so it dies first.",
+  },
+  {
+    ...RIFTER,
+    id: "quaker", base: "rifter", threat_weight: 2.3, mark_anchor: "core",
+    /*
+     * Four short cracks **walking toward** the player, each placed ahead of the
+     * last. The rifter's one line is answered by stepping across it; the
+     * quaker's answer is to step across and then keep moving, because the next
+     * crack is laid where the last one sent you.
+     */
+    description: "Walks four short cracks toward you one after another: cross the first, and do not stop.",
+  },
+  {
+    ...SNARECASTER,
+    id: "chainer", base: "snarecaster", threat_weight: 2.6, mark_anchor: "head",
+    /*
+     * It **anchors** the chain across the floor as a live line rather than
+     * throwing it. The snarecaster moves the player; the chainer takes a line
+     * of the room away and leaves it there, so the arena is smaller while it
+     * lives.
+     */
+    description: "Anchors its chain across the floor and leaves it live: the room is smaller until it dies.",
+  },
+  {
+    ...DELVER,
+    id: "burrower", base: "delver", threat_weight: 2.1, mark_anchor: "head",
+    /*
+     * It erupts **three times along its heading**, not once where the mound
+     * stopped. The delver is answered by leading it; the burrower is answered
+     * by leaving its *line*, because the mound's direction is the threat and
+     * the stopping place is only the first of them.
+     */
+    description: "Comes up three times along the line it dived on: leave the line, not the spot.",
+  },
+  {
+    ...CINDERLING,
+    id: "emberling", affix_excluded: ["burning", "shielded"], base: "cinderling", threat_weight: 2.2, mark_anchor: "head",
+    /*
+     * Set alight, it **flares into a ring of fire** rather than only trailing
+     * it. The cinderling punishes fire builds by feeding on them; the
+     * emberling punishes standing next to one that is already burning, which
+     * is exactly where a melee player has to be.
+     */
+    description: "Burning, it flares into a ring of fire instead of a trail: hit it alight from outside a tile.",
+  },
+  {
+    ...SOWER,
+    id: "planter", affix_excluded: ["volatile", "shielded"], base: "sower", threat_weight: 2.5, mark_anchor: "shard_l",
+    /*
+     * It plants a **ring of seeds round the player**, with two gaps. The sower
+     * punishes the dodge; the planter names where the dodge may go, which is
+     * the same question asked as a shape rather than as a scatter.
+     */
+    description: "Plants a ring of seeds round you with two ways out: find a gap before they arm.",
+  },
+  {
+    ...TANK,
+    id: "breaker", base: "tank", threat_weight: 5.8, mark_anchor: "head",
+    /*
+     * Its overhead chop **cracks the floor** three tiles ahead of it. The
+     * tank's chop is the answer to being on top of it or behind it, so the
+     * safe place is out of its reach; the breaker's crack reaches past that,
+     * and the answer is to be out of its *lane* instead.
+     */
+    description: "Slow and armoured, and its chop splits the floor ahead of it: being out of reach is not being out of the way.",
+  },
+  {
+    ...SUMMONER,
+    id: "brooder", affix_excluded: ["splitting"], base: "summoner", threat_weight: 5.4, mark_anchor: "head",
+    /*
+     * Its thrown flame is a **thrown minion**: the coal hatches a rusher where
+     * it lands. The summoner's reinforcements arrive at the summoner, so the
+     * player can fight them on the way in; the brooder's arrive at the
+     * *player*, so there is no ground that is safely far from it.
+     */
+    ranged: { kind: "lob", interval_s: 6 },
+    description: "Throws coals that hatch where they land, not fire: its reinforcements arrive on top of you.",
+  },
+];
+
+const BY_ID = Object.fromEntries(SUBSPECIES_DEFS.map((d) => [d.id, d])) as Record<EnemyId, EnemyDef>;
+
 export const ENEMIES: Readonly<Record<EnemyId, EnemyDef>> = {
+  ...BY_ID,
   rusher: RUSHER,
   shooter: SHOOTER,
   turret: TURRET,
@@ -793,10 +1238,81 @@ export const ENEMIES: Readonly<Record<EnemyId, EnemyDef>> = {
  */
 export const ENEMY_IDS: readonly AssemblableId[] =
   ["rusher", "shooter", "turret", "orbiter", "tank", "summoner", "lancer", "sentinel",
-    "warden", "bellringer", "rifter", "snarecaster", "delver", "cinderling", "sower"];
+    "warden", "bellringer", "rifter", "snarecaster", "delver", "cinderling", "sower",
+    ...SUBSPECIES_DEFS.map((d) => d.id as AssemblableId)];
 
 /** Everything including the boss, for renderers and frame checks. */
 export const ALL_ENEMY_IDS: readonly EnemyId[] = [...ENEMY_IDS, "boss"];
+
+/* --------------------------- subspecies helpers --------------------------- */
+
+/**
+ * The base a body varies, or itself.
+ *
+ * Total over `EnemyId`, and the single place the pairing is read: the roster
+ * cap counts a breaker as a tank, the mix ratios hand a subspecies a share of
+ * its base's, and the renderer asks its base for the frames.
+ */
+export function baseArchetype(id: EnemyId): EnemyId {
+  return ENEMIES[id].base ?? id;
+}
+
+/** The key a per-archetype table is written with: a base body, or the boss. */
+export type BaseKey = BaseEnemyId | "boss";
+
+/**
+ * Completes a per-archetype table by giving every subspecies its base's row.
+ *
+ * Perception lag, gait, atlas name, class: each is written for the bodies a
+ * player can name, and a subspecies shares all of them with its base by
+ * construction — it is the same body with one verb changed, and none of these
+ * is the verb. So a table states the bases and this fills the rest, which
+ * keeps the thirteen from being thirteen more rows in every table in the game
+ * and makes a body that *should* differ an explicit row rather than an
+ * omission. The lancer's own drawn model is exactly that: it states
+ * `enemy_lancer` and keeps it.
+ */
+export function fillSubspecies<T>(table: Readonly<Partial<Record<EnemyId, T>>>): Record<EnemyId, T> {
+  const out = { ...table } as Record<EnemyId, T>;
+  for (const id of ALL_ENEMY_IDS) {
+    if (out[id] === undefined) out[id] = table[baseArchetype(id)] as T;
+  }
+  return out;
+}
+
+export function isSubspecies(id: EnemyId): boolean {
+  return ENEMIES[id].base !== undefined;
+}
+
+/**
+ * The base, as the key a per-archetype table is written with.
+ *
+ * Every such table — perception lag, gait, atlas name, class — is written for
+ * the bodies a player can name, and a subspecies shares all of them with its
+ * base by construction. Rather than thirteen more rows in each, they are keyed
+ * on `BaseEnemyId` and read through here.
+ */
+export function baseKey(id: EnemyId): BaseKey {
+  return baseArchetype(id) as BaseKey;
+}
+
+/** The subspecies of a base, or null. The lancer is the rusher's. */
+export const SUBSPECIES_OF: Readonly<Record<EnemyId, EnemyId | null>> = (() => {
+  const out: Partial<Record<EnemyId, EnemyId | null>> = {};
+  for (const id of ALL_ENEMY_IDS) out[id] = null;
+  for (const id of ALL_ENEMY_IDS) {
+    const b = ENEMIES[id].base;
+    if (b) out[b] = id;
+  }
+  return out as Record<EnemyId, EnemyId | null>;
+})();
+
+/** Every subspecies id, in roster order. */
+export const SUBSPECIES_IDS: readonly EnemyId[] = ENEMY_IDS.filter(isSubspecies);
+
+/** Every base archetype, in roster order: what a composition is written over. */
+export const BASE_ENEMY_IDS: readonly BaseEnemyId[] =
+  ENEMY_IDS.filter((id) => !isSubspecies(id)) as BaseEnemyId[];
 
 export function enemy(id: EnemyId): EnemyDef {
   return ENEMIES[id];
@@ -813,7 +1329,7 @@ export function patternOf(id: EnemyId): PatternNode | null {
 /** Melee archetypes gain from cover and lose in open rooms; ranged do the reverse. */
 export type EnemyClass = "melee" | "ranged";
 
-const CLASSES: Readonly<Record<EnemyId, EnemyClass>> = {
+const CLASSES: Readonly<Record<EnemyId, EnemyClass>> = fillSubspecies<EnemyClass>({
   rusher: "melee",
   tank: "melee",
   shooter: "ranged",
@@ -821,7 +1337,6 @@ const CLASSES: Readonly<Record<EnemyId, EnemyClass>> = {
   orbiter: "ranged",
   // A summoner never shoots, but it plays from the back line and is read as ranged.
   summoner: "ranged",
-  lancer: "melee",
   sentinel: "ranged",
   warden: "ranged",
   bellringer: "ranged",
@@ -842,8 +1357,13 @@ const CLASSES: Readonly<Record<EnemyId, EnemyClass>> = {
    * is the wrong thing for anything reading this table.
    */
   boss: "melee",
-};
+});
 
+/**
+ * A subspecies is classed as its base. It keeps the base's behaviour, so how
+ * the player is expected to answer it — close, or hold the distance — is the
+ * same answer, which is the whole thing the class decides.
+ */
 export function enemyClass(id: EnemyId): EnemyClass {
   return CLASSES[id];
 }

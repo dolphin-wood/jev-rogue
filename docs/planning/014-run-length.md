@@ -44,8 +44,37 @@ Valve's L4D director implements explicitly:
 - **60 to 80 seconds** — combat plus its trough. Room, offer, portal, next
   room.
 
-Fourteen of those cycles is roughly 16 minutes, plus the boss and the merchant
-visit, which lands at 20.
+Fourteen of those cycles is roughly 16 minutes, plus the merchant visit and a
+boss fight of about two minutes (doc 020 — it is played to its music, and two
+minutes is two and a half passes of it), which lands at 20.
+
+### A room's size climbs with the run
+
+The pacing unit above describes a room in the middle of a run. The opening
+rooms are not that room, and the caps that hold a fight's size were all
+written for the late one — applied from the first door they handed room 1 a
+seventeen-body trickle, which is unplayable before there is a build to play it
+with. One **run-progress ramp** (doc 005, `encounters/ramp.ts`) says how big a
+fight may get at each point:
+
+| rooms | roster | alive at once | waves | chunk | density | anchors | elites |
+|---|---|---|---|---|---|---|---|
+| 1–2 | 5 | 3 | 2 | 2 | sparse | none | no |
+| 3–5 | 13 | 6 | 4 | 3 | to normal | tank | no |
+| 6–9 | 26 | 10 | 6 | 4 | to dense | tank, summoner | yes |
+| 10+ | 40 | 12 | any | 5 | all | all | yes |
+
+Measured over forty-eight runs, mean hearts lost by room index: 0.08, 0.05,
+0.33, 0.84, 0.71, 1.19, 0.60, 1.09, 0.78, 0.63. The first two rooms are an
+introduction and the curve climbs from there.
+
+**The ramp costs room length, and the two cannot both be had.** Capping an
+early roster is capping how long its room takes, so the measured median fell
+from 25 s to 19 s against the 30 to 40 this document asks for — the tail is
+gone rather than the middle (p90 31 s, nothing over 60 s). Length at the
+front of a run would have to be bought with *more bodies*, which is the one
+thing the opening rooms must not have. The band above therefore describes a
+room from about index 6 on; before that a room is deliberately shorter.
 
 ### Room duration is bought with structure before health
 
@@ -59,10 +88,8 @@ health is the last lever to reach for, because it costs hearts.
 
 Rooms are played in **rounds** (doc 005, Assembly): each round is a fight in
 its pressure band on its own, and the next comes once the last has mostly
-fallen, so the pause between rounds is the room's own small trough. The
-headless reference player's median combat room is 22 seconds (p90 45 s;
-build rooms, three rounds, 38 s). It is faster than a person by a factor that
-is not measured, so the played figure sits inside the band.
+fallen, so the pause between rounds is the room's own small trough. A release
+room plays one round and every other room two: three, played, went on and on.
 
 ### The trough
 
@@ -97,10 +124,11 @@ offer's kind is the player's choice, so a stat or gold room keeps the cadence
 from going silent without spending the scarce thing.
 
 Doc 013 settles on three spells with three affix slots each. The player starts
-with `magic_bolt` and the style's second spell, so the third slot fills at the
-first spell portal, normally inside the run's opening third. That is
-deliberate: the player needs their verbs while they are still learning the
-first one, and a run's opening minutes are the ones most easily wasted. From
+with one spell, the chosen style's starter (006), so the second and third keys
+fill at the first spell portals, normally inside the run's opening third. That
+is deliberate: the first rooms teach one verb and the sword, and each new key
+arrives while the player still has room to learn it; a run's opening minutes
+are the ones most easily wasted, so the early doors lean toward spells. From
 there a spell card is a **replacement decision** that costs the affixes
 invested in whatever it displaces, and that is the half of the run the length
 exists to reach.

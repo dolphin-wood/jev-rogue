@@ -3,20 +3,27 @@
  * milliseconds; nothing here reads a clock, a DOM or a renderer, so the
  * headless harness and the browser run the identical simulation.
  */
-import { AFFIXES, ENEMIES } from "../encounters/index.ts";
-import { ITEMS, parseCastTree, plainInstance } from "../spells/index.ts";
+import { BAR_MS, BEAT_MS, beats, pastGrid, untilGrid } from "./beat.ts";
+import { AFFIXES, ENEMIES, affixesFor, baseArchetype, rampFor, rampMinimum, rampRoster, resistOf, threatWeight } from "../encounters/index.ts";
+import { ITEMS, plainInstance } from "../spells/index.ts";
+import { LEVEL_HEARTS, levelAt, withLevels, xpForKill } from "../run/levels.ts";
 import type { ItemRegistry } from "../spells/items.ts";
 import { GRID_W, GRID_H, TILE_PX, Tile } from "../types.ts";
+import { STATUS_ELEMENTS, copyPowers, noPowers } from "../content/tags.ts";
+import { PROC_SPLIT } from "./cast.ts";
+import type { ElementPowers } from "../content/tags.ts";
+import type { MeleeKind, SpawnGroup } from "../types.ts";
 import type {
-  EncounterPlan, EnemyId, HazardEffect, ItemInstance, RoomPlan, RoomType, Staff, EliteAffix,
+  EncounterPlan, ElitePresence, EnemyId, HazardEffect, ItemInstance, RoomPlan, RoomType, Staff, EliteAffix, WaveStructure,
 } from "../types.ts";
+import type { AffixContext } from "../encounters/affixes.ts";
 import type { Rng } from "../rng.ts";
 import {
   DASH_COOLDOWN_MS, DASH_IFRAME_MS, DASH_MS, DASH_SPEED,
   HURT_NUDGE, HURT_NUDGE_MS, INVULN_MS, MAX_HEARTS, PLAYER_RADIUS, PLAYER_SPEED, noMods, HP_PER_HEART, NO_INPUT,
   STEP_MS, STUN_LIGHTNING_MS,
 } from "./types.ts";
-import type { Bullet, DeathBurst, Enemy, Input, Particle, PlayerMods, World } from "./types.ts";
+import type { Bullet, DeathBurst, Enemy, GrassCell, Input, Particle, PlayerMods, World } from "./types.ts";
 import { acquire, makePool, integrate, POOL_SIZES } from "./bullets.ts";
 import {
   circleHitsWall, circlesOverlap, entryPosition, hasLineOfSight, moveSliding, normalise,
@@ -25,40 +32,44 @@ import {
   beginSwing, cancelSwing, makeSwingBox, manaPerHit, sectorHits, snapFacing,
   stepStrike, stepSwing, strikeHits, swingMoveScale, beginSpin,
 } from "./melee.ts";
-import { FIRE_ENEMY_DAMAGE, lightFire, makeFirePool, makeScorchPool, scorch, stepFires, stepScorches } from "./fire.ts";
-import { firePayloadChild, fireUnit } from "./cast.ts";
+import { CLOUD_TICK_MS, FIRE_ENEMY_DAMAGE, FIRE_TICK_MS, GROUND_STATUS_POWER, lightFire, makeFirePool, makeScorchPool, scorch, stepFires, stepScorches } from "./fire.ts";
+import { eruptRing, fireUnit, PROC_MIN } from "./cast.ts";
+import { stepBoomerangs, stepEnchant, stepOrbs, stepTrail, stepWaves, waveCentre, waveHits } from "./shapes.ts";
 import {
   onDashThrough, onExpire, onHit, onHurt, onKill, stepWards,
   wallSplitCount, wardStops,
 } from "./affix-hooks.ts";
 import type { HookSim } from "./affix-hooks.ts";
-import { emptyScope } from "../spells/execute.ts";
 import {
-  AFFIX_SLOTS, SPELL_SLOTS, MANA_REGEN_FRACTION_PER_S, makeSpell, stepSpells, stepEchoes, ENEMY_BUILD_PER_HIT,
+  SPELL_SLOTS, MANA_REGEN_FRACTION_PER_S, makeSpell, stepSpells, stepEchoes, ENEMY_BUILD_PER_HIT, cancelCharge,
+  freeCastScope,
 } from "./spells.ts";
-import { spikesOut } from "../rooms/features.ts";
+import { featureCells, spikesOut } from "../rooms/features.ts";
 import { floodFill } from "../rooms/measure.ts";
 import {
-  breakable, clearPropCell, expiredProps, placeFixtures, placeProps, propHit, stepProps,
+  breakable, clearPropCell, expiredProps, placeFixtures, placeProps, placeStanding, propHit, stepProps,
   PROP_MANA_FRACTION,
 } from "./props.ts";
 import { COIN_VALUE, MANA_ORB, drop, makePickupPool, stepPickups } from "./pickups.ts";
 import {
-  enteredPortal, placePortals, placeReward, raisePortals, stepPortals, stepReward,
+  enteredPortal, placeRewardNear, portalsBefore, raisePortals, stepPortals, stepReward,
 } from "./exits.ts";
 import type { RoomOffer } from "./exits.ts";
 import type { Destructible } from "./props.ts";
 import type { SpellSlot } from "./spells.ts";
 import type { BulletEmission } from "../encounters/patterns.ts";
 import { turnToward } from "./aim.ts";
-import { dragStep, onExpansionDeath, stepAttacks } from "./attacks.ts";
+import { ARM_TELE_MS, castArm, castRift, castRanged, castShockwave, dragStep, interruptToll, lineToWall, onExpansionDeath, shockwaveHits, spendWard, stepAttacks } from "./attacks.ts";
 import type { AttackHooks } from "./attacks.ts";
 import { computeFlowField, tileOf } from "./flow.ts";
 import {
-  isActive, livingSummoners, makeEnemy, stepEnemy, stagger, wake, dropToken,
-  dropFireToken, ARMOUR_BREAK_MS, SPAWN_FADE_MS, SPAWN_TELEGRAPH_MS, ENEMY_FREEZE_MS,
+  anchored, bossStringHearts, hatchMinion, isActive, livingSummoners, makeEnemy, stepEnemy, stagger, wake, dropToken,
+  dropFireToken, ARMOUR_BREAK_MS, SPAWN_FADE_MS, SPAWN_TELEGRAPH_MS, ENEMY_FREEZE_MS, STAGGER_MS,
+  ENEMY_BURN_MS, ENEMY_POISON_MS, ENEMY_BURN_SOURCES, ENEMY_POISON_STACKS, SHATTER_MULT,
+  STATUS_BREADTH_MULT, statusBreadth,
   meleeSpec,
-  spikeVolley, release,
+  spikeVolley, SPIKE_SIZE, release, bossPhase, BOSS_POWER,
+  beginWindup, bossBehind, bossLevel,
 } from "./enemy.ts";
 import { feature } from "../rooms/features.ts";
 
@@ -85,6 +96,25 @@ const HAZARD_GRACE_MS = 400;
 const NEAR_MISS_RADIUS = 26;
 /** Impulse a hit imparts, scaled down for heavier bodies. */
 const KNOCKBACK = 160;
+/**
+ * How long a body cannot be staggered by a spell again, after one has.
+ *
+ * Twice the stagger a weight of 1.8 buys, so a heavy spell cast on its own
+ * cooldown still lands its stagger every time and a heavy spell spammed at
+ * one body does not hold it. "A stagger is the payoff for a slow cast, not a
+ * lock" (doc 006).
+ */
+const SPELL_STAGGER_IMMUNE_MS = 900;
+
+/** Staggers a body with a spell, once per `SPELL_STAGGER_IMMUNE_MS`. */
+function spellStagger(w: World, e: Enemy, weight: number): void {
+  if (e.staggerImmuneMs > 0) return;
+  stagger(w, e, STAGGER_MS * weight);
+  e.staggerImmuneMs = SPELL_STAGGER_IMMUNE_MS;
+}
+
+/** A player's shot at least this heavy (`weight`) staggers what it hits, for `STAGGER_MS` times its weight. */
+const SPELL_STAGGER_WEIGHT = 1.2;
 
 /**
  * Impact freeze and camera trauma per event.
@@ -147,6 +177,22 @@ const PROPS_PER_ROOM = 6;
  */
 const ATTACK_TOKENS = 2;
 /**
+ * ...plus one per this many awake bodies.
+ *
+ * A fixed two was right for the fight it was written against and wrong for a
+ * room of six: measured, an awake body spent **57% of its time waiting for a
+ * turn** — a melee body 43 to 65% of it in the ring, a ranged body 62 to 79%
+ * of it waiting to shoot — which is what "enemies wander about for ages doing
+ * nothing" is. The cap exists so that a room cannot commit six bodies at once
+ * and leave the player no position to answer from; it does not have to mean
+ * that four of six are always idle.
+ *
+ * Scaling keeps the intent (a fixed share of the room is engaged rather than a
+ * fixed number) and holds the ceiling where it matters: at the concurrency cap
+ * of twelve it is six turns, which is still half the floor waiting.
+ */
+const TOKENS_PER_AWAKE = 3;
+/**
  * How many steps of the player's path the world remembers, which sets the
  * longest reaction an enemy can have. 24 steps is 400 ms; see `playerTrail`.
  */
@@ -162,6 +208,13 @@ const PLAYER_TRAIL_DEPTH = 24;
  * times the fire; it does not need to make them harmless.
  */
 const FIRE_TOKENS = 2;
+/**
+ * The view the simulation assumes when no camera says otherwise: the viewport,
+ * one 21 × 13-tile view (doc 017). The harness plays against it.
+ */
+export const DEFAULT_VIEW_HALF = { x: TILE_PX * 10.5, y: TILE_PX * 6.5 };
+/** See `World.flightBudget`. */
+const FLIGHT_BUDGET = 60;
 
 export interface CreateWorldOptions {
   readonly room: RoomPlan;
@@ -169,8 +222,17 @@ export interface CreateWorldOptions {
   readonly staff: Staff;
   readonly slots: readonly (ItemInstance | null)[];
   readonly hearts: number;
-  /** What the run has improved about the player; see `PlayerMods`. */
+  /**
+   * What the **stat cards** have improved about the player; see `PlayerMods`.
+   * The level's share is added here from `xp`, so a caller hands in the cards
+   * and the experience and never the two already combined.
+   */
   readonly mods?: PlayerMods;
+  /**
+   * Experience earned so far this run (`run/levels.ts`). Nothing in a test
+   * passes it, so a world with no history starts at level 1.
+   */
+  readonly xp?: number;
   readonly rng: Rng;
   readonly items?: ItemRegistry;
   /**
@@ -184,13 +246,35 @@ export interface CreateWorldOptions {
   readonly props?: number;
   /**
    * A normal room's stray elite: when given, one body in the room carries
-   * these affixes. See `strayEliteFor`.
+   * these affixes.
    */
-  readonly strayElite?: readonly EliteAffix[];
+  readonly affixCtx?: AffixContext;
   /** Difficulty settings; see `World.dealtMult`. */
   readonly dealtMult?: number;
   readonly takenMult?: number;
   readonly invincible?: boolean;
+  /** See `World.placement`; waves unless set. */
+  readonly placement?: "waves" | "camps";
+  /** Half the camera's view round the player, px; see `World.viewHalf`. */
+  readonly viewHalf?: { x: number; y: number };
+  /** Firing turns and the bullets-in-flight budget, when not the defaults. */
+  readonly fireTokens?: number;
+  /** Where in the run this room is (1-based), for the ramp; the late run when absent. */
+  readonly roomIndex?: number;
+  /**
+   * **The early economy** (doc 003): how far the coin drop from a kill is
+   * raised while the build has not taken shape, as a multiplier clamped to
+   * `COIN_BOOST_MAX`.
+   *
+   * Gold only buys anything through a vendor, and the vendors are the thing a
+   * half-built run most needs to reach: a spell off the shelf is a key filled,
+   * where a stat is a number on a build that does not exist yet. So the run
+   * pays more per body while `build_shape` is `raw` or `forming` and settles
+   * back to the ordinary rate once it is `formed`. The cap is code's; which
+   * doors lead to the vendor is the Director's (`npc_room`).
+   */
+  readonly coinBoost?: number;
+  readonly flightBudget?: number;
   /**
    * Spin charge carried in from the last room. Rage is earned with the sword
    * and banked as charges; a portal that emptied the bank would make a charge
@@ -205,52 +289,18 @@ export interface CreateWorldOptions {
   readonly offer?: RoomOffer;
 }
 
-/** The three keyed spells drawn from a slot list, padded to `SPELL_SLOTS`. */
 /**
- * The three keyed spells, drawn from the staff.
- *
- * **An attack claims the modifiers that follow it**, up to its three slots,
- * until the next attack. That is the one reading of a flat slot list that
- * matches doc 013's "three spells, three affix slots each" without inventing a
- * second data structure for the player to arrange.
- *
- * Before this, every non-passive slot became its own spell — so a boost was a
- * key that did nothing, and it could not reach the attack beside it either.
- * Twenty of the forty items in the pool were inert as a result, which is why
- * `fracture_rune` never split anything and `power_rune` never raised any
- * damage.
+ * The three keyed spells, drawn from the slot list: each held item is one
+ * self-contained spell, in slot order, padded to `SPELL_SLOTS`.
  */
 function spellsFrom(
   slots: readonly (ItemInstance | null)[], items: ItemRegistry,
 ): (SpellSlot | null)[] {
   const out: (SpellSlot | null)[] = [];
-  let attack: ItemInstance | null = null;
-  let mods: ItemInstance[] = [];
-
-  const flush = (): void => {
-    if (!attack || out.length >= SPELL_SLOTS) return;
-    const spell = makeSpell(attack, items, mods);
-    if (spell.unit) out.push(spell);
-    attack = null;
-    mods = [];
-  };
-
   for (const inst of slots) {
-    if (!inst) continue;
-    const kind = items.get(inst.base)?.kind;
-    // A passive is a stat on the whole staff, not something to press or attach.
-    if (kind === "passive") continue;
-    if (kind === "attack" || kind === "payload") {
-      flush();
-      attack = inst;
-      continue;
-    }
-    // A boost or a multicast with no attack yet has nothing to modify; one
-    // after an attack is that attack's affix.
-    if (attack && mods.length < AFFIX_SLOTS) mods.push(inst);
+    if (!inst || out.length >= SPELL_SLOTS) continue;
+    if (items.has(inst.base)) out.push(makeSpell(inst));
   }
-  flush();
-
   while (out.length < SPELL_SLOTS) out.push(null);
   return out;
 }
@@ -267,6 +317,9 @@ export function answerOffer(w: World): void {
   if (!w.rewardPending) return;
   w.rewardPending = false;
   w.rewardDrop = null;
+  // In front of the player, where they took the reward — which is gone, so
+  // the row need not keep clear of it.
+  w.portals = portalsBefore(w.room.grid, w.room.extent, w.portalSpecs, w.player, [], hazardCells(w), w.viewHalf);
   raisePortals(w.portals);
   w.events.push({ kind: "portals_open", x: w.player.x, y: w.player.y });
 }
@@ -274,11 +327,10 @@ export function answerOffer(w: World): void {
 /**
  * Puts an item into the first free staff slot and rebuilds what depends on it.
  *
- * Three things depend on the slots and forgetting any one of them is a silent
- * failure: the parsed cast tree, the three keyed spells, and the slots
- * themselves. Exported as one call so a reward taken mid-run cannot rebuild
- * two of the three — which is the shape of bug that shows up as "the spell I
- * picked up does nothing".
+ * The keyed spells depend on the slots and forgetting to rebuild them is a
+ * silent failure. Exported as one call so a reward taken mid-run cannot update
+ * one without the other — which is the shape of bug that shows up as "the
+ * spell I picked up does nothing".
  *
  * Returns false when the staff is full. Doc 003 wants that case to open the
  * staff editor with a mandatory discard; there is no editor yet, so the caller
@@ -298,22 +350,32 @@ export function equipItem(
   const slots = [...w.slots];
   slots[free] = plainInstance(baseId, uid, items);
   w.slots = slots;
-  w.tree = parseCastTree(slots, items);
   w.spells = spellsFrom(slots, items);
   return true;
 }
 
 export function createWorld(input: CreateWorldOptions): World {
   /*
+   * **The level is folded in here, once, for every caller.**
+   *
+   * The run hands in what the stat cards did and how much experience it has
+   * earned; what the player actually fights with is the two together
+   * (`withLevels`). Doing it here rather than in the scene and again in the
+   * harness is the parity rule: both callers build the same body from the
+   * same two numbers, and neither can forget half of it.
+   */
+  const baseMods = input.mods ? { ...input.mods } : noMods();
+  const progress = levelAt(input.xp ?? 0);
+  const mods = withLevels(baseMods, progress.level);
+  /*
    * The run's max-mana modifier is applied to the staff here, once. It was
    * recorded (`deep_well` multiplied `mods.manaMax`) and read by nothing, so
    * the stat card said "+18% max mana" and the bar did not move.
    */
-  const o: CreateWorldOptions = input.mods && input.mods.manaMax !== 1
-    ? { ...input, staff: { ...input.staff, mana_max: Math.round(input.staff.mana_max * input.mods.manaMax) } }
-    : input;
-  const start = entryPosition(o.room.entry);
-  const tree = parseCastTree(o.slots, o.items ?? ITEMS);
+  const o: CreateWorldOptions = mods.manaMax !== 1
+    ? { ...input, mods, staff: { ...input.staff, mana_max: Math.round(input.staff.mana_max * mods.manaMax) } }
+    : { ...input, mods };
+  const start = entryPosition(o.room.entry, o.room.extent);
   /*
    * The world owns a copy of the grid.
    *
@@ -326,7 +388,9 @@ export function createWorld(input: CreateWorldOptions): World {
   const zones = o.room.zones;
   // Fixtures first: the zone's own pillars, which the scattered props then
   // keep clear of like any other solid.
-  const fixtures = placeFixtures(grid, zones);
+  // Every prop breaks, fixtures too, so the boss room stands none (see below).
+  const fixtures = o.room.room_type === "boss" ? [] : placeFixtures(grid, zones);
+  const standing = placeStanding(grid, o.room.standing ?? []);
   const scattered = placeProps(
     grid, o.rng,
     // Clear of the entry and of every spawn point: a prop on a spawn buries
@@ -335,27 +399,28 @@ export function createWorld(input: CreateWorldOptions): World {
     [start, ...o.room.spawn_groups.flatMap((g) => g.cells.map((c) => ({
       x: (c[0] + 0.5) * TILE_PX, y: (c[1] + 0.5) * TILE_PX,
     })))],
-    o.props ?? PROPS_PER_ROOM,
+    // None in the boss room: the arena is the fight's, and a pot there is a
+    // wall the king's moves stop at and the player trips on mid-dodge.
+    o.props ?? (o.room.room_type === "boss" ? 0 : PROPS_PER_ROOM),
+    // Nor on a floor hazard: a pot standing in a poison pool is a thing the
+    // player has to wade in to break, and reads as the pool being floor.
+    hazardCellsOf(zones),
   );
-  const props = [...fixtures, ...scattered];
+  const props = [...fixtures, ...standing, ...scattered];
   return {
     tick: 0,
     room: { ...o.room, grid, zones },
     props,
     staff: o.staff,
     slots: o.slots,
-    tree,
-    /*
-     * The first three non-passive items become the three keyed spells.
-     *
-     * Read off the same slot list doc 006 parses into a tree, so the Director
-     * and the staff editor keep planning one inventory and nothing has to be
-     * planned twice. What changes is only how it is spent: doc 006 cycled the
-     * whole list on a held button, and doc 013 binds the first three to keys.
-     */
+    // The first three held items become the three keyed spells (doc 013).
     spells: spellsFrom(o.slots, o.items ?? ITEMS),
     pickups: makePickupPool(),
     gold: 0,
+    xp: progress.xp,
+    level: progress.level,
+    baseMods,
+    staffManaBase: input.staff.mana_max,
     /*
      * The portals exist from the first frame and are shut.
      *
@@ -370,32 +435,9 @@ export function createWorld(input: CreateWorldOptions): World {
      * advantage a floor portal has over a door in the wall, and it would be
      * wasted by hiding them until the end.
      */
-    /*
-     * The portals exist from the first frame, shut and not yet drawn.
-     *
-     * Placed at room start rather than when the offer is answered so the
-     * geometry is settled with the rest of the room, deterministically for a
-     * seed — a layout decided mid-play would differ between a replay and the
-     * run it was replaying. They become visible when they are raised, which is
-     * the beat the player sees.
-     *
-     * Placement avoids the spawn groups, which are known now and gone later.
-     */
-    portals: o.offer
-      ? placePortals(
-        grid, o.offer.doors, start,
-        [
-          ...o.room.spawn_groups.flatMap((g) =>
-            g.cells.map((c) => ({ x: (c[0] + 0.5) * TILE_PX, y: (c[1] + 0.5) * TILE_PX }))),
-          // Never in a zone: a portal standing in a poison pool asks the
-          // player to be hurt to leave, and one on a turret mount has a
-          // turret on it.
-          ...o.room.zones.filter((z) => z.feature !== "none").flatMap((z) =>
-            z.cells.map((c) => ({ x: (c[0] + 0.5) * TILE_PX, y: (c[1] + 0.5) * TILE_PX }))),
-        ],
-        o.rng,
-      )
-      : [],
+    // Made when the way out opens, in front of the player (`portalsBefore`).
+    portals: [],
+    portalSpecs: o.offer?.doors ?? [],
     rewardPending: false,
     rewardDrop: null,
     exited: null,
@@ -407,17 +449,19 @@ export function createWorld(input: CreateWorldOptions): World {
       mods: o.mods ? { ...o.mods } : noMods(),
       invulnMs: 0,
       mana: o.staff.mana_max,
-      castIndex: 0, castTimerMs: 0, cooldownMs: 0,
-      firing: false,
+      castPending: -1, castWindupMs: 0, castCost: 0, castRecoverMs: 0, castMoveScale: 1,
+      chargeKey: -1, chargeMs: 0, chargeVoid: -1, landing: null,
       aim: { x: start.x + 1, y: start.y },
       facing: 0,
       dashMs: 0, dashIframeMs: 0, dashCooldownMs: 0, dashX: 0, dashY: 0,
       hurtX: 0, hurtY: 0, hurtMs: 0,
       burnBuild: 0, poisonBuild: 0, burnFedMs: 0, poisonFedMs: 0, burnMs: 0, poisonMs: 0, dotTickMs: 0,
       rage: Math.max(0, Math.min(o.mods?.rageMax ?? Infinity, o.rage ?? 0)), swingStretch: 1, spinTurn: 0, spinBufferMs: 0,
-      strikeMs: 0, strikeDamage: 0, strikeRadius: 0, strikeHits: [],
-      stunMs: 0, dragMs: 0, dragX: 0, dragY: 0, slowed: false, slipMs: 0, slideX: 0, slideY: 0,
-      swingMs: 0, swingFacing: 0,
+      strikeMs: 0, strikeDamage: 0, strikeRadius: 0,
+      strikeElement: "none" as const, strikeElementPower: 1, strikePowers: noPowers(), strikeProc: 1, strikeStatusMult: 1, strikeHits: [],
+      stunMs: 0, dragMs: 0, dragX: 0, dragY: 0, slipMs: 0, slideX: 0, slideY: 0,
+      swingMs: 0, swingFacing: 0, swung: false, chainMs: 0,
+      trail: null, enchant: null, stance: null,
     },
     enemies: [],
     playerBullets: makePool(POOL_SIZES.player),
@@ -425,44 +469,101 @@ export function createWorld(input: CreateWorldOptions): World {
     particles: Array.from({ length: PARTICLE_POOL }, () => ({
       alive: false, x: 0, y: 0, vx: 0, vy: 0, lifeMs: 0, maxLifeMs: 1, kind: "hit" as const,
     })),
-    pendingWaves: chunkWaves((o.encounter?.waves ?? []).map((w) => ({
+    pendingWaves: chunkWaves(trimToRamp((o.encounter?.waves ?? []).map((w) => ({
       atMs: w.at_ms,
       spawns: w.spawns.map((s) => ({ archetype: s.archetype, group: s.spawn_group, count: s.count })),
-    }))),
+    })), o.roomIndex ?? 99, o.room.room_type === "combat" || o.room.room_type === "elite",
+      PACING[o.encounter?.profile.wave_structure ?? "steady"].gapMs), o.roomIndex ?? 99),
+    pacing: PACING[o.encounter?.profile.wave_structure ?? "steady"],
     affixes: o.encounter?.elite_affixes ?? [],
-    strayElite: o.strayElite ?? [],
+    normalElites: normalEliteCount(o.roomIndex ?? 99, o.encounter?.profile?.elite_presence),
+    affixCtx: o.affixCtx ?? {
+      roster_size: o.encounter?.waves.reduce((n, wv) => n + wv.spawns.reduce((m, sp) => m + sp.count, 0), 0) ?? 0,
+      rooms_seen: o.roomIndex ?? 1,
+      shielded_rooms: 0,
+      build_elemental_only: false,
+    },
     elitesPlaced: 0,
     affixPlaced: {},
     dealtMult: o.dealtMult ?? 1,
     resonance: [],
     takenMult: o.takenMult ?? 1,
     invincible: o.invincible ?? false,
+    viewHalf: o.viewHalf ?? DEFAULT_VIEW_HALF,
+    viewCentre: null,
+    placement: o.placement ?? "waves",
     events: [],
-    stats: { heartsLost: 0, damageDealt: 0, shotsFired: 0, nearMisses: 0, elapsedMs: 0 },
+    stats: {
+      enemiesSpawned: 0, heartsLost: 0, damageDealt: 0, shotsFired: 0, nearMisses: 0, elapsedMs: 0,
+      castPresses: 0, castRefusedMana: 0, manaBelowKeyMs: 0, shotHits: 0, swordDamage: 0,
+      hurtByRanged: 0, hurtByMelee: 0, hurtByHazard: 0,
+      hurtByEnemy: {}, heartsLow: o.hearts ?? 0,
+    },
     rng: o.rng,
     nextEnemyId: 1,
+    nextEruptionCast: 1,
+    lastSpellKey: null,
     lastWaveMs: -Infinity,
     cleared: false,
     // Charged, so the first step onto a hazard is paid for at once.
     playerTrail: [{ x: start.x, y: start.y }],
+    /*
+     * Where in the run this room is, for the ramp (doc 005). Defaults to the
+     * end of it, so anything that does not say — a test, a frame capture —
+     * plays the full-size game.
+     */
+    roomIndex: o.roomIndex ?? 99,
+    coinBoost: Math.max(1, Math.min(COIN_BOOST_MAX, o.coinBoost ?? 1)),
     attackTokens: ATTACK_TOKENS,
-    fireTokens: FIRE_TOKENS,
+    fireTokens: o.fireTokens ?? FIRE_TOKENS,
+    // The base the scaling adds to; an experiment may set it (`JR_FIRE_TOKENS`).
+    fireTokenCap: o.fireTokens ?? FIRE_TOKENS,
+    flightBudget: o.flightBudget ?? FLIGHT_BUDGET,
     hazardTimerMs: HAZARD_DAMAGE_INTERVAL_MS - HAZARD_GRACE_MS,
     hitstopMs: 0,
     trauma: 0,
     fires: makeFirePool(),
-    vortices: Array.from({ length: 6 }, () => ({
-      alive: false, x: 0, y: 0, radius: 0, lifeMs: 0, maxLifeMs: 1, pull: 0, tickMs: 0, damage: 0, spellIndex: -1,
+    grass: grassOf(o.room),
+    pathGrid: lavaAsWall(o.room),
+    /*
+     * Eighteen, from six: a free cast is the spell's own shape now, so
+     * `scatter` III on Void Maw opens six pulls a press, and at six slots
+     * every press evicted the pull the press before had put under the body
+     * it was holding. A pull is not a patch of fire, and there is no carpet
+     * to cap (`FIRE_POOL`); eighteen is three presses of the widest cast,
+     * which is more than the bar pays for in the time a pull lasts.
+     */
+    vortices: Array.from({ length: 18 }, () => ({
+      alive: false, x: 0, y: 0, radius: 0, lifeMs: 0, maxLifeMs: 1, pull: 0, tickMs: 0, damage: 0,
+      element: "none" as const, elementPower: 1, powers: noPowers(), proc: 1, statusMult: 1, spellIndex: -1,
+      collapseDamage: 0,
+    })),
+    eruptions: Array.from({ length: ERUPTION_POOL }, () => ({
+      alive: false, x: 0, y: 0, delayMs: 0, ageMs: 0, fired: false, radius: 0, damage: 0,
+      element: "none", elementPower: 1, powers: noPowers(), proc: 1, statusMult: 1, weight: 1, burnMs: 0, kind: "earth" as const, spellIndex: -1, castId: 0,
+      telegraphMs: 0,
     })),
     pets: Array.from({ length: 2 }, () => ({
       alive: false, x: 0, y: 0, vx: 0, vy: 0, facing: 0, lifeMs: 0, maxLifeMs: 1, fireMs: 0,
-      intervalMs: 700, damage: 0, range: 0, speed: 0, spellIndex: -1, attackMs: 0,
+      intervalMs: 700, damage: 0, range: 0, speed: 0,
+      element: "none" as const, elementPower: 1, powers: noPowers(), proc: 1, statusMult: 1, spellIndex: -1, attackMs: 0,
+    })),
+    /*
+     * Nine: three keys at the pool's largest cap of three. A key's own cap
+     * (`max_alive`) is what bounds a held key; this only has to hold them.
+     */
+    orbs: Array.from({ length: 9 }, () => ({
+      alive: false, x: 0, y: 0, vx: 0, vy: 0, radius: 0, lifeMs: 0, maxLifeMs: 1, zapClockMs: 0, zapMs: 300,
+      zapReach: 0, damage: 0, element: "none" as const, elementPower: 0, powers: noPowers(), proc: 1, statusMult: 1,
+      affixes: [], spellIndex: -1, manaSpent: 0, born: 0, lastTargetId: -1,
     })),
     wards: [],
     echoes: [],
+    freeStrikes: [],
+    dooms: [],
     scorches: makeScorchPool(),
-    rifts: [], mines: [], tethers: [], lobs: [], slowFields: [], flames: [], deathBursts: [],
-    streak: 0, streakMs: 0, quietMs: 0,
+    rifts: [], mines: [], tethers: [], lobs: [], hasteFields: [], shockwaves: [], arms: [], flames: [], deathBursts: [],
+    streak: 0, streakMs: 0, swordBlow: false, quietMs: 0,
     swing: makeSwingBox(),
     flow: null,
     flowTile: null,
@@ -473,27 +574,28 @@ export function createWorld(input: CreateWorldOptions): World {
 export /** The share of an elite room's non-heavy bodies that are elite; see the spawn. */
 const ELITE_SHARE = 0.35;
 const HEAVY_ELITES: ReadonlySet<string> = new Set(["tank", "summoner", "turret", "sentinel"]);
+/** The most bodies an elite room makes elite: four things to pick a kill order for. */
+export const ELITE_ROOM_CAP = 4;
 
 /**
- * A normal room's stray elite: from room 3, about one room in seven has one
- * body that is an elite — a single affix, the enraged tint — so an elite is
- * something a normal room can surprise the player with, not only a door.
+ * **How many elites a normal room hides** (doc 019).
+ *
+ * This replaces a flat 15% a room with a Director answer. A fixed rate is a
+ * designer's taste written as a constant, and whether *this* room should hide
+ * one reads on the player's state exactly as `density` and `anchor` do — so
+ * it is `elite_presence`, asked in round 2, and this is only the conversion
+ * from its label to a count.
+ *
+ * The caps stay code's, whatever the answer was: never before the ramp allows
+ * an elite at all, and never more than two.
  */
-export function strayEliteFor(roomIndex: number, rng: { next(): number }): EliteAffix[] {
-  if (roomIndex < 3 || rng.next() >= 0.15) return [];
-  // Not burning: a stray elite that sets the floor alight turned out to be
-  // the largest single source of burn in a run.
-  const pool: EliteAffix[] = ["swift", "armored", "volatile"];
-  return [pool[Math.floor(rng.next() * pool.length)]!];
+export const NORMAL_ELITE_CAP = 2;
+export const ELITE_COUNT: Readonly<Record<ElitePresence, number>> = { none: 0, one: 1, two: 2 };
+
+export function normalEliteCount(roomIndex: number, presence: ElitePresence | undefined): number {
+  if (!rampFor(roomIndex).elites) return 0;
+  return Math.min(NORMAL_ELITE_CAP, ELITE_COUNT[presence ?? "none"]);
 }
-
-/**
- * How many lancers an elite room holds at once. Every rusher became one, and
- * with rushers two thirds of a melee roster that was six bodies each firing
- * eight spikes every two seconds: measured, the spikes were a third of all
- * hearts lost in a run. Two is a pair to read; the rest stay rushers.
- */
-const LANCER_CAP = 2;
 
 function hazardCells(w: World): Set<number> {
   const out = new Set<number>();
@@ -521,10 +623,27 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
 
   // The freeze holds everything: bodies, bullets, timers. Held for a frame or
   // three it reads as the hit having weight, not as the game hitching.
+  /*
+   * The boss's fight clock advances first — before the hitstop freeze, so it
+   * is real time since the fight began and the music can be played to it,
+   * and before any body moves, so everything this step reads the same beat
+   * (doc 020). Advanced under the same conditions `stepBoss` runs under.
+   */
+  for (const e of w.enemies)
+    if (e.archetype === "boss" && e.hp > 0 && (isActive(e) || e.airborne) && e.awake) e.bossFightMs += dtMs;
   if (w.hitstopMs > 0) {
     w.hitstopMs -= dtMs;
     return w;
   }
+  /*
+   * The boss's blade is held to its line here, before the bodies move, so the
+   * windup that comes due in this step commits in this step — `stepEnemy`
+   * takes the step off it next. Held in `stepBoss`, after the bodies, a blade
+   * whose line fell inside a freeze landed two steps after the freeze ended.
+   */
+  for (const e of w.enemies)
+    if (e.archetype === "boss" && e.attack === "windup" && e.attackMs > 0)
+      e.attackMs = Math.max(0, Math.min(e.attackMs, e.bossBladeAt - e.bossFightMs + dtMs));
 
   // Counted after the freeze, because a frozen frame is presentation, not
   // game time. Charging it to the room would make every measurement of how
@@ -532,6 +651,11 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   w.stats.elapsedMs += dtMs;
 
   stepPlayer(w, input, dtMs);
+  // What runs on the caster (doc 006): the guard's clock, the trail's ground
+  // for the distance just walked, the enchant's clock.
+  stepStance(w, dtMs);
+  stepTrail(w, dtMs);
+  stepEnchant(w, dtMs);
   refreshFlow(w);
   releaseWaves(w);
 
@@ -540,18 +664,28 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   resolveStrikes(w, dtMs);
   // The expansion's rifts, mines, tethers, lobs, fields and discs.
   stepAttacks(w, dtMs, attackHooks(w));
+  // A travelling band — the slam's, a sword wave — breaks the stone it runs into, once a wave each.
+  for (const s of w.shockwaves) {
+    if (!s.alive || s.chargeMs > 0) continue;
+    s.propsStruck ??= [];
+    bossStrikesProps(w, (q) => shockwaveHits(s, q.x, q.y, q.radius), s.propsStruck, BOSS_PROP_WAVE_DAMAGE);
+  }
   stepDeathBursts(w, dtMs);
 
-  /*
-   * Doc 013 replaces the held fire button with three keys. `stepCast`'s
-   * auto-cycling tree is no longer stepped for the player: the sword is the
-   * basic attack now, and a staff that fires on its own while the player is
-   * swinging is a second basic attack competing with the first.
-   */
   // A stun silences the spells too, or it would only be a movement penalty.
-  const cast = stepSpells(
-    w, items, dtMs, w.player.stunMs > 0 ? null : input.spell ?? null,
-  );
+  // A charge being held goes out with it, unpaid: a stun is not a release.
+  if (w.player.stunMs > 0 && w.player.chargeKey >= 0) cancelCharge(w.player);
+  const pressedSpell = w.player.stunMs > 0 ? null : input.spell ?? null;
+  const cast = stepSpells(w, items, dtMs, pressedSpell);
+  /*
+   * A press that produced nothing is said out loud, so the renderer can
+   * answer it. `stepSpells` already knows why — the whole point of
+   * `SpellStep.refused` — and the value was being dropped here, which left
+   * the browser's player with a key that silently did nothing whenever the
+   * bar sat just under the cost.
+   */
+  if (cast.refused !== null && pressedSpell !== null)
+    w.events.push({ kind: "cast_refused", x: w.player.x, y: w.player.y, what: cast.refused, amount: pressedSpell });
   w.stats.shotsFired += cast.shots.length;
   for (const shot of cast.shots) emit(w, shot.x, shot.y, "muzzle", 2);
   for (const shot of stepEchoes(w, items, dtMs)) emit(w, shot.x, shot.y, "muzzle", 2);
@@ -564,6 +698,23 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   if (w.playerTrail.length > PLAYER_TRAIL_DEPTH) w.playerTrail.shift();
 
   smashProps(w, dtMs);
+  /*
+   * The turn budget, re-sized each step against how many bodies are actually
+   * awake (`TOKENS_PER_AWAKE`). Free turns are the cap less the ones being
+   * held, so the count is self-correcting: a body that dies or is staggered
+   * mid-attack cannot leak a turn, and a cap that shrinks as a room is
+   * cleared never goes negative.
+   */
+  {
+    const awake = w.enemies.filter((e) => e.hp > 0 && e.awake && isActive(e)).length;
+    const extra = Math.floor(awake / TOKENS_PER_AWAKE);
+    const heldMelee = w.enemies.filter((e) => e.hasToken).length;
+    const heldFire = w.enemies.filter((e) => e.hasFireToken).length;
+    // The ramp holds the base down early: one turn in the opening rooms.
+    const base = Math.min(ATTACK_TOKENS, rampFor(w.roomIndex).tokens);
+    w.attackTokens = Math.max(0, base + extra - heldMelee);
+    w.fireTokens = Math.max(0, Math.min(w.fireTokenCap, rampFor(w.roomIndex).tokens) + extra - heldFire);
+  }
   for (const e of w.enemies) stepEnemy(w, e, dtMs);
   for (const e of w.enemies) if (e.archetype === "boss" && e.hp > 0) stepBoss(w, e, dtMs);
   resolveBodies(w);
@@ -573,6 +724,8 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
     return false;
   });
 
+  // Before the shots: an orb's strike is born on its body and lands this step.
+  stepOrbs(w, dtMs);
   stepPlayerBullets(w, dtMs, items);
   stepEnemyBullets(w, dtMs);
   resolveEnemySwings(w);
@@ -589,9 +742,13 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   collectPickups(w, dtMs);
   stepHazards(w, dtMs);
   poisonGround(w, dtMs);
+  stepLava(w, dtMs);
+  stepGrass(w, dtMs);
   stepStatuses(w, dtMs);
   stepDashStrike(w, dtMs);
   stepVortices(w, dtMs);
+  stepEruptions(w, dtMs);
+  stepDooms(w, dtMs);
   stepPets(w, dtMs, items);
   stepWards(w, dtMs);
   slipstream(w);
@@ -599,12 +756,32 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   if (w.streakMs > 0) w.streakMs -= dtMs;
   stepQuiet(w, dtMs);
 
-  if (!w.cleared && worldCleared(w)) {
+  // Not while the boss is still to come (`World.awaitingBoss`): the hall is empty until he stands.
+  if (!w.cleared && !w.awaitingBoss && worldCleared(w)) {
     w.cleared = true;
     w.events.push({ kind: "room_cleared", x: w.player.x, y: w.player.y });
+    /*
+     * **The fight's leftovers go with it.** A seed armed on the floor, a shot
+     * still in the air, a crack still growing: with every body dead they are
+     * a hit with nobody behind it, landing while the player walks to the
+     * reward. Each is put out where it is.
+     */
+    if (w.stats.enemiesSpawned > 0) {
+      for (const m of w.mines) w.events.push({ kind: "bullet_spent", x: m.x, y: m.y, what: "mine" });
+      w.mines = [];
+      for (const b of w.enemyBullets) if (b.alive) {
+        b.alive = false;
+        w.events.push({ kind: "bullet_spent", x: b.x, y: b.y, what: b.from });
+      }
+      w.lobs = [];
+      w.rifts = [];
+      w.shockwaves = [];
+      w.arms = [];
+    }
     if (w.offer && w.offer.cards.length > 0) {
       w.rewardPending = true;
-      w.rewardDrop = placeReward(w.room.grid, w.offer.cards[0]!.kind, hazardCells(w));
+      // Beside the player: with the room larger than the view, the middle was often off it.
+      w.rewardDrop = placeRewardNear(w.room.grid, w.offer.cards[0]!.kind, w.player, hazardCells(w));
       w.events.push({
         kind: "reward_shown", x: w.rewardDrop.x, y: w.rewardDrop.y,
         what: w.rewardDrop.kind,
@@ -625,6 +802,7 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
        */
       for (let i = 0; i < (w.offer.coins ?? GOLD_ROOM_COINS); i++)
         drop(w.pickups, "coin", w.player.x, w.player.y, w.rng);
+      w.portals = portalsBefore(w.room.grid, w.room.extent, w.portalSpecs, w.player, [], hazardCells(w), w.viewHalf);
       raisePortals(w.portals);
       w.events.push({ kind: "portals_open", x: w.player.x, y: w.player.y });
     }
@@ -692,24 +870,51 @@ function reachableFloor(w: World): Uint8Array {
   return floodFill(w.room.grid, [Math.floor(w.player.x / TILE_PX), Math.floor(w.player.y / TILE_PX)]);
 }
 
+/**
+ * Cells of the room's floor hazards — spikes, poison, ice, lava — where no
+ * body is placed. A turret mount or grass is a feature and
+ * not a hazard, so a turret still stands on its plinth.
+ */
+function floorHazardCells(w: World): Set<number> {
+  return hazardCellsOf(w.room.zones);
+}
+
+function hazardCellsOf(zones: RoomPlan["zones"]): Set<number> {
+  const out = new Set<number>();
+  for (const z of zones) {
+    if (z.feature === "none" || feature(z.feature).resource !== "floor_hazard") continue;
+    for (const c of z.cells) out.add(c[1] * GRID_W + c[0]);
+  }
+  return out;
+}
+
 function nearestFreeCell(
   w: World, cell: readonly [number, number], taken: Set<number>,
 ): readonly [number, number] {
   const reach = reachableFloor(w);
-  const ok = (x: number, y: number): boolean => {
+  /*
+   * **Never in a hazard**, where the floor offers anything else: a spawn cell
+   * beside a poison pool resolved into it, and the body began its fight
+   * standing in the poison. Only a room with no clear floor within reach
+   * falls back to a hazard cell rather than to no cell.
+   */
+  const hazards = floorHazardCells(w);
+  const ok = (x: number, y: number, clear: boolean): boolean => {
     if (x < 1 || y < 1 || x >= GRID_W - 1 || y >= GRID_H - 1) return false;
     const key = y * GRID_W + x;
-    return w.room.grid[key] === Tile.Floor && !taken.has(key) && reach[key] === 1;
+    return w.room.grid[key] === Tile.Floor && !taken.has(key) && reach[key] === 1 && (!clear || !hazards.has(key));
   };
-  if (ok(cell[0], cell[1])) return cell;
-  for (let r = 1; r <= 4; r++)
-    for (let dy = -r; dy <= r; dy++)
-      for (let dx = -r; dx <= r; dx++) {
-        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-        const x = cell[0] + dx;
-        const y = cell[1] + dy;
-        if (ok(x, y)) return [x, y];
-      }
+  for (const clear of [true, false]) {
+    if (ok(cell[0], cell[1], clear)) return cell;
+    for (let r = 1; r <= 4; r++)
+      for (let dy = -r; dy <= r; dy++)
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          const x = cell[0] + dx;
+          const y = cell[1] + dy;
+          if (ok(x, y, clear)) return [x, y];
+        }
+  }
   return cell;
 }
 
@@ -757,13 +962,15 @@ function placeFor(
   let bestKey = -1;
   let bestSeen = -1;
   const reach = reachableFloor(w);
+  // An emplacement never moves again, so one set down in a hazard stood in it all fight.
+  const hazards = floorHazardCells(w);
   for (let dy = -2; dy <= 2; dy++)
     for (let dx = -2; dx <= 2; dx++) {
       const tx = cell[0] + dx;
       const ty = cell[1] + dy;
       if (tx < 1 || ty < 1 || tx >= GRID_W - 1 || ty >= GRID_H - 1) continue;
       const key = ty * GRID_W + tx;
-      if (taken.has(key)) continue;
+      if (taken.has(key) || hazards.has(key)) continue;
       if (w.room.grid[key] !== Tile.Floor || reach[key] !== 1) continue;
       const p = { x: (tx + 0.5) * TILE_PX, y: (ty + 0.5) * TILE_PX };
       const seen = visibleFloor(w.room.grid, p.x, p.y);
@@ -785,7 +992,7 @@ function placeFor(
 function refreshFlow(w: World): void {
   const tile = tileOf(w.player.x, w.player.y);
   if (w.flow && w.flowTile && w.flowTile[0] === tile[0] && w.flowTile[1] === tile[1]) return;
-  w.flow = computeFlowField(w.room.grid, w.player.x, w.player.y);
+  w.flow = computeFlowField(w.pathGrid, w.player.x, w.player.y);
   w.flowTile = tile;
 }
 
@@ -823,6 +1030,17 @@ function stepPlayer(w: World, input: Input, dtMs: number): void {
     // Dash outranks the sword, so it cancels a swing in progress rather than
     // being refused by it. One priority ordering instead of a cancel table.
     cancelSwing(p);
+    // And a held charge: the dash is the answer to a charge gone wrong, so it
+    // puts the charge out at no cost (doc 006).
+    if (p.chargeKey >= 0) cancelCharge(p);
+    /*
+     * And a stance (doc 006). The dash keeps its place above everything
+     * (doc 013): it drops the guard at once, and the guard answers as it
+     * would have had it run out — at its expiry share, round where the
+     * player stood — so the key pressed is never a dead press, and the
+     * dodge is never refused because a guard was up.
+     */
+    if (p.stance) answerStance(w, p.stance.expireShare);
     p.dashMs = DASH_MS;
     p.slipFired = 0;
     p.dashIframeMs = DASH_IFRAME_MS;
@@ -861,8 +1079,10 @@ function stepPlayer(w: World, input: Input, dtMs: number): void {
     * swingMoveScale(p)
     // Poisoned: a quarter off, for as long as it lasts.
     * (p.poisonMs > 0 && !dashing ? POISON_SLOW : 1)
-    // A bellringer's slow field: a quarter off while inside it.
-    * (p.slowed && !dashing ? 0.75 : 1);
+    // Winding a spell up and recovering from it: the heavier, the slower.
+    * (!dashing && (p.castPending >= 0 || p.castRecoverMs > 0 || p.chargeKey >= 0) ? p.castMoveScale : 1)
+    // Holding a stance: planted, and slowed for as long as it holds.
+    * (!dashing && p.stance ? p.stance.moveScale : 1);
   const move = dashing ? { x: p.dashX, y: p.dashY } : dir;
   /*
    * Sliding: on ice the player keeps the velocity they had and steers it
@@ -914,7 +1134,6 @@ function stepPlayer(w: World, input: Input, dtMs: number): void {
   // hitbox still holds the centre it was given, so turning re-aims the next
   // hit rather than widening this one.
   p.facing = snapFacing(dir.x, dir.y, p.facing);
-  p.firing = input.fire;
 }
 
 /**
@@ -933,8 +1152,12 @@ function resolveSwing(w: World, dtMs: number): void {
 
   const box = w.swing;
   for (const e of struck) {
+    // A blow of the swing proper, not the spin's: the one kind of kill a streak counts.
+    w.swordBlow = w.player.swingStretch === 1;
     hurtEnemy(w, e, box.damage, e.awake ? "" : "sneak", w.player);
+    w.swordBlow = false;
     w.stats.damageDealt += box.damage;
+    w.stats.swordDamage += box.damage;
     e.hitFlashMs = HIT_FLASH_MS;
     // The sword fills the rage gauge: a little per connecting blow, more for
     // the one that kills. A spin's own hits do not refund it.
@@ -1014,7 +1237,7 @@ const PROP_HIT_ID_BASE = -2;
  * `tag` says what dealt it, for the damage number's colour: an element
  * (fire, ice, poison) or a spell school, or nothing for the sword.
  */
-function hurtEnemy(
+export function hurtEnemy(
   w: World, e: Enemy, raw: number, tag = "", from?: { x: number; y: number },
 ): { broke: boolean } {
   /*
@@ -1030,6 +1253,9 @@ function hurtEnemy(
    * worth something).
    */
   if (tag === "sneak" && raw > 0) mult = AMBUSH_MULT;
+  // **Breadth pays**: a body carrying two different elements takes more from
+  // everything. See `STATUS_BREADTH_MULT`.
+  if (raw > 0 && statusBreadth(e) >= 2) mult *= STATUS_BREADTH_MULT;
   if (e.frozenMs > 0 && raw > 0) {
     mult = SHATTER_MULT;
     e.frozenMs = 0;
@@ -1040,12 +1266,26 @@ function hurtEnemy(
     emit(w, e.x, e.y, "kill", 10);
     w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "shatter" });
   }
+  // What the body is made of: an element it resists does less, one it is
+  // immune to nothing at all (`EnemyDef.resist`).
+  const resist = tag ? resistOf(e.archetype, tag) : 1;
+  if (resist === 0) return { broke: false };
+  mult *= resist;
   // Damage is a whole number: rounded down, never below one.
   const amount = raw > 0 ? Math.max(1, Math.floor(raw * mult * w.dealtMult)) : 0;
+  /*
+   * **A hit stops a toll** (doc 005, the bellringer). Any damage at all, on
+   * armour or on health: the point of the move is that it can be answered, so
+   * it is answered by reaching the ringer, not by out-damaging its shield.
+   */
+  if (amount > 0) interruptToll(w, e);
   if (amount > 0)
     w.events.push({ kind: "damage", x: e.x, y: e.y - e.radius, what: `${e.armour > 0 ? "armour" : "hp"}${tag ? `:${tag}` : ""}`, amount });
   if (e.armour > 0) {
     e.armour -= amount;
+    // A ward's share of the armour is spent first, so a ringer still holding
+    // the line has to put it back (doc 005, the bellringer).
+    spendWard(e, amount);
     if (e.armour > 0) return { broke: false };
     // Overkill carries into health, so armour never converts a big hit into a
     // small one by absorbing all of it.
@@ -1103,26 +1343,163 @@ function damageProp(w: World, p: Destructible, amount: number): void {
  * swing is: that module owns the geometry and the clocks, and this one owns
  * what damage means, which is where invulnerability and the death path live.
  */
+/**
+ * The burn a tick of the player's ground fire adds, as a share of a hit's
+ * (`applyElementTo` floors power at 0.5). At a 520 ms tick a body standing
+ * in it catches in about three seconds — slower than being shot, since it
+ * costs nothing to keep standing a body in it.
+ */
+/*
+ * **Standing in fire is a slow toll that lights a fast one.** The ground asks
+ * once a second for a point (`FIRE_TICK_MS`, `FIRE_ENEMY_DAMAGE`), and this
+ * is how quickly it sets what stands in it alight: at 1.4 a tick the gauge
+ * fills on the second one, so a body that lingers catches in about two
+ * seconds and then burns at four ticks a second, which is where a fire
+ * spell's damage belongs.
+ *
+ * It is the *hazard* that was overtuned, not the gauge: at four damage twice
+ * a second, overlapping patches made Wildfire Field 6.2 times the pool's pack
+ * median. Slowing and shrinking the toll fixed that without making a field
+ * bad at the one thing it is for, which is setting things on fire.
+ */
+const GROUND_BURN_POWER = GROUND_STATUS_POWER;
+
+/*
+ * **A body burns once for standing in fire, however many fires it is standing
+ * in.** Every patch kept its own clock and billed every body inside it, so
+ * overlapping patches multiplied: Wildfire Field drops one a cast, a held key
+ * lays four or five over the same ground, and each of them billed the same
+ * body its toll *and* fed its burn gauge — which is why the spell measured at
+ * five times the sword's pack clearing and why shrinking the patch or
+ * shortening its life changed nothing (the pack stands in the overlap either
+ * way, and a recast renews it).
+ *
+ * So the toll is the **body's**, not the patch's: one tick per `FIRE_TICK_MS`
+ * per body, and the second patch to reach it that second does nothing. A
+ * field is still the best key against a crowd — it bills six bodies where a
+ * bolt bills one — but re-lighting ground that is already alight is worth
+ * nothing, which is the honest rule and the one a player can see.
+ */
 function resolveFires(w: World, dtMs: number): void {
   stepScorches(w, dtMs);
   const { enemies, playerBurning } = stepFires(w, dtMs);
   if (playerBurning) feedBurn(w, BURN_BUILD_PER_S * (dtMs / 1000));
-  for (const { id, damage } of enemies) {
+  for (const e of w.enemies) if (e.groundBurnMs > 0) e.groundBurnMs -= dtMs;
+  for (const e of w.enemies) if (e.groundPoisonMs > 0) e.groundPoisonMs -= dtMs;
+  slowInClouds(w);
+  for (const { id, damage, owner, statusMult, powers, proc, element } of enemies) {
     const e = w.enemies.find((x) => x.id === id);
     if (!e || e.hp <= 0) continue;
-    // Burning ground feeds a cinderling rather than hurting it, and sets it alight.
-    if (e.archetype === "cinderling") {
+    // Burning ground burns what stands on it; what flies passes over.
+    if (ENEMIES[e.archetype].flying) continue;
+    if (element === "poison") {
+      poisonCloudTick(w, e, damage, statusMult, powers, proc);
+      continue;
+    }
+    // Already billed this second by some other patch: see above.
+    if (e.groundBurnMs > 0) continue;
+    e.groundBurnMs = FIRE_TICK_MS;
+    /*
+     * Burning ground feeds a cinderling rather than hurting it — but **only
+     * the player's**.
+     *
+     * Its own fire lighting it was a loop with no exit: it lobs a coal, walks
+     * into the pool, catches, trails fire while it burns, stands in the trail,
+     * which refreshes the burn, and so on until the room is alight and the
+     * body has been on fire since the first throw. What the design asks for
+     * is "the player's element turned around" — the risk of answering a coal
+     * with fire — so the player's fire is the only thing that lights it, and
+     * enemy-owned fire (its own coals, its trail, a summoner's flame) feeds
+     * it a little health and nothing else.
+     */
+    if (baseArchetype(e.archetype) === "cinderling") {
       e.hp = Math.min(e.maxHp, e.hp + damage);
-      e.burnMs = Math.max(e.burnMs, 1500);
-      e.burnBuild = Math.min(1, e.burnBuild + 0.25);
+      if (owner === "player") {
+        e.burnMs = Math.max(e.burnMs, 1500);
+        e.burnBuild = Math.min(1, e.burnBuild + 0.25);
+      }
       continue;
     }
     hurtEnemy(w, e, damage, "fire");
+    /*
+     * **The player's burning ground builds the burn gauge**, a share of a
+     * hit's worth each tick. It only dealt its tick, so a body stood in a
+     * bloom or a wildfire and never caught — the one place fire is meant to
+     * set things alight was the one place it could not.
+     */
+    /*
+     * Burning ground burns by its nature, and carries anything else the spell
+     * that lit it holds — a field with `rime` or `blight` on it chills or
+     * poisons what stands in it, because that is what the card said.
+     */
+    /*
+     * Its fire adds to the ground's own: `kindle` on a field says the ground
+     * burns faster, and at the ground's figure alone the card attached and
+     * changed nothing — `affix-shapes.test.ts` found it.
+     */
+    if (owner === "player") {
+      applyElementTo(e, "fire", GROUND_BURN_POWER + powers.fire * proc, statusMult);
+      if (powers.poison > 0) applyElementTo(e, "poison", powers.poison * proc, statusMult);
+      if (powers.ice > 0) applyElementTo(e, "ice", powers.ice * proc, statusMult);
+    }
     e.hitFlashMs = HIT_FLASH_MS;
     w.stats.damageDealt += damage;
     w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "fire" });
     // See `resolveSwing`: the death filter owns the kill.
   }
+}
+
+/**
+ * How hard a tick of the player's poison cloud poisons what stands in it, as
+ * a share of a hit's (the cloud's `GROUND_BURN_POWER`): the gauge fills on
+ * the second tick, as burning ground lights on its second, so a body that
+ * stays in the cloud is poisoned in about two seconds and every tick after
+ * deepens it.
+ */
+const CLOUD_POISON_POWER = GROUND_STATUS_POWER;
+/**
+ * How long a body stays slowed after it was last inside a cloud. Short: the
+ * slow is the cloud's, read every step, and it lets go a moment after the
+ * body is out.
+ */
+const CLOUD_SLOW_MS = 250;
+
+/**
+ * **A poison field slows what stands in it** (doc 006), every step rather
+ * than on the tick: the slow is the ground's grip, not a status it builds.
+ * What flies is over the cloud, as it is over burning ground.
+ */
+function slowInClouds(w: World): void {
+  for (const f of w.fires) {
+    if (!f.alive || f.element !== "poison" || f.owner !== "player") continue;
+    for (const e of w.enemies) {
+      if (e.hp <= 0 || e.spawnFadeMs > 0 || ENEMIES[e.archetype].flying) continue;
+      if (!circlesOverlap(f.x, f.y, f.radius, e.x, e.y, e.radius)) continue;
+      e.slowMs = Math.max(e.slowMs, CLOUD_SLOW_MS);
+    }
+  }
+}
+
+/**
+ * **A poison field's tick** (doc 006): the cloud's small toll as poison
+ * damage, and its poison into the body's gauge — never a burn. Like burning
+ * ground, a body pays once a tick however many clouds it stands in
+ * (`groundPoisonMs`), and the cloud carries whatever else the spell holds on
+ * top (`kindle`, `rime`), because the card said it would. It feeds no
+ * cinderling: a cinderling eats fire, and this is not fire.
+ */
+function poisonCloudTick(
+  w: World, e: Enemy, damage: number, statusMult: number, powers: ElementPowers, proc: number,
+): void {
+  if (e.groundPoisonMs > 0) return;
+  e.groundPoisonMs = CLOUD_TICK_MS;
+  hurtEnemy(w, e, damage, "poison");
+  applyElementTo(e, "poison", CLOUD_POISON_POWER + powers.poison * proc, statusMult);
+  if (powers.fire > 0) applyElementTo(e, "fire", powers.fire * proc, statusMult);
+  if (powers.ice > 0) applyElementTo(e, "ice", powers.ice * proc, statusMult);
+  e.hitFlashMs = HIT_FLASH_MS;
+  w.stats.damageDealt += damage;
+  w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "poison" });
 }
 
 /**
@@ -1137,11 +1514,18 @@ function resolveStrikes(w: World, dtMs: number): void {
     if (!stepStrike(e.strike, dtMs)) continue;
     const s = e.strike;
     scorch(w, s.x, s.y, s.radius);
+    /*
+     * The beacon's ground keeps burning (doc 019). The turret denies a place
+     * for an instant, so the player steps out and steps back; the beacon takes
+     * that ground out of play while it burns, so the answer is to leave and
+     * stay left. Same marker, same 900 ms, same bolt — one verb changed.
+     */
+    if (e.archetype === "beacon") lightFire(w, s.x, s.y, "enemy", { radius: s.radius * 0.8, lifeMs: 2000 });
     impact(w, HITSTOP_HIT, TRAUMA_KILL);
     w.events.push({ kind: "hazard_tick", x: s.x, y: s.y, what: "lightning" });
     emit(w, s.x, s.y, "hit", 6);
     if (strikeHits(s, w.player.x, w.player.y, PLAYER_RADIUS)) {
-      hurtPlayer(w, w.player.x, w.player.y, "lightning", STUN_LIGHTNING_MS, LIGHTNING_HEARTS);
+      hurtPlayer(w, w.player.x, w.player.y, "lightning", STUN_LIGHTNING_MS, LIGHTNING_HEARTS * e.damageMult);
     }
     // It strikes from above and hits whatever is standing there, which is what
     // makes it a hazard the enemies can walk into as well.
@@ -1165,28 +1549,77 @@ const WAVE_CHUNK = 5;
  * which is the thing the player reported as unmanageable.
  */
 const WAVE_GATE_ALIVE = 3;
+/**
+ * ...plus this many, because a reinforcement **commutes**.
+ *
+ * A wave lands out of the view and walks in (`reinforcementCell`), which is
+ * about two seconds of floor it crosses before it is part of anything.
+ * Releasing it only once the room was already down to the gate meant those
+ * two seconds were always spent on an empty screen: measured, a wave walking
+ * in was 5.2% of all uncleared room time, a quarter of the empty time in the
+ * game. Called two bodies earlier, it arrives as the last of the group in
+ * front of the player falls, and the gate's real job — that a wave never
+ * lands *on* a fight still going — is unchanged, because the fight is over by
+ * the time it gets there.
+ */
+const WAVE_PRE_RELEASE = 1;
+/**
+ * **What the room's pacing answer means** (doc 019).
+ *
+ * The Director picks how hard the room presses; these are the two knobs that
+ * decide it, and they are the only thing the answer changes. Everything that
+ * makes a fight *safe* — the alive cap, the ceiling on a gated release, the
+ * minimum gap between waves — stays in code and is untouched by the answer.
+ *
+ * - `preRelease` is how many bodies may still be standing when the next beat
+ *   is called. 0 waits for the floor to clear, which is the breather; 2 sends
+ *   the next beat while the player is still finishing this one.
+ * - `gapMs` is the nominal spacing of the beats the plan lays out.
+ */
+export const PACING: Readonly<Record<WaveStructure, { readonly preRelease: number; readonly gapMs: number }>> = {
+  breathe: { preRelease: 0, gapMs: 4800 },
+  steady: { preRelease: 1, gapMs: 3500 },
+  relentless: { preRelease: 2, gapMs: 2400 },
+};
+
+/** The pacing this room was given, or the middle of the three. */
+function pacingOf(w: World): { preRelease: number; gapMs: number } {
+  return w.pacing;
+}
 /** ...but never waits longer than this past its time, so a room cannot stall. */
 const WAVE_GATE_MAX_WAIT_MS = 16000;
+/**
+ * ...and even then never past the most bodies a gated release leaves up. The
+ * ceiling alone released a chunk every 16 s to a player who was not killing,
+ * until the whole roster stood at once — seventeen bodies in view, past doc
+ * 005's cap of twelve, which the plan was checked against and the floor was not.
+ */
+const WAVE_CEILING_ALIVE = WAVE_GATE_ALIVE + WAVE_CHUNK;
 /**
  * Waves after the opening never land closer together than this, gate or no
  * gate. Chunks cut from one planned wave share a time, so when the ceiling
  * released one it released the rest on the following frames — two waves
  * arriving as one, which is exactly what the gate exists to prevent.
  */
-const WAVE_MIN_GAP_MS = 3500;
+const WAVE_MIN_GAP_MS = 2000;
+/** The nominal spacing of a room's beats; the gate decides when one lands. */
+const BEAT_GAP_MS = 3500;
 
 /**
  * Splits any wave larger than `WAVE_CHUNK` into consecutive waves at the same
  * time, which the live gate then spaces out. The plan's roster and order are
  * kept; only how many arrive together changes.
  */
-function chunkWaves(waves: World["pendingWaves"]): World["pendingWaves"] {
+function chunkWaves(waves: World["pendingWaves"], roomIndex = 99): World["pendingWaves"] {
   const out: World["pendingWaves"] = [];
+  // The ramp's chunk: an early room's waves arrive two at a time, not five.
+  // A beat arrives as a beat: the chunk is the ramp's own wave size.
+  const chunk = Math.max(WAVE_CHUNK, rampFor(roomIndex).perWave);
   for (const wave of waves) {
     const flat: { archetype: EnemyId; group: string }[] = [];
     for (const s of wave.spawns) for (let i = 0; i < s.count; i++) flat.push({ archetype: s.archetype, group: s.group });
-    for (let i = 0; i < flat.length; i += WAVE_CHUNK) {
-      const slice = flat.slice(i, i + WAVE_CHUNK);
+    for (let i = 0; i < flat.length; i += chunk) {
+      const slice = flat.slice(i, i + chunk);
       const spawns: { archetype: EnemyId; group: string; count: number }[] = [];
       for (const f of slice) {
         const same = spawns.find((s) => s.archetype === f.archetype && s.group === f.group);
@@ -1199,6 +1632,112 @@ function chunkWaves(waves: World["pendingWaves"]): World["pendingWaves"] {
   return out;
 }
 
+/**
+ * **The ramp's hard filter on a plan** (doc 005). An encounter is assembled
+ * against a pressure band, which says how *intense* a fight should be and
+ * nothing about how much game the player has had — so a room at index 1 was
+ * being handed a seventeen-body trickle. Everything past the ramp's roster is
+ * dropped, in the order the plan listed it, so what is kept is the front of
+ * the fight the Director asked for rather than a different one.
+ *
+ * It is here, at the world, rather than in the assembler, because this is the
+ * last place before the bodies exist: whatever either arm chose and whatever
+ * fallback preset it reached, an early room is a small room.
+ */
+type PendingWave = World["pendingWaves"][number];
+function trimToRamp(
+  waves: readonly PendingWave[], roomIndex: number, fight: boolean, gapMs = BEAT_GAP_MS,
+): PendingWave[] {
+  const ramp = rampFor(roomIndex);
+  /*
+   * Everything the plan asked for, flattened and **dealt lightest first**.
+   * The plan's own order puts the anchor at the front, which makes the first
+   * beat the heaviest and every beat after it an anticlimax; a room should
+   * open with a statement and end with one. Sorting by threat weight is the
+   * cheapest thing that makes wave 1 the scene and the last wave the climax.
+   */
+  const flat: PendingWave["spawns"][number][] = [];
+  for (const wave of waves)
+    for (const s of wave.spawns)
+      for (let i = 0; i < s.count; i++) flat.push({ ...s, count: 1 });
+  flat.sort((a, b) => threatWeight(a.archetype) - threatWeight(b.archetype));
+
+  /*
+   * Then cut into beats. Each carries `perWave`, and the last — the climax —
+   * may carry `climaxBonus` more, which is where the heaviest bodies land
+   * because the deal was sorted. A plan with more waves than the ramp allows
+   * is *not* stretched: it is told in this many beats or fewer, so a trickle
+   * of eight arrivals becomes three (doc 005, the beat structure).
+   */
+  const out: PendingWave[] = [];
+  const first = waves[0]?.atMs ?? 0;
+  /*
+   * **Never fewer beats than the bodies need, and never a room with none.**
+   * Packing greedily by `perWave` collapsed a small plan into one beat — two
+   * bodies at the late ramp became a single wave of two, and the room lost
+   * its second half. The count comes from the bodies, capped by the ramp, and
+   * is at least one whenever the plan had anything at all: a combat room with
+   * an empty roster is a free reward room, which must never happen.
+   */
+  /*
+   * **A fight room is never empty, and never a formality.** Below the ramp's
+   * minimum the roster is padded from its own lightest bodies — the plan's
+   * shape is kept, there is just enough of it — and a plan with nothing at
+   * all gets rushers, which is the roster's floor. See `rampMinimum`.
+   */
+  // Only where a fight was actually planned: a world built with no encounter
+  // at all is a fixture or a vendor's room, not a fight that came out empty.
+  const floor = fight && waves.length > 0 ? rampMinimum(roomIndex) : 0;
+  while (flat.length < floor) {
+    const seed = flat[flat.length % Math.max(1, flat.length)]
+      ?? { archetype: "rusher" as EnemyId, group: waves[0]?.spawns[0]?.group ?? "", count: 1 };
+    flat.push({ ...seed, count: 1 });
+  }
+  const total2 = Math.min(flat.length, Math.max(floor, rampRoster(roomIndex)));
+  if (total2 <= 0) return [];
+  const beats = Math.max(1, Math.min(ramp.waves, Math.ceil(total2 / ramp.perWave)));
+  const per = Math.floor(total2 / beats);
+  const pool = flat.slice(0, total2);
+  const seen = new Set<EnemyId>();
+  let taken = 0;
+  for (let k = 0; k < beats; k++) {
+    const last = k === beats - 1;
+    // The remainder falls to the climax, which is also where the heavy bodies
+    // are: the deal was sorted lightest first.
+    const room = last ? total2 - taken : per;
+    const slice = pool.slice(taken, taken + room);
+    /*
+     * **A later beat is never just more of the same.** The weight sort alone
+     * can hand a room three beats of rushers with the tank at the end, which
+     * escalates in size and asks the same question three times. If a beat
+     * would introduce nothing the player has not already met, one body of it
+     * is swapped for the nearest unseen archetype further down the pool — the
+     * nearest, so the beat is still about as heavy as its place in the room.
+     */
+    if (k > 0 && slice.every((f) => seen.has(f.archetype))) {
+      const fresh = pool.findIndex((f, i) => i >= taken + room && !seen.has(f.archetype));
+      if (fresh >= 0) {
+        const swap = slice.length - 1;
+        [pool[taken + swap], pool[fresh]] = [pool[fresh]!, pool[taken + swap]!];
+        slice[swap] = pool[taken + swap]!;
+      }
+    }
+    for (const f of slice) seen.add(f.archetype);
+    taken += room;
+    const spawns: PendingWave["spawns"] = [];
+    for (const f of slice) {
+      const same = spawns.find((x) => x.archetype === f.archetype && x.group === f.group);
+      if (same) same.count++;
+      else spawns.push({ ...f, count: 1 });
+    }
+    // The opening beat stands with the room; the rest are called by the gate.
+    // Spaced, so each beat has a time of its own; the gate still holds it
+    // until the floor thins and the breather has passed.
+    out.push({ atMs: k === 0 ? first : first + k * gapMs, spawns });
+  }
+  return out;
+}
+
 function releaseWaves(w: World): void {
   /*
    * One wave at a time. The first wave stands with the room; every later
@@ -1206,29 +1745,85 @@ function releaseWaves(w: World): void {
    * bodies, with a ceiling on the wait so a room whose survivors hide cannot
    * hold the next wave forever.
    */
+  /*
+   * **The run-progress ramp** (doc 005): whatever the plan asked for, an
+   * early room holds a smaller fight. This is the floor under the option
+   * filter — a Director that asks for a dense surround in room 1 still gets a
+   * gate that releases two bodies at a time and holds three on the floor.
+   */
+  const ramp = rampFor(w.roomIndex);
+  const pacing = pacingOf(w);
   const alive = w.enemies.filter((e) => e.hp > 0).length;
   // The first step: `elapsedMs` has already advanced by the time waves release.
   const opening = w.tick <= 1;
-  if (!opening && w.stats.elapsedMs - w.lastWaveMs < WAVE_MIN_GAP_MS) return;
-  const due = w.pendingWaves.filter((wave) => {
+  const camps = opening && w.placement === "camps" && w.pendingWaves.length > 0 ? campsOf(w) : null;
+  /*
+   * **A cleared floor calls the next wave now.** Its time and the gap after
+   * the last are for a fight still going; with nothing left standing the
+   * player was left on an empty floor counting down to a wave they could not
+   * hurry, which read as the room having stalled.
+   */
+  const cleared = !opening && alive === 0 && w.pendingWaves.length > 0;
+  if (!opening && !cleared && w.stats.elapsedMs - w.lastWaveMs < WAVE_MIN_GAP_MS) return;
+  const due = cleared ? [...w.pendingWaves].sort((a, b) => a.atMs - b.atMs) : w.pendingWaves.filter((wave) => {
     if (wave.atMs > w.stats.elapsedMs) return false;
     if (opening && wave.atMs <= 0) return true;
-    return alive <= WAVE_GATE_ALIVE || w.stats.elapsedMs - wave.atMs >= WAVE_GATE_MAX_WAIT_MS;
+    if (alive <= Math.min(WAVE_GATE_ALIVE + pacing.preRelease, ramp.alive)) return true;
+    const bodies = wave.spawns.reduce((n, s) => n + s.count, 0);
+    return w.stats.elapsedMs - wave.atMs >= WAVE_GATE_MAX_WAIT_MS
+      && alive + bodies <= Math.min(WAVE_CEILING_ALIVE, ramp.alive);
   });
-  // One chunk per release, opening or not.
-  const release = due.slice(0, 1);
+  // One chunk per release, opening or not; the camps are all placed at once.
+  const release = camps ? [...w.pendingWaves] : due.slice(0, 1);
   if (release.length === 0) return;
   if (!opening) w.lastWaveMs = w.stats.elapsedMs;
   w.pendingWaves = w.pendingWaves.filter((wave) => !release.includes(wave));
-  const dueWaves = release;
+  /*
+   * **A climax is a heavier beat, not a bigger crowd.** A beat may carry more
+   * bodies than the ramp lets stand at once, so what does not fit arrives as
+   * soon as there is room: the rest of the wave goes back on the queue rather
+   * than onto the floor. Without it a six-body beat landing on a floor that
+   * already held five put eleven on screen, and "more than six in view" —
+   * which is the crowd the whole token and station design exists to prevent —
+   * ran at nearly three per cent of room time.
+   */
+  const dueWaves: typeof release = [];
+  let room = Math.max(1, ramp.alive - alive);
+  for (const wave of release) {
+    const spawns: PendingWave["spawns"] = [];
+    const held: PendingWave["spawns"] = [];
+    for (const s of wave.spawns) {
+      const take = Math.max(0, Math.min(s.count, room));
+      room -= take;
+      if (take > 0) spawns.push({ ...s, count: take });
+      if (take < s.count) held.push({ ...s, count: s.count - take });
+    }
+    if (spawns.length > 0) dueWaves.push({ ...wave, spawns });
+    // The remainder keeps its place at the front of the queue.
+    if (held.length > 0) w.pendingWaves.unshift({ ...wave, atMs: w.stats.elapsedMs, spawns: held });
+  }
+  if (dueWaves.length === 0) return;
 
   // Cells already claimed this room, so nothing stacks on anything.
   const taken = new Set<number>(
     w.enemies.map((e) => Math.floor(e.y / TILE_PX) * GRID_W + Math.floor(e.x / TILE_PX)),
   );
+  /*
+   * **The opening roster is dealt into stations across the room** — one of
+   * them in the view the player walks into, the rest spread over the floor.
+   * See `stationsOf` for why, and for what it replaces.
+   */
+  const stations = opening && !camps
+    ? stationsOf(w, dueWaves.filter((x) => x.atMs <= 0).reduce((n, x) => n + x.spawns.reduce((m, sp) => m + sp.count, 0), 0))
+    : null;
+  /** Where each station's bodies have already been put, so they stand apart. */
+  const placed: [number, number][][] = stations ? stations.map(() => []) : [];
+  let stationTurn = 0;
+  const view = opening && !camps && (!stations || stations.length === 0) ? entryView(w) : null;
+  let shown = 0;
   for (const wave of dueWaves) {
     for (const spawn of wave.spawns) {
-      const group = w.room.spawn_groups.find((g) => g.id === spawn.group) ?? w.room.spawn_groups[0];
+      const group = camps?.get(spawn.group) ?? w.room.spawn_groups.find((g) => g.id === spawn.group) ?? w.room.spawn_groups[0];
       if (!group) continue;
       /*
        * A turret mount is where turrets stand.
@@ -1239,10 +1834,36 @@ function releaseWaves(w: World): void {
        * archetype is the one the room can genuinely place, and placing it is
        * what makes the feature a decision about the floor rather than a label.
        */
-      const mounts = spawn.archetype === "turret" || spawn.archetype === "sentinel" ? turretMounts(w) : [];
+      const mountBase = baseArchetype(spawn.archetype);
+        const mounts = mountBase === "turret" || mountBase === "sentinel" ? turretMounts(w) : [];
+      // Across the group, in an order drawn per arrival: always filling it
+      // from its first cells put every wave in the same few places.
+      const cells = [...group.cells];
+      for (let k = cells.length - 1; k > 0; k--) {
+        const j = Math.floor(w.rng.next() * (k + 1));
+        [cells[k], cells[j]] = [cells[j]!, cells[k]!];
+      }
       for (let i = 0; i < spawn.count; i++) {
         const mount = mounts.find((c) => !taken.has(c[1] * GRID_W + c[0]));
-        const cell = mount ?? group.cells[i % group.cells.length]!;
+        const inView = !mount && view !== null && shown < ENTRY_VIEW_BODIES && (wave.atMs <= 0);
+        /*
+         * A station for an opening body, a reinforcement cell out of view for
+         * a later one, and the planned group only when neither has anywhere
+         * to put it. Stations are filled round-robin so the room populates
+         * evenly instead of one group at a time.
+         */
+        let spread: [number, number] | null = null;
+        if (!mount && stations && stations.length > 0 && wave.atMs <= 0) {
+          for (let tries = 0; tries < stations.length && !spread; tries++) {
+            const k = (stationTurn + tries) % stations.length;
+            spread = pickInStation(w, stations[k]!, placed[k]!, taken);
+            if (spread) { placed[k]!.push(spread); stationTurn = k + 1; }
+          }
+        } else if (!mount && !opening) {
+          spread = reinforcementCell(w, taken);
+        }
+        const cell = mount ?? spread ?? (inView ? view![shown % view!.length]! : cells[i % cells.length]!);
+        if (!mount && !spread && inView) shown++;
         const at = placeFor(w, spawn.archetype, cell, taken);
         /*
          * In an elite room every rusher is a **lancer**: the lancer is the
@@ -1260,8 +1881,22 @@ function releaseWaves(w: World): void {
          */
         let affixes: readonly EliteAffix[] = [];
         if (w.affixes.length > 0) {
-          if (w.elitesPlaced === 0 || HEAVY_ELITES.has(spawn.archetype) || w.rng.next() < ELITE_SHARE) affixes = w.affixes;
-        } else if (w.strayElite.length > 0 && w.elitesPlaced === 0 && w.rng.next() < 0.35) affixes = w.strayElite;
+          // An elite room: the door promised it, so the first body and every
+          // heavy carry the room's affixes, to the cap.
+          if (w.elitesPlaced < ELITE_ROOM_CAP
+            && (w.elitesPlaced === 0 || HEAVY_ELITES.has(baseArchetype(spawn.archetype)) || w.rng.next() < ELITE_SHARE)) {
+            affixes = w.affixes;
+          }
+        } else if (w.elitesPlaced < w.normalElites) {
+          /*
+           * A normal room hides as many as the Director asked for, each with
+           * **one** affix drawn for that body (doc 019). Spread over the
+           * roster rather than dealt to the first bodies: an elite the player
+           * meets at the door is a warning, one they meet in the middle of a
+           * fight is a surprise, and the surprise is the point.
+           */
+          if (w.rng.next() < 0.4) affixes = affixesFor(spawn.archetype, w.affixCtx, w.rng);
+        }
         // Doc 001's per-room caps (`AFFIXES[id].max_enemies`): `shielded` on one
         // body, `volatile` on two. A capped affix is left off the next body.
         affixes = affixes.filter((id) => {
@@ -1270,10 +1905,21 @@ function releaseWaves(w: World): void {
         });
         for (const id of affixes) w.affixPlaced[id] = (w.affixPlaced[id] ?? 0) + 1;
         if (affixes.length > 0) w.elitesPlaced++;
-        const lancers = w.enemies.filter((x) => x.archetype === "lancer" && x.hp > 0).length;
-        const archetype = spawn.archetype === "rusher" && affixes.length > 0 && lancers < LANCER_CAP
-          ? "lancer" : spawn.archetype;
-        const e = makeEnemy(w.nextEnemyId++, archetype, at.x, at.y, affixes);
+        /*
+         * The lancer is a **subspecies, not an elite form** (doc 005). Every
+         * rusher in an elite room used to become one, which made it a
+         * difficulty modifier rather than a body — the player met it only
+         * behind an elite door and never learned it as its own thing. It is
+         * an ordinary roster archetype now, drawn by the mixes like any
+         * other and gated by the ramp, and it may carry affixes like any
+         * other. The swap, and the cap that held it down, are gone.
+         */
+        /*
+         * The run's own ramp, applied where the body is made: what a room-14
+         * rusher is worth is not what a room-6 rusher is worth (doc 005).
+         */
+        const e = makeEnemy(w.nextEnemyId++, spawn.archetype, at.x, at.y, affixes, rampFor(w.roomIndex));
+        w.stats.enemiesSpawned++;
         // Facing the player from its first frame, not the default east.
         e.facing = Math.atan2(w.player.y - e.y, w.player.x - e.x);
         /*
@@ -1282,12 +1928,337 @@ function releaseWaves(w: World): void {
          * a room whose opening roster grows out of the floor in front of the
          * player reads as an ambush that was not planned as one.
          */
-        if (wave.atMs <= 0 && opening) e.spawnFadeMs = 0;
+        if ((wave.atMs <= 0 || camps) && opening) e.spawnFadeMs = 0;
+        /*
+         * **A reinforcement walks in awake.** It lands out of the view and on
+         * the far side of the room (`reinforcementCell`), which is further
+         * than any aggro range, so left dormant it would stand where it
+         * arrived until the player came to find it — a wave that adds nothing
+         * to the fight it was called for. Woken, it crosses the floor and the
+         * player watches it come, which is what a reinforcement is.
+         */
+        if (!opening) {
+          wake(w, e);
+          /*
+           * And it arrives without the floor telegraph, when it arrives out
+           * of sight. The rings and the climb are 0.76 s of warning for a
+           * player who is about to have a body grow out of the ground beside
+           * them (doc 008); a body appearing on floor they cannot see needs no
+           * warning, and those 0.76 s were spent off screen on every wave.
+           */
+          if (Math.abs(at.x - w.player.x) > w.viewHalf.x || Math.abs(at.y - w.player.y) > w.viewHalf.y)
+            e.spawnFadeMs = 0;
+        }
         w.enemies.push(e);
       }
     }
     w.events.push({ kind: "wave_spawned", x: w.player.x, y: w.player.y, amount: wave.spawns.length });
   }
+}
+
+/** How many of the opening bodies stand in the first view, and how near the door they may. */
+const ENTRY_VIEW_BODIES = 4;
+const ENTRY_VIEW_CLEAR = TILE_PX * 5;
+
+/* ------------------------- spreading a room out -------------------------- */
+
+/**
+ * **Stations**: the opening roster stood across the floor rather than piled
+ * into the first view.
+ *
+ * The room used to be either a crowd or an empty hall. Four of the opening
+ * bodies were placed inside two tiles of one point in the entry view and the
+ * rest went to whatever spawn group the plan named, so a vast room read as a
+ * knot of enemies by the door and several screens of nothing — and then each
+ * later wave arrived at its own planned group once the floor thinned, so the
+ * fight swung between a crowd and no fight at all.
+ *
+ * So the opening roster is dealt into small **stations** of two or three
+ * bodies, one of them in the view the player walks into and the rest spread
+ * over the room by farthest-point sampling. The count is set by how much open
+ * floor there is — about one station per viewport of it — so a small room
+ * gets two and a hall gets five or six, and a body never has more than two
+ * companions within shouting distance.
+ *
+ * The alarm ripple still takes a station together (a station is tighter than
+ * `ALERT_RADIUS`), and the next station is further than the radius, so the
+ * room stays what doc 005 asks for: a set of fights whose order the player
+ * chooses.
+ */
+const STATION_RADIUS_TILES = 2.2;
+const STATION_MAX_BODIES = 3;
+const MAX_STATIONS = 4;
+/** How far apart two bodies of one station stand, in tiles. */
+const STATION_SPACING_TILES = 1.6;
+/**
+ * How far apart two **stations** stand, in tiles, and the slack around it.
+ *
+ * Stations are placed as a **chain at a spacing**, not by farthest-point
+ * sampling. Farthest-point is the right rule for "spread these as far apart
+ * as possible" and the wrong one for a room somebody has to walk across: it
+ * puts every station in a different corner, and measured, the single largest
+ * reason a room had nothing on screen was the player walking from one corner
+ * to the next — 10.2% of all uncleared room time, nearly half of the empty
+ * time in the game.
+ *
+ * Seven tiles is most of a viewport (the view is sixteen by nine), so the
+ * next station is a step beyond the edge of the screen rather than across the
+ * hall: the player clears one, turns, and the next is already close. The
+ * chain grows from the station in the entry view, so it runs along the way
+ * the player is going.
+ */
+const STATION_SPACING_TARGET = 7;
+const STATION_SPACING_SLACK = 2.5;
+/** How much open ground round a station's centre is worth against its spacing. */
+const STATION_OPEN_WEIGHT = 1.5;
+
+/** The share of the 5x5 box round a cell that is floor: cheap visibility. */
+function openness(w: World, c: readonly [number, number]): number {
+  let open = 0;
+  let total = 0;
+  for (let dy = -2; dy <= 2; dy++)
+    for (let dx = -2; dx <= 2; dx++) {
+      const gx = c[0] + dx;
+      const gy = c[1] + dy;
+      if (gx < 0 || gy < 0 || gx >= GRID_W || gy >= GRID_H) continue;
+      total++;
+      if (w.room.grid[gy * GRID_W + gx] === Tile.Floor) open++;
+    }
+  return total > 0 ? open / total : 0;
+}
+
+function stationsOf(w: World, bodies: number): [number, number][][] {
+  const hazards = hazardCells(w);
+  const open: [number, number][] = [];
+  for (let gy = 1; gy < w.room.extent.h - 1; gy++)
+    for (let gx = 1; gx < w.room.extent.w - 1; gx++) {
+      if (w.room.grid[gy * GRID_W + gx] !== Tile.Floor || hazards.has(gy * GRID_W + gx)) continue;
+      open.push([gx, gy]);
+    }
+  if (open.length === 0) return [];
+  const p = w.player;
+  const viewTiles = Math.max(1, ((w.viewHalf.x * 2) / TILE_PX) * ((w.viewHalf.y * 2) / TILE_PX));
+  // One station per viewport of open floor, and never fewer than the roster
+  // needs to keep its groups down to two or three bodies.
+  const regions = Math.max(2, Math.round(open.length / viewTiles));
+  const wanted = Math.max(Math.ceil(bodies / STATION_MAX_BODIES), regions);
+  const n = Math.max(1, Math.min(MAX_STATIONS, Math.min(bodies, wanted)));
+
+  const centres: [number, number][] = [];
+  // The first station is the one the player walks in to see, so the room
+  // opens with a fight rather than with a hall.
+  const first = entryView(w);
+  if (first) centres.push(first[0]!);
+  const far = open.filter(([gx, gy]) =>
+    Math.hypot((gx + 0.5) * TILE_PX - p.x, (gy + 0.5) * TILE_PX - p.y) >= CAMP_ENTRY_CLEAR);
+  const pool = far.length > 0 ? far : open;
+  while (centres.length < n) {
+    let best: [number, number] | null = null;
+    let bestScore = -Infinity;
+    for (const c of pool) {
+      const toPlayer = Math.hypot((c[0] + 0.5) * TILE_PX - p.x, (c[1] + 0.5) * TILE_PX - p.y) / TILE_PX;
+      const toOther = centres.length
+        ? Math.min(...centres.map((o) => Math.hypot(c[0] - o[0], c[1] - o[1])))
+        : toPlayer;
+      /*
+       * A link in the chain: about `STATION_SPACING_TARGET` from whatever is
+       * nearest, never nearer than the alarm radius wants. Scoring the
+       * *closeness to the target* rather than the distance itself is the whole
+       * change — the old rule maximised the distance and therefore always
+       * chose a corner.
+       */
+      const near = Math.min(toPlayer, toOther);
+      if (near < STATION_SPACING_TARGET - STATION_SPACING_SLACK) continue;
+      /*
+       * And it stands somewhere the player can **see** it from. A station
+       * tucked behind cover is a fight that is on screen and invisible, which
+       * measured as 6.5% of all uncleared room time — the second largest
+       * reason a room read as empty. Open floor around the centre is a cheap
+       * stand-in for a sight line and costs one 5x5 scan rather than a
+       * raycast per candidate.
+       */
+      const score = -Math.abs(near - STATION_SPACING_TARGET)
+        + openness(w, c) * STATION_OPEN_WEIGHT + w.rng.next() * 0.4;
+      if (score > bestScore) { bestScore = score; best = c; }
+    }
+    // Nowhere at the target spacing: take the farthest thing left, which is
+    // what a small room leaves.
+    if (!best) {
+      let far = -1;
+      for (const c of pool) {
+        const near = centres.length
+          ? Math.min(...centres.map((o) => Math.hypot(c[0] - o[0], c[1] - o[1])))
+          : Math.hypot((c[0] + 0.5) * TILE_PX - p.x, (c[1] + 0.5) * TILE_PX - p.y) / TILE_PX;
+        if (near > far) { far = near; best = c; }
+      }
+      if (!best || far < STATION_RADIUS_TILES * 2) break;
+    }
+    centres.push(best);
+  }
+  return centres.map(([cx, cy]) => {
+    const cells = open.filter(([x, y]) => Math.hypot(x - cx, y - cy) <= STATION_RADIUS_TILES);
+    return cells.length > 0 ? cells : [[cx, cy] as [number, number]];
+  });
+}
+
+/**
+ * A free cell of a station, at least `STATION_SPACING_TILES` from the ones
+ * its companions already hold: two bodies a station is a pair standing near
+ * each other, not a pair standing on each other.
+ */
+function pickInStation(
+  w: World, cells: readonly [number, number][], used: readonly [number, number][], taken: Set<number>,
+): [number, number] | null {
+  let best: [number, number] | null = null;
+  let bestD = -1;
+  for (const c of cells) {
+    if (taken.has(c[1] * GRID_W + c[0])) continue;
+    const d = used.length === 0
+      ? w.rng.next()
+      : Math.min(...used.map((o) => Math.hypot(c[0] - o[0], c[1] - o[1])));
+    if (used.length > 0 && d < STATION_SPACING_TILES) continue;
+    if (d > bestD) { bestD = d; best = c; }
+  }
+  // Nowhere far enough: any free cell of the station beats none at all.
+  if (best) return best;
+  return cells.find((c) => !taken.has(c[1] * GRID_W + c[0])) ?? null;
+}
+
+/** How far out of the view and away from the player reinforcements land. */
+const REINFORCE_CLEAR_PX = TILE_PX * 6;
+
+/**
+ * Where a later wave arrives: **out of sight, on the far side**.
+ *
+ * A wave is a reinforcement, not a spawn: it should be something that walks
+ * into the fight, so the player sees it coming and the floor refills from an
+ * edge rather than around them. Landing outside the view and as far from the
+ * player as the room allows gives both — and it is also, for free, the rule
+ * that keeps a wave off the ground the player has just cleared, since the
+ * ground the player has just cleared is the ground they are standing on.
+ *
+ * Falls back to the planned cell when the room has nowhere that qualifies,
+ * which is what a small room is.
+ */
+function reinforcementCell(w: World, taken: Set<number>): [number, number] | null {
+  const hazards = hazardCells(w);
+  const p = w.player;
+  let best: [number, number] | null = null;
+  let bestD = -Infinity;
+  for (let gy = 1; gy < w.room.extent.h - 1; gy++)
+    for (let gx = 1; gx < w.room.extent.w - 1; gx++) {
+      const i = gy * GRID_W + gx;
+      if (w.room.grid[i] !== Tile.Floor || hazards.has(i) || taken.has(i)) continue;
+      const x = (gx + 0.5) * TILE_PX;
+      const y = (gy + 0.5) * TILE_PX;
+      const outOfView = Math.abs(x - p.x) > w.viewHalf.x + TILE_PX || Math.abs(y - p.y) > w.viewHalf.y + TILE_PX;
+      const d = Math.hypot(x - p.x, y - p.y);
+      if (!outOfView || d < REINFORCE_CLEAR_PX) continue;
+      /*
+       * The **nearest** cell that qualifies, not the furthest. "Out of sight"
+       * is the whole requirement — it is what makes a wave something that
+       * walks in rather than something that appears — and picking the far
+       * corner instead only added seconds of empty floor to every wave: the
+       * median room went from 23 to 27 seconds and its p90 from 37 to 46,
+       * which is a room spent watching reinforcements commute.
+       */
+      const score = -d + w.rng.next() * TILE_PX * 2;
+      if (score > bestD) { bestD = score; best = [gx, gy]; }
+    }
+  return best;
+}
+
+/**
+ * The cells of a small group in the view the player enters to: the camera's
+ * view as it first frames the player (centred on them, held inside the
+ * room), a tile in from its edges, and the group's middle as far from the
+ * door as that view allows — at least `ENTRY_VIEW_CLEAR` — on open floor out
+ * of the hazards. Null when the view holds no such floor.
+ */
+function entryView(w: World): [number, number][] | null {
+  const p = w.player;
+  const roomW = w.room.extent.w * TILE_PX, roomH = w.room.extent.h * TILE_PX;
+  const half = w.viewHalf;
+  const cx = half.x * 2 >= roomW ? roomW / 2 : Math.max(half.x, Math.min(roomW - half.x, p.x));
+  const cy = half.y * 2 >= roomH ? roomH / 2 : Math.max(half.y, Math.min(roomH - half.y, p.y));
+  const hazards = hazardCells(w);
+  const open: [number, number][] = [];
+  for (let gy = 1; gy < w.room.extent.h - 1; gy++)
+    for (let gx = 1; gx < w.room.extent.w - 1; gx++) {
+      const x = (gx + 0.5) * TILE_PX, y = (gy + 0.5) * TILE_PX;
+      if (Math.abs(x - cx) > half.x - TILE_PX || Math.abs(y - cy) > half.y - TILE_PX) continue;
+      if (w.room.grid[gy * GRID_W + gx] !== Tile.Floor || hazards.has(gy * GRID_W + gx)) continue;
+      open.push([gx, gy]);
+    }
+  const far = open.filter(([gx, gy]) => Math.hypot((gx + 0.5) * TILE_PX - p.x, (gy + 0.5) * TILE_PX - p.y) >= ENTRY_VIEW_CLEAR);
+  if (far.length === 0) return null;
+  let best = far[0]!;
+  let bestD = -1;
+  for (const c of far) {
+    const d = Math.hypot((c[0] + 0.5) * TILE_PX - p.x, (c[1] + 0.5) * TILE_PX - p.y) + w.rng.next() * TILE_PX;
+    if (d > bestD) { bestD = d; best = c; }
+  }
+  const group = far.filter(([gx, gy]) => Math.hypot(gx - best[0], gy - best[1]) <= CAMP_RADIUS_TILES);
+  return group.length > 0 ? group : [best];
+}
+
+/** The most camps a room is split into, how far they keep from the entry, and how wide one is. */
+const MAX_CAMPS = 4;
+const CAMP_ENTRY_CLEAR = TILE_PX * 6;
+const CAMP_RADIUS_TILES = 2;
+
+/**
+ * The encounter as camps (`World.placement`): its waves dealt round-robin into
+ * up to `MAX_CAMPS` groups, each placed round a centre chosen to be as far as
+ * the room allows from the entry and from the other camps — farthest-point
+ * sampling over reachable open floor out of the hazards, `CAMP_ENTRY_CLEAR`
+ * from the door. A camp is tighter than the alarm radius, so the ripple
+ * (`wake`) takes the whole camp when one of it notices the player; the next
+ * camp is further than the radius, so it is its own fight.
+ *
+ * Returns each wave's spawns rewritten onto its camp's group, keyed by the
+ * group id the spawns now carry.
+ */
+function campsOf(w: World): Map<string, SpawnGroup> {
+  const hazards = hazardCells(w);
+  const entry = w.player;
+  const open: [number, number][] = [];
+  for (let gy = 1; gy < GRID_H - 1; gy++)
+    for (let gx = 1; gx < GRID_W - 1; gx++) {
+      if (w.room.grid[gy * GRID_W + gx] !== Tile.Floor || hazards.has(gy * GRID_W + gx)) continue;
+      open.push([gx, gy]);
+    }
+  const far = open.filter(([x, y]) => Math.hypot((x + 0.5) * TILE_PX - entry.x, (y + 0.5) * TILE_PX - entry.y) >= CAMP_ENTRY_CLEAR);
+  const pool = far.length > 0 ? far : open;
+  const n = Math.min(MAX_CAMPS, w.pendingWaves.length);
+  const centres: [number, number][] = [];
+  const ex = Math.floor(entry.x / TILE_PX), ey = Math.floor(entry.y / TILE_PX);
+  // The first camp is the one the player walks in to see (`entryView`).
+  const first = entryView(w);
+  if (first && n > 0) centres.push(first[0]!);
+  for (let k = centres.length; k < n; k++) {
+    let best: [number, number] | null = null;
+    let bestD = -1;
+    for (const c of pool) {
+      const toEntry = Math.hypot(c[0] - ex, c[1] - ey);
+      const toCamp = centres.length ? Math.min(...centres.map((o) => Math.hypot(c[0] - o[0], c[1] - o[1]))) : toEntry;
+      // Each camp after the first is the farthest from everything already
+      // chosen, the door among them.
+      const d = Math.min(toEntry, toCamp) + w.rng.next() * 0.5;
+      if (d > bestD) { bestD = d; best = c; }
+    }
+    if (best) centres.push(best);
+  }
+  const groups = new Map<string, SpawnGroup>();
+  centres.forEach(([cx, cy], k) => {
+    const cells = pool.filter(([x, y]) => Math.hypot(x - cx, y - cy) <= CAMP_RADIUS_TILES) as [number, number][];
+    groups.set(`camp_${k}`, { id: `camp_${k}`, cells: cells.length ? cells : [[cx, cy]] });
+  });
+  w.pendingWaves = w.pendingWaves.map((wave, i) => ({
+    ...wave, atMs: 0,
+    spawns: wave.spawns.map((sp) => ({ ...sp, group: `camp_${i % Math.max(1, centres.length)}` })),
+  }));
+  return groups;
 }
 
 /** Free cells of every `turret_mount` zone, in the order the room declares them. */
@@ -1302,19 +2273,56 @@ function turretMounts(w: World): [number, number][] {
 }
 
 function onEnemyKilled(w: World, e: Enemy): void {
+  /*
+   * A `doom` mark outlives its body (doc 006): it still bursts, on its own
+   * clock, where the body fell — which is what makes marking a pack and
+   * killing into it the play the delay asks for. Handed over once and
+   * cleared, so a second call for the same death cannot burst it twice.
+   */
+  if (e.doomMs > 0) {
+    w.dooms.push({ x: e.x, y: e.y, ms: e.doomMs, damage: e.doomDamage, radius: e.doomRadius, spellIndex: e.doomSpell });
+    e.doomMs = 0;
+  }
+  if (e.contagion > 0) spreadContagion(w, e);
   // Otherwise a room whose attackers all died would have no turns left in it
   // and every survivor would circle forever.
   dropToken(w, e);
   dropFireToken(w, e);
   onExpansionDeath(w, e);
   dropLoot(w, e.x, e.y, ENEMIES[e.archetype].threat_weight >= 4 ? 2 : 1);
+  /*
+   * **An elite pays in health, when health is what the player needs.**
+   *
+   * The heal is worth a tenth of the bar whenever it comes, and **how often it
+   * comes scales against what is left of that bar**: near certain at a sliver,
+   * near nothing at full. A drop that always came was a tenth of a bar handed
+   * to a player who could not hold it — at full health the pickup is litter,
+   * and a reward the player steps over teaches them to stop looking at the
+   * floor. Scaled, the elite is a fight worth taking *because* it is the way
+   * back from a bad room, which is the role doc 003's heart budget leaves
+   * empty.
+   *
+   * The curve is the missing share, squared. Linear gave a coin-flip at half
+   * health, which is where a player is for most of a run and where a heal is
+   * merely nice; squaring pushes the mass to the bottom of the bar, so it is
+   * about a tenth at three quarters, a quarter at half, and all but certain
+   * under a sixth — a rescue rather than a trickle.
+   */
+  if (e.affixes.length > 0) {
+    const max = MAX_HEARTS + w.player.mods.maxHearts;
+    const missing = Math.max(0, Math.min(1, 1 - w.player.hearts / max));
+    if (w.rng.next() < missing * missing) {
+      drop(w.pickups, "heart", e.x, e.y, w.rng).value = max * ELITE_HEAL_FRACTION;
+    }
+  }
   killPays(w, e);
+  gainXp(w, e);
   impact(w, HITSTOP_KILL, TRAUMA_KILL);
   w.events.push({ kind: "enemy_killed", x: e.x, y: e.y, what: e.archetype, facing: e.facing });
   emit(w, e.x, e.y, "kill", 8);
   if (e.affixes.includes("splitting") && e.archetype !== "rusher") {
     for (let i = 0; i < 2; i++)
-      w.enemies.push(makeEnemy(w.nextEnemyId++, "rusher", e.x + (i ? 12 : -12), e.y, []));
+      w.enemies.push(makeEnemy(w.nextEnemyId++, "rusher", e.x + (i ? 12 : -12), e.y, [], rampFor(w.roomIndex)));
   }
   /*
    * Bursts on death. `volatile` promised this in its description and never
@@ -1342,34 +2350,269 @@ function onEnemyKilled(w: World, e: Enemy): void {
  * - **Leap** (phase II on): it marks the player's spot, goes up — nothing
  *   hits it in the air — and comes down there with a smaller ring. The
  *   answer is to leave the mark, and the landing is the punish window.
+ * - **Quake**: it drives the greatsword into the floor and the stone splits
+ *   along four lines out from it (eight at phase III, and the second four are
+ *   laid a beat later into the first four's gaps). The answer is to stand
+ *   *between* the cracks, which is the one thing the slam's answer — get in
+ *   close — does not help with.
+ * - **Hook** (phase III): the chain the snarecaster taught the player, thrown
+ *   by something four times its size. It reels the player onto the greatsword,
+ *   and the chop that follows is the biggest hit in the game. Dash through the
+ *   line while it lies on the floor, as with any chain.
  * - **Adds**: two bodies at each phase change, so phase II and III open with
  *   a kill-order question.
  *
  * Every move has a telegraph at least 0.6 s long, and nothing tracks once
  * it is committed.
+ *
+ * **Escalation is by moves, not by numbers** (research: the boss survey's
+ * order of levers — add a move, then change a move's speed or range, then the
+ * arena, then adds). Phase I teaches two, phase II adds the leap and shortens
+ * the gaps, phase III adds the hook and doubles the quake; every phase keeps
+ * the slam, so the fight stays the same fight.
  */
-const BOSS_MOVES: Readonly<Record<number, readonly ("slam" | "leap")[]>> = {
-  1: ["slam"],
-  2: ["slam", "leap"],
-  3: ["leap", "slam", "slam", "leap"],
-};
-const BOSS_MOVE_GAP_MS: Readonly<Record<number, number>> = { 1: 4200, 2: 3400, 3: 2600 };
-export const BOSS_SLAM_MS = 700;
-export const BOSS_LEAP_MS = 1300;
-/** Of the leap, the part spent rising before it is out of reach. */
-export const BOSS_LEAP_RISE_MS = 260;
+export type BossMove = "slam" | "leap" | "quake" | "hook" | "storm";
 /*
- * The shockwave starts here, so everything inside is safe. It was 30 — inside
- * the boss's own body — and the "come closer" answer did not exist: the sword
- * swings from 50 to 70 px out, exactly where the ring was born. At 64 the
- * sword's own range is the safe place.
+ * **One turn at a time, chosen by where the player is** (doc 020).
+ *
+ * The king had three clocks of his own — a rotation of moves on one, his blade
+ * on another, a volley that ran whenever neither was — and they overlapped, so
+ * he never stopped attacking. A great boss (the Souls school) does one thing,
+ * and then stands in its recovery and walks, and the walk is the player's:
+ * the rest *is* the opening. So he now takes turns: one blade string, one
+ * move or one volley, and after it a rest (`bossRestMs`) in which he only
+ * stalks back round to face them. When it runs out he chooses the next turn
+ * from where they stand — the reach of the answer is the question:
+ *
+ * - **Close** (inside his sweep): the sweeps, the slam round his feet, the
+ *   cleave at a player level with him, the backhand at one behind him.
+ * - **Mid**: the cleave and the slash he steps into, the quake, the hook, the storm.
+ * - **Far**: the leap onto them, the dashcut along a line, the hook, the storm, a volley.
+ *
+ * Each band holds at least two turns, drawn by weight, and never the one he
+ * has just taken, so a player who learns a range learns a set, not a move.
+ * A phase adds turns rather than numbers (the slash strings, the dashcut and
+ * the hook from II, more bolts to the storm), and the rests shorten.
  */
-export const BOSS_SLAM_SAFE_PX = 64;
+type BossAct = MeleeKind | BossMove | "volley";
+/** Centre to centre, px: inside the first he answers with what is at his feet, past the second with what crosses the hall. */
+const BOSS_CLOSE_PX = 96;
+const BOSS_FAR_PX = 176;
+/** A volley turn: two bars, fired standing. */
+export const BOSS_VOLLEY_MS = beats(8);
+/** How long he walks after a blade he chose before giving it up for another turn. */
+const BOSS_BLADE_CHASE_MS = 2600;
+/** The rest after a turn, in beats, by phase; and up to this many more, drawn. */
+const BOSS_REST_BEATS: Readonly<Record<number, number>> = { 1: 7, 2: 6, 3: 5 };
+const BOSS_REST_JITTER_BEATS = 2;
+/** After a heavy turn — a leap, a slam, a quake, a string of three — this many beats more: the big opening. */
+const BOSS_HEAVY_REST_BEATS = 2;
+const BOSS_HEAVY_ACTS: ReadonlySet<string> = new Set(["leap", "slam", "quake", "storm"]);
+
+/** The rest after the turn that has just ended, ms. */
+function bossRestMs(w: World, e: Enemy): number {
+  const heavy = BOSS_HEAVY_ACTS.has(e.bossLastAct) || e.bossStringN >= 3;
+  const n = (BOSS_REST_BEATS[e.phase] ?? 6) + w.rng.next() * BOSS_REST_JITTER_BEATS + (heavy ? BOSS_HEAVY_REST_BEATS : 0);
+  return beats(n);
+}
+
+/** The king's next turn, from where the player stands (see above); null when the lab holds every kind. */
+function chooseBossAct(w: World, e: Enemy): BossAct | null {
+  const p = w.player;
+  const d = Math.hypot(p.x - e.x, p.y - e.y);
+  const ph = e.phase;
+  // Where they are now, not where his last glance put them: he has walked since.
+  const level = bossLevel(e, p);
+  const opts: [BossAct, number][] = [];
+  if (d < BOSS_CLOSE_PX) {
+    // At his feet the side matters: his sweeps go out of his front only, so beside him is the cleave's, behind him the backhand's.
+    if (bossBehind(e, p)) opts.push(["maul", 4], ["slam", 2]);
+    else if (level) opts.push(["greatcleave", 4], ["slam", 2]);
+    else {
+      opts.push(["greatsweep", 3], ["slam", 2], ["greatcleave", 2]);
+      if (ph >= 2) opts.push(["greatslash", 3]);
+    }
+  } else if (d < BOSS_FAR_PX) {
+    opts.push(["quake", 2], ["storm", 2]);
+    if (ph >= 2) opts.push(["hook", 2]);
+    // The cleave comes down along a line at them, level or in front; behind him it cannot.
+    opts.push(bossBehind(e, p) ? ["greatsweep", 1] : ["greatcleave", 3]);
+    if (ph >= 2) opts.push(["greatslash", 2]);
+    opts.push(["volley", 1]);
+  } else {
+    opts.push(["leap", 4], ["storm", 3], ["volley", 2], ["quake", 1]);
+    if (ph >= 2 && level) opts.push(["dashcut", 3]);
+    if (ph >= 2) opts.push(["hook", 3]);
+  }
+  const held = w.bossHold;
+  const allowed = opts.filter(([a]) => {
+    if (a === "hook" && (!hasLineOfSight(w.room.grid, e.x, e.y, p.x, p.y) || e.gapPx < TILE_PX * 2)) return false;
+    const kind = a === "volley" ? "volleys" : (BOSS_MOVE_NAMES as readonly string[]).includes(a) ? "moves" : "blades";
+    return !held?.[kind];
+  });
+  // Never the same turn twice running, while there is another.
+  const fresh = allowed.filter(([a]) => a !== e.bossLastAct);
+  const pool = fresh.length > 0 ? fresh : allowed;
+  if (pool.length === 0) return null;
+  let roll = w.rng.next() * pool.reduce((t, [, wt]) => t + wt, 0);
+  for (const [a, wt] of pool) if ((roll -= wt) < 0) return a;
+  return pool[pool.length - 1]![0];
+}
+/**
+ * Three beats raised: the sword is driven into the ground round his feet as
+ * well as throwing the band, so the player has two things to do — get off the
+ * ground, then clear the band — and the raise is the time for the first.
+ */
+export const BOSS_SLAM_MS = beats(3);
+/**
+ * The slam's **shockwave** (doc 005): the ring of broken floor that travels
+ * out from the impact, which is what the move is now about.
+ *
+ * The slam used to be a ring of bullets and a "come in close" safe spot, and
+ * it shared its answer with the leap — be somewhere else when it lands. A
+ * band that travels is the one question in the fight whose answer is the
+ * dash itself: it reaches everywhere in the arena eventually, so distance is
+ * only a delay, and crossing it needs the i-frames rather than a gap.
+ *
+ * It starts at the safe radius the bullet ring already used, so the "get in
+ * close" answer the slam taught is still true for the first beat of it, and
+ * then it stops being true, which is the fight escalating inside one move.
+ * Phase III sends a second band a beat behind the first, into the ground the
+ * player used to dodge the first.
+ */
+const BOSS_SHOCK_SPEED: Readonly<Record<number, number>> = { 1: 230, 2: 260, 3: 290 };
+/** The phase III second band, a beat and a half behind the first: on the off-beat. */
+const BOSS_SHOCK_SECOND_MS = beats(1.5);
+export const BOSS_SHOCK_DAMAGE = 1;
+/** A crack of the quake, and the leap's landing on a player under it, in hearts (see `BOSS_POWER`). */
+const BOSS_QUAKE_DAMAGE = 1;
+const BOSS_LAND_DAMAGE = 1;
+/**
+ * **The leap is an arc, not a teleport.**
+ *
+ * It used to run its clock down where it stood and then assign the landing
+ * coordinates, which is exactly what it looked like: the body vanished off one
+ * tile and appeared on another, and the only thing that said a leap had
+ * happened was the mark on the floor. Nothing about that is readable — a
+ * player cannot judge *when* something arrives if it was never travelling.
+ *
+ * So the move has three parts the player can see. It **crouches and rises**
+ * for `BOSS_LEAP_RISE_MS`, still on the floor and still hittable, with the
+ * mark already down. It is then **in the air** for the rest: the body is
+ * interpolated along the line to the mark and lifted by a parabola
+ * (`Enemy.bossLift`), while its shadow stays on the floor underneath it and
+ * shrinks — so the shadow closing on the mark is the clock. And it **lands**:
+ * hitstop, dust, the screen shakes, and the shockwave goes out from the
+ * impact, which is the answer the whole move was asking for.
+ */
+/** Four beats: one gathering, three in the air, landing on the downbeat (doc 020). */
+export const BOSS_LEAP_MS = beats(4);
+/** Of the leap, the part spent gathering on the floor before it is airborne: one beat. */
+export const BOSS_LEAP_RISE_MS = beats(1);
+/** How high the arc goes, in px, for the lift and the shadow. */
+export const BOSS_LEAP_HEIGHT = 84;
+/*
+ * **Where the sword strikes** (doc 020). The greatsword is driven into the
+ * floor at his feet, so the ground round them is hit on the commit
+ * (`BOSS_SLAM_IMPACT_DAMAGE`), and the shockwave is born at its edge. It was a
+ * safe circle — "come closer" as the slam's answer — which put the one place
+ * the sword lands at the one place it could not hurt, and made his feet the
+ * safest ground in the fight. The answers now are to be off that ground when
+ * the sword comes down, or to dash it, and then to jump the band.
+ */
+export const BOSS_SLAM_IMPACT_PX = 56;
+/*
+ * **What the king's blows do to the hall** (doc 020): his sword, his slam and
+ * his landing take half a column's stone at a stroke, a travelling band a
+ * third, so a column he has been driven into twice is gone and the cover the
+ * player was using goes with it.
+ */
+const BOSS_PROP_DAMAGE = 18;
+const BOSS_PROP_WAVE_DAMAGE = 12;
+/** Breaks what `hits` finds among the standing props, each at most once for the blow that `seen` belongs to. */
+function bossStrikesProps(w: World, hits: (q: Destructible) => boolean, seen: number[], amount = BOSS_PROP_DAMAGE): void {
+  w.props.forEach((q, i) => {
+    if (q.hp <= 0 || seen.includes(-100 - i) || !hits(q)) return;
+    seen.push(-100 - i);
+    damageProp(w, q, amount);
+  });
+}
+const BOSS_SLAM_IMPACT_DAMAGE = 1;
 export const BOSS_LEAP_RADIUS = 46;
+/**
+ * The quake: how long the sword is up before it comes down, how far the
+ * cracks run, and how long after the first four the second four are laid at
+ * phase III. The cracks carry the rift's own 900 ms growth on top of the
+ * raise, so the whole move is read for a second and a half before anything
+ * lands — the longest tell in the fight, because it denies the most ground.
+ */
+export const BOSS_QUAKE_MS = beats(2);
+/**
+ * How long he stays down on the sword after a ground strike's last blow —
+ * the slam and the quake — before he rises: two beats knelt in the broken
+ * floor, the weight of the blow, and the opening it leaves.
+ */
+const BOSS_KNEEL_MS = beats(2);
+/**
+ * **The storm** (doc 020): he raises the greatsword over his head and calls
+ * the lightning down on the player — a bolt a beat, each marked on the floor
+ * two beats before it falls (the turret's ring, closing), the first where
+ * they stand, the next ahead of where they are going, and so on by turns.
+ * The answer is to keep moving and to change direction: running straight
+ * walks into the lead, standing still is the first mark. He stands with the
+ * sword up for all of it, which is the opening for a player who can reach him
+ * between two marks. Three bolts in phase I, four in II, five in III.
+ */
+const BOSS_STORM_RAISE_MS = beats(2);
+const BOSS_STORM_BOLTS: Readonly<Record<number, number>> = { 1: 3, 2: 4, 3: 5 };
+const BOSS_STORM_MARK_MS = beats(2);
+const BOSS_STORM_RADIUS = 26;
+const BOSS_STORM_DAMAGE = 1;
+/** How far ahead of the player the leading bolts are laid: this many times where they have gone since his last glance. */
+const BOSS_STORM_LEAD = 1.6;
+/** How long the storm holds him: the raise, a bolt a beat, and the last one's mark and fall. */
+function bossStormMs(phase: number): number {
+  return BOSS_STORM_RAISE_MS + ((BOSS_STORM_BOLTS[phase] ?? 3) - 1) * BEAT_MS + BOSS_STORM_MARK_MS + 250;
+}
+/**
+ * The storm's bolt `i`, marked now: on the player, or ahead of them, by turns;
+ * inside the hall. `late` is how far past its beat the stepped clock marked
+ * it, given back out of the mark so the bolt still falls on the beat.
+ */
+function stormBolt(w: World, e: Enemy, i: number, late: number): void {
+  const p = w.player;
+  const lead = i % 2 === 1 ? BOSS_STORM_LEAD : 0;
+  const ext = w.room.extent;
+  const x = Math.max(TILE_PX * 1.5, Math.min((ext.w - 1.5) * TILE_PX, p.x + (p.x - e.lookX) * lead));
+  const y = Math.max(TILE_PX * 1.5, Math.min((ext.h - 1.5) * TILE_PX, p.y + (p.y - e.lookY) * lead));
+  castRift(w, x, y, 0, 0, { width: BOSS_STORM_RADIUS * 2, teleMs: BOSS_STORM_MARK_MS - late, damage: BOSS_STORM_DAMAGE * e.damageMult, bolt: true });
+}
+
+/** The boss's chain lies on the floor three beats: heavier than a snarecaster's 730 ms. */
+const BOSS_HOOK_AIM_MS = beats(3);
+/** How far his chain reaches: across the hall, since it is his answer to a player who stays out of reach. */
+export const BOSS_HOOK_REACH_PX = TILE_PX * 11;
+const BOSS_QUAKE_REACH = TILE_PX * 5;
+const BOSS_QUAKE_SECOND_MS = beats(1.25);
 const BOSS_ADDS: Readonly<Record<number, readonly EnemyId[]>> = {
   2: ["rusher", "rusher"],
   3: ["lancer", "shooter"],
 };
+
+/**
+ * The travelling band the slam throws out. Born at the sword's own reach, so
+ * the ground the player is standing on when they close is safe for the beat
+ * it takes them to commit, and killed off past the arena's diagonal.
+ */
+function bossShock(w: World, e: Enemy, inner = BOSS_SLAM_IMPACT_PX): void {
+  castShockwave(w, e.x, e.y, {
+    chargeMs: 0,
+    inner,
+    speed: BOSS_SHOCK_SPEED[e.phase] ?? 260,
+    maxRadius: Math.hypot(GRID_W * TILE_PX, GRID_H * TILE_PX),
+    damage: BOSS_SHOCK_DAMAGE * e.damageMult,
+  });
+}
 
 function bossRing(w: World, e: Enemy, count: number, speed: number, offsetDeg: number): void {
   const ring: BulletEmission[] = [];
@@ -1378,12 +2621,82 @@ function bossRing(w: World, e: Enemy, count: number, speed: number, offsetDeg: n
       size: 1.1, at_ms: 0, aim: "fixed:0", angle_deg: offsetDeg + (360 / count) * i,
       speed, from: "ring", path: [0, i],
     });
-  release(w, e, ring, BOSS_SLAM_SAFE_PX);
+  release(w, e, ring, BOSS_SLAM_IMPACT_PX);
+}
+
+/**
+ * The quake's cracks: four rifts out from the boss, the first aimed at the
+ * player so the set is never the same set twice, each stopping at stone.
+ *
+ * A rift carries its own growth before it erupts, so the player has the raise
+ * *and* the crack to read — and the answer is to stand between two of them,
+ * which is a different question from the slam's (come in) and the leap's
+ * (leave the mark). Three moves, three answers.
+ */
+function bossQuake(w: World, e: Enemy, offset: number): void {
+  const toward = Math.atan2(w.player.y - e.y, w.player.x - e.x) + offset;
+  for (let i = 0; i < 4; i++) {
+    const a = toward + (i / 4) * Math.PI * 2;
+    // Stopped at the first stone, like the rifter's own crack: a fissure
+    // does not run through a pillar, and one that did would be unanswerable.
+    castRift(w, e.x, e.y, a, lineToWall(w, e.x, e.y, a, BOSS_QUAKE_REACH),
+      { width: TILE_PX * 0.9, damage: BOSS_QUAKE_DAMAGE * e.damageMult });
+  }
+}
+
+/** The boss's moves by name, for the boss lab. */
+export const BOSS_MOVE_NAMES: readonly BossMove[] = ["slam", "quake", "leap", "hook", "storm"];
+
+/**
+ * The boss lab's "do this now": queue `move` on the beat grid exactly as the
+ * rotation would — the commit on the next downbeat for a ground strike, the
+ * next beat for the chains — skipping the gap and the hook's line test.
+ * False when the boss is busy (a move, a blade, a phase change).
+ */
+export function queueBossMove(w: World, move: BossMove): boolean {
+  const e = w.enemies.find((b) => b.archetype === "boss" && b.hp > 0);
+  if (!e || e.bossCast !== "none" || e.attack !== "approach" || e.airborne) return false;
+  const unit = BOSS_ON_DOWNBEAT.has(move) ? BAR_MS : BEAT_MS;
+  const commitAt = e.bossFightMs + BOSS_COMMIT_MS[move];
+  // It is his turn now, in place of whatever he had chosen.
+  e.bossBlade = null;
+  e.bossVolleyMs = 0;
+  e.bossLastAct = move;
+  e.bossNext = move;
+  // To the next line strictly, as the rotation queues (the start is still ahead).
+  e.bossStartAt = commitAt + untilGrid(commitAt, unit) - BOSS_COMMIT_MS[move];
+  e.bossMoveMs = 0;
+  return true;
+}
+
+/** The boss lab's blade on demand: `kind` wound up at the player now, on its beat. */
+export function forceBossBlade(w: World, kind: MeleeKind): boolean {
+  const e = w.enemies.find((b) => b.archetype === "boss" && b.hp > 0);
+  if (!e || e.bossCast !== "none" || e.attack !== "approach" || e.airborne || e.bossNext !== "none") return false;
+  e.attackCooldownMs = 0;
+  beginWindup(w, e, w.player, kind);
+  return true;
 }
 
 function stepBoss(w: World, e: Enemy, dtMs: number): void {
   if (!isActive(e) && !e.airborne) return;
   if (!e.awake) return;
+  /*
+   * **What he costs**: his own figure (`BOSS_POWER`) times the boss band's
+   * `power`, read when a volley is fired and when a blade is armed.
+   *
+   * The band was already written to apply to him — its note says only the
+   * *beat* is the boss's and that "health and damage keep the late-run
+   * figures" — and it did not, because nothing passes him a scale. That
+   * mattered the moment the player's bar started growing on its own
+   * (`run/levels.ts`): the fountain at the fixed stop refills half the bar,
+   * so the health a player arrives at the king with is very nearly their
+   * maximum whatever the fourteen fights cost, and a maximum that grew by
+   * half while his blows did not is the whole fight rebalanced by the back
+   * door. His **health** is still his own: scaling that would make the fight
+   * longer rather than harder, and the length of it is doc 020's.
+   */
+  e.damageMult = BOSS_POWER * rampFor(w.roomIndex).power;
   // Adds at a phase change, once per phase.
   const addsFor = BOSS_ADDS[e.phase];
   if (addsFor && e.bossAddsPhase < e.phase) {
@@ -1391,57 +2704,277 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
     addsFor.forEach((id, i) => {
       const a = (i / addsFor.length) * Math.PI * 2 + Math.PI / 4;
       const [gx, gy] = nearestFloor(w, e.x + Math.cos(a) * 70, e.y + Math.sin(a) * 70);
-      const add = makeEnemy(w.nextEnemyId++, id, (gx + 0.5) * TILE_PX, (gy + 0.5) * TILE_PX, []);
+      const add = makeEnemy(w.nextEnemyId++, id, (gx + 0.5) * TILE_PX, (gy + 0.5) * TILE_PX, [], rampFor(w.roomIndex));
       add.awake = true;
+      // The king's, like the king: nothing in this room pays experience,
+      // because the run ends in it (`run/levels.ts`).
+      add.summoned = true;
       w.enemies.push(add);
     });
   }
 
+  /*
+   * **His turns** (`chooseBossAct`). Out of one — a move finished, a blade
+   * string recovered, a volley spent, a stagger over — the rest starts, and
+   * it is the player's: he only walks back round to face them.
+   */
+  if (e.bossCast === "none" && e.attack === "approach" && e.bossVolleyMs > 0) {
+    e.bossVolleyMs -= dtMs;
+    // A player who comes in through the volley is met with what is at his feet, not a rest.
+    if (e.gapPx < BOSS_CLOSE_PX - e.radius - PLAYER_RADIUS) { e.bossVolleyMs = 0; e.bossBusy = false; e.bossMoveMs = 0; }
+  }
+  if (e.bossBlade !== null && e.attack === "approach") {
+    e.bossPlanMs += dtMs;
+    // Walked after too long: the turn is given up for one that fits where they are now, at once.
+    if (e.bossPlanMs > BOSS_BLADE_CHASE_MS) { e.bossBlade = null; e.bossBusy = false; e.bossMoveMs = 0; }
+  }
+  const busy = e.bossCast !== "none" || e.attack !== "approach" || e.bossNext !== "none"
+    || e.bossVolleyMs > 0 || e.bossBlade !== null || e.airborne;
+  if (e.bossBusy && !busy) e.bossMoveMs = bossRestMs(w, e);
+  e.bossBusy = busy;
+
   if (e.bossCast === "none") {
-    if (e.attack !== "approach") return;
-    e.bossMoveMs -= dtMs;
-    if (e.bossMoveMs > 0) return;
-    const list = BOSS_MOVES[e.phase] ?? BOSS_MOVES[1]!;
-    const step = e.bossMoveIndex;
-    const move = list[step % list.length]!;
-    e.bossMoveIndex = step + 1;
+    if (e.attack !== "approach" || e.bossBlade !== null || e.bossVolleyMs > 0) return;
+    if (e.bossNext === "none") {
+      e.bossMoveMs -= dtMs;
+      if (e.bossMoveMs > 0) return;
+      const act = chooseBossAct(w, e);
+      if (act === null) return;
+      e.bossLastAct = act;
+      e.bossBusy = true;
+      if (act === "volley") {
+        e.bossVolleyMs = BOSS_VOLLEY_MS;
+        e.patternMs = 0;
+        return;
+      }
+      if (!(BOSS_MOVE_NAMES as readonly string[]).includes(act)) {
+        e.bossBlade = act as MeleeKind;
+        e.bossPlanMs = 0;
+        return;
+      }
+      /*
+       * **On the beat** (doc 020): a move is queued to start at the moment
+       * that puts its commit — the instant it promises damage — on the grid
+       * of the boss theme: the ground strikes on a downbeat, the chains on
+       * any beat. What waits is the idle gap in front of the telegraph, by
+       * less than a bar.
+       */
+      const next = act as BossMove;
+      const unit = BOSS_ON_DOWNBEAT.has(next) ? BAR_MS : BEAT_MS;
+      const commitAt = e.bossFightMs + BOSS_COMMIT_MS[next];
+      e.bossNext = next;
+      // To the next line strictly: the start is still ahead, so there is no stepped clock to allow for yet.
+      e.bossStartAt = commitAt + untilGrid(commitAt, unit) - BOSS_COMMIT_MS[next];
+    }
+    if (e.bossFightMs < e.bossStartAt) return;
+    const move = e.bossNext as Exclude<Enemy["bossNext"], "none">;
+    const commitIn = BOSS_COMMIT_MS[move];
+    /*
+     * The stepped clock arrives at or past the start — by a step, or by a
+     * freeze when hitstop jumped it — and the telegraph gives that back, so
+     * the commit is on the line rather than behind it. A freeze is at most
+     * 100 ms against telegraphs of 357 ms and more, so none nears the floor.
+     */
+    const trim = Math.max(0, e.bossFightMs - e.bossStartAt);
+    e.bossNext = "none";
+    e.bossStartAt = -1;
+    // Missed by more than a freeze (a backhand ran through the queue): queue it again for the next line
+    // rather than eat into a telegraph.
+    if (trim > BOSS_MAX_TRIM_MS) { e.bossLastAct = ""; e.bossBusy = false; e.bossMoveMs = 0; return; }
+    e.bossMoveIndex++;
     e.bossCast = move;
-    e.bossCastMs = move === "slam" ? BOSS_SLAM_MS : BOSS_LEAP_MS;
+    e.bossCastMs = (move === "slam" ? BOSS_SLAM_MS
+      : move === "quake" ? BOSS_QUAKE_MS
+        : move === "storm" ? bossStormMs(e.phase)
+          : BOSS_LEAP_MS) - trim;
+    e.bossBolts = 0;
+    e.bossCastEndAt = e.bossFightMs + e.bossCastMs;
+    e.bossCommitAt = e.bossFightMs + commitIn - trim;
+    // Every move drops the volley in hand: two telegraphs on one body at one
+    // moment is two telegraphs nobody reads (and see `fire`, which holds while he moves).
     e.pending = [];
     e.telegraphMs = 0;
     dropFireToken(w, e);
     if (move === "leap") {
       e.bossTargetX = w.player.x;
       e.bossTargetY = w.player.y;
+      e.bossFromX = e.x;
+      e.bossFromY = e.y;
+      e.bossLift = 0;
+    }
+    if (move === "hook") {
+      /*
+       * The snarecaster's own chain, thrown by the boss: the line lies on the
+       * floor for its aim window, flies, and on a hit drags the player in.
+       * Reusing the kind rather than authoring a grab is the whole point of
+       * the boss being an `EnemyId` — the player has already learned how to
+       * answer a chain, and what is new is what is standing at the other end.
+       */
+      castRanged(w, e, "hook", { x: w.player.x, y: w.player.y });
+      /*
+       * A heavier chain than the snarecaster's, and slower to throw. At the
+       * snarecaster's 730 ms the grab and the greatsword behind it were two
+       * hearts on one read, and the whole answer to a chain — dash across the
+       * line while it lies on the floor — needs the line to lie there long
+       * enough to be seen under everything else the boss has in the air.
+       */
+      const chain = w.tethers.find((t) => t.alive && t.kind === "hook" && t.from === e.id && t.phase === "aim");
+      if (chain) chain.ms = BOSS_HOOK_AIM_MS - trim;
+      e.poseMs = BOSS_HOOK_AIM_MS - trim;
+      // The pose owns the timing from here; the cast is over as far as the
+      // move list is concerned once the chain is in the air.
+      e.bossCastMs = BOSS_LEAP_MS;
+      e.bossCastEndAt = e.bossFightMs + e.bossCastMs;
     }
     w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: `boss_${move}` });
     return;
   }
 
   const before = e.bossCastMs;
-  e.bossCastMs -= dtMs;
+  // From the absolute end, not by subtraction: hitstop freezes this function but not the clock, so a
+  // countdown would come out late by every freeze inside the telegraph, and off the beat.
+  e.bossCastMs = e.bossCastEndAt - e.bossFightMs;
+  keepBossOnBeat(w, e);
   if (e.bossCast === "slam") {
-    // Phase III: a second ring into the first's gaps, a beat later.
-    if (e.phase >= 3 && before > -260 && e.bossCastMs <= -260) bossRing(w, e, 12, 115, 15);
+    /*
+     * Phase III: a second band a beat behind the first, and the bullet ring
+     * offset into the first's gaps. Two bands is the one place the slam asks
+     * for a second dash rather than a longer one.
+     */
+    if (e.phase >= 3 && before > -BOSS_SHOCK_SECOND_MS && e.bossCastMs <= -BOSS_SHOCK_SECOND_MS) {
+      bossShock(w, e);
+      bossRing(w, e, 12, 115, 15);
+    }
     if (before > 0 && e.bossCastMs <= 0) {
+      // The sword into the floor at his feet: the ground round them is struck.
+      if (Math.hypot(w.player.x - e.x, w.player.y - e.y) <= BOSS_SLAM_IMPACT_PX + PLAYER_RADIUS)
+        hurtPlayer(w, e.x, e.y, "melee:boss", 0, BOSS_SLAM_IMPACT_DAMAGE * e.damageMult);
+      bossStrikesProps(w, (q) => Math.hypot(q.x - e.x, q.y - e.y) <= BOSS_SLAM_IMPACT_PX + q.radius, []);
+      bossShock(w, e);
       bossRing(w, e, e.phase >= 2 ? 14 : 12, 120, 0);
-      impact(w, HITSTOP_HIT, 0);
+      // A greatsword driven into stone: a long freeze and the room shaking, so it lands like one.
+      impact(w, BOSS_STRIKE_STOP_MS, BOSS_STRIKE_TRAUMA);
       w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "boss_slam" });
     }
-    if (e.bossCastMs <= (e.phase >= 3 ? -300 : 0)) finishBossMove(e);
+    if (e.bossCastMs <= (e.phase >= 3 ? -BOSS_SHOCK_SECOND_MS : 0) - BOSS_KNEEL_MS) finishBossMove(e);
     return;
   }
-  // Leap.
-  e.airborne = e.bossCastMs < BOSS_LEAP_MS - BOSS_LEAP_RISE_MS && e.bossCastMs > 0;
+  if (e.bossCast === "quake") {
+    // The sword comes down: four cracks out along the compass, turned toward
+    // the player so one of them is never the line they are standing on.
+    if (before > 0 && e.bossCastMs <= 0) {
+      bossQuake(w, e, 0);
+      impact(w, BOSS_STRIKE_STOP_MS, BOSS_STRIKE_TRAUMA * 0.85);
+      w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "boss_quake" });
+    }
+    // Phase III lays a second four into the first's gaps, so the gap the
+    // player picked is the one that closes.
+    if (e.phase >= 3 && before > -BOSS_QUAKE_SECOND_MS && e.bossCastMs <= -BOSS_QUAKE_SECOND_MS)
+      bossQuake(w, e, Math.PI / 4);
+    if (e.bossCastMs <= (e.phase >= 3 ? -BOSS_QUAKE_SECOND_MS : 0) - BOSS_KNEEL_MS) finishBossMove(e);
+    return;
+  }
+  if (e.bossCast === "storm") {
+    // A bolt a beat from the first, on the fight clock, so each falls on the beat two after it is marked.
+    const n = BOSS_STORM_BOLTS[e.phase] ?? 3;
+    while (e.bossBolts < n && e.bossFightMs >= e.bossCommitAt + e.bossBolts * BEAT_MS - 1e-6) {
+      stormBolt(w, e, e.bossBolts, Math.max(0, e.bossFightMs - (e.bossCommitAt + e.bossBolts * BEAT_MS)));
+      e.bossBolts++;
+    }
+    if (e.bossCastMs <= 0 && e.bossBolts >= n) finishBossMove(e);
+    return;
+  }
+  if (e.bossCast === "hook") {
+    /*
+     * **The hook** (doc 020). The chain lies on the floor aimed at the player
+     * and follows them the whole time it lies there — he does not miss by
+     * where they were — and is thrown from wherever they are when it goes;
+     * the answer is the dash through its flight, or the step off its line as
+     * it leaves. It costs nothing when it catches (`stepTether`): it drags
+     * them to his feet, in front of him, and the light slash is already
+     * coming as they land. The grab is the setup; the cut is the damage.
+     */
+    const p = w.player;
+    for (const t of w.tethers) {
+      if (!t.alive || t.from !== e.id || t.kind !== "hook") continue;
+      if (t.phase === "aim") {
+        const a = Math.atan2(p.y - e.y, p.x - e.x);
+        const len = lineToWall(w, e.x, e.y, a, BOSS_HOOK_REACH_PX);
+        t.x1 = e.x + Math.cos(a) * len;
+        t.y1 = e.y + Math.sin(a) * len;
+      }
+      if (t.phase === "drag") e.bossHooked = true;
+    }
+    const chain = w.tethers.some((t) => t.alive && t.from === e.id);
+    if (e.bossHooked) {
+      if (p.dragMs > 0 || chain) return;
+      e.bossHooked = false;
+      finishBossMove(e);
+      // One cut, not a string: the grab was the first blow of it.
+      e.bossString = [];
+      e.bossStringN = 1;
+      e.bossLinked = true;
+      e.bossLinkedBlow = null;
+      beginWindup(w, e, p, "greatslash");
+      e.bossLinked = false;
+      return;
+    }
+    if (!chain && e.bossCastMs <= 0) finishBossMove(e);
+    if (e.bossCastMs <= -1600) finishBossMove(e);
+    return;
+  }
+  /*
+   * **The leap.** The gather on the floor, the arc through the air, and the
+   * landing — see `BOSS_LEAP_MS`. The body's own coordinates are moved along
+   * the arc, so it travels: the sim's position and the drawing agree, and
+   * everything that reads a position while it is in the air (the shadow, the
+   * flow field, the adds) reads a body that is somewhere sensible.
+   */
+  const elapsed = BOSS_LEAP_MS - e.bossCastMs;
+  const flight = Math.max(1, BOSS_LEAP_MS - BOSS_LEAP_RISE_MS);
+  const k = Math.max(0, Math.min(1, (elapsed - BOSS_LEAP_RISE_MS) / flight));
+  e.airborne = elapsed > BOSS_LEAP_RISE_MS && e.bossCastMs > 0;
+  if (e.bossCastMs > 0) {
+    // The gather: it sinks a little before it goes, which is the beat that
+    // says "now", and then it is in the air on a parabola.
+    if (!e.airborne) {
+      e.bossLift = -3 * (elapsed / Math.max(1, BOSS_LEAP_RISE_MS));
+    } else {
+      // Eased along the ground line so the arc reads as a throw rather than a
+      // slide: quick off the floor, slowing into the mark.
+      const ease = k * k * (3 - 2 * k);
+      e.x = e.bossFromX + (e.bossTargetX - e.bossFromX) * ease;
+      e.y = e.bossFromY + (e.bossTargetY - e.bossFromY) * ease;
+      e.bossLift = BOSS_LEAP_HEIGHT * 4 * k * (1 - k);
+      e.knockX = 0;
+      e.knockY = 0;
+      e.vx = 0;
+      e.vy = 0;
+    }
+  }
   if (before > 0 && e.bossCastMs <= 0) {
     const [gx, gy] = nearestFloor(w, e.bossTargetX, e.bossTargetY);
     e.x = (gx + 0.5) * TILE_PX;
     e.y = (gy + 0.5) * TILE_PX;
     e.airborne = false;
-    impact(w, HITSTOP_KILL, 0);
+    e.bossLift = 0;
+    impact(w, HITSTOP_CAP, 0);
+    // A landing this size is felt: the biggest single shake in the fight,
+    // and the dust the renderer throws off it hangs on the same event.
+    w.trauma = Math.min(1, w.trauma + 0.7);
     w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "boss_land" });
+    bossStrikesProps(w, (q) => Math.hypot(q.x - e.x, q.y - e.y) <= BOSS_LEAP_RADIUS + q.radius, []);
     if (Math.hypot(w.player.x - e.x, w.player.y - e.y) <= BOSS_LEAP_RADIUS + PLAYER_RADIUS)
-      hurtPlayer(w, e.x, e.y, "melee:boss", 0, 1.4);
+      hurtPlayer(w, e.x, e.y, "melee:boss", 0, BOSS_LAND_DAMAGE * e.damageMult);
+    /*
+     * **The landing throws the shockwave.** It is the same band the standing
+     * slam sends, born at the same safe radius — so the answer the player
+     * learned in phase I still works, and the leap is that question asked
+     * about ground they did not choose. Without it the leap was a body
+     * arriving and nothing else, which is why it read as a teleport even
+     * once it had an arc.
+     */
+    bossShock(w, e, BOSS_LEAP_RADIUS);
     bossRing(w, e, 8, 110, 22);
     w.flow = null;
     w.flowTile = null;
@@ -1450,11 +2983,40 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
   if (e.bossCastMs <= -500) finishBossMove(e);
 }
 
+/** From a move's start to the moment it promises damage: the part the beat grid aligns. */
+const BOSS_COMMIT_MS: Readonly<Record<Exclude<Enemy["bossCast"], "none">, number>> = {
+  slam: BOSS_SLAM_MS, quake: BOSS_QUAKE_MS, leap: BOSS_LEAP_MS, hook: BOSS_HOOK_AIM_MS, storm: BOSS_STORM_RAISE_MS,
+};
+/**
+ * What the boss's ground strikes cost the frame: four frames of freeze and a
+ * shake. The roster's hits freeze a frame and never shake (`TRAUMA_HIT`); a
+ * greatsword into the floor has to be felt in the hands, or it reads as the
+ * floor cracking by itself while a body stands near it.
+ */
+const BOSS_STRIKE_STOP_MS = FRAME_MS * 4;
+const BOSS_STRIKE_TRAUMA = 0.42;
+/** The most a telegraph gives back to put its commit on the line: one freeze at its cap, and a step. */
+const BOSS_MAX_TRIM_MS = HITSTOP_CAP + FRAME_MS;
+/** The ground strikes take the downbeat; the chains take any beat. */
+const BOSS_ON_DOWNBEAT: ReadonlySet<string> = new Set(["slam", "quake", "leap"]);
+
+/**
+ * The parts of a move that run on clocks of their own — the hook's chain,
+ * the blade's windup — are held to the fight clock too, for the
+ * same reason as `bossCastMs`: those clocks stop in hitstop and the beat does
+ * not. A clock may only be brought *forward* to its target, never pushed back.
+ */
+function keepBossOnBeat(w: World, e: Enemy): void {
+  const toCommit = e.bossCommitAt - e.bossFightMs;
+  if (e.bossCast === "hook")
+    for (const t of w.tethers) if (t.alive && t.from === e.id && t.phase === "aim") t.ms = Math.max(0, Math.min(t.ms, toCommit));
+}
+
 function finishBossMove(e: Enemy): void {
   e.bossCast = "none";
   e.bossCastMs = 0;
   e.airborne = false;
-  e.bossMoveMs = BOSS_MOVE_GAP_MS[e.phase] ?? 3400;
+  e.bossLift = 0;
 }
 
 /** The floor cell nearest a point, in grid coordinates. */
@@ -1503,7 +3065,7 @@ function stepDeathBursts(w: World, dtMs: number): void {
     if (d.ms > 0) continue;
     // The body is gone from the room; the volley is fired from where it fell.
     const body = { ...d.body, x: d.x, y: d.y } as Enemy;
-    spikeVolley(w, body, DEATH_BURST_SPEED[d.kind], d.kind === "lance" ? 0.8 : 0.9, d.reach + 4);
+    spikeVolley(w, body, DEATH_BURST_SPEED[d.kind], d.kind === "lance" ? SPIKE_SIZE : 1.0, d.reach + 4);
   }
   w.deathBursts = w.deathBursts.filter((d) => d.ms > 0);
 }
@@ -1519,13 +3081,45 @@ function stepDeathBursts(w: World, dtMs: number): void {
  * drains when the hits stop, and that ignites when full; then the gauge is
  * the status's clock, and hits while it runs top it up and stack its
  * intensity. Ice stays immediate: it is control, not damage over time.
+ *
+ * How long each status then runs, and what it ticks for, is in `enemy.ts`
+ * beside the tick itself (`ENEMY_BURN_MS`, `BURN_DPS`); `statusForecast` in
+ * `spells.ts` adds them up for a card.
  */
-export const ENEMY_BURN_MS = 3000;
-export const ENEMY_POISON_MS = 4000;
 
 function applyElement(e: Enemy, b: Bullet): void {
-  const add = ENEMY_BUILD_PER_HIT * Math.max(0.5, b.elementPower || 1);
-  if (b.element === "fire") {
+  applyElementsTo(e, b.powers, b.statusMult || 1, b.proc);
+}
+
+/**
+ * **Every element the thing carried, each into its own gauge.** No reactions:
+ * a body hit by a shot that burns and poisons ends up burning and poisoned,
+ * and the two run on their own clocks.
+ */
+function applyElementsTo(e: Enemy, powers: ElementPowers, mult = 1, proc = 1): void {
+  // A piece of a multi-hit fills a gauge by its share, not by a whole hit:
+  // see `Bullet.proc`.
+  for (const el of STATUS_ELEMENTS) {
+    const p = powers[el] * proc;
+    if (p > 0) applyElementTo(e, el, p, mult);
+  }
+}
+
+/** An element's hit on a body, whatever carried it: a shot, a cell of erupting ground. */
+/**
+ * `mult` is **how hard the build that landed this hit burns**: the spell's
+ * level and every damage multiplier on it (`Enemy.statusMult`). A status
+ * already running keeps the strongest thing feeding it; a fresh one starts at
+ * whatever lit it.
+ */
+function applyElementTo(e: Enemy, element: string, power: number, mult = 1): void {
+  // An immune body takes no status either; a resistant one builds it slower.
+  const resist = resistOf(e.archetype, element);
+  if (resist === 0) return;
+  const add = ENEMY_BUILD_PER_HIT * Math.max(0.5, power || 1) * resist;
+  const running = e.burnMs > 0 || e.poisonMs > 0;
+  e.statusMult = running ? Math.max(e.statusMult, mult) : mult;
+  if (element === "fire") {
     if (e.burnMs > 0) {
       e.burnMs = Math.min(ENEMY_BURN_MS, e.burnMs + ENEMY_BURN_MS * add * 0.6);
       e.burnSources = Math.min(4, e.burnSources + 1);
@@ -1533,8 +3127,8 @@ function applyElement(e: Enemy, b: Bullet): void {
     }
     e.burnBuild = Math.min(1, e.burnBuild + add);
     e.buildFedMs = 600;
-    if (e.burnBuild >= 1) { e.burnMs = ENEMY_BURN_MS; e.burnSources = 1; e.burnBuild = 1; }
-  } else if (b.element === "poison") {
+    if (e.burnBuild >= 1) { e.burnMs = ENEMY_BURN_MS; e.burnSources = ENEMY_BURN_SOURCES; e.burnBuild = 1; }
+  } else if (element === "poison") {
     if (e.poisonMs > 0) {
       e.poisonMs = Math.min(ENEMY_POISON_MS, e.poisonMs + ENEMY_POISON_MS * add * 0.6);
       e.poisonStacks = Math.min(5, e.poisonStacks + 1);
@@ -1542,8 +3136,8 @@ function applyElement(e: Enemy, b: Bullet): void {
     }
     e.poisonBuild = Math.min(1, e.poisonBuild + add);
     e.buildFedMs = 600;
-    if (e.poisonBuild >= 1) { e.poisonMs = ENEMY_POISON_MS; e.poisonStacks = 2; e.poisonBuild = 1; }
-  } else if (b.element === "ice") {
+    if (e.poisonBuild >= 1) { e.poisonMs = ENEMY_POISON_MS; e.poisonStacks = ENEMY_POISON_STACKS; e.poisonBuild = 1; }
+  } else if (element === "ice") {
     // Ice builds too: each hit slows, a full gauge freezes.
     if (e.frozenMs > 0) return;
     e.chillBuild = Math.min(1, e.chillBuild + add);
@@ -1617,11 +3211,7 @@ function bulletsBreakProps(
 /**
  * A projectile that dies with `split` set comes apart into fragments.
  *
- * `Bullet.split` was set from the item mods and **read by nothing**, so
- * `fracture_rune` — "splits projectiles after it into fragments when they die"
- * — had no effect whatsoever. Same class of defect as the multicast items:
- * authored content wired to a mechanism that was never written, invisible
- * because the item still appeared in offers and still cost mana.
+ * `Bullet.split` is set by `fork` on a hit and by `shatter` on a wall.
  *
  * The fragments are deliberately weak and short-lived. What splitting buys is
  * **coverage**, not damage: the parent's damage is divided rather than copied,
@@ -1660,12 +3250,14 @@ function splitBullets(w: World, dead: readonly Bullet[]): void {
       child.lifeMs = 1000 * SPLIT_LIFE;
       child.element = parent.element;
       child.elementPower = parent.elementPower;
+      copyPowers(child.powers, parent.powers);
+      // A shard is a piece of the shot that made it, and procs like one.
+      child.proc = parent.proc * PROC_SPLIT;
+      child.statusMult = parent.statusMult;
       child.split = 0;
       child.pierce = 0;
       child.bounce = 0;
       child.homing = 0;
-      child.payloadUnit = null;
-      child.passthrough = false;
       // The shards **carry on forward** past whatever the parent hit. Letting
       // them re-hit the same body would make a fork a damage multiplier on
       // one target, which is a different and much duller item than one that
@@ -1685,7 +3277,6 @@ function splitBullets(w: World, dead: readonly Bullet[]): void {
  * spell's own unit at a point. Built per call rather than stored, so it always
  * closes over the live world and never over a room that has been replaced.
  */
-const SHATTER_MULT = 3;
 
 /** What a player shot's damage number is coloured by: its element, else its spell's school. */
 function damageTag(_w: World, b: Bullet): string {
@@ -1701,8 +3292,17 @@ function hookSim(w: World): HookSim {
       w.stats.damageDealt += amount;
       e.hitFlashMs = HIT_FLASH_MS;
     },
-    fire: (unit, origin, target) => {
-      fireUnit(w, unit, emptyScope(), ITEMS, [], origin, target);
+    /*
+     * A free cast keeps the spell's identity: its slot, affixes, element and
+     * level, exactly as a keypress builds them (`freeCastScope`). Fired
+     * through an empty scope, a `resonance` or `retort` shot carried
+     * `spellIndex: -1` and no element, so it was drawn and sounded as a
+     * generic bolt rather than as the spell it came from.
+     */
+    fire: (spellIndex, origin, target) => {
+      const slot = w.spells[spellIndex];
+      if (!slot) return;
+      fireUnit(w, slot.item, freeCastScope(slot, spellIndex), ITEMS, [], origin, target);
     },
   };
 }
@@ -1746,6 +3346,26 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
     if (b.rehitMs <= 0) { b.hitIds.length = 0; b.rehitMs = ORBIT_REHIT_MS; }
   }
 
+  /*
+   * `emit` (doc 006): a shot that throws a shard every `emitMs` of its
+   * flight, each turned a step further round than the last, so the orb
+   * sprays the ground it crosses rather than one line of it.
+   */
+  for (const b of w.playerBullets) {
+    if (!b.alive || b.emitMs <= 0 || b.orbitMs > 0) continue;
+    b.emitClock -= dtMs;
+    while (b.emitClock <= 0) {
+      b.emitClock += b.emitMs;
+      throwShard(w, b, b.emitAngle);
+      b.emitAngle += EMIT_TURN;
+    }
+  }
+
+  // The thrown blades fly out and home on their own path; see `stepBoomerangs`.
+  stepBoomerangs(w, dtMs);
+  // An enchant's waves fly forward as arcs, over whatever the room holds; see `stepWaves`.
+  const wavesEnded = stepWaves(w, dtMs);
+
   const nearest = w.enemies.find(isActive) ?? null;
   const { expired, hitWall } = integrate(
     w.playerBullets, w.room.grid, dtMs,
@@ -1769,7 +3389,8 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
     for (const e of w.enemies) {
       if (!isActive(e) || e.hp <= 0) continue;
       if (b.hitIds.includes(e.id)) continue;
-      if (!circlesOverlap(b.x, b.y, b.radius, e.x, e.y, e.radius)) continue;
+      // A wave is an arc, not a disc (`waveHits`).
+      if (b.delivery === "wave" ? !waveHits(b, e, dtMs) : !circlesOverlap(b.x, b.y, b.radius, e.x, e.y, e.radius)) continue;
 
       // Being shot is the loudest way to be noticed. A sleeping enemy that
       // keeps dozing under fire is worse than having no aggro range at all,
@@ -1777,48 +3398,98 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
       const unaware = !e.awake;
       wake(w, e);
 
+      /*
+       * Where it struck, and the way the hit travels: a shot's at itself,
+       * along its flight; a wave's where its arc crosses the body, outward
+       * from its centre — the arc crosses a body at its flank as squarely as
+       * at its middle.
+       */
+      const [hx, hy] = b.delivery === "wave" ? [e.x - waveCentre(b).x, e.y - waveCentre(b).y] : [b.vx, b.vy];
+      const hl = Math.hypot(hx, hy) || 1;
+      const ux = hx / hl, uy = hy / hl;
+      const [px, py] = b.delivery === "wave"
+        ? [e.x - ux * Math.min(e.radius, hl), e.y - uy * Math.min(e.radius, hl)]
+        : [b.x, b.y];
+
       const immune = e.affixes.includes("shielded") && b.element !== "none";
       if (!immune) {
         // What the spell had attached fires here: an arc to the next body, or
         // a mark. Before the damage, so a detonation sees the body it is on.
         onHit(w, b, e, hookSim(w));
         // From where the shot came, a body-length back along its travel.
-        const sp = Math.hypot(b.vx, b.vy) || 1;
-        hurtEnemy(w, e, b.damage, unaware ? "sneak" : damageTag(w, b), { x: b.x - (b.vx / sp) * 24, y: b.y - (b.vy / sp) * 24 });
+        hurtEnemy(w, e, b.damage, unaware ? "sneak" : damageTag(w, b), { x: px - ux * 24, y: py - uy * 24 });
         if (e.hp <= 0) onKill(w, b, e, hookSim(w));
         w.stats.damageDealt += b.damage;
+        // A shot that arrived: the numerator of "how often the player hits".
+        w.stats.shotHits++;
         applyElement(e, b);
+        /*
+         * The two bolt options that stay on the body (doc 006). A `doom` hit
+         * marks it, unless a mark is already counting down there: a second
+         * hit is a hit, not a second payoff. A `contagion` hit that leaves
+         * the body poisoned makes it a carrier for as long as the poison runs.
+         */
+        if (b.doomMs > 0 && e.doomMs <= 0 && e.hp > 0) {
+          e.doomMs = b.doomMs;
+          e.doomDamage = b.doomDamage;
+          e.doomRadius = b.doomRadius;
+          e.doomSpell = b.spellIndex;
+          w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "doom_mark" });
+        }
+        if (b.contagion > 0 && e.poisonMs > 0) {
+          e.contagion = Math.max(e.contagion, b.contagion);
+          e.contagionReach = Math.max(e.contagionReach, b.contagionReach);
+        }
         e.hitFlashMs = HIT_FLASH_MS;
         // A hit that does not move the target reads as no hit at all.
-        const speed = Math.hypot(b.vx, b.vy) || 1;
-        const push = (KNOCKBACK * (b.weight || 1)) / Math.max(1, e.radius / 10);
-        e.knockX += (b.vx / speed) * push;
-        e.knockY += (b.vy / speed) * push;
+        const weight = b.weight || 1;
+        const push = (KNOCKBACK * weight) / Math.max(1, e.radius / 10);
+        e.knockX += ux * push;
+        e.knockY += uy * push;
+        /*
+         * **Mass decides what a hit does to a body**, not only how far it
+         * moves it. A light shot — a spark, a pellet, a seeker — pushes and
+         * no more; one heavier than the bolt interrupts, as the sword does,
+         * for longer the heavier it is: a stone shard or a void orb stops a
+         * windup where a fan of sparks cannot.
+         */
+        if (weight >= SPELL_STAGGER_WEIGHT) spellStagger(w, e, weight);
         // A heavy shot lands like one: a longer freeze, the room shakes, grit.
         if ((b.weight || 1) > 1) {
           impact(w, HITSTOP_HIT * (1 + b.weight), TRAUMA_HIT * 1.8 * b.weight);
-          emit(w, b.x, b.y, "kill", 6);
-          w.events.push({ kind: "hazard_tick", x: b.x, y: b.y, what: "heavy_hit" });
+          emit(w, px, py, "kill", 6);
+          w.events.push({ kind: "hazard_tick", x: px, y: py, what: "heavy_hit" });
         } else impact(w, HITSTOP_HIT, TRAUMA_HIT);
       }
-      w.events.push({ kind: "enemy_hit", x: b.x, y: b.y, what: e.archetype, amount: b.damage });
-      emit(w, b.x, b.y, "hit", 4);
+      w.events.push({ kind: "enemy_hit", x: px, y: py, what: e.archetype, amount: b.damage });
+      emit(w, px, py, "hit", 4);
       b.hitIds.push(e.id);
 
-      if (b.payloadUnit) {
-        // A carrier triggers exactly once, however many bodies it pierces.
-        for (const _ of firePayloadChild(w, b.payloadUnit, b.x, b.y, items)) void _;
-        b.payloadUnit = null;
-        if (!b.passthrough) { b.alive = false; break; }
-      }
       if (b.pierce > 0) b.pierce--;
-      else if (!b.passthrough) {
+      else {
         b.alive = false;
         // Dying on a body is dying. Splitting only on expiry would make the
         // fork worthless against exactly what the player aims at.
         splitBullets(w, [b]);
+        burstShards(w, b);
         break;
       }
+    }
+  }
+
+  /*
+   * A wave breaks what it crosses, as the swing it came from does — a pot
+   * or a crate under the arc — and flies on over it: each prop once, on the
+   * wave's own list, below the bodies' ids.
+   */
+  for (const b of w.playerBullets) {
+    if (!b.alive || b.delivery !== "wave") continue;
+    for (let i = 0; i < w.props.length; i++) {
+      const prop = w.props[i]!;
+      const id = PROP_HIT_ID_BASE - i;
+      if (prop.hp <= 0 || b.hitIds.includes(id) || !waveHits(b, prop, dtMs)) continue;
+      b.hitIds.push(id);
+      damageProp(w, prop, b.damage);
     }
   }
 
@@ -1832,18 +3503,61 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
   // "Where the shot runs out" is anywhere it ended without finding a body: a
   // shot that stops on a wall has run out just as surely as one that timed
   // out, and at this room size nearly every miss ends on a wall.
-  for (const b of expired) onExpire(w, b);
+  for (const b of [...expired, ...wavesEnded]) onExpire(w, b);
   for (const b of hitWall) { onExpire(w, b); b.split = Math.max(b.split, wallSplitCount(b)); }
+  // An `emit` shot bursts into its ring wherever it ends: out of time, or on a wall.
+  for (const b of [...expired, ...hitWall]) burstShards(w, b);
   for (const b of hitWall)
     w.events.push({ kind: "bullet_wall", x: b.x, y: b.y, what: `player:${b.element}`, facing: Math.atan2(b.vy, b.vx) });
   splitBullets(w, [...expired, ...hitWall]);
+}
 
-  // on_expire and on_wall carriers cast where they stopped.
-  for (const b of [...expired, ...hitWall])
-    if (b.payloadUnit) {
-      firePayloadChild(w, b.payloadUnit, b.x, b.y, items);
-      b.payloadUnit = null;
-    }
+/**
+ * An `emit` shard: a small, short, fast projectile of the spell's own
+ * element, thrown off the shot that carries the option. **It carries the
+ * element and none of the affixes**: the orb is the spell and carries what
+ * the key attached, and a fork or a chain on every shard of it would turn one
+ * affix into twenty. Worth little to an on-hit effect (`PROC_EMIT`), so a
+ * spray of shards cannot fill a gauge faster than the hit that threw them.
+ */
+const EMIT_SPEED = 360;
+const EMIT_LIFE_MS = 420;
+const EMIT_RADIUS = 3;
+/** How far round the next shard is thrown from the last, in radians: an odd step, so the spray does not settle into spokes. */
+const EMIT_TURN = (137.5 * Math.PI) / 180;
+/** A shard's proc weight, of the shot that threw it; see `procWeight`. */
+const PROC_EMIT = 0.25;
+
+function throwShard(w: World, from: Bullet, angle: number): void {
+  const b = acquire(w.playerBullets, false);
+  if (!b) return;
+  b.alive = true;
+  b.x = from.x;
+  b.y = from.y;
+  b.originX = from.x;
+  b.originY = from.y;
+  b.vx = Math.cos(angle) * EMIT_SPEED;
+  b.vy = Math.sin(angle) * EMIT_SPEED;
+  b.radius = EMIT_RADIUS;
+  b.damage = from.emitDamage;
+  b.lifeMs = EMIT_LIFE_MS;
+  b.element = from.element;
+  b.elementPower = from.elementPower;
+  copyPowers(b.powers, from.powers);
+  b.proc = Math.max(PROC_MIN, from.proc * PROC_EMIT);
+  b.statusMult = from.statusMult;
+  b.spellIndex = from.spellIndex;
+  b.weight = 0.4;
+  w.stats.shotsFired++;
+}
+
+/** The ring an `emit` shot bursts into as it ends, once; see `throwShard`. */
+function burstShards(w: World, b: Bullet): void {
+  if (b.emitRing <= 0) return;
+  const n = b.emitRing;
+  b.emitRing = 0;
+  for (let i = 0; i < n; i++) throwShard(w, b, b.emitAngle + (i / n) * Math.PI * 2);
+  w.events.push({ kind: "shot", x: b.x, y: b.y, what: "emit_burst" });
 }
 
 function stepEnemyBullets(w: World, dtMs: number): void {
@@ -1917,13 +3631,20 @@ function collectPickups(w: World, dtMs: number): void {
   );
   for (const p of taken) {
     if (p.kind === "heart") {
-      w.player.hearts = Math.min(MAX_HEARTS + w.player.mods.maxHearts, w.player.hearts + 1);
+      /*
+       * A heart heals one; an **elite's** heart heals a share of the whole
+       * bar, which `value` carries (see `ELITE_HEAL_FRACTION`). The health a
+       * body is worth should scale with the health the player has, the way
+       * the fountain's does.
+       */
+      const heal = p.value > 0 ? p.value : 1;
+      w.player.hearts = Math.min(MAX_HEARTS + w.player.mods.maxHearts, w.player.hearts + heal);
       emit(w, p.x, p.y, "heal", 5);
     } else if (p.kind === "mana") {
       w.player.mana = Math.min(w.staff.mana_max, w.player.mana + MANA_ORB);
       emit(w, p.x, p.y, "pickup", 2);
     } else {
-      w.gold += COIN_VALUE;
+      w.gold += p.value;
       emit(w, p.x, p.y, "pickup", 4);
     }
     w.events.push({ kind: "pickup", x: p.x, y: p.y, what: p.kind });
@@ -1942,18 +3663,18 @@ function collectPickups(w: World, dtMs: number): void {
 /**
  * What breaking scenery pays: **gold, usually, in a small random handful**.
  *
- * It paid like a quarter of a kill — one coin from one pot in eight — which
- * made pots not worth the swing, and a breakable the player learns to walk
- * past is furniture with a health bar. Four pots in five now scatter one to
- * three coins, which is a handful on the floor without any new art: the
- * coins are the coin sprite, thrown a little apart. Hearts do not come from
- * scenery; a heart is something a fight pays.
+ * A pot in three scatters a coin or two: enough that a breakable is worth
+ * the swing, not so much that scenery out-pays the fight. At four in five
+ * and up to three coins, a player who broke everything took about thirty
+ * gold a room from pots alone, twice what the fight paid, and ended a run
+ * with twice the gold anything sold for. Hearts do not come from scenery; a
+ * heart is something a fight pays.
  */
-const PROP_COIN_CHANCE = 0.8;
+const PROP_COIN_CHANCE = 0.35;
 
 function dropPropLoot(w: World, x: number, y: number): void {
   if (w.rng.next() >= PROP_COIN_CHANCE) return;
-  const coins = 1 + Math.floor(w.rng.next() * 3);
+  const coins = 1 + Math.floor(w.rng.next() * 2);
   for (let i = 0; i < coins; i++) drop(w.pickups, "coin", x, y, w.rng);
 }
 
@@ -1961,22 +3682,22 @@ function dropPropLoot(w: World, x: number, y: number): void {
  * **Every kill pays** — beyond the chance of a coin or a heart, which was
  * nearly all a kill was worth, and a kill that pays nothing is a toll.
  *
- * - **Mana orbs**, always: one, plus one for a heavy body and two for an
- *   elite. They refund the spells, so killing is what fuels casting.
- * - **Coins** from an elite, always two: the harder body is the one worth
+ * - **No mana on the floor.** The sword is what refills the pool (doc 013);
+ *   orbs dropped by bodies were one more thing to walk over and collect for
+ *   a resource the fight already pays in.
+ * - **A coin** from an elite, always: the harder body is the one worth
  *   going for.
- * - **A streak**: a third kill inside two seconds of the last one, and every
- *   kill after it, banks extra rage — so clearing a pack fast is how the spin
- *   comes round.
+ * - **A streak**: a third sword kill inside two seconds of the last one, and
+ *   every one after it, banks extra rage — so clearing a pack fast with the
+ *   blade is how the spin comes round. Only the sword's kills count: rage is
+ *   the sword's gauge (doc 013), and a scatter shot that dropped three bodies
+ *   at once filled it without a swing.
  */
 function killPays(w: World, e: Enemy): void {
   if (e.archetype === "boss") return;
   const elite = e.affixes.length > 0;
-  // Orbs from the bodies worth them — a heavy one, an elite — not from every
-  // kill: an orb on every body paid more mana than the sword did (doc 013).
-  const orbs = (ENEMIES[e.archetype].threat_weight >= 2 ? 1 : 0) + (elite ? 2 : 0);
-  for (let i = 0; i < orbs; i++) drop(w.pickups, "mana", e.x, e.y, w.rng);
-  if (elite) for (let i = 0; i < 2; i++) drop(w.pickups, "coin", e.x, e.y, w.rng);
+  if (elite) drop(w.pickups, "coin", e.x, e.y, w.rng);
+  if (!w.swordBlow) return;
   w.streak = w.streakMs > 0 ? w.streak + 1 : 1;
   w.streakMs = STREAK_MS;
   if (w.streak >= 3) {
@@ -1986,32 +3707,105 @@ function killPays(w: World, e: Enemy): void {
 }
 
 /**
- * **A quiet room wakes its sleepers.** When everything awake is dead and the
- * bodies left have not noticed the player, they notice the silence: after a
- * few seconds the one nearest the player wakes, and its alarm spreads. A
- * sleeper is a body the player may reach first; it is never a room that
- * cannot end.
+ * **A quiet room comes to the player.**
+ *
+ * Two silences, and the second is the one the stations introduced. When
+ * everything awake is dead and the bodies left have not noticed the player,
+ * they notice the silence: after a few seconds the one nearest the player
+ * wakes, and its alarm spreads. And when a fight is going on somewhere but
+ * **nothing awake is in the player's view**, the same thing happens sooner —
+ * because a roster spread over a hall means the player can otherwise spend a
+ * third of a room walking between fights, which measured worse than the knot
+ * by the door it replaced.
+ *
+ * Waking the nearest body rather than moving one is what keeps the room a set
+ * of fights whose order the player chooses (doc 005): it is the room noticing
+ * them, at the pace the alarm ripple already reads at.
  */
 function stepQuiet(w: World, dtMs: number): void {
   const live = w.enemies.filter((e) => e.hp > 0 && e.spawnFadeMs <= 0);
+  const p = w.player;
+  const unaware = live.filter((e) => !e.awake);
   // Only once the fight has started: a room nobody has touched is not quiet, it is waiting.
-  if (live.length === 0 || live.some((e) => e.awake) || w.pendingWaves.length > 0 || w.stats.damageDealt <= 0) {
+  if (unaware.length === 0 || w.stats.damageDealt <= 0) { w.quietMs = 0; return; }
+  const awakeInView = live.some((e) => e.awake
+    && Math.abs(e.x - p.x) <= w.viewHalf.x + e.radius && Math.abs(e.y - p.y) <= w.viewHalf.y + e.radius);
+  const anythingAwake = live.some((e) => e.awake);
+  /*
+   * A group down to its last body counts as quiet even while that body is on
+   * screen: it is about to be gone, and the point is to have called the next
+   * station by then.
+   */
+  const nearlyDone = live.filter((e) => e.awake).length <= LAST_BODY;
+  if ((awakeInView && !nearlyDone)
+    || (anythingAwake && w.pendingWaves.length > 0 && w.stats.elapsedMs - w.lastWaveMs < WAVE_MIN_GAP_MS)) {
     w.quietMs = 0;
     return;
   }
+  /*
+   * **The next station is called while the last one is still dying**, not
+   * after the screen has already gone quiet. Waiting for the gap and then
+   * waking somebody means the player always sees the gap; waking on the last
+   * body of the group in front of them means the next fight is on its way
+   * before they have finished the one they are in.
+   */
+  const awakeLeft = live.filter((e) => e.awake).length;
   w.quietMs += dtMs;
-  if (w.quietMs < QUIET_WAKE_MS) return;
+  const wait = !anythingAwake ? QUIET_WAKE_MS : awakeLeft <= LAST_BODY ? NEXT_STATION_MS : UNSEEN_WAKE_MS;
+  if (w.quietMs < wait) return;
   w.quietMs = 0;
-  const p = w.player;
-  const nearest = live.reduce((a, b) => (Math.hypot(a.x - p.x, a.y - p.y) <= Math.hypot(b.x - p.x, b.y - p.y) ? a : b));
+  const nearest = unaware.reduce((a, b) => (Math.hypot(a.x - p.x, a.y - p.y) <= Math.hypot(b.x - p.x, b.y - p.y) ? a : b));
   wake(w, nearest);
 }
 
 const QUIET_WAKE_MS = 4000;
+/** With a fight going on but nothing of it in view, the room joins in sooner. */
+const UNSEEN_WAKE_MS = 1600;
+/**
+ * A group is "down to its last" at this many awake bodies, and the next
+ * station is called this long after it gets there — long enough that the
+ * player is finishing the body in front of them rather than being interrupted
+ * by the next fight arriving on top of it.
+ */
+const LAST_BODY = 1;
+const NEXT_STATION_MS = 1300;
 
 /** Kills this close together count as one streak. */
 const STREAK_MS = 2000;
 const STREAK_RAGE = 0.25;
+
+/** What an elite kill heals, as a share of the whole bar (doc 005). */
+export const ELITE_HEAL_FRACTION = 0.1;
+
+/**
+ * **What a kill pays in experience, and the level it may reach** (doc 003,
+ * "Experience and levels"; `run/levels.ts`).
+ *
+ * In the simulation rather than in either caller, which is the whole point:
+ * the scene and the balance harness both get the levels by running the game,
+ * so a run measured headless and a run played in a browser grow the same body
+ * at the same moments. Neither of them can hold a different table.
+ *
+ * A level raises the modifiers and hands back **the health it just added**.
+ * Not a full heal — that would make levelling the way out of a bad room and
+ * turn every summoner into a rest stop — and not nothing, because a maximum
+ * that grows while the bar does not is a widening gap the player reads as
+ * losing health.
+ */
+function gainXp(w: World, e: Enemy): void {
+  const points = xpForKill(e.archetype, { elite: e.affixes.length > 0, summoned: e.summoned });
+  if (points <= 0) return;
+  w.xp += points;
+  w.events.push({ kind: "xp", x: e.x, y: e.y, amount: points });
+  const now = levelAt(w.xp);
+  while (w.level < now.level) {
+    w.level++;
+    w.player.mods = withLevels(w.baseMods, w.level);
+    w.player.hearts = Math.min(MAX_HEARTS + w.player.mods.maxHearts, w.player.hearts + LEVEL_HEARTS);
+    w.staff = { ...w.staff, mana_max: Math.round(w.staffManaBase * w.player.mods.manaMax) };
+    w.events.push({ kind: "level_up", x: w.player.x, y: w.player.y, amount: w.level });
+  }
+}
 
 function dropLoot(w: World, x: number, y: number, weight: number): void {
   const roll = w.rng.next();
@@ -2022,10 +3816,10 @@ function dropLoot(w: World, x: number, y: number, weight: number): void {
    * promise, and one the player cannot take teaches them to ignore the next.
    */
   if (w.player.hearts < MAX_HEARTS + w.player.mods.maxHearts && roll < HEART_CHANCE * weight) {
-    drop(w.pickups, "heart", x, y, w.rng);
+    drop(w.pickups, "heart", x, y, w.rng).value = 0;
     return;
   }
-  if (roll < HEART_CHANCE * weight + COIN_CHANCE * weight)
+  if (roll < HEART_CHANCE * weight + COIN_CHANCE * weight * w.coinBoost)
     drop(w.pickups, "coin", x, y, w.rng);
 }
 
@@ -2049,11 +3843,21 @@ function dropLoot(w: World, x: number, y: number, weight: number): void {
  * rather than one lump so the pickup magnet has something to do and the
  * payout reads as a payout.
  */
-const GOLD_ROOM_COINS = 14;
+const GOLD_ROOM_COINS = 8;
+
+/**
+ * The most the early economy may raise a kill's coin chance (`coinBoost`).
+ *
+ * Doubling it takes a room of twelve bodies from about ten gold to about
+ * twenty, which is a vendor stop's difference over four rooms and not a second
+ * income. A cap rather than a free parameter, because the floor after a fight
+ * being littered with coins is the failure this number has already had once.
+ */
+export const COIN_BOOST_MAX = 2;
 
 const HEART_CHANCE = 0.05;
-/** Raised from 0.22: a kill should pay gold as often as not over a room. */
-const COIN_CHANCE = 0.35;
+/** A coin from about one body in four: a room of twelve pays ten to fifteen, doc 003's band. */
+const COIN_CHANCE = 0.22;
 
 /**
  * Scenery can block a body. It must never trap one.
@@ -2079,6 +3883,19 @@ const COIN_CHANCE = 0.35;
  * work, and heavier bodies do it faster because the rate scales with their
  * radius.
  */
+/** The throne hall's columns: worn by blows only, never by a dash or a body leaning on them. */
+function hallProp(p: Destructible): boolean {
+  return p.kind === "column";
+}
+/**
+ * The throne hall's candelabra: tall iron on a narrow foot, knocked over by
+ * anything that walks into them — the player, a dash, a body, the king
+ * crossing his hall — as well as broken by a blow.
+ */
+function toppled(p: Destructible): boolean {
+  return p.kind === "candelabrum";
+}
+
 function smashProps(w: World, dtMs: number): void {
   /*
    * The player's dodge breaks what it goes through. It already passes through
@@ -2087,10 +3904,13 @@ function smashProps(w: World, dtMs: number): void {
    * the room's clutter a second use.
    */
   const pl = w.player;
+  for (const p of w.props)
+    if (p.hp > 0 && toppled(p) && propHit(p, pl.x, pl.y, PLAYER_RADIUS + 2)) damageProp(w, p, p.hp);
   if (pl.dashMs > 0) {
     const ahead = PLAYER_RADIUS + CHARGE_SMASH_LOOKAHEAD;
     for (const p of w.props) {
-      if (p.hp <= 0) continue;
+      // Not the throne hall's columns: only a blow breaks those (`HallKind`).
+      if (p.hp <= 0 || hallProp(p)) continue;
       if (propHit(p, pl.x + pl.dashX * ahead, pl.y + pl.dashY * ahead, PLAYER_RADIUS)
         || propHit(p, pl.x, pl.y, PLAYER_RADIUS)) damageProp(w, p, p.hp);
     }
@@ -2100,7 +3920,12 @@ function smashProps(w: World, dtMs: number): void {
     const charging = e.attack === "lunge" && ENEMIES[e.archetype].melee === "charge";
 
     for (const p of w.props) {
-      if (p.hp <= 0) continue;
+      if (p.hp <= 0 || hallProp(p)) continue;
+      // Walked into, it goes over.
+      if (toppled(p)) {
+        if (propHit(p, e.x, e.y, e.radius + 2)) damageProp(w, p, p.hp);
+        continue;
+      }
       if (charging) {
         // A little ahead of itself, so the cell is already floor by the time
         // the body arrives rather than on the frame it would have hit it.
@@ -2170,7 +3995,8 @@ function resolveBodies(w: World): void {
        * your own momentum. A charging tank is the exception because the whole
        * point of a ram is that it does not stop for you.
        */
-      const charging = e.attack === "lunge" && e.armour > 0;
+      // A charge, a body bolted to the floor, and the king all hold their ground.
+      const charging = (e.attack === "lunge" && e.armour > 0) || anchored(e) || e.archetype === "boss";
       const overlap = min - d;
       const nx = dx / d;
       const ny = dy / d;
@@ -2210,8 +4036,9 @@ function push(w: World, a: Enemy, b: Enemy): void {
   const nx = d < 0.0001 ? 1 : dx / d;
   const ny = d < 0.0001 ? 0 : dy / d;
   const overlap = min - Math.max(d, 0.0001);
-  const fixedA = plowing(a);
-  const fixedB = plowing(b);
+  // A ram plows; an emplacement is bolted down; the king is moved by nothing. Either way the other body gives.
+  const fixedA = plowing(a) || anchored(a) || a.archetype === "boss";
+  const fixedB = plowing(b) || anchored(b) || b.archetype === "boss";
   if (fixedA && fixedB) return;
   const ma = a.radius * a.radius;
   const mb = b.radius * b.radius;
@@ -2291,6 +4118,8 @@ function resolveEnemySwings(w: World): void {
     if (!isActive(e) || e.hp <= 0) continue;
     const box = e.swing;
     if (!box.active) continue;
+    // The king's sword breaks what it passes through (`BOSS_PROP_DAMAGE`), once a swing each.
+    if (e.archetype === "boss") bossStrikesProps(w, (q) => sectorHits(box, q, q.radius), box.hitIds);
     // Dedup per swing, the same way the player's own arc does: one attack is
     // one hit however many frames the player spends inside it.
     if (box.hitIds.includes(PLAYER_HIT_ID)) continue;
@@ -2326,6 +4155,7 @@ function resolveEnemySwings(w: World): void {
      */
     if (ram) hurtPlayer(w, p.x - e.lungeX, p.y - e.lungeY, `melee:${e.archetype}`, 0, box.damage);
     else hurtPlayer(w, e.x, e.y, `melee:${e.archetype}`, 0, box.damage);
+
     if (ram && p.hearts < before) ramImpact(w, e, spec);
   }
 }
@@ -2444,11 +4274,17 @@ function stepHazards(w: World, dtMs: number): void {
       feedPoison(w, POISON_BUILD_PER_S * (dtMs / 1000));
       return;
     }
-    case "collapse": {
-      // Punishes camping, not movement, so the whole dwell time has to pass
-      // before anything happens — and then it happens once.
+    case "lava": {
+      /*
+       * A dash crosses it untouched — the i-frames cover a tile several times
+       * over — and walking over it costs: it burns from the first step, and a
+       * heart once the grace is up, on the contact clock. The channel is one
+       * tile thick, so walking across is one heart and dashing is none.
+       */
+      if (dashInvulnerable(p)) return;
+      feedBurn(w, LAVA_BURN_PER_S * (dtMs / 1000));
       w.hazardTimerMs += dtMs;
-      if (w.hazardTimerMs < HAZARD_COLLAPSE_MS) return;
+      if (w.hazardTimerMs < HAZARD_DAMAGE_INTERVAL_MS) return;
       w.hazardTimerMs = 0;
       break;
     }
@@ -2466,21 +4302,140 @@ export const SPIN_BUFFER_MS = 180;
  * The pool is ground; the bodies that stand on the ground stand in it. So a
  * pool between the player and a rusher is a place to fight *from*: the
  * rusher's gauge fills as it crosses, the same gauge a venom spell feeds.
- * The orbiter flies and a leaping boss is in the air, so neither is touched.
+ * What flies and a leaping boss are in the air, so neither is touched.
  */
 function poisonGround(w: World, dtMs: number): void {
   const pools = w.room.zones.filter((z) => z.feature === "poison_pool");
   if (pools.length === 0) return;
   const add = ENEMY_POOL_BUILD_PER_S * (dtMs / 1000);
   for (const e of w.enemies) {
-    if (e.hp <= 0 || e.airborne || e.archetype === "orbiter" || e.spawnFadeMs > 0) continue;
+    if (e.hp <= 0 || e.airborne || ENEMIES[e.archetype].flying || e.spawnFadeMs > 0) continue;
     const inPool = pools.some((z) => z.cells.some((c) =>
       circlesOverlap((c[0] + 0.5) * TILE_PX, (c[1] + 0.5) * TILE_PX, TILE_PX / 2, e.x, e.y, e.radius * 0.6)));
     if (!inPool) continue;
     if (e.poisonMs > 0) { e.poisonMs = Math.max(e.poisonMs, ENEMY_POISON_MS * 0.5); continue; }
     e.poisonBuild = Math.min(1, e.poisonBuild + add);
     e.buildFedMs = 600;
-    if (e.poisonBuild >= 1) { e.poisonMs = ENEMY_POISON_MS; e.poisonStacks = 2; e.poisonBuild = 1; }
+    if (e.poisonBuild >= 1) { e.poisonMs = ENEMY_POISON_MS; e.poisonStacks = ENEMY_POISON_STACKS; e.poisonBuild = 1; }
+  }
+}
+
+/** How fast lava fills the player's burn gauge, per second, on top of its hearts. */
+const LAVA_BURN_PER_S = 1.2;
+/** A body in lava takes this much every `LAVA_ENEMY_TICK_MS`. */
+const LAVA_ENEMY_DAMAGE = 8;
+const LAVA_ENEMY_TICK_MS = 450;
+/** How long a grass cell burns, and how long into it the fire reaches its neighbours. */
+export const GRASS_BURN_MS = 1500;
+/**
+ * How long touched grass smoulders before it goes up. Long enough that a
+ * player walking or dashing across grass as they light it is a step past the
+ * cell when it catches, short enough that the fire still reads as the spell's.
+ */
+export const GRASS_CATCH_MS = 300;
+export const GRASS_SPREAD_MS = 260;
+
+/** The room's grid with every lava cell a wall: what bodies route on. */
+function lavaAsWall(room: RoomPlan): Uint8Array {
+  const grid = new Uint8Array(room.grid);
+  for (const z of room.zones)
+    if (z.feature === "lava_channel")
+      for (const [x, y] of featureCells(z.feature, z.cells)) grid[y * GRID_W + x] = Tile.Wall;
+  return grid;
+}
+
+/** Every cell of every grass zone, whole. */
+function grassOf(room: RoomPlan): GrassCell[] {
+  return room.zones.filter((z) => z.feature === "grass_patch")
+    .flatMap((z) => z.cells.map(([x, y]) => ({
+      x, y, state: "grass" as const, ms: 0, owner: "enemy" as const, spread: false,
+    })));
+}
+
+/**
+ * Bodies in lava burn. They route round it (`World.pathGrid`), so a body is
+ * in it because it was knocked there — which is the player's to use.
+ * Airborne bodies and everything that flies pass over.
+ */
+function stepLava(w: World, dtMs: number): void {
+  const channels = w.room.zones.filter((z) => z.feature === "lava_channel");
+  if (channels.length === 0) return;
+  for (const e of w.enemies) {
+    if (e.hp <= 0 || e.airborne || ENEMIES[e.archetype].flying || e.spawnFadeMs > 0) continue;
+    const inLava = channels.some((z) => featureCells(z.feature, z.cells).some((c) =>
+      circlesOverlap((c[0] + 0.5) * TILE_PX, (c[1] + 0.5) * TILE_PX, TILE_PX / 2, e.x, e.y, e.radius * 0.6)));
+    if (!inLava) { e.lavaMs = 0; continue; }
+    e.lavaMs += dtMs;
+    if (e.lavaMs < LAVA_ENEMY_TICK_MS) continue;
+    e.lavaMs = 0;
+    hurtEnemy(w, e, LAVA_ENEMY_DAMAGE, "lava");
+  }
+}
+
+/**
+ * Grass burns once, and the fire runs through it.
+ *
+ * Any fire that reaches a whole cell lights it, whoever lit that fire —
+ * a spell, a cinderling's trail, a burning shot, the player's own trail or
+ * field — and the burning grass hurts **everyone** in it, the player who lit
+ * it included: a player who sends fire across the grass under a pack burns
+ * the pack, and has to be out of the patch when it goes up. What makes that
+ * fair is the catch: touched grass smoulders for `GRASS_CATCH_MS` before it
+ * burns, so a player walking or dashing across grass as they light it is past
+ * the cell when it goes up, and only lingering costs them. The owner is kept
+ * for the kill's credit. A burning cell lights its whole neighbours a beat later,
+ * so the fire is seen to run, and is burnt ground after it. The fires the
+ * grass lights do not light grass themselves: the spread is the grass's own
+ * clock, not a chain reaction in one step.
+ */
+function stepGrass(w: World, dtMs: number): void {
+  if (w.grass.length === 0) return;
+  const at = new Map(w.grass.map((c) => [c.y * GRID_W + c.x, c]));
+  // Touched: it smoulders first, and only a cell still standing can be touched.
+  const light = (c: GrassCell, owner: "player" | "enemy") => {
+    if (c.state !== "grass") return;
+    c.state = "catching";
+    c.ms = 0;
+    c.owner = owner;
+    c.spread = false;
+  };
+  const ignite = (c: GrassCell) => {
+    c.state = "burning";
+    c.ms = 0;
+    const f = lightFire(w, (c.x + 0.5) * TILE_PX, (c.y + 0.5) * TILE_PX, c.owner, { radius: TILE_PX * 0.62, lifeMs: GRASS_BURN_MS });
+    f.fromGrass = true;
+  };
+  for (const f of w.fires) {
+    // A poison cloud is not fire, and lights nothing.
+    if (!f.alive || f.fromGrass || f.element !== "fire") continue;
+    for (const c of w.grass)
+      if (c.state === "grass" && Math.hypot((c.x + 0.5) * TILE_PX - f.x, (c.y + 0.5) * TILE_PX - f.y) < f.radius + TILE_PX * 0.4) light(c, f.owner);
+  }
+  // A fire shot lights the cell it flies over, so a fire spell cast across a
+  // patch leaves a burning line behind it. A lobbed throw is in the air and
+  // lights only where it lands, as the fire it leaves.
+  for (const [list, owner] of [[w.playerBullets, "player"], [w.enemyBullets, "enemy"]] as const)
+    for (const b of list) {
+      if (!b.alive || b.element !== "fire") continue;
+      const c = at.get(Math.floor(b.y / TILE_PX) * GRID_W + Math.floor(b.x / TILE_PX));
+      if (c && c.state === "grass") light(c, owner);
+    }
+  for (const c of w.grass) {
+    if (c.state === "catching") {
+      c.ms += dtMs;
+      if (c.ms >= GRASS_CATCH_MS) ignite(c);
+      continue;
+    }
+    if (c.state !== "burning") continue;
+    c.ms += dtMs;
+    if (!c.spread && c.ms >= GRASS_SPREAD_MS) {
+      c.spread = true;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const n = at.get((c.y + dy) * GRID_W + c.x + dx);
+        if (n && n.state === "grass") light(n, c.owner);
+      }
+    }
+    if (c.ms >= GRASS_BURN_MS) { c.state = "burnt"; c.ms = 0; }
   }
 }
 
@@ -2492,8 +4447,6 @@ export const ENEMY_POOL_BUILD_PER_S = 0.9;
  * to deny ground rather than to punish crossing it.
  */
 const HAZARD_SLOW_TICK_MS = 1800;
-/** How long the player may stand on crumbling floor before it gives way. */
-const HAZARD_COLLAPSE_MS = 2600;
 /** How long the player keeps sliding after leaving ice. */
 const SLIP_CARRY_MS = 260;
 
@@ -2513,7 +4466,7 @@ export function hazardAt(
     if (zone.feature === "none") continue;
     const f = feature(zone.feature);
     if (!f || f.hazard_effect === "none") continue;
-    for (const cell of zone.cells) {
+    for (const cell of featureCells(zone.feature, zone.cells)) {
       const cx = (cell[0] + 0.5) * TILE_PX;
       const cy = (cell[1] + 0.5) * TILE_PX;
       if (circlesOverlap(cx, cy, TILE_PX / 2, x, y, PLAYER_RADIUS))
@@ -2538,15 +4491,51 @@ export function dashInvulnerable(p: World["player"]): boolean {
  */
 function stepDashStrike(w: World, dtMs: number): void {
   const p = w.player;
+  /*
+   * A dash cast free cuts where it was aimed and nowhere else (`FreeStrike`):
+   * every body inside the cut, once, and the player does not move.
+   */
+  if (w.freeStrikes.length > 0) {
+    for (const s of w.freeStrikes) {
+      for (const e of w.enemies) {
+        if (!isActive(e) || e.hp <= 0) continue;
+        if (!circlesOverlap(s.x, s.y, s.radius, e.x, e.y, e.radius)) continue;
+        wake(w, e);
+        hurtEnemy(w, e, s.damage, s.element !== "none" ? s.element : "", s);
+        w.stats.damageDealt += s.damage;
+        applyElementsTo(e, s.powers, s.statusMult, s.proc);
+        e.hitFlashMs = HIT_FLASH_MS;
+        impact(w, HITSTOP_HIT, TRAUMA_HIT);
+        w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: e.archetype, amount: s.damage });
+        emit(w, e.x, e.y, "hit", 4);
+      }
+      w.events.push({ kind: "shot", x: s.x, y: s.y, what: "free_strike" });
+    }
+    w.freeStrikes = [];
+  }
   if (p.strikeMs <= 0) return;
   p.strikeMs -= dtMs;
+  /*
+   * A `land` dash comes down (doc 006): the ring goes off where the player
+   * actually is when the travel ends, which a wall may have made short of
+   * the body it leapt at.
+   */
+  if (p.strikeMs <= 0 && p.landing) {
+    const ring = p.landing;
+    p.landing = null;
+    eruptRing(w, p, ring, 0);
+    w.events.push({ kind: "shot", x: p.x, y: p.y, what: "land" });
+  }
+  // A leap is in the air and cuts nothing on the way.
+  if (p.strikeDamage <= 0) return;
   for (const e of w.enemies) {
     if (!isActive(e) || e.hp <= 0 || p.strikeHits.includes(e.id)) continue;
     if (!circlesOverlap(p.x, p.y, PLAYER_RADIUS + p.strikeRadius, e.x, e.y, e.radius)) continue;
     p.strikeHits.push(e.id);
     wake(w, e);
-    hurtEnemy(w, e, p.strikeDamage, "", p);
+    hurtEnemy(w, e, p.strikeDamage, p.strikeElement !== "none" ? p.strikeElement : "", p);
     w.stats.damageDealt += p.strikeDamage;
+    applyElementsTo(e, p.strikePowers, p.strikeStatusMult, p.strikeProc);
     e.hitFlashMs = HIT_FLASH_MS;
     const d = Math.hypot(e.x - p.x, e.y - p.y) || 1;
     const push = 260 / Math.max(1, e.radius / 10);
@@ -2558,6 +4547,65 @@ function stepDashStrike(w: World, dtMs: number): void {
   }
 }
 
+/** Eruption cells alive at once, across every cast. */
+/*
+ * Raised from 32 with the `ring` pattern: three rings of cells round the
+ * caster are thirty-odd cells on their own, and a pool that recycled the
+ * outer ring's cells before they went off would make the spell's reach a
+ * fact about the pool size.
+ */
+const ERUPTION_POOL = 128;
+/** How long a cell that went off is drawn. */
+export const ERUPTION_SHOW_MS = 420;
+
+/**
+ * The ground erupting: each cell waits its turn, then goes off once on every
+ * body standing in it — damage in its element, the element's status, a push
+ * outward by its weight and, heavy enough, a stagger — and a fire cell leaves
+ * the floor burning. The room jolts once for a cell that hit anything.
+ */
+function stepEruptions(w: World, dtMs: number): void {
+  for (const c of w.eruptions) {
+    if (!c.alive) continue;
+    if (c.fired) {
+      c.ageMs += dtMs;
+      if (c.ageMs >= ERUPTION_SHOW_MS) c.alive = false;
+      continue;
+    }
+    c.delayMs -= dtMs;
+    if (c.delayMs > 0) continue;
+    c.fired = true;
+    c.ageMs = 0;
+    let hit = false;
+    for (const e of w.enemies) {
+      if (!isActive(e) || e.hp <= 0) continue;
+      const d = Math.hypot(e.x - c.x, e.y - c.y);
+      if (d > c.radius + e.radius) continue;
+      // What flies is over a spike; fire rises high enough to reach it.
+      if (c.kind === "earth" && ENEMIES[e.archetype].flying) continue;
+      if (c.castId > 0) {
+        if (e.eruptionCastId === c.castId) continue;
+        e.eruptionCastId = c.castId;
+      }
+      hit = true;
+      hurtEnemy(w, e, c.damage, c.element !== "none" ? c.element : "", { x: c.x, y: c.y });
+      w.stats.damageDealt += c.damage;
+      applyElementsTo(e, c.powers, c.statusMult, c.proc);
+      e.hitFlashMs = HIT_FLASH_MS;
+      const push = (KNOCKBACK * c.weight) / Math.max(1, e.radius / 10);
+      const nx = d > 1 ? (e.x - c.x) / d : Math.cos(w.player.facing), ny = d > 1 ? (e.y - c.y) / d : Math.sin(w.player.facing);
+      e.knockX += nx * push;
+      e.knockY += ny * push;
+      if (c.weight >= SPELL_STAGGER_WEIGHT) spellStagger(w, e, c.weight);
+      w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: e.archetype, amount: c.damage });
+      if (e.hp <= 0) onEnemyKilled(w, e);
+    }
+    if (c.burnMs > 0) lightFire(w, c.x, c.y, "player", { radius: c.radius, lifeMs: c.burnMs, damage: c.damage * 0.2 });
+    if (hit) impact(w, HITSTOP_HIT * (1 + c.weight * 0.5), TRAUMA_HIT * Math.max(1, c.weight));
+    w.events.push({ kind: "eruption", x: c.x, y: c.y, what: c.kind });
+  }
+}
+
 /** How often a vortex ticks its damage on what it holds. */
 const VORTEX_TICK_MS = 500;
 
@@ -2566,7 +4614,11 @@ function stepVortices(w: World, dtMs: number): void {
   for (const v of w.vortices) {
     if (!v.alive) continue;
     v.lifeMs -= dtMs;
-    if (v.lifeMs <= 0) { v.alive = false; continue; }
+    if (v.lifeMs <= 0) {
+      v.alive = false;
+      if (v.collapseDamage > 0) collapse(w, v);
+      continue;
+    }
     v.tickMs -= dtMs;
     const tick = v.tickMs <= 0;
     if (tick) v.tickMs = VORTEX_TICK_MS;
@@ -2584,13 +4636,110 @@ function stepVortices(w: World, dtMs: number): void {
         moveSliding(w.room.grid, e, (dx / d) * strength * dt, (dy / d) * strength * dt, e.radius);
       }
       if (tick && d < v.radius * 0.75) {
-        hurtEnemy(w, e, v.damage);
+        hurtEnemy(w, e, v.damage, v.element !== "none" ? v.element : "");
         w.stats.damageDealt += v.damage;
+        applyElementsTo(e, v.powers, v.statusMult, v.proc);
         e.hitFlashMs = HIT_FLASH_MS;
         w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "vortex" });
       }
     }
   }
+}
+
+/**
+ * **`collapse`** (doc 006): as the pull lets go it implodes, once, on every
+ * body still inside its radius — the bodies it gathered and held, which is
+ * the pull's payoff. A body that walked out, or was never in it, takes none.
+ * Measured from the body's centre, not its edge: the implosion is at the
+ * middle of what the pull holds, and a body only touching the rim was not held.
+ */
+function collapse(w: World, v: World["vortices"][number]): void {
+  let hit = false;
+  for (const e of w.enemies) {
+    if (!isActive(e) || e.hp <= 0) continue;
+    if (Math.hypot(e.x - v.x, e.y - v.y) > v.radius) continue;
+    hit = true;
+    hurtEnemy(w, e, v.collapseDamage, v.element !== "none" ? v.element : "", v);
+    w.stats.damageDealt += v.collapseDamage;
+    applyElementsTo(e, v.powers, v.statusMult, v.proc);
+    e.hitFlashMs = HIT_FLASH_MS;
+    w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: e.archetype, amount: v.collapseDamage });
+  }
+  if (hit) impact(w, HITSTOP_HIT * 2, TRAUMA_HIT);
+  w.events.push({ kind: "eruption", x: v.x, y: v.y, what: "collapse" });
+}
+
+/**
+ * The `doom` marks counting down, on bodies and where bodies died, and the
+ * `contagion` a carrier loses when its poison runs out.
+ */
+function stepDooms(w: World, dtMs: number): void {
+  for (const e of w.enemies) {
+    if (e.contagion > 0 && e.poisonMs <= 0) e.contagion = 0;
+    if (e.doomMs <= 0 || e.hp <= 0) continue;
+    e.doomMs -= dtMs;
+    if (e.doomMs > 0) continue;
+    e.doomMs = 0;
+    doomBurst(w, e.x, e.y, e.doomDamage, e.doomRadius);
+  }
+  if (w.dooms.length === 0) return;
+  for (const d of w.dooms) {
+    d.ms -= dtMs;
+    if (d.ms <= 0) doomBurst(w, d.x, d.y, d.damage, d.radius);
+  }
+  w.dooms = w.dooms.filter((d) => d.ms > 0);
+}
+
+/**
+ * A `doom` mark going off: its stored damage on every body inside the burst,
+ * the marked one with them. Reported as `dot:doom`, because doc 006 counts a
+ * doom burst as the spell's status — the delayed payoff the caster left to
+ * work — and the bench's affliction gate reads status damage by that tag.
+ */
+function doomBurst(w: World, x: number, y: number, damage: number, radius: number): void {
+  for (const e of w.enemies) {
+    if (!isActive(e) || e.hp <= 0) continue;
+    if (Math.hypot(e.x - x, e.y - y) > radius + e.radius) continue;
+    hurtEnemy(w, e, damage, "dot:doom", { x, y });
+    w.stats.damageDealt += damage;
+    e.hitFlashMs = HIT_FLASH_MS;
+    w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: e.archetype, amount: damage });
+  }
+  impact(w, HITSTOP_HIT * 2, TRAUMA_HIT);
+  emit(w, x, y, "kill", 8);
+  w.events.push({ kind: "eruption", x, y, what: "doom" });
+}
+
+/**
+ * **A carrier died: its poison jumps** (doc 006). Up to `contagion` of the
+ * nearest bodies within reach take the poison as it stood — its time left,
+ * its stacks, the build behind it — and carry the contagion on in turn.
+ *
+ * It cannot loop. A jump happens only on a death and each body dies once,
+ * so a chain of jumps is bounded by the room; and a body that already
+ * carries the contagion is not a target, so two carriers dying side by side
+ * do not spend their jumps on each other.
+ */
+function spreadContagion(w: World, e: Enemy): void {
+  const n = e.contagion;
+  e.contagion = 0;
+  if (n <= 0 || e.poisonMs <= 0) return;
+  const near = w.enemies
+    .filter((o) => o !== e && o.hp > 0 && isActive(o) && o.contagion <= 0 && resistOf(o.archetype, "poison") > 0)
+    .map((o) => ({ o, d: Math.hypot(o.x - e.x, o.y - e.y) }))
+    .filter((c) => c.d <= e.contagionReach + c.o.radius)
+    .sort((a, b) => a.d - b.d)
+    .slice(0, n);
+  for (const { o } of near) {
+    o.poisonMs = Math.max(o.poisonMs, e.poisonMs);
+    o.poisonStacks = Math.max(o.poisonStacks, e.poisonStacks);
+    o.poisonBuild = 1;
+    o.statusMult = Math.max(o.statusMult, e.statusMult);
+    o.contagion = n;
+    o.contagionReach = e.contagionReach;
+    w.events.push({ kind: "hazard_tick", x: o.x, y: o.y, what: "contagion" });
+  }
+  if (near.length > 0) w.events.push({ kind: "shot", x: e.x, y: e.y, what: "contagion" });
 }
 
 /** How close behind the player the companion tries to stand, in px. */
@@ -2661,8 +4810,11 @@ function stepPets(w: World, dtMs: number, items: ItemRegistry): void {
     b.targetId = best.id;
     b.seekDegPerS = 200;
     b.spellIndex = pet.spellIndex;
-    b.element = "none";
-    b.elementPower = 1;
+    b.element = pet.element;
+    b.elementPower = pet.elementPower;
+    copyPowers(b.powers, pet.powers);
+    b.proc = pet.proc;
+    b.statusMult = pet.statusMult;
     w.stats.shotsFired++;
     void items;
   }
@@ -2698,16 +4850,22 @@ export const POISON_SLOW = 0.75;
  * most. A running status is not fed: standing in the pool while poisoned
  * does not extend it, or a pool is a status that never ends.
  */
+/*
+ * Standing in what caused a status keeps it full: already burning, the fire
+ * underfoot holds the burn at its whole length rather than letting it run
+ * down while the player stands in the flames — the gauge falling there read
+ * as the fire having stopped working.
+ */
 function feedBurn(w: World, amount: number): void {
   const p = w.player;
-  if (p.burnMs > 0) return;
+  if (p.burnMs > 0) { p.burnMs = BURN_STATUS_MS; return; }
   p.burnBuild = Math.min(1, p.burnBuild + amount);
   p.burnFedMs = BUILD_FED_HOLD_MS;
 }
 
 function feedPoison(w: World, amount: number): void {
   const p = w.player;
-  if (p.poisonMs > 0) return;
+  if (p.poisonMs > 0) { p.poisonMs = POISON_STATUS_MS; return; }
   p.poisonBuild = Math.min(1, p.poisonBuild + amount);
   p.poisonFedMs = BUILD_FED_HOLD_MS;
 }
@@ -2751,12 +4909,13 @@ function stepStatuses(w: World, dtMs: number): void {
 function drainPlayer(w: World, hearts: number, cause: string): void {
   const p = w.player;
   if (p.hearts <= 0) return;
-  const due = Math.min(p.hearts, wholeHp(hearts * w.takenMult));
+  const due = Math.min(p.hearts, wholeHp(hearts * w.takenMult * rampFor(w.roomIndex).hurt));
   // Invincible (testing): the tick is shown, not taken.
   const taken = w.invincible ? 0 : due;
   p.hearts -= taken;
   w.stats.heartsLost += taken;
   w.events.push({ kind: "player_hit", x: p.x, y: p.y, what: `dot:${cause}`, amount: due });
+  hurtFamily(w, `dot:${cause}`, due);
 }
 
 /**
@@ -2765,14 +4924,14 @@ function drainPlayer(w: World, hearts: number, cause: string): void {
  */
 function resonate(w: World, e: Enemy): void {
   w.spells.forEach((slot, i) => {
-    if (!slot || !slot.unit) return;
+    if (!slot) return;
     const held = slot.affixes.find((a) => a.id === "resonance");
     if (!held) return;
     const every = [5, 4, 3][held.tier - 1] ?? 5;
     w.resonance[i] = (w.resonance[i] ?? 0) + 1;
     if (w.resonance[i]! < every) return;
     w.resonance[i] = 0;
-    hookSim(w).fire(slot.unit, w.player, e);
+    hookSim(w).fire(i, w.player, e);
     w.events.push({ kind: "shot", x: w.player.x, y: w.player.y, what: "resonance" });
   });
 }
@@ -2813,7 +4972,9 @@ const LIGHTNING_HEARTS = 1.2;
 function attackHooks(w: World): AttackHooks {
   return {
     hurtPlayer: (x, y, cause, stunMs, hearts) => hurtPlayer(w, x, y, cause, stunMs, hearts),
+    playerInvulnerable: () => w.player.invulnMs > 0 || dashInvulnerable(w.player),
     burnPlayer: (amount) => feedBurn(w, amount),
+    hatch: (x, y, from) => { hatchMinion(w, x, y, from); },
     knockDown: (e, ms) => {
       e.staggerMs = ms;
       e.attack = "approach";
@@ -2834,14 +4995,30 @@ function hurtPlayer(
 ): void {
   const p = w.player;
   if (p.invulnMs > 0 || dashInvulnerable(p)) return;
+  /*
+   * **A stance takes the hit** (doc 006): the first enemy hit that would
+   * land — a body's blade or contact, a shot, anything an enemy did — is
+   * cancelled whole (no heart, no shove, no stun, no `retort`, since
+   * nothing hurt), the caster is untouchable for a moment, and the stance
+   * answers. The room's own hazards are the floor, not an enemy, and a
+   * guard does not parry a spike strip.
+   */
+  if (p.stance && !cause.startsWith("hazard:")) {
+    p.invulnMs = Math.max(p.invulnMs, STANCE_GUARD_MS);
+    w.events.push({ kind: "spell", x, y, what: "stance_guard" });
+    answerStance(w, 1);
+    return;
+  }
   // Always shorter than the invulnerability it arrives with, so a stun is
   // never a window in which the player is hit again. See `Player.stunMs`.
   if (stunMs > 0) p.stunMs = Math.min(stunMs, INVULN_MS - 120);
   // Invincible still takes the hit — the shove, the frames, the number shown —
   // just not the health.
-  const due = Math.min(p.hearts, wholeHp(hearts * w.takenMult));
+  const due = Math.min(p.hearts, wholeHp(hearts * w.takenMult * rampFor(w.roomIndex).hurt));
   const taken = w.invincible ? 0 : due;
   p.hearts = Math.max(0, p.hearts - taken);
+  // The floor of the bar this room, for the close calls the briefing reports.
+  w.stats.heartsLow = Math.min(w.stats.heartsLow, p.hearts);
   p.invulnMs = INVULN_MS * p.mods.invuln;
   /*
    * Shoved off the line they were hit on.
@@ -2861,9 +5038,89 @@ function hurtPlayer(
   w.stats.heartsLost += taken;
   impact(w, HITSTOP_PLAYER_HIT, TRAUMA_PLAYER_HIT);
   w.events.push({ kind: "player_hit", x, y, what: cause, amount: due });
+  hurtFamily(w, cause, taken);
   emit(w, p.x, p.y, "hit", 6);
   // `retort`: a spell with it fires back at whatever did this, free.
   onHurt(w, x, y, hookSim(w));
+}
+
+/**
+ * The moment of invulnerability a stance buys when it takes a hit (doc 006):
+ * long enough to outlast the rest of the blow that was cancelled — a blade's
+ * active frames, the second pellet of a pair — and short of a real hit's
+ * mercy frames, because nothing was lost.
+ */
+export const STANCE_GUARD_MS = 400;
+
+/**
+ * **The stance answers** (doc 006): a spin slash round the caster, of the
+ * spell's damage at `share` of it — the whole of it for a hit taken, the
+ * expiry share for a guard that ran out or was dropped by a dash — cutting
+ * every body within the answer's radius once, carrying the spell's elements,
+ * and staggering what it cuts. The stance ends here: it answers once.
+ */
+function answerStance(w: World, share: number): void {
+  const p = w.player;
+  const s = p.stance;
+  if (!s) return;
+  p.stance = null;
+  const damage = s.damage * share;
+  let hit = false;
+  for (const e of w.enemies) {
+    if (!isActive(e) || e.hp <= 0) continue;
+    const d = Math.hypot(e.x - p.x, e.y - p.y);
+    if (d > s.radius + e.radius) continue;
+    hit = true;
+    wake(w, e);
+    hurtEnemy(w, e, damage, s.element !== "none" ? s.element : "", p);
+    w.stats.damageDealt += damage;
+    applyElementsTo(e, s.powers, s.statusMult, s.proc);
+    e.hitFlashMs = HIT_FLASH_MS;
+    if (ENEMIES[e.archetype].behaviour !== "stationary") {
+      const push = (KNOCKBACK * s.weight) / Math.max(1, e.radius / 10);
+      const nx = d > 1 ? (e.x - p.x) / d : Math.cos(p.facing), ny = d > 1 ? (e.y - p.y) / d : Math.sin(p.facing);
+      e.knockX += nx * push;
+      e.knockY += ny * push;
+    }
+    spellStagger(w, e, s.weight);
+    w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: e.archetype, amount: damage });
+    emit(w, e.x, e.y, "hit", 4);
+  }
+  if (hit) impact(w, HITSTOP_HIT * 3, TRAUMA_HIT);
+  w.events.push({ kind: "spell", x: p.x, y: p.y, what: "stance_answer", amount: share });
+}
+
+/** The guard's clock: a stance that runs out with nothing taken answers at its expiry share. */
+function stepStance(w: World, dtMs: number): void {
+  const s = w.player.stance;
+  if (!s) return;
+  s.ms -= dtMs;
+  if (s.ms <= 0) answerStance(w, s.expireShare);
+}
+
+/**
+ * Health lost, split by **what took it** — the three families the playtest log
+ * already groups causes into, so a log written by the browser and one written
+ * by the harness answer "how much of this was ranged" the same way.
+ *
+ * It is the one thing the player knows about a bad stretch that no other label
+ * carries: being shot from across the room and being cut down in melee are
+ * different problems with different answers on a reward screen.
+ */
+function hurtFamily(w: World, cause: string, hearts: number): void {
+  if (hearts <= 0) return;
+  if (cause.startsWith("melee:") || cause.startsWith("contact:")) w.stats.hurtByMelee += hearts;
+  else if (cause.startsWith("hazard:") || cause.startsWith("dot:") || cause.startsWith("status:"))
+    w.stats.hurtByHazard += hearts;
+  else w.stats.hurtByRanged += hearts;
+  /*
+   * And by the body itself. The cause already names it — `melee:tank`,
+   * `bullet:shooter`, `hazard:lava_channel` — so the attribution costs a
+   * split, and it is the difference between telling the Director "melee took
+   * three hearts" and telling it which enemy to stop sending.
+   */
+  const who = cause.includes(":") ? cause.slice(cause.indexOf(":") + 1) : cause;
+  if (who) w.stats.hurtByEnemy[who] = (w.stats.hurtByEnemy[who] ?? 0) + hearts;
 }
 
 function emit(w: World, x: number, y: number, kind: Particle["kind"], n: number): void {

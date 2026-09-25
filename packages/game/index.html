@@ -3,8 +3,39 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>jev-rogue</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="%BASE_URL%favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="64x64" href="%BASE_URL%favicon.png" />
+    <title>Jev Rogue</title>
     <style>
+      /*
+        Fusion Pixel 12px (OFL-1.1, see assets/fonts/OFL.txt), bundled rather
+        than fetched from a CDN: the game keeps working offline and nothing
+        about the player reaches a third party. The game's own pixel font has
+        no CJK glyphs at all, so Chinese and Japanese would be a page of tofu
+        without it; `unicode-range` keeps each file out of the download until
+        a glyph in it is actually drawn, so an English player pays nothing.
+        Both faces share one family name — they cover disjoint ranges, and
+        the browser picks per glyph.
+      */
+      @font-face {
+        font-family: "Ark Pixel 12";
+        src: url("%BASE_URL%fonts/ark-pixel-12px-monospaced-latin.subset.woff2") format("woff2");
+        font-display: block;
+        unicode-range: U+0020-007E, U+00A0-00FF, U+2010-2027, U+2030-205E,
+          U+20A0-20BF, U+2190-21FF, U+2200-22FF, U+2500-257F, U+25A0-25FF, U+2600-26FF;
+      }
+      @font-face {
+        font-family: "Fusion Pixel 12";
+        src: url("%BASE_URL%fonts/fusion-pixel-12px-monospaced-zh_hans.ttf.woff2") format("woff2");
+        font-display: swap;
+        unicode-range: U+2E80-2EFF, U+3000-303F, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FF00-FFEF;
+      }
+      @font-face {
+        font-family: "Fusion Pixel 12";
+        src: url("%BASE_URL%fonts/fusion-pixel-12px-monospaced-ja.ttf.woff2") format("woff2");
+        font-display: swap;
+        unicode-range: U+3040-309F, U+30A0-30FF, U+31F0-31FF;
+      }
       html, body { margin: 0; height: 100%; background: #0d0b1f; overflow: hidden; }
       /* The canvas is positioned and sized from script; see main.ts. */
       /* Phaser centres the canvas inside this; see present() in main.ts. */

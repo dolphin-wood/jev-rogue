@@ -16,12 +16,13 @@
  * draws it from the ones legal for the archetype, symmetry and entry, and
  * keeps the last two out of the draw (`generateRoom`'s `avoid`).
  */
-import { GRID_W, Tile } from "../types.ts";
-import type { DoorSide, Shape, SpaceArchetype, SpaceArchetypeId } from "../types.ts";
-import { ENTRY_CELL, idx, isFloor, maskFor, mirrorX } from "./masks.ts";
+import { Tile } from "../types.ts";
+import type { DoorSide, Extent, Shape, SpaceArchetype, SpaceArchetypeId } from "../types.ts";
+import { entryCell, idx, isFloor, maskFor, mirrorX } from "./masks.ts";
+import { BASE_EXTENT, rectAt } from "./extent.ts";
 import { entryClearCells } from "./validate.ts";
 
-/** `[x, y, w, h]` in grid cells. */
+/** `[x, y, w, h]` in base grid cells, stretched to a room's extent (`extent.ts`). */
 type Rect = readonly [number, number, number, number];
 
 export interface Skeleton {
@@ -50,7 +51,7 @@ const sk = (
 });
 
 /** A rectangle and its reflection across the centre column. */
-const pair = (r: Rect): Rect[] => [r, [mirrorX(r[0] + r[2] - 1), r[1], r[2], r[3]]];
+const pair = (r: Rect): Rect[] => [r, [mirrorX(r[0] + r[2] - 1, BASE_EXTENT), r[1], r[2], r[3]]];
 
 export const SKELETONS: readonly Skeleton[] = [
   /* arena: the full 19 x 11 interior */
@@ -129,29 +130,30 @@ export function skeletonById(id: string): Skeleton {
 
 const MASKS = new Map<string, Uint8Array>();
 
-/** A skeleton's mask: its shape's, with its walls and floors applied. Shared; do not mutate. */
-export function skeletonMask(s: Skeleton): Uint8Array {
-  const cached = MASKS.get(s.id);
+/** A skeleton's mask at an extent: its shape's, with its walls and floors applied. Shared; do not mutate. */
+export function skeletonMask(s: Skeleton, ext: Extent): Uint8Array {
+  const key = `${s.id}:${ext.w}x${ext.h}`;
+  const cached = MASKS.get(key);
   if (cached) return cached;
-  const mask = maskFor(s.shape).slice();
+  const mask = maskFor(s.shape, ext).slice();
   const fill = (rects: readonly Rect[], tile: Tile) => {
-    for (const [x0, y0, w, h] of rects)
+    for (const r of rects) {
+      const [x0, y0, w, h] = rectAt(r, ext);
       for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) mask[idx(x, y)] = tile;
+    }
   };
   fill(s.floors, Tile.Floor);
   fill(s.walls, Tile.Wall);
-  MASKS.set(s.id, mask);
+  MASKS.set(key, mask);
   return mask;
 }
 
 /** True when the mask is its own reflection, so a mirrored room can be built in it. */
-export function skeletonSymmetric(s: Skeleton): boolean {
-  const mask = skeletonMask(s);
-  for (let i = 0; i < mask.length; i++) {
-    const x = i % GRID_W;
-    const y = (i - x) / GRID_W;
-    if (mask[i] !== mask[idx(mirrorX(x), y)]) return false;
-  }
+export function skeletonSymmetric(s: Skeleton, ext: Extent): boolean {
+  const mask = skeletonMask(s, ext);
+  for (let y = 0; y < ext.h; y++)
+    for (let x = 0; x < ext.w; x++)
+      if (mask[idx(x, y)] !== mask[idx(mirrorX(x, ext), y)]) return false;
   return true;
 }
 
@@ -166,25 +168,25 @@ export function inSkeleton(a: SpaceArchetype, s: Skeleton): SpaceArchetype {
  * declared cell still floor, and no new wall inside the entry's clear radius.
  * The boss arenas keep their plain outline: the fight is the room.
  */
-export function skeletonFits(a: SpaceArchetype, s: Skeleton, mirrored: boolean, entry: DoorSide): boolean {
+export function skeletonFits(a: SpaceArchetype, s: Skeleton, mirrored: boolean, entry: DoorSide, ext: Extent): boolean {
   if (s.shape !== a.shape || s.except.includes(a.id)) return false;
   if (a.boss === true) return s.walls.length === 0 && s.floors.length === 0;
-  if (mirrored && !skeletonSymmetric(s)) return false;
+  if (mirrored && !skeletonSymmetric(s, ext)) return false;
   if (s.closes.includes(entry)) return false;
-  const mask = skeletonMask(s);
+  const mask = skeletonMask(s, ext);
   const doors = inSkeleton(a, s).doors;
   for (const d of doors) {
-    const c = ENTRY_CELL[d];
+    const c = entryCell(d, ext);
     if (!isFloor(mask, c[0], c[1])) return false;
   }
   for (const z of a.zoneSlots) for (const c of z.cells) if (!isFloor(mask, c[0], c[1])) return false;
   for (const g of a.spawnGroups) for (const c of g.cells) if (!isFloor(mask, c[0], c[1])) return false;
-  const base = maskFor(a.shape);
-  for (const c of entryClearCells(base, entry)) if (!isFloor(mask, c[0], c[1])) return false;
+  const base = maskFor(a.shape, ext);
+  for (const c of entryClearCells(base, entry, ext)) if (!isFloor(mask, c[0], c[1])) return false;
   return true;
 }
 
-/** Every skeleton a room of this archetype, symmetry and entry can be built in. */
-export function skeletonsFor(a: SpaceArchetype, mirrored: boolean, entry: DoorSide): Skeleton[] {
-  return SKELETONS.filter((s) => skeletonFits(a, s, mirrored, entry));
+/** Every skeleton a room of this archetype (at the extent), symmetry and entry can be built in. */
+export function skeletonsFor(a: SpaceArchetype, mirrored: boolean, entry: DoorSide, ext: Extent): Skeleton[] {
+  return SKELETONS.filter((s) => skeletonFits(a, s, mirrored, entry, ext));
 }

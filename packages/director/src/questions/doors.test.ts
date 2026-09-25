@@ -15,7 +15,7 @@ const labels = (over: Partial<SummaryLabels> = {}): SummaryLabels => ({
   health: "ok", recent_damage: "none", clear_speed: "normal",
   movement_pressure_recent: "light", run_progress: "mid", gold: "ok",
   tension_cap: "peak_allowed", hazard_cap: "high", pressure_cap: 5,
-  build: { archetype: "area", bottleneck: "accuracy", mana_sustain: "tight", range: "long", missing_roles: ["tracking"], dominant_tags: ["area"] },
+  build: { range: "long" },
   preference: { dominant: ["area"], consistency: "on_plan" },
   ...over,
 });

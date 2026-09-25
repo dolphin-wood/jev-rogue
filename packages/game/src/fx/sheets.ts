@@ -43,6 +43,9 @@ const RAMP = {
   smoke: [0x3a3440, 0x5e5864, 0x847e8a, 0xaaa4ae].map(hex),
   hurt: [0x5a0a14, 0xb01e28, 0xff5a4a, 0xffb0a0, 0xffffff].map(hex),
   blast: [0x6a4a30, 0xb08a60, 0xe8c890, 0xfff0c0, 0xffffff].map(hex),
+  lava: [0x2a1a1c, 0x8a3414, 0xc8561a, 0xe2701e, 0xf28c32, 0xf8a848, 0xffd070].map(hex),
+  grass: [0x16301a, 0x224826, 0x33662e, 0x4f8a38, 0x7cb24c, 0xb4da74].map(hex),
+  char: [0x141014, 0x221c1e, 0x34292a, 0x4a3e3a, 0x6a5e56, 0xe0602a, 0xffb848].map(hex),
 } as const;
 
 /** A deterministic generator, so a sheet is the same drawing every boot. */
@@ -375,6 +378,107 @@ function merge(base: FxFrame, top: FxFrame): FxFrame {
 }
 
 /** Every sheet, keyed by name. `blastLen` is the warden's reach in texels. */
+/** The floor tile's size in texels: one world tile, at half a world pixel a texel. */
+const TILE_TX = 64;
+
+/** How many frames the lava loop has. */
+export const LAVA_FRAMES = 32;
+/** The lava field is two tiles long, so a channel repeats half as often; each cell takes one half. */
+const LAVA_W = TILE_TX * 2;
+const LAVA_DRIFT = LAVA_W / LAVA_FRAMES;
+
+/**
+ * Lava, flowing along x in a loop of `LAVA_FRAMES`, after the pixel games that
+ * draw it well: **one flat orange**, with flecks a shade lighter and a few a
+ * shade darker drifting on it at two speeds. What makes it lava is its edge,
+ * drawn by the scene (`groundEdges`): a ragged bank of dark stone biting into
+ * it and a band of brighter melt along the bank. Two tiles long and cut in
+ * halves (`lava` and `lavab`), alternating along a channel.
+ *
+ * Three versions came first and each was busier inside than at its edge —
+ * yellow blobs boiling in place, cracked plates of crust that read as
+ * beetles, a dark melt with ripples that read as a rust-coloured rug.
+ * Everything moves a whole number of fields over the loop and wraps on x, so
+ * every cell shows the same frame and the flow is continuous; a channel
+ * running north–south is the tile turned.
+ */
+function lavaField(): Canvas[] {
+  const R = rng(91);
+  // Flecks: short dashes a shade off the body, a few darker, drifting slowly.
+  const flecks = Array.from({ length: 34 }, () => ({
+    x: R() * LAVA_W, y: 4 + R() * (TILE_TX - 8), len: 2 + Math.floor(R() * 4), dark: R() < 0.3, fast: R() < 0.4,
+  }));
+  const out: Canvas[] = [];
+  for (let f = 0; f < LAVA_FRAMES; f++) {
+    const c = new Canvas(LAVA_W, TILE_TX);
+    const shift = f * LAVA_DRIFT;
+    for (let y = 0; y < TILE_TX; y++) for (let x = 0; x < LAVA_W; x++) c.put(x, y, 3);
+    for (const fl of flecks) {
+      const x0 = fl.x + shift * (fl.fast ? 2 : 1);
+      for (let k = 0; k < fl.len; k++) {
+        const wx = ((Math.round(x0 + k) % LAVA_W) + LAVA_W) % LAVA_W;
+        c.idx[Math.round(fl.y) * LAVA_W + wx] = fl.dark ? 2 : 4;
+      }
+    }
+    out.push(c);
+  }
+  return out;
+}
+
+function lavaHalves(): [FxSheet, FxSheet] {
+  const field = lavaField();
+  const half = (off: number): FxFrame[] => field.map((c) => {
+    const h = new Canvas(TILE_TX, TILE_TX);
+    for (let y = 0; y < TILE_TX; y++) for (let x = 0; x < TILE_TX; x++) h.idx[y * TILE_TX + x] = c.idx[y * LAVA_W + x + off]!;
+    return h.paint(RAMP.lava);
+  });
+  return [{ name: "lava", frames: half(0), origin: [0, 0] }, { name: "lavab", frames: half(TILE_TX), origin: [0, 0] }];
+}
+
+/** Grass over a floor tile: a dark ground of it, then tufts of blades lit at the tip. Two variants. */
+function grass(name: string, seed: number): FxSheet {
+  const frames: FxFrame[] = [];
+  for (let v = 0; v < 2; v++) {
+    const R = rng(seed + v * 17);
+    const c = new Canvas(TILE_TX, TILE_TX);
+    for (let y = 0; y < TILE_TX; y++) for (let x = 0; x < TILE_TX; x++) c.put(x, y, R() < 0.18 ? 0 : 1);
+    for (let n = 0; n < 70; n++) {
+      const x = Math.floor(R() * TILE_TX), y = 4 + Math.floor(R() * (TILE_TX - 4));
+      const h = 3 + Math.floor(R() * 4), lean = R() < 0.5 ? -1 : 1;
+      for (let k = 0; k < h; k++) c.put(x + (k > h / 2 ? lean : 0), y - k, k === h - 1 ? 5 : k > h / 2 ? 4 : 3);
+      if (R() < 0.5) for (let k = 0; k < h - 1; k++) c.put(x - lean, y - k, k === h - 2 ? 4 : 2);
+    }
+    frames.push(c.paint(RAMP.grass));
+  }
+  return { name, frames, origin: [0, 0] };
+}
+
+/**
+ * Burnt grass: charred ground, ash and stubble; and while it is still
+ * burning, two frames of embers glowing through it.
+ */
+function char(name: string, seed: number, embers: boolean): FxSheet {
+  const frames: FxFrame[] = [];
+  for (let v = 0; v < 2; v++) {
+    const R = rng(seed + v * 13);
+    const c = new Canvas(TILE_TX, TILE_TX);
+    for (let y = 0; y < TILE_TX; y++) for (let x = 0; x < TILE_TX; x++) c.put(x, y, R() < 0.25 ? 0 : 1);
+    for (let n = 0; n < 40; n++) {
+      const x = Math.floor(R() * TILE_TX), y = 3 + Math.floor(R() * (TILE_TX - 3));
+      const h = 1 + Math.floor(R() * 2);
+      for (let k = 0; k < h; k++) c.put(x, y - k, 2);
+      if (R() < 0.35) c.put(x + 1, y, 4);
+    }
+    if (embers) for (let n = 0; n < 26; n++) {
+      const x = Math.floor(R() * TILE_TX), y = Math.floor(R() * TILE_TX);
+      c.put(x, y, R() < 0.4 ? 6 : 5);
+      if (R() < 0.5) c.put(x + 1, y, 5);
+    }
+    frames.push(c.paint(RAMP.char));
+  }
+  return { name, frames, origin: [0, 0] };
+}
+
 export function bakeSheets(opts: { blastLen: number; blastSpreadDeg: number }): FxSheet[] {
   return [
     muzzle("muzzle_s", 5, 11),
@@ -387,5 +491,9 @@ export function bakeSheets(opts: { blastLen: number; blastSpreadDeg: number }): 
     hurtBurst("hit_player", 31),
     smoke("smoke", 41),
     blast("blast", opts.blastLen, opts.blastSpreadDeg, 51),
+    ...lavaHalves(),
+    grass("grass", 61),
+    char("grass_burnt", 71, false),
+    char("grass_burning", 81, true),
   ];
 }

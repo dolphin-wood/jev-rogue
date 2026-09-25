@@ -1,4 +1,8 @@
 /** The complete, authoritative list of sprite frames the game expects. */
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { SUBSPECIES_ART } from "./subspecies.ts";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /**
  * The art keeps the hard-edged pixel look of the shipped reference without
@@ -15,10 +19,27 @@ export const ART_SCALE = 2;
 
 export type SizeClass = "s64" | "s96" | "s256" | "s32";
 
-export const SIZE: Record<SizeClass, number> = { s64: 64, s96: 96, s256: 256, s32: 32 };
-
 /** World size a sprite class occupies, for the renderer and for collision. */
 export const WORLD_SIZE: Record<SizeClass, number> = { s64: 32, s96: 48, s256: 128, s32: 16 };
+
+/**
+ * Delivered size of each class in art pixels: its world size at `ART_SCALE`.
+ * The class names are the sizes at 2. Most sources are pixel art drawn on
+ * this grid and delivered at four times it, so 2 is the art's own resolution:
+ * exported at 3 they were resampled and their pixels came out uneven. How
+ * large the art is on screen is the view's business — whole device pixels to
+ * an art pixel (doc 008) — not the export's.
+ */
+export const SIZE: Record<SizeClass, number> = {
+  s64: WORLD_SIZE.s64 * ART_SCALE, s96: WORLD_SIZE.s96 * ART_SCALE,
+  s256: WORLD_SIZE.s256 * ART_SCALE, s32: WORLD_SIZE.s32 * ART_SCALE,
+};
+
+/** How many two-by-two drawings the two-thirds-grain floor has. */
+export const MID_FLOOR_VARIANTS = 3;
+
+/** An art size given at the first scale, 2, at the current one. */
+export const atScale = (px: number): number => Math.round((px * ART_SCALE) / 2);
 
 /** Entity sprites must be centred on their collision circle; decor need not be. */
 export interface FrameSpec {
@@ -125,24 +146,113 @@ const frame = (
   centred = true,
   mayUseHot = false,
   dimensions?: readonly [number, number],
-): FrameSpec => ({ name, size, centred, mayUseHot, ...(dimensions ? { width: dimensions[0], height: dimensions[1] } : {}) });
+): FrameSpec => ({ name, size, centred, mayUseHot, ...(dimensions ? { width: atScale(dimensions[0]), height: atScale(dimensions[1]) } : {}) });
+
+/** The player's walk cycle, composed from the player's sprite model (doc 016). */
+export const PLAYER_WALK_FRAMES = 8;
+
+/**
+ * The frames every sprite model delivers, read from the models themselves.
+ *
+ * A model's `anims.json` already names each atlas frame it composes, and its
+ * `rig.json` gives the size the frame is composed at, so listing them again
+ * here could only go out of date. Read directly rather than through
+ * `models.ts`, because the manifest is what `models.ts` is checked against and
+ * a cycle between the two would make each the other's source of truth.
+ */
+function modelManifest(): FrameSpec[] {
+  const dir = fileURLToPath(new URL("../../../../assets/models/", import.meta.url));
+  if (!existsSync(dir)) return [];
+  const out: FrameSpec[] = [];
+  for (const body of readdirSync(dir).sort()) {
+    // B8 ships the Crypt King as painted full frames; its abandoned rig must
+    // not append swordless model poses to the production atlas.
+    if (/^boss_p[123]$/.test(body)) continue;
+    const rigPath = join(dir, body, "rig.json");
+    const animsPath = join(dir, body, "anims.json");
+    if (!existsSync(rigPath) || !existsSync(animsPath)) continue;
+    const rig = JSON.parse(readFileSync(rigPath, "utf8")) as { size: [number, number] };
+    const anims = JSON.parse(readFileSync(animsPath, "utf8")) as { facings: string[]; frames: Record<string, string> };
+    const size = (Object.entries(SIZE).find(([, px]) => px === rig.size[0])?.[0] ?? "s64") as SizeClass;
+    for (const template of Object.keys(anims.frames))
+      for (const f of template.includes("{f}") ? anims.facings : [""])
+        // A telegraph frame is the one enemy drawing allowed the reserved
+        // magenta, as the delivered telegraphs were.
+        out.push(frame(template.replace("{f}", f), size, true, /tele|telegraph/.test(template)));
+  }
+  return out;
+}
 
 /** Consolidated art-request revision: the authoritative 896-frame runtime atlas. */
+/* ------------------------------ marks (019) ------------------------------- */
+
+/**
+ * The frame a subspecies' mark is drawn as: a small sprite hung at the base
+ * body's `mark` anchor, one per facing (doc 019, "Art, and what it costs").
+ *
+ * The measured alternative is why this is a frame rather than a model. A
+ * walking body carries about 90 atlas frames and an emplacement 24, so
+ * thirteen subspecies packed as their own models is roughly 980 frames —
+ * **+58% on the character half of an atlas already packed 4096 wide because
+ * the roster took it past 4300 rows at 2048**. Thirteen marks over three
+ * facings is 39, about 2%, and the palette does the rest at runtime
+ * (`game/src/fx/palette-swap.ts`).
+ *
+ * `s32` is 16 world pixels, which is a horn, a plume or a lens against a
+ * 32-unit body: the mark has to change the silhouette at a glance without
+ * becoming a second body. It is `centred: false`, because what is placed is
+ * the anchor point, not the drawing's middle.
+ */
+export const MARK_SIZE: SizeClass = "s32";
+
+export const markFrame = (id: string, facing: string): string => `mark_${id}_${facing}`;
+
+/**
+ * Frame specs for a set of subspecies marks.
+ *
+ * **Deliberately not spliced into `MANIFEST`.** Until the marks are drawn, a
+ * row here would fail the manifest check and change the packed atlas; phase 2
+ * adds `...markFrameSpecs(SUBSPECIES_IDS)` to the list in one line, once the
+ * drawings exist.
+ */
+export function markFrameSpecs(ids: readonly string[]): FrameSpec[] {
+  return ids.flatMap((id) =>
+    FACINGS.map((f) => ({ name: markFrame(id, f), size: MARK_SIZE, centred: false, mayUseHot: false })));
+}
+
 export const MANIFEST: FrameSpec[] = (() => {
   const out: FrameSpec[] = [];
+  // The subspecies marks (doc 019): 39 frames, against the 980 a model apiece
+  // would have cost. `art.ts` draws them; the rigs carry where they hang.
+  out.push(...markFrameSpecs(SUBSPECIES_ART.map((a) => a.id)));
 
   for (const f of FACINGS) {
-    for (let i = 0; i < 4; i++) {
-      out.push(frame(`player_${f}_idle${i}`, "s64"));
-      out.push(frame(`player_${f}_walk${i}`, "s64"));
-    }
-    for (const pose of ["windup", "follow", "dash"])
+    for (let i = 0; i < 4; i++) out.push(frame(`player_${f}_idle${i}`, "s64"));
+    for (let i = 0; i < PLAYER_WALK_FRAMES; i++) out.push(frame(`player_${f}_walk${i}`, "s64"));
+    // strike and slash are the cut's keys between the windup and the follow
+    // through, recover the way back, cast the off hand raised; the player's
+    // model composes them (doc 016).
+    for (const pose of ["windup", "strike", "slash", "follow", "recover", "cast", "dash"])
       out.push(frame(`player_${f}_${pose}`, "s64"));
     out.push(frame(`player_${f}_hurt0`, "s64"), frame(`player_${f}_hurt1`, "s64"));
   }
 
   // The grip, not the asymmetric silhouette, sits at frame centre.
   out.push(frame("weapon_player_sword", "s64", false));
+  /*
+   * The staff as its own sprite, cut from the player's model, its **grip** at
+   * the frame's centre so the renderer can turn it about the hand. Through a
+   * swing the staff follows the cut rather than the drawn keys, because five
+   * keys cannot follow a continuous aim (doc 016); the same drawing serves
+   * the idle, where the model poses it.
+   */
+  out.push(frame("weapon_player_staff", "s96", false));
+  /*
+   * The closed fist that holds it, its grip at the frame's centre. One
+   * drawing for every key and every facing, painted over the shaft so the
+   * hand wraps it at whatever angle the staff is turned to.
+   */
+  out.push(frame("weapon_player_fist", "s32", false));
   for (let i = 0; i < 3; i++) out.push(frame(`vfx_impact_${i}`, "s64"));
   for (let i = 0; i < 3; i++) out.push(frame(`vfx_bolt_${i}`, "s64", false, false, [64, 128]));
   for (let i = 0; i < 4; i++) out.push(frame(`vfx_offhand_${i}`, "s64"));
@@ -196,10 +306,41 @@ export const MANIFEST: FrameSpec[] = (() => {
   for (const f of FACINGS) for (let i = 0; i < 4; i++) out.push(frame(`pet_${f}_walk${i}`, "s64"));
   for (const vendor of ["merchant", "blacksmith"]) for (let i = 0; i < 2; i++)
     out.push(frame(`prop_${vendor}_${i}`, "s64"));
+  /*
+   * The fountain (doc 003): three frames of moving water while it is full,
+   * and one still frame once it has been drunk. Drawn as text under
+   * `assets/effects`, like the ground eruptions.
+   */
+  for (let i = 0; i < 3; i++) out.push(frame(`prop_fountain_${i}`, "s64"));
+  out.push(frame("prop_fountain_dry_0", "s64"));
 
   for (let i = 0; i < 8; i++) out.push(frame(`tile_floor_${i}`, "s64", false));
+  // The floor and the solid wall at half their grain, four half-size drawings
+  // to a tile, for trying the room at a finer scale (`fineGrain` in art.ts).
+  for (let i = 0; i < 8; i++) out.push(frame(`tile_floor_fine_${i}`, "s64", false));
+  // The floor at two thirds of its grain: three stones to two tiles, a
+  // two-by-two block of tiles cut from one drawing (`midGrain` in art.ts).
+  for (let v = 0; v < MID_FLOOR_VARIANTS; v++) for (let q = 0; q < 4; q++) out.push(frame(`tile_floor_mid_${v}_${q}`, "s64", false));
+  // The drain's grate alone, to lay over a finer floor (`drainGrate` in art.ts).
+  out.push(frame("tile_floor_drain_grate", "s64", false));
+  out.push(frame("tile_wall_solid_fine", "s64", false));
   for (const c of ["solid", "n", "e", "s", "w", "ne", "es", "sw", "wn", "ns", "ew", "nes", "esw", "swn", "wne", "nesw"])
     out.push(frame(`tile_wall_${c}`, "s64", false));
+  // The inside of an L: the cap square a wall cell needs at a corner where its
+  // two neighbours are walls and the floor is on the diagonal.
+  for (const c of ["ne", "es", "sw", "wn"]) out.push(frame(`tile_wall_inner_${c}`, "s64", false));
+
+  // Painted depth materials. Each depth's source sheet carries all named
+  // cells, including the corner overlays used by the wall autotiler.
+  for (const id of ["ossuary", "flooded", "furnace"]) {
+    for (let i = 0; i < 4; i++) out.push(frame(`tile_${id}_floor_${i}`, "s64", false));
+    for (const c of ["solid", "n", "e", "s", "w", "ne", "es", "sw", "wn", "ns", "ew", "nes", "esw", "swn", "wne", "nesw"])
+      out.push(frame(`tile_${id}_wall_${c}`, "s64", false));
+    for (const c of ["ne", "es", "sw", "wn"]) out.push(frame(`tile_${id}_wall_inner_${c}`, "s64", false));
+    for (let i = 0; i < 8; i++) out.push(frame(`deco_${id}_${i}`, "s64", false));
+    for (let i = 0; i < 3; i++) out.push(frame(`patch_${id}_${i}`, "s64", false, false, [128, 128]));
+    out.push(frame(`prop_${id}_sconce`, "s64", false, false, [64, 128]));
+  }
 
   out.push(frame("prop_portal_shut_0", "s64"), frame("prop_portal_shut_1", "s64"));
   for (let i = 0; i < 4; i++) out.push(frame(`prop_portal_open_${i}`, "s64"));
@@ -210,15 +351,49 @@ export const MANIFEST: FrameSpec[] = (() => {
   for (const d of ["crack_0", "crack_1", "drain_0", "drain_1", "stain_0", "stain_1", "rubble_0", "rubble_1", "moss_0", "moss_1", "scorch", "bones"])
     out.push(frame(`deco_${d}`, "s64", false));
 
-  for (const p of [1, 2, 3]) for (const pose of ["idle0", "idle1", "tele"])
+  for (const p of [1, 2, 3]) for (const pose of ["idle0", "idle1", "ceremony0", "ceremony1", "tele"])
     out.push(frame(`boss_p${p}_${pose}`, "s256", true, pose === "tele"));
-  for (const p of [1, 2, 3]) for (const pose of ["windup", "commit", "hit0", "hit1", "leap", "slam"])
-    out.push(frame(`boss_p${p}_${pose}`, "s256"));
+  for (const p of [1, 2, 3]) for (const pose of [
+    "windup", "commit", "follow", "hit0", "hit1", "leap_gather", "leap_air",
+    "slam", "slam_lift", "slam_drive", "hook", "backhand",
+  ])
+    out.push(frame(`boss_p${p}_${pose}`, "s256", true));
+  for (const p of [1, 2, 3]) for (const pose of [
+    "walk0", "walk1", "walk2", "walk3", "walk4", "walk5",
+    "sweep_wind", "sweep_enter", "sweep_cross", "sweep_mid", "sweep_cut", "sweep_recover", "sweep_reset",
+    "cleave_raise", "cleave_fall", "cleave_cut", "cleave_hold", "cleave_stuck",
+    "dash_cut", "dash_skid", "recover",
+    "chain_wind", "chain_cast", "chain_follow", "hook_wind", "hook_reel", "stagger0", "stagger1",
+  ]) out.push(frame(`boss_p${p}_${pose}`, "s256", true));
+  /*
+   * **The wide cuts** (`assets/source/melee/boss-king/wide/`): 336 art px
+   * cells, because a greatsword swung round the body does not fit 256. The
+   * string's front and return sweeps from phase II, and the vertical
+   * finisher in every phase; the renderer lays them on their own pivot
+   * (`anchors.json`), the feet.
+   */
+  for (const p of [1, 2, 3]) for (const pose of [
+    ...(p >= 2 ? ["sweep_front_wind", "sweep_front_enter", "sweep_front_mid", "sweep_front_cut", "sweep_back_wind", "sweep_back_cross", "sweep_back_cut"] : []),
+    "cleave_front_raise", "cleave_front_fall", "cleave_front_cut", "cleave_front_follow",
+  ]) out.push(frame(`boss_p${p}_${pose}`, "s256", true, false, [336, 336]));
+  out.push(frame("boss_unbind_1", "s256", false), frame("boss_unbind_2", "s256", false));
+  for (const piece of ["pauldron_l", "pauldron_r", "helm", "breastplate_l", "breastplate_r", "cape"])
+    out.push(frame(`boss_debris_${piece}`, "s64", false));
+  for (const piece of ["link_face", "link_edge", "hook_head"])
+    out.push(frame(`boss_chain_${piece}`, "s64", false));
+  // Story panels share a ground line; a collapsed body is intentionally low
+  // in its cell, so visual-bounds centring is not an appropriate invariant.
+  out.push(frame("boss_throne_seated", "s256", false), frame("boss_throne_empty", "s256", false));
+  for (const pose of ["goblet", "notice", "throw", "rise"])
+    out.push(frame(`boss_throne_${pose}`, "s256", false));
+  for (let i = 0; i < 4; i++) out.push(frame(`vfx_goblet_${i}`, "s64", false));
+  out.push(frame("deco_wine_splash", "s64", false, false, [128, 64]));
+  for (let i = 0; i < 3; i++) out.push(frame(`boss_death${i}`, "s256", false));
   for (const kind of ["player_a", "player_b", "player_c"])
     for (let i = 0; i < 2; i++) out.push(frame(`bullet_${kind}_${i}`, "s32"));
   for (const kind of ["enemy_a", "enemy_b"])
     for (let i = 0; i < 2; i++) out.push(frame(`bullet_${kind}_${i}`, "s32", true, true));
-  for (const kind of ["spike", "poison", "ice", "crumble"])
+  for (const kind of ["spike", "poison", "ice"])
     for (let i = 0; i < 2; i++) out.push(frame(`hazard_${kind}_${i}`, "s64", false));
   for (const kind of ["pillar", "brazier", "mirror", "manawell", "chest", "shop", "restfire"])
     for (let i = 0; i < 2; i++) {
@@ -237,10 +412,18 @@ export const MANIFEST: FrameSpec[] = (() => {
   for (const id of [
     "magic_bolt", "shock_arc", "spark_spray", "stone_shard", "ember_dart", "frost_needle",
     "venom_spit", "arc_lance", "scatter_shot", "cinder_burst", "glacier_spike",
-    "void_orb", "plague_bloom", "impact_carrier", "fuse_carrier", "wall_carrier",
-    "piercing_carrier", "mortar_carrier",
+    "void_orb", "plague_bloom",
   ]) out.push(frame(`icon_${id}`, "s32", true, false, [16, 16]));
   for (const id of ["spirit_blades", "wildfire_field", "stone_ward", "blink_strike", "void_maw", "spirit_ally"])
+    out.push(frame(`icon_${id}`, "s32", true, false, [16, 16]));
+  // Drawn as text (`assets/icons`): the role spells and the ground eruptions.
+  for (const id of ["frost_nova", "seeker_swarm", "fault_line", "earth_spikes", "flame_pillars", "cinder_geysers"])
+    out.push(frame(`icon_${id}`, "s32", true, false, [16, 16]));
+  // Drawn as text too, until they have art: the spells on doc 006's newer options.
+  for (const id of ["mana_darts", "arcane_cannon", "doom_sigil", "frozen_orb", "contagion", "meteor", "quake_ring", "leap_slam"])
+    out.push(frame(`icon_${id}`, "s32", true, false, [16, 16]));
+  // And the spells on doc 006's newer shapes: the orb, the boomerang, the enchant, the stance, the trail, the cloud.
+  for (const id of ["ball_lightning", "returning_edge", "crescent_edge", "counter_stance", "cinder_stride", "toxic_cloud"])
     out.push(frame(`icon_${id}`, "s32", true, false, [16, 16]));
   for (const id of [
     "fork", "chain", "brand", "harvest", "echo", "bloom", "shatter",
@@ -255,11 +438,47 @@ export const MANIFEST: FrameSpec[] = (() => {
   for (const kind of ["stat", "spell", "affix", "gold"])
     out.push(frame(`icon_reward_${kind}`, "s32", true, false, [16, 16]));
   out.push(frame("ui_elite_badge", "s32", true, false, [16, 16]));
+  /*
+   * The ground eruptions (`drawEruptions`), drawn as text under
+   * `assets/effects`. Each is bottom-anchored on its cell rather than centred
+   * on it, so the floor line sits at the foot of the frame and the spike or
+   * column stands above it. Two spike variants, so a line of five cells is
+   * not the same drawing stamped five times.
+   */
+  for (const variant of ["a", "b"]) for (let i = 0; i < 4; i++)
+    out.push(frame(`vfx_earth_spike_${variant}${i}`, "s64", false, false, [48, 48]));
+  for (let i = 0; i < 2; i++) out.push(frame(`vfx_earth_crack_${i}`, "s32", false, false, [32, 16]));
+  for (let i = 0; i < 6; i++) out.push(frame(`vfx_flame_pillar_${i}`, "s64", false, false, [48, 80]));
+  for (let i = 0; i < 5; i++) out.push(frame(`vfx_cinder_geyser_${i}`, "s64", false, false, [48, 64]));
+  for (const phase of ["launch", "fly", "dissolve"] as const)
+    for (let i = 0; i < (phase === "launch" ? 2 : 4); i++) out.push(frame(`vfx_crescent_wave_${phase}_${i}`, "s256", false, false, [96, 192]));
+  for (let i = 0; i < 4; i++) {
+    out.push(frame(`vfx_meteor_rock_${i}`, "s32"));
+    out.push(frame(`vfx_frost_orb_${i}`, "s32"));
+    out.push(frame(`vfx_ball_lightning_${i}`, "s32"));
+    out.push(frame(`vfx_arc_seg_${i}`, "s32", false, false, [32, 16]));
+    out.push(frame(`vfx_doom_burst_${i}`, "s96"));
+    out.push(frame(`vfx_vortex_${i}`, "s256", false, false, [128, 128]));
+    out.push(frame(`vfx_vortex_gather_${i}`, "s256", false, false, [128, 128]));
+    out.push(frame(`vfx_landing_dust_${i}`, "s256", false, false, [128, 64]));
+    out.push(frame(`vfx_gas_puff_${i}`, "s32"));
+  }
+  for (let i = 0; i < 5; i++) {
+    out.push(frame(`vfx_meteor_impact_${i}`, "s256", false, false, [128, 128]));
+    out.push(frame(`vfx_doom_rune_${i}`, "s32"));
+    out.push(frame(`vfx_guard_answer_${i}`, "s256", false, false, [128, 128]));
+  }
+  for (let i = 0; i < 2; i++) {
+    out.push(frame(`vfx_arc_cap_${i}`, "s32", false, false, [16, 16]));
+    out.push(frame(`vfx_contagion_glob_${i}`, "s32", false, false, [16, 16]));
+  }
   out.push(frame("vfx_ward_0", "s32"), frame("vfx_ward_1", "s32"));
   out.push(frame("vfx_brand_mark", "s32", true, false, [16, 16]));
   out.push(frame("prop_reward_stat_0", "s64"));
   for (const id of ["npc_merchant", "npc_smith", "action_attack", "action_spin", "action_dodge"])
     out.push(frame(`icon_${id}`, "s32", true, false, [16, 16]));
+  // The fountain's badge, over its head and on the portal that leads to it.
+  out.push(frame("icon_npc_fountain", "s32", true, false, [16, 16]));
   for (const id of ["burn", "poison", "chill", "freeze", "stun", "stagger", "alert"])
     out.push(frame(`icon_status_${id}`, "s32", true, false, [16, 16]));
   out.push(frame("ui_shield", "s32", true, false, [16, 16]));
@@ -289,14 +508,16 @@ export const MANIFEST: FrameSpec[] = (() => {
   for (let i = 0; i < 4; i++) out.push(frame(`vfx_beam_seg_${i}`, "s64", false));
   for (let i = 0; i < 2; i++) out.push(frame(`vfx_beam_cap_${i}`, "s64", false));
 
+  // The expansion bodies' walks are drawn in the pipeline (`drawnWalk`), six frames a cycle.
+  const EXPANSION_WALK = ["walk0", "walk1", "walk2", "walk3", "walk4", "walk5"];
   const facingFrames = (kind: string, size: SizeClass, poses: readonly string[]) => {
     for (const f of FACINGS) for (const pose of poses) out.push(frame(`enemy_${kind}_${f}_${pose}`, size));
   };
-  facingFrames("warden", "s96", ["idle0", "idle1", "walk0", "walk1", "walk2", "walk3", "dormant0", "dormant1", "windup", "lunge", "plant", "hit0", "hit1"]);
+  facingFrames("warden", "s96", ["idle0", "idle1", ...EXPANSION_WALK, "dormant0", "dormant1", "windup", "lunge", "plant", "hit0", "hit1"]);
   out.push(frame("enemy_warden_death", "s96"));
   facingFrames("warden", "s96", ["throw_windup", "throw_release", "idle_bare0", "idle_bare1"]);
   out.push(frame("weapon_enemy_warden_shield", "s96", false, false, [64, 96]));
-  facingFrames("bellringer", "s64", ["idle0", "idle1", "walk0", "walk1", "walk2", "walk3", "dormant0", "dormant1", "windup", "cast", "field", "burst", "hit0", "hit1", "peal_windup", "peal_release"]);
+  facingFrames("bellringer", "s64", ["idle0", "idle1", ...EXPANSION_WALK, "dormant0", "dormant1", "windup", "cast", "field", "burst", "hit0", "hit1", "peal_windup", "peal_release"]);
   out.push(frame("enemy_bellringer_death", "s64"));
   for (const pose of ["dormant", "idle0", "idle1", "telegraph", "erupt", "hit0", "hit1", "death", "telegraph_walk"])
     out.push(frame(`enemy_rifter_${pose}`, "s64", true, pose.startsWith("telegraph")));
@@ -309,11 +530,11 @@ export const MANIFEST: FrameSpec[] = (() => {
   for (let i = 0; i < 4; i++) out.push(frame(`vfx_mine_armed_${i}`, "s64", true, true));
   for (let i = 0; i < 3; i++) out.push(frame(`vfx_mine_burst_${i}`, "s64", true, true));
 
-  facingFrames("snarecaster", "s64", ["idle0", "idle1", "walk0", "walk1", "walk2", "walk3", "dormant0", "dormant1", "windup", "fire", "whip", "hit0", "hit1", "anchor_cast"]);
+  facingFrames("snarecaster", "s64", ["idle0", "idle1", ...EXPANSION_WALK, "dormant0", "dormant1", "windup", "fire", "whip", "hit0", "hit1", "anchor_cast"]);
   out.push(frame("enemy_snarecaster_death", "s64"));
-  facingFrames("delver", "s64", ["idle0", "idle1", "walk0", "walk1", "walk2", "walk3", "dormant0", "dormant1", "burrow0", "burrow1", "emerge0", "emerge1", "windup", "lunge", "hit0", "hit1"]);
+  facingFrames("delver", "s64", ["idle0", "idle1", ...EXPANSION_WALK, "dormant0", "dormant1", "burrow0", "burrow1", "emerge0", "emerge1", "windup", "lunge", "hit0", "hit1"]);
   out.push(frame("enemy_delver_death", "s64"));
-  facingFrames("cinderling", "s64", ["idle0", "idle1", "walk0", "walk1", "walk2", "walk3", "dormant0", "dormant1", "windup", "lob", "burning0", "burning1", "hit0", "hit1", "flare_windup"]);
+  facingFrames("cinderling", "s64", ["idle0", "idle1", ...EXPANSION_WALK, "dormant0", "dormant1", "windup", "lob", "burning0", "burning1", "hit0", "hit1", "flare_windup"]);
   out.push(frame("enemy_cinderling_death", "s64"));
   facingFrames("sower", "s64", ["idle0", "idle1", "idle2", "idle3", "dormant0", "dormant1", "cast", "hit0", "hit1", "bloom_cast"]);
   out.push(frame("enemy_sower_death", "s64"));
@@ -324,6 +545,13 @@ export const MANIFEST: FrameSpec[] = (() => {
   for (let i = 0; i < 4; i++) out.push(frame(`vfx_mound_${i}`, "s64", false));
   for (let i = 0; i < 3; i++) out.push(frame(`vfx_emerge_ring_${i}`, "s64"));
   for (let i = 0; i < 4; i++) out.push(frame(`vfx_coal_${i}`, "s32", true, true));
+
+  // Every frame a sprite model composes, which is the model's own business
+  // rather than a list kept beside it (doc 016): a body gains a pose by
+  // gaining one in `anims.json`, and the atlas follows. Listed last, so a
+  // name the sheets also deliver keeps the place it already had.
+  const listed = new Set(out.map((f) => f.name));
+  for (const f of modelManifest()) if (!listed.has(f.name)) { listed.add(f.name); out.push(f); }
 
   return out;
 })();

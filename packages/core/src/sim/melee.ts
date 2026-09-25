@@ -25,6 +25,7 @@
 import { TILE_PX } from "../types.ts";
 import { PLAYER_RADIUS } from "./types.ts";
 import type { Enemy, Player, Strike, Vec, World } from "./types.ts";
+import { throwWave } from "./shapes.ts";
 
 /* -------------------------------- constants ------------------------------- */
 
@@ -37,6 +38,13 @@ export const SWING_ACTIVE_MS = 8 * FRAME_MS;
 /** Frames 12-14, then frame 15 releases the player. */
 export const SWING_RECOVER_MS = 4 * FRAME_MS;
 export const SWING_TOTAL_MS = SWING_WINDUP_MS + SWING_ACTIVE_MS + SWING_RECOVER_MS;
+/**
+ * How soon after a swing ends the next one still continues the chain, and
+ * the conjured blade is still out. Long enough for a player tapping or
+ * holding the key to be chaining, short enough that a swing after walking
+ * somewhere summons it again.
+ */
+export const SWING_CHAIN_MS = 350;
 
 /**
  * Total coverage of one swing: the angle the blade's tip travels through.
@@ -122,8 +130,24 @@ export const SWING_KNOCKBACK = 80;
  * a late-run player with three times the cap would find that hitting things
  * barely moved the bar, so the reason to close distance would evaporate at the
  * point they had most invested in being able to.
+ *
+ * **0.035, down from 0.09.** At a ninth of the bar a swing paid for most of a
+ * cast, so a player in melee range never ran out and mana stopped being a
+ * limiter at all — nothing in the surveyed roguelikes hands back a resource
+ * that fast as a baseline (`docs/research/combat-balance-references.md`). At
+ * this rate **about two connecting hits fund one cast of a cheap spell**,
+ * which is the exchange the design is for: closing is how you afford standing
+ * away.
+ *
+ * **Mana is the limiter that binds.** A spell has a cooldown as well, and a
+ * thing gated on two limiters is really gated on one — the other is slack and
+ * silently does nothing. The cooldown is a floor on how fast one key may be
+ * tapped (`spellCooldownMs`, a quarter second plus a little for a dear
+ * spell); the bar is what says how many casts a fight contains. If a spell's
+ * cooldown ever becomes the thing the player waits on, that spell is
+ * mispriced, not well gated.
  */
-export const MANA_PER_HIT_FRACTION = 0.09;
+export const MANA_PER_HIT_FRACTION = 0.06;
 
 /**
  * Movement during a swing, by phase.
@@ -207,6 +231,8 @@ export interface SwingBox {
    * spell also reverses it.
    */
   sweep: 1 | -1;
+  /** Whether this swing continues a chain (`SWING_CHAIN_MS`): the conjured blade is already out. */
+  chained: boolean;
   hitIds: number[];
   ageMs: number;
 }
@@ -215,7 +241,7 @@ export function makeSwingBox(): SwingBox {
   return {
     active: false, x: 0, y: 0, facing: 0, halfArc: 0, sweepDeg: 0, angle: 0, lastAngle: 0,
     trackingMs: 0, bladeReach: 0, spread: 0, reach: 0,
-    damage: 0, knockback: 0, sweep: 1, hitIds: [], ageMs: 0,
+    damage: 0, knockback: 0, sweep: 1, chained: false, hitIds: [], ageMs: 0,
   };
 }
 
@@ -290,6 +316,8 @@ export function swingPhase(p: Player): SwingPhase {
 
 export function canSwing(p: Player): boolean {
   if (p.dashMs > 0) return false;
+  // A stance holds the sword (doc 006): the guard is the key's, not the blade's.
+  if (p.stance) return false;
   if (p.swingMs <= 0) return true;
   /*
    * `swift_hand` cuts the recovery: the last part of it can be cancelled into
@@ -335,6 +363,7 @@ export const SPIN_KNOCKBACK_MULT = 0.5;
  */
 export function canSpin(p: Player): boolean {
   if (p.dashMs > 0) return false;
+  if (p.stance) return false;
   return p.swingMs <= 0 || p.swingStretch === 1;
 }
 
@@ -361,10 +390,17 @@ export function beginSpin(p: Player, world: World): boolean {
  *
  * **Every swing is identical, including its direction.** An earlier version
  * ran a three-hit chain whose third hit did double damage with more reach,
- * after Moonlighter, and a later one kept alternating which way the blade
- * crossed the body. Both are gone: a combo asks the player to track where
- * they are in a sequence, and that attention is better spent on the enemies.
- * One motion, every time, is a thing the player never has to think about.
+ * after Moonlighter, and two others alternated which way the blade crossed
+ * the body — the second after Carian Slicer, tried beside the 2D Zeldas'
+ * one stroke repeated and judged worse. A combo asks the player to track
+ * where they are in a sequence, and that attention is better spent on the
+ * enemies. One motion, every time, is a thing the player never has to think
+ * about.
+ *
+ * A swing that starts within `SWING_CHAIN_MS` of the last one ending, or
+ * cancels its recovery, is marked `chained`. That changes nothing it does;
+ * it tells the renderer the conjured blade is already out, so it is not
+ * summoned again.
  *
  * Each swing locks its own direction and every swing re-aims, so the facing
  * keeps updating during one for the sprite and for the next, while this box
@@ -374,6 +410,8 @@ export function beginSpin(p: Player, world: World): boolean {
  */
 export function beginSwing(p: Player, world: World): void {
   if (!canSwing(p)) return;
+  // Chained if it comes before the last swing has finished or soon after.
+  const chained = p.swung && (p.swingMs > 0 || p.chainMs > 0);
 
   p.swingMs = SWING_TOTAL_MS;
   p.swingStretch = 1;
@@ -394,6 +432,8 @@ export function beginSwing(p: Player, world: World): void {
   box.damage = SWING_DAMAGE * (p.mods?.swordDamage ?? 1);
   box.knockback = SWING_KNOCKBACK;
   box.sweep = sweepFor(p.swingFacing);
+  p.swung = true;
+  box.chained = chained;
   box.lastAngle = bladeAngle(box, p);
   box.hitIds.length = 0;
   box.ageMs = 0;
@@ -414,11 +454,13 @@ export function stepSwing(world: World, dtMs: number): Enemy[] {
   const box = world.swing;
 
   if (p.swingMs <= 0) {
+    if (p.chainMs > 0) p.chainMs -= dtMs;
     box.active = false;
     return [];
   }
 
   p.swingMs -= dtMs;
+  if (p.swingMs <= 0) p.chainMs = SWING_CHAIN_MS;
   box.ageMs += dtMs;
   // The swing is attached to the body. Anchoring it where the swing started
   // left the arc behind whenever the player kept moving, which is most of the
@@ -449,6 +491,16 @@ export function stepSwing(world: World, dtMs: number): Enemy[] {
   }
 
   if (p.swingMs <= 0) box.active = false;
+  /*
+   * **An enchant's wave** (doc 006) leaves as the active window ends, once a
+   * swing, whether or not the swing connected: the blade's tip has finished
+   * its arc, and that arc is what flies on (`throwWave`). It is thrown by the
+   * swing, not by a hit. The spin is the rage's move and throws none — a
+   * wave is what a swing does under the enchant, and the spin is not a swing
+   * the player chose to make four times a second. A swing cut off before its
+   * window ends (a stance, a spin) has no finished arc and throws none.
+   */
+  if (wasActive && !box.active && p.swingMs > 0 && p.swingStretch === 1 && p.enchant) throwWave(world);
   if (!box.active) return [];
 
   const struck: Enemy[] = [];
@@ -953,11 +1005,176 @@ export const MELEE_ATTACKS: Readonly<Record<MeleeAttackSpec["kind"], MeleeAttack
     windupMs: 480, lungeMs: 1000, recoverMs: 560, stunsOnWall: true,
     commitRange: 110, restMs: 1500, recoilSpeed: 0.2, brakeMs: 140,
   },
+  /*
+   * The four below exist because the roster's melee had become **all travel**.
+   * Every body's answer was a commitment that crossed ground — the rusher and
+   * the delver stabbed, the tank rammed, the lancer drove — so three quarters
+   * of the attacks in a fight were "something is arriving at you at speed",
+   * and the only thing the player ever had to read was a direction and a
+   * moment. Reported as "it's all dash attacks", and it was.
+   *
+   * These travel a fraction of a body length or none, so the question they
+   * ask is **shape**: where the steel is, not when it arrives. Each has a
+   * silhouette the player can name — a twin arc, a ring, a long sweep, a
+   * shove — so the telegraph carries the answer as well as the warning.
+   */
+  /**
+   * The rusher's **claw**: two short swipes across a quarter-turn, a step in
+   * behind each rather than a lunge. Half a heart a swipe, so the pair is
+   * worth about one drive — and the second is the point of it, because the
+   * player who steps out of the first is stepping into where the second is
+   * going. It is always strung (see `chooseMelee`), which is the only attack
+   * in the roster that is.
+   */
+  claw: {
+    kind: "claw", bladeDeg: 52, sweepDeg: 95, reachTiles: 1.05,
+    damage: 0.5, knockback: 170, commitSpeed: 0.45,
+    windupMs: 300, lungeMs: 170, recoverMs: 380, stunsOnWall: false,
+    commitRange: 34, restMs: 1100, recoilSpeed: 0.25, brakeMs: 0,
+  },
+  /**
+   * The tank's **overhead slam**: the greatsword goes up and comes straight
+   * down where it stands, and the floor answers with a ring. It does not
+   * travel at all, which is the whole difference from the ram — the ram asks
+   * the player to leave a lane, the slam asks them to leave a *place*, and
+   * the ring is what makes the place bigger than the blade.
+   *
+   * The blade is short and the ring is wide and weaker, so standing on it is
+   * a heart and a half and standing near it is half of one. See
+   * `SLAM_SHOCK_RADIUS`.
+   */
+  slam: {
+    kind: "slam", bladeDeg: 360, sweepDeg: 0, reachTiles: 1.25,
+    damage: 1.2, knockback: 380, commitSpeed: 0,
+    windupMs: 640, lungeMs: 200, recoverMs: 620, stunsOnWall: false,
+    commitRange: 26, restMs: 1900, recoilSpeed: 0, brakeMs: 0,
+  },
+  /**
+   * The lancer's **sweep**: the spear swung flat through most of a turn, at
+   * its full reach, slowly. Nothing else in the roster is answered by ducking
+   * *inside* a weapon — the reach is 1.65 tiles and the body is 8, so the
+   * ground between the lancer's feet and its spear tip is the safe place, and
+   * a player who has learned to back out of the spike drive is exactly wrong
+   * for it.
+   */
+  sweep: {
+    kind: "sweep", bladeDeg: 26, sweepDeg: 210, reachTiles: 1.65,
+    damage: 0.9, knockback: 260, commitSpeed: 0.15,
+    windupMs: 500, lungeMs: 360, recoverMs: 540, stunsOnWall: false,
+    commitRange: 44, restMs: 1800, recoilSpeed: 0.1, brakeMs: 0,
+  },
+  /**
+   * The warden's **shield bash**: a short shove with the plate, for a player
+   * who has walked inside a gun. It barely reaches and it barely hurts; what
+   * it does is **throw them back out**, which is the whole point — a heavy
+   * gunner's problem is somebody standing on it while it reloads, and its
+   * answer should be to make room rather than to out-damage them.
+   */
+  /**
+   * **The boss's backhand: his answer to a player behind him.**
+   *
+   * His cuts go out of his front (`bossAim`), so the ground behind him — above
+   * him on the screen — is where a melee player would stand for ever. When
+   * his turn comes with them there and close (`chooseBossAct`), this is one
+   * of the two things he does: an arm swung round to wherever they are.
+   *
+   * The reach is 2.4 tiles, **further than the player's own arc lands**
+   * (about 80 px between centres against this body), so there is no place
+   * behind him that hits him and is outside this; the arc is 120° swept
+   * through another 90°, so sidestepping inside it does not work either; and
+   * the knockback is the largest in the game, to put the player back out in
+   * front of him.
+   */
+  maul: {
+    kind: "maul", bladeDeg: 120, sweepDeg: 90, reachTiles: 2.4,
+    damage: 1, knockback: 520, commitSpeed: 0.2,
+    windupMs: 560, lungeMs: 260, recoverMs: 600, stunsOnWall: false,
+    commitRange: 70, restMs: 1500, recoilSpeed: 0.1, brakeMs: 0,
+  },
+  /*
+   * **The Crypt King's greatsword** (doc 020). The boss's blades were the
+   * roster's slash and cleave, whose reach — 1.2 and 1.5 tiles from the body's
+   * centre — ended half a tile past the edge of a body drawn four tiles tall
+   * with a sword two tiles long. They are his own now, sized to the sword that
+   * is drawn, and each asks one question the other does not.
+   *
+   * The **greatsweep** is the heavy one: the sword brought flat all the way
+   * round his front, 190° at 2.5 tiles — wound up long, swung whole (every
+   * key of the front cut), felt in the hands (a freeze and a shake), and
+   * thrown on as a sword wave as wide as the cut. 2.5 tiles is where the
+   * player's own arc ends, so the player fighting at the tip of their sword
+   * is just outside it and the one hugging him is not; his back is safe; its
+   * recovery, the sword carried past and the body over its front knee, is
+   * the opening. It is everything the slash is not.
+   *
+   * The **greatcleave** is the sword driven straight down as far ahead as the
+   * arms go: 3.5 tiles long and narrow — 14°, about a body wide where it lands
+   * — so it is answered by one step sideways, and it outranges everything but
+   * a spell. The blade bites into the floor, and pulling it out is the
+   * longest recovery he has.
+   *
+   * Both commit from a gap well inside their reach, so a player who has not
+   * moved when the windup starts is in it; the windups are held to the beat
+   * (`beginWindup`), so the cut lands on the music. The sweep carries the body
+   * back a step as it recovers, which puts him outside the gap where he
+   * shoots (`BOSS_PATTERN_MIN_GAP`), so a string is followed by a volley and
+   * the fight alternates the two rather than becoming a sword fight only.
+   */
+  greatsweep: {
+    kind: "greatsweep", bladeDeg: 30, sweepDeg: 160, reachTiles: 2.5,
+    damage: 1, knockback: 360, commitSpeed: 0.3,
+    windupMs: 900, lungeMs: 280, recoverMs: 900, stunsOnWall: false,
+    commitRange: 40, restMs: 3800, recoilSpeed: 0.35, brakeMs: 0,
+  },
+  greatcleave: {
+    kind: "greatcleave", bladeDeg: 14, sweepDeg: 0, reachTiles: 3.5,
+    damage: 1, knockback: 300, commitSpeed: 0.9,
+    windupMs: 700, lungeMs: 160, recoverMs: 1200, stunsOnWall: false,
+    commitRange: 70, restMs: 3800, recoilSpeed: 0, brakeMs: 0,
+  },
+  /*
+   * The **greatslash**: the light cut the king's strings are made of (doc 020,
+   * `BossPhase.strings`), and the sweep's opposite. Narrow — 100° all told —
+   * and long, 3 tiles, with a stride into it (`commitSpeed`), so it reaches
+   * past the player's own and a step back is not always far enough; quick to
+   * wind (480 ms) and quick to throw, so two of them can be laid a beat and a
+   * half apart and the heavy blow after them still has room to wait. No
+   * wave: its danger is the rhythm, not the ground past it. Alone it recovers
+   * like any cut; inside a string it does not recover at all.
+   */
+  greatslash: {
+    kind: "greatslash", bladeDeg: 30, sweepDeg: 70, reachTiles: 3,
+    damage: 1, knockback: 200, commitSpeed: 1.1,
+    windupMs: 480, lungeMs: 160, recoverMs: 600, stunsOnWall: false,
+    commitRange: 52, restMs: 3800, recoilSpeed: 0.2, brakeMs: 0,
+  },
+  /*
+   * The **dashcut**: the king's run at a player keeping their distance, the
+   * sword out in front. It crouches for the windup with the line drawn, then
+   * crosses about six tiles in a third of a second, cutting everything along
+   * the way — so it is answered by leaving the line, not the range — and it
+   * stops in a skid with the sword dragged behind, which is the opening. Into
+   * a wall it stuns itself, so where the player stands when it crouches
+   * decides where it ends up.
+   */
+  dashcut: {
+    kind: "dashcut", bladeDeg: 50, sweepDeg: 0, reachTiles: 1.6,
+    damage: 1, knockback: 380, commitSpeed: 8,
+    windupMs: 760, lungeMs: 300, recoverMs: 900, stunsOnWall: true,
+    commitRange: 150, restMs: 3800, recoilSpeed: 0, brakeMs: 300,
+  },
+  bash: {
+    kind: "bash", bladeDeg: 96, sweepDeg: 0, reachTiles: 0.95,
+    damage: 0.6, knockback: 460, commitSpeed: 0.8,
+    windupMs: 380, lungeMs: 160, recoverMs: 520, stunsOnWall: false,
+    commitRange: 22, restMs: 2200, recoilSpeed: 0.3, brakeMs: 0,
+  },
 };
 
 /** Arms a swing box from an attack spec, aimed along `facing` from `x, y`. */
 export function armMeleeAttack(
   box: SwingBox, spec: MeleeAttackSpec, x: number, y: number, facing: number, sweep: 1 | -1,
+  damageMult = 1,
 ): void {
   box.active = false;
   box.x = x;
@@ -971,7 +1188,7 @@ export function armMeleeAttack(
   box.bladeReach = TILE_PX * spec.reachTiles;
   box.spread = 0;
   box.reach = box.bladeReach;
-  box.damage = spec.damage;
+  box.damage = spec.damage * damageMult;
   box.knockback = spec.knockback;
   box.sweep = sweep;
   box.hitIds.length = 0;

@@ -44,6 +44,8 @@ export interface Pickup {
    * vanishing into the same frame that spawned it.
    */
   ageMs: number;
+  /** What a coin is worth; `COIN_VALUE` unless it was minted for a sum. */
+  value: number;
 }
 
 export const PICKUP_POOL = 64;
@@ -81,7 +83,7 @@ export const MANA_ORB = 5;
 export function makePickupPool(): Pickup[] {
   return Array.from({ length: PICKUP_POOL }, () => ({
     alive: false, kind: "coin" as PickupKind, x: 0, y: 0,
-    vx: 0, vy: 0, lifeMs: 0, ageMs: 0,
+    vx: 0, vy: 0, lifeMs: 0, ageMs: 0, value: COIN_VALUE,
   }));
 }
 
@@ -101,8 +103,29 @@ export function drop(
   slot.vy = Math.sin(a) * speed;
   slot.lifeMs = PICKUP_LIFETIME_MS;
   slot.ageMs = 0;
+  slot.value = COIN_VALUE;
   return slot;
 }
+
+/**
+ * A sum paid as coins that burst from a point and fly to the player — what a
+ * dismantled spell pays, so taking it apart is seen and collected rather
+ * than a number changing. Up to `MAX_BURST_COINS`, the sum shared out
+ * among them.
+ */
+export function burstCoins(pool: Pickup[], x: number, y: number, gold: number, rng: Rng): void {
+  const total = Math.max(0, Math.round(gold));
+  if (total === 0) return;
+  const n = Math.max(1, Math.min(MAX_BURST_COINS, Math.round(total / COIN_VALUE)));
+  for (let i = 0; i < n; i++) {
+    const c = drop(pool, "coin", x, y, rng);
+    c.value = Math.floor(total / n) + (i < total % n ? 1 : 0);
+    // Thrown harder than a kill's drop, so the burst is seen.
+    c.vx *= 2.2;
+    c.vy *= 2.2;
+  }
+}
+const MAX_BURST_COINS = 12;
 
 /** Whether this drop may be taken yet. */
 export function pickupArmed(p: Pickup): boolean {

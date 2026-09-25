@@ -7,7 +7,8 @@
  * post-filter (two slots that pick features sharing a resource keep the
  * higher-probability one) and the hazard budget against `hazard_cap`.
  */
-import type { Feature } from "../types.ts";
+import type { Extent, Feature } from "../types.ts";
+import { rectAt } from "./extent.ts";
 import type { HazardCap } from "../content/tags.ts";
 
 export const FEATURES: readonly Feature[] = [
@@ -41,15 +42,36 @@ export const FEATURES: readonly Feature[] = [
     hazard_effect: "slip",
     resource: "floor_hazard",
   },
+  /*
+   * `crumble_floor` was here: a floor that took a heart off anyone who stood
+   * on it for three seconds. It was removed as a duplicate of the spike
+   * strip — both are a floor hazard that charges for dwelling — and because
+   * it was unreadable: it was drawn with the decorative crack decal, so the
+   * floor that hurt and the floor that did not looked the same, and nothing
+   * telegraphed its clock or collapsed when it ran out.
+   */
   {
-    id: "crumble_floor",
-    description: "Crumbling floor: collapses three seconds after it is stood on. Punishes camping, not movement.",
-    tags: ["hazard", "area_denial"],
+    id: "lava_channel",
+    description: "Lava channel: a one-tile line of molten rock across the zone. Walking over it burns; a dash crosses it untouched. Splits a space without closing it.",
+    tags: ["hazard", "damage_zone", "movement_pressure"],
+    slot_kind: "zone",
+    hazard_budget: 2,
+    /** A line, never a pool: a dash always clears it and the floor goes round it. See `featureCells`. */
+    hazard_effect: "lava",
+    resource: "floor_hazard",
+  },
+  {
+    id: "grass_patch",
+    description: "Grass: burns once when fire reaches it, and the fire runs through the patch. Grass fire burns everyone in it, whoever lit it: a trap for whoever stands in it when it goes up.",
+    tags: ["hazard", "damage_zone", "area_denial"],
     slot_kind: "zone",
     hazard_budget: 1,
-    /** Punishes camping, not movement — so crossing it is free. */
-    hazard_effect: "collapse",
-    resource: "floor_hazard",
+    /**
+     * Harmless until lit; then it is fire, whose owner is whoever lit it. See
+     * `stepGrass`. It shares no resource: grass beside a floor hazard is two
+     * different things to cross, not two of one.
+     */
+    hazard_effect: "none",
   },
   {
     id: "brazier",
@@ -73,6 +95,23 @@ export const FEATURES: readonly Feature[] = [
 ];
 
 export type FeatureId = (typeof FEATURES)[number]["id"];
+
+/**
+ * The cells a feature actually covers in its zone.
+ *
+ * Every feature fills its zone except lava, which runs **one tile thick**
+ * along the zone's long axis through its middle: a line a dash (64 px) clears
+ * from any side, with floor all round it, so it splits a space without
+ * closing it. A pool of it would be a wall that hurts.
+ */
+export function featureCells(id: string, cells: readonly (readonly [number, number])[]): readonly (readonly [number, number])[] {
+  if (id !== "lava_channel" || cells.length === 0) return cells;
+  const xs = cells.map((c) => c[0]), ys = cells.map((c) => c[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const wide = x1 - x0 >= y1 - y0;
+  const mid = wide ? Math.round((y0 + y1) / 2) : Math.round((x0 + x1) / 2);
+  return cells.filter(([x, y]) => (wide ? y === mid : x === mid));
+}
 
 /*
  * The mana font is gone. It was a basin that paid mana to anyone standing
@@ -129,8 +168,19 @@ export function isHazard(f: Feature): boolean {
 
 /** The features a slot may be offered under a cap; `none` hides every hazard. */
 export function featuresForCap(cap: HazardCap): readonly Feature[] {
-  return cap === "none" ? FEATURES.filter((f) => !isHazard(f)) : FEATURES;
+  const offered = FEATURES.filter((f) => !UNDRAWN.has(f.id));
+  return cap === "none" ? offered.filter((f) => !isHazard(f)) : offered;
 }
+
+/**
+ * Features the simulation has and no room is given yet, because their art is
+ * not drawn. Lava works — it burns, a dash crosses it, bodies route round it —
+ * but four versions of it drawn in code each read as a strip laid on the
+ * floor rather than a channel in it: the floor is painted art with its own
+ * outline and light, and code-drawn lava had neither. It waits on its tiles
+ * (`docs/art-workorder-codex.md`).
+ */
+const UNDRAWN: ReadonlySet<string> = new Set(["lava_channel"]);
 
 /**
  * The middle of the arena, in grid cells: the band a fight actually happens in.
@@ -139,8 +189,8 @@ export function featuresForCap(cap: HazardCap): readonly Feature[] {
  * width and its middle five rows, which is where the player and everything
  * chasing them spend a fight.
  */
-const CORE_X = [7, 13] as const;
-const CORE_Y = [4, 8] as const;
+/** The middle of the room: base cells 7..13 by 4..8, stretched to the extent. */
+const CORE: readonly [number, number, number, number] = [7, 4, 7, 5];
 
 /**
  * Whether a zone sits in the middle of the room.
@@ -156,20 +206,21 @@ const CORE_Y = [4, 8] as const;
  * Floor hazards are not restricted this way: a hazard in the middle is the
  * whole point of a hazard, because the player can choose to cross it.
  */
-export function centralZone(cells: readonly (readonly [number, number])[]): boolean {
+export function centralZone(cells: readonly (readonly [number, number])[], ext: Extent): boolean {
   if (cells.length === 0) return false;
+  const [x0, y0, w, h] = rectAt(CORE, ext);
   let inside = 0;
   for (const [x, y] of cells)
-    if (x >= CORE_X[0] && x <= CORE_X[1] && y >= CORE_Y[0] && y <= CORE_Y[1]) inside++;
+    if (x >= x0 && x < x0 + w && y >= y0 && y < y0 + h) inside++;
   return inside * 2 > cells.length;
 }
 
 /** What may fill one zone: the cap's features, minus solids in the middle. */
 export function featuresForZone(
-  cap: HazardCap, cells: readonly (readonly [number, number])[],
+  cap: HazardCap, cells: readonly (readonly [number, number])[], ext: Extent,
 ): readonly Feature[] {
   const offered = featuresForCap(cap);
-  return centralZone(cells) ? offered.filter((f) => !f.fixture) : offered;
+  return centralZone(cells, ext) ? offered.filter((f) => !f.fixture) : offered;
 }
 
 export function totalHazardBudget(chosen: readonly (Feature | null)[]): number {
@@ -200,11 +251,12 @@ export function assignZoneFeatures<
   zones: readonly Z[],
   cap: HazardCap,
   rng: { next(): number },
+  ext: Extent,
 ): Z[] {
   const weightNone = 2;
   const seen = new Set<string>();
   return zones.map((z) => {
-    const offered = featuresForZone(cap, z.cells);
+    const offered = featuresForZone(cap, z.cells, ext);
     const total = weightNone + offered.length;
     let roll = rng.next() * total;
     let picked: Feature | null = null;

@@ -29,18 +29,38 @@
  * the same test the lancer's swap uses.
  */
 import { TILE_PX, GRID_W, GRID_H } from "../types.ts";
+import type { EnemyId } from "../types.ts";
+import { baseArchetype } from "../encounters/enemies.ts";
 import { PLAYER_RADIUS } from "./types.ts";
-import type { Enemy, Flame, Lob, Mine, Rift, Tether, World } from "./types.ts";
+import type { Arm, Enemy, Flame, Lob, Mine, Rift, Shockwave, Tether, World } from "./types.ts";
 import { circleHitsWall, dist2, hasLineOfSight, moveSliding, normalise } from "./collide.ts";
 import { lightFire } from "./fire.ts";
 
 /** What the world lends this module to land damage with. */
 export interface AttackHooks {
   hurtPlayer(x: number, y: number, cause: string, stunMs: number, hearts: number): void;
+  /**
+   * Whether the player currently has i-frames — mercy frames or a dash.
+   *
+   * `hurtPlayer` already refuses a hit during them, but a shockwave needs the
+   * answer *before* it decides the band is spent: a ring the player dashed
+   * through has not caught them, and it has to stay live for the rest of its
+   * travel in case they stop inside it.
+   */
+  playerInvulnerable(): boolean;
   /** Feeds the player's burn gauge, as standing in fire does. */
   burnPlayer(amount: number): void;
   /** Staggers a body even if armour would refuse it: a cut tether knocks its ringer down. */
   knockDown(e: Enemy, ms: number): void;
+  /**
+   * Hatches a brooder's coal into a body where it landed (doc 019).
+   *
+   * A hook rather than a spawn here, because the caps that decide whether a
+   * body may arrive at all — the summoner pool, the concurrency cap, the
+   * ramp's alive count — live in the world, and a second place that creates
+   * enemies is a second place to get them wrong.
+   */
+  hatch(x: number, y: number, from: EnemyId): void;
 }
 
 export function isElite(e: Enemy): boolean {
@@ -56,7 +76,7 @@ const RIFT_SCAR_MS = 1500;
 
 export function castRift(
   w: World, x: number, y: number, angle: number, length: number,
-  opts: { width?: number; teleMs?: number; damage?: number } = {},
+  opts: { width?: number; teleMs?: number; damage?: number; bolt?: boolean } = {},
 ): Rift {
   const r: Rift = {
     alive: true, x, y, angle, length,
@@ -64,9 +84,10 @@ export function castRift(
     teleMs: opts.teleMs ?? RIFT_TELE_MS, teleMaxMs: opts.teleMs ?? RIFT_TELE_MS,
     activeMs: RIFT_ACTIVE_MS, scarMs: RIFT_SCAR_MS,
     damage: opts.damage ?? 1, struck: false,
+    ...(opts.bolt ? { bolt: true } : {}),
   };
   w.rifts.push(r);
-  w.events.push({ kind: "telegraph", x, y, what: length > 0 ? "rift" : "burst" });
+  w.events.push({ kind: "telegraph", x, y, what: r.bolt ? "bolt" : length > 0 ? "rift" : "burst" });
   return r;
 }
 
@@ -85,8 +106,140 @@ export function riftHits(r: Rift, x: number, y: number, radius: number): boolean
   return riftDistance(r, x, y) <= r.width / 2 + radius;
 }
 
+/* =============================== shockwave ================================ */
+
+/**
+ * The **ground shockwave**: a ring of broken floor travelling outward from an
+ * impact (doc 005, the boss's slam).
+ *
+ * A `Rift` of zero length is a filled circle, and a filled circle asks one
+ * question — *be somewhere else by the time it lands*. That is the question
+ * the slam already asked, and the boss's whole escalation is meant to be by
+ * **kinds of move**, not by more of one. A travelling band asks the opposite:
+ * everywhere is safe eventually and nowhere is safe for long, and the answer
+ * is the dash — through the band, during its i-frames — or distance.
+ *
+ * The numbers are set so a dash crosses it. The player dashes about 150 px in
+ * 220 ms of i-frames; the band is 34 px thick and closes at 260 px/s, so the
+ * relative closing width the dash has to cover is under 90 px even head-on.
+ * Standing still, it is unmissable; moving outward ahead of it, it catches
+ * up, because 260 is twice the walk.
+ */
+export const SHOCK_CHARGE_MS = 520;
+export const SHOCK_THICKNESS = 34;
+export const SHOCK_SPEED = 260;
+
+export function castShockwave(
+  w: World, x: number, y: number,
+  opts: {
+    chargeMs?: number; inner?: number; thickness?: number;
+    speed?: number; maxRadius?: number; damage?: number;
+    /** Only the stretch of the ring facing this way, `half` radians either side. */
+    facing?: number; half?: number;
+  } = {},
+): Shockwave {
+  const s: Shockwave = {
+    alive: true, x, y,
+    chargeMs: opts.chargeMs ?? SHOCK_CHARGE_MS,
+    chargeMaxMs: opts.chargeMs ?? SHOCK_CHARGE_MS,
+    inner: opts.inner ?? 0,
+    thickness: opts.thickness ?? SHOCK_THICKNESS,
+    speed: opts.speed ?? SHOCK_SPEED,
+    maxRadius: opts.maxRadius ?? TILE_PX * 9,
+    damage: opts.damage ?? 1,
+    struck: false,
+    ...(opts.facing !== undefined && opts.half !== undefined ? { facing: opts.facing, half: opts.half } : {}),
+  };
+  w.shockwaves.push(s);
+  // A band with a charge is a promise, and is cued; one born at once is part of a blow that has its own sound
+  // (the king's sword waves, his slam's band), and a second cue on it rang like a bell.
+  if (s.chargeMs > 0) w.events.push({ kind: "telegraph", x, y, what: "shockwave" });
+  return s;
+}
+
+/** Whether a body of `radius` at (x, y) is standing in the live band. */
+export function shockwaveHits(s: Shockwave, x: number, y: number, radius: number): boolean {
+  if (s.chargeMs > 0) return false;
+  const d = Math.hypot(x - s.x, y - s.y);
+  if (d < s.inner - radius || d > s.inner + s.thickness + radius) return false;
+  if (s.facing === undefined || s.half === undefined) return true;
+  // An arc of the ring: the body's own width widens it, as a blade's arc is widened.
+  let off = Math.atan2(y - s.y, x - s.x) - s.facing;
+  while (off > Math.PI) off -= Math.PI * 2;
+  while (off < -Math.PI) off += Math.PI * 2;
+  return Math.abs(off) <= s.half + Math.asin(Math.min(1, radius / Math.max(d, 1)));
+}
+
+/* ================================== arm =================================== */
+
+/**
+ * **The rotating arm** (doc 005, "patterns that force a direction").
+ *
+ * The limb is laid out at full length and held still for `ARM_TELE_MS` — long
+ * enough to read *where it starts and which way it will turn* — and then it
+ * sweeps. Two answers, and the player picks one per sweep: **dash through it**
+ * on the i-frames, or **run the way it turns** and stay ahead of the tip. Both
+ * are footwork; neither is a flinch.
+ *
+ * The rate is set against the player's walk. The arm's tip at 96 px out at
+ * 2.2 rad/s moves at about 210 px/s, against a walk of 150 — so outrunning it
+ * at the tip is impossible and outrunning it *near the anchor* is easy, which
+ * is the whole geometry lesson: inside a turning arm you circle, outside it
+ * you leave. The dash crosses the 20 px limb in a fraction of its 220 ms of
+ * i-frames from any angle.
+ */
+export const ARM_TELE_MS = 620;
+export const ARM_WIDTH = 20;
+/** One hit per this long: a sweep charges the player once, not per frame. */
+const ARM_HIT_COOLDOWN_MS = 1100;
+
+export function castArm(
+  w: World, owner: Enemy, angle: number,
+  opts: {
+    spin: number; length: number; activeMs: number;
+    inner?: number; width?: number; teleMs?: number; damage?: number;
+  },
+): Arm {
+  const a: Arm = {
+    alive: true, owner: owner.id, x: owner.x, y: owner.y, angle,
+    spin: opts.spin, inner: opts.inner ?? owner.radius * 0.6, length: opts.length,
+    width: opts.width ?? ARM_WIDTH,
+    teleMs: opts.teleMs ?? ARM_TELE_MS, teleMaxMs: opts.teleMs ?? ARM_TELE_MS,
+    activeMs: opts.activeMs, activeMaxMs: opts.activeMs,
+    damage: opts.damage ?? 1, hitCooldownMs: 0,
+  };
+  w.arms.push(a);
+  w.events.push({ kind: "telegraph", x: owner.x, y: owner.y, what: "arm" });
+  return a;
+}
+
+/**
+ * Whether a body of `radius` at (x, y) is touching the limb.
+ *
+ * The limb is a capsule from `inner` to `length` along `angle`, which is
+ * exactly what the renderer draws: the drawing takes its two endpoints from
+ * this same geometry, so the steel the player sees is the steel that cuts.
+ */
+export function armHits(a: Arm, x: number, y: number, radius: number): boolean {
+  if (a.teleMs > 0 || a.activeMs <= 0) return false;
+  return armDistance(a, x, y) <= a.width / 2 + radius;
+}
+
+/** Distance from a point to the limb's spine. */
+export function armDistance(a: Arm, x: number, y: number): number {
+  const ux = Math.cos(a.angle);
+  const uy = Math.sin(a.angle);
+  const x0 = a.x + ux * a.inner;
+  const y0 = a.y + uy * a.inner;
+  const vx = ux * (a.length - a.inner);
+  const vy = uy * (a.length - a.inner);
+  const len2 = vx * vx + vy * vy;
+  const t = len2 > 0 ? Math.max(0, Math.min(1, ((x - x0) * vx + (y - y0) * vy) / len2)) : 0;
+  return Math.hypot(x - (x0 + vx * t), y - (y0 + vy * t));
+}
+
 /** How far a rift reaches along its line before stone stops it. */
-function lineToWall(w: World, x: number, y: number, angle: number, max: number): number {
+export function lineToWall(w: World, x: number, y: number, angle: number, max: number): number {
   const step = 6;
   for (let d = step; d <= max; d += step) {
     if (circleHitsWall(w.room.grid, x + Math.cos(angle) * d, y + Math.sin(angle) * d, 2)) return d - step;
@@ -108,7 +261,12 @@ const MINE_FUSE_MS = 6000;
 const MINES_PER_BODY = 2;
 export const MINE_TRIGGER = TILE_PX * 0.65;
 export const MINE_BLAST = TILE_PX * 1.0;
-const MINE_BURST_MS = 300;
+/**
+ * How long a burst is on screen after it has landed. Exported because the
+ * renderer plays three drawn frames across it, and a hard-coded copy there
+ * silently stops matching the moment this changes.
+ */
+export const MINE_BURST_MS = 300;
 
 /**
  * Set off, a seed flashes this long before it bursts. It burst on the frame
@@ -150,7 +308,7 @@ function tether(
   w: World, kind: Tether["kind"], from: number, to: number, x1: number, y1: number,
   phase: Tether["phase"], ms: number, damage = 0,
 ): Tether {
-  const t: Tether = { alive: true, kind, from, to, x1, y1, phase, ms, cutMs: 0, damage };
+  const t: Tether = { alive: true, kind, from, to, x1, y1, phase, ms, cutMs: 0, damage, pulseMs: 0 };
   w.tethers.push(t);
   return t;
 }
@@ -181,6 +339,16 @@ function segmentDistance(px: number, py: number, x0: number, y0: number, x1: num
 
 /** Armour a ward gives: a tank's worth (research §2.2). */
 export const WARD_ARMOUR = 18;
+/**
+ * The line **does not trickle the shield back**; the toll does, all at once
+ * (`toll`).
+ *
+ * It used to feed at 7.5 armour a second, which made the ringer's actual
+ * move — the clap — redundant: the shield came back whether or not the bell
+ * rang, so there was nothing to interrupt and nothing to time. Putting the
+ * whole refill on the toll is what turns the ringer from a body with a
+ * passive aura into a body with a **window**.
+ */
 /** Standing in a ward line this long cuts it: 20 frames. */
 const WARD_CUT_MS = 330;
 /** A cut line knocks its ringer down for a second: the cut is a reward, not a toll. */
@@ -193,6 +361,15 @@ function grantWard(e: Enemy, amount: number): void {
   e.maxArmour = Math.max(e.maxArmour, e.armour);
 }
 
+/**
+ * Damage taken out of armour comes out of the ward first, so a shield the
+ * player has broken through is a shield the ringer has to pay for again.
+ * Called from the one place armour is spent (`damageEnemy`).
+ */
+export function spendWard(e: Enemy, amount: number): void {
+  if (e.wardArmour > 0) e.wardArmour = Math.max(0, e.wardArmour - amount);
+}
+
 function stripWard(e: Enemy): void {
   if (e.wardArmour <= 0) return;
   e.armour = Math.max(0, e.armour - e.wardArmour);
@@ -202,6 +379,51 @@ function stripWard(e: Enemy): void {
 /** Whether a body already carries a ward from any tether. */
 function warded(w: World, id: number): boolean {
   return w.tethers.some((t) => t.alive && t.kind === "ward" && t.to === id);
+}
+
+/**
+ * The bell rings: every ally still on one of this ringer's lines has its
+ * shield put straight back to full, and a pulse of light is sent down the
+ * line to say so (`Tether.pulseMs`; the shield pops full when it arrives).
+ *
+ * Instant rather than a faster feed, because the point is a **moment**: the
+ * player who was three hits from breaking an ally has to see the three hits
+ * given back, and a shield that creeps back up is a number nobody watches.
+ * What the toll costs the player is measured in the windup it takes, not in
+ * health, so the answer is the interrupt (`interruptToll`).
+ */
+function toll(w: World, e: Enemy): void {
+  for (const t of w.tethers) {
+    if (!t.alive || t.kind !== "ward" || t.from !== e.id || t.to < 0) continue;
+    const ally = byId(w, t.to);
+    if (!ally) continue;
+    grantWard(ally, WARD_ARMOUR);
+    t.pulseMs = TOLL_PULSE_MS;
+  }
+  w.hasteFields.push({
+    alive: true, x: e.x, y: e.y,
+    radius: HASTE_FIELD_RADIUS, lifeMs: HASTE_FIELD_MS, maxLifeMs: HASTE_FIELD_MS,
+  });
+  w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "toll" });
+}
+
+/**
+ * **A hit during the windup stops the toll** (doc 005, the bellringer).
+ *
+ * Called from the one place a body takes damage. It is the whole reason the
+ * windup is 820 ms and drawn on the floor: the ringer is asking the player to
+ * leave what they are fighting and come and shut it up, and a question with
+ * no way to answer it is not a question. The circle goes with it, so what the
+ * player sees is the thing they interrupted stopping.
+ */
+export function interruptToll(w: World, e: Enemy): void {
+  if (e.pose !== "field") return;
+  e.pose = "";
+  e.poseMs = 0;
+  e.moveMs = TOLL_INTERRUPT_MS;
+  for (const r of w.rifts)
+    if (r.alive && r.length === 0 && r.teleMs > 0 && dist2(r.x, r.y, e.x, e.y) < 16) r.alive = false;
+  w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: "toll_interrupted" });
 }
 
 /* ================================== lob =================================== */
@@ -219,7 +441,7 @@ export function throwLob(
 
 /** Poses a body holds still through: the move is the whole of what it is doing. */
 export const PLANTED_POSES: ReadonlySet<string> = new Set([
-  "musket_windup", "musket_fire", "musket_second", "musket_reload", "cast", "field", "burst", "peal_windup", "windup_hook", "anchor_cast",
+  "musket_windup", "musket_fire", "musket_second", "musket_reload", "cast", "field", "burst", "peal_windup", "windup_hook", "anchor_cast", "lash_windup",
   "flare_windup", "bloom_cast", "telegraph", "telegraph_walk", "lob_windup", "cinder_windup",
 ]);
 
@@ -253,8 +475,13 @@ export const MUSKET_SPREAD_DEG = 48;
 export const MUSKET_RANGE = TILE_PX * 2.8;
 /** How long the flame takes to roll out to its reach. */
 export const FLAME_ROLL_MS = 50;
-/** How long the gout stays on screen, rolling out and then guttering. */
-export const FLAME_LIFE_MS = 900;
+/**
+ * How long the gout stays on screen, rolling out and then guttering. It only
+ * hurts in its first moment, so this is all picture: a shot is a bang and a
+ * breath of smoke, and smoke hanging in the lane for most of a second read as
+ * the shot still being there.
+ */
+export const FLAME_LIFE_MS = 520;
 /** Where the muzzle is, out from the body's centre along the aim. */
 const MUSKET_MUZZLE_PX = 20;
 const FLAME_RAYS = 7;
@@ -330,9 +557,43 @@ function stepFlame(w: World, f: Flame, dtMs: number, hooks: AttackHooks): void {
   }
 }
 const RING_CAST_MS = 660;
-const FIELD_CAST_MS = 500;
-const SLOW_FIELD_MS = 4000;
-const SLOW_FIELD_RADIUS = TILE_PX * 2.5;
+/**
+ * The **toll** (doc 005, the bellringer).
+ *
+ * The ringer is the roster's one support body, and a support whose signature
+ * move damages the player is a support pretending to be an attacker. So the
+ * toll does no damage at all: it is **maintenance**, and what it maintains is
+ * the wards. Every ally the ringer still has a line to has its shield put
+ * straight back to full, instantly, however much of it the player had just
+ * cut through.
+ *
+ * That makes the fight a question about *timing* rather than about standing
+ * somewhere. Either break the body you are on before the next toll lands, or
+ * cut the line, or — the answer the move is really built around — **hit the
+ * ringer while it is winding up**, which stops the toll dead (`TOLL_CUE`).
+ * The ringer is no longer a body to kill eventually; it is a body with a
+ * window, and the window is drawn on the floor for `FIELD_CAST_MS`.
+ *
+ * What the clap leaves behind is a patch that **hurries its allies**, not one
+ * that slows the player: the lingering half of a support's move belongs on
+ * the bodies it supports. It is not drawn on the floor (see `HasteField`).
+ *
+ * 820 ms of windup because that is a reaction plus a crossing: long enough to
+ * be answered by a player who is on the other side of the room and has to
+ * decide to come, which is what makes the interrupt a real choice.
+ */
+const FIELD_CAST_MS = 820;
+const TOLL_RADIUS = TILE_PX * 2.1;
+/** The ringing the clap leaves, and how much faster it makes a body inside it. */
+const HASTE_FIELD_MS = 2500;
+const HASTE_FIELD_RADIUS = TOLL_RADIUS;
+export const HASTE_SPEED = 1.35;
+/** How long a hurried body coasts after leaving the patch. */
+const HASTE_CARRY_MS = 300;
+/** How long the conduction pulse takes to run from the ringer to an ally. */
+export const TOLL_PULSE_MS = 220;
+/** After an interrupted toll, the ringer waits this long before trying again. */
+const TOLL_INTERRUPT_MS = 2600;
 const PEAL_WINDUP_MS = 1100;
 const PEAL_RADIUS = TILE_PX * 4;
 const PEAL_WARD_MS = 4000;
@@ -342,10 +603,19 @@ const HOOK_AIM_MS = 730;
 const HOOK_FLY_MS = 330;
 const HOOK_LENGTH = TILE_PX * 6;
 const DRAG_MS = 520;
+/** Of the lash, the part left after the player lands: a reaction plus a dash. */
+const LASH_AFTER_MS = 460;
+/**
+ * The lash's reach. The drag stops the player about 41 px from the caster
+ * (its radius plus a tile), so this covers where they land with a step's
+ * worth to spare — the answer is to move, not to have been elsewhere.
+ */
+const LASH_RADIUS = TILE_PX * 1.8;
 const CHAIN_MS = 5000;
 const CHAIN_LENGTH = TILE_PX * 5;
 const DELVE_SURFACE_MS = 2600;
 const DIVE_MS = 500;
+const DELVE_UNDER_MAX_MS = 1200;
 const EMERGE_MS = 600;
 const CINDER_TRAIL_MS = 660;
 const FLARE_MS = 1000;
@@ -365,10 +635,17 @@ export function stepExpansion(
   }
   if (e.moveMs > 0) e.moveMs -= dtMs;
   const gap = Math.hypot(seen.x - e.x, seen.y - e.y);
-  const elite = isElite(e);
   const free = e.poseMs <= 0 && e.attack === "approach";
 
-  switch (e.archetype) {
+  /*
+   * **Dispatched on the base, branched on the id** (doc 019). A subspecies is
+   * its base's body with one verb changed, so it takes the same case and
+   * differs inside it — `case "bellringer"` is where both the bellringer and
+   * the pealer live, and which of the two is standing there decides whether it
+   * tolls or peals. Keying the switch on the id instead would have made every
+   * subspecies a body that does nothing at all, silently.
+   */
+  switch (baseArchetype(e.archetype)) {
     case "bellringer": {
       const allies = w.enemies.filter((o) => o !== e && o.hp > 0 && o.archetype !== "bellringer" && o.spawnFadeMs <= 0);
       if (allies.length === 0) e.aloneMs += dtMs;
@@ -379,8 +656,17 @@ export function stepExpansion(
         castRift(w, e.x, e.y, 0, 0, { width: TILE_PX * 4, teleMs: BURST_MS, damage: 1 });
         break;
       }
-      if (free && e.moveMs <= 0 && !elite) {
+      if (free && e.moveMs <= 0 && e.archetype !== "pealer") {
         pose(e, "field", FIELD_CAST_MS);
+        /*
+         * The circle the player sees grow *is* the clap's reach, and it deals
+         * nothing: `damage: 0`. It is there to say **where** and **when**, so
+         * the player can decide to be at the ringer before the ring closes.
+         * Kept as a rift rather than as a bespoke telegraph because it is the
+         * same growing circle the delver's emergence uses, which the player
+         * has already learned to read as a clock.
+         */
+        castRift(w, e.x, e.y, 0, 0, { width: TOLL_RADIUS * 2, teleMs: FIELD_CAST_MS, damage: 0 });
         e.moveMs = 7000;
       }
       break;
@@ -394,38 +680,17 @@ export function stepExpansion(
         lightFire(w, e.x, e.y, "enemy", { radius: TILE_PX * 0.5, lifeMs: 1600 });
         e.moveMs = CINDER_TRAIL_MS;
       }
-      if (elite && e.burnBuild >= 0.95 && e.pose === "") pose(e, "flare_windup", FLARE_MS);
+      if (e.archetype === "emberling" && e.burnBuild >= 0.95 && e.pose === "") pose(e, "flare_windup", FLARE_MS);
       break;
     }
-    case "shooter": {
-      // Pin Shot: onto the retreat line, 1.5 tiles behind where it saw the player.
-      if (elite && free && e.moveMs <= 0 && gap > 90) {
-        pose(e, "lob", LOB_WINDUP_MS);
-        e.moveMs = 5200;
-      }
-      break;
-    }
-    case "orbiter": {
-      // Seedwake: its own path is where the seeds are.
-      if (elite && e.moveMs <= 0) {
-        if (minesOf(w, e.id) < MINES_PER_BODY) plantMine(w, e.id, e.x, e.y);
-        e.moveMs = 1600;
-      }
-      break;
-    }
-    case "summoner": {
-      // Ward Tether: its newest minion, armoured while the line holds.
-      if (elite && e.moveMs <= 0 && !w.tethers.some((t) => t.alive && t.from === e.id)) {
-        const minion = w.enemies.filter((o) => o.hp > 0 && o.archetype === "rusher" && o.spawnFadeMs <= 0 && !warded(w, o.id))
-          .sort((a, b) => b.id - a.id)[0];
-        if (minion) {
-          tether(w, "ward", e.id, minion.id, 0, 0, "hold", 0);
-          grantWard(minion, WARD_ARMOUR);
-        }
-        e.moveMs = 1500;
-      }
-      break;
-    }
+    /*
+     * The shooter's pin shot and the orbiter's seedwake are gone (doc 019).
+     * Both were doc 005 elite moves, and both answered like another archetype
+     * already in the roster — a lob is the cinderling's and a seed is the
+     * sower's — so the player learned nothing from meeting them. The pinner
+     * puts a second shot down the shooter's own lane and the wisp curls the
+     * orbiter's own shot, which are the same bodies asked one step harder.
+     */
     default:
       break;
   }
@@ -440,7 +705,7 @@ function finishPose(w: World, e: Enemy, seen: { x: number; y: number }): void {
     case "musket_windup":
       fireMusket(w, e);
       // The elite's second barrel: a beat later, from where it stands.
-      pose(e, isElite(e) && e.casts % 2 === 1 ? "musket_second" : "musket_fire", MUSKET_FIRE_MS);
+      pose(e, e.archetype === "fusilier" && e.casts % 2 === 1 ? "musket_second" : "musket_fire", MUSKET_FIRE_MS);
       break;
     case "musket_second":
       pose(e, "musket_windup", MUSKET_SECOND_MS);
@@ -451,7 +716,7 @@ function finishPose(w: World, e: Enemy, seen: { x: number; y: number }): void {
       pose(e, "musket_reload", MUSKET_RELOAD_MS);
       break;
     case "field":
-      w.slowFields.push({ alive: true, x: e.x, y: e.y, radius: SLOW_FIELD_RADIUS, lifeMs: SLOW_FIELD_MS, maxLifeMs: SLOW_FIELD_MS });
+      toll(w, e);
       break;
     case "burst":
       // The ring it telegraphed has gone off; the ringer goes with it.
@@ -459,7 +724,7 @@ function finishPose(w: World, e: Enemy, seen: { x: number; y: number }): void {
       break;
     case "peal_windup": {
       for (const o of w.enemies) {
-        if (o === e || o.hp <= 0 || o.archetype === "bellringer") continue;
+        if (o === e || o.hp <= 0 || baseArchetype(o.archetype) === "bellringer") continue;
         if (dist2(o.x, o.y, e.x, e.y) > PEAL_RADIUS * PEAL_RADIUS) continue;
         grantWard(o, WARD_ARMOUR * 0.7);
         tether(w, "ward", e.id, o.id, 0, 0, "live", PEAL_WARD_MS);
@@ -513,7 +778,15 @@ function finishPose(w: World, e: Enemy, seen: { x: number; y: number }): void {
       break;
     }
     case "lob_windup":
-      throwLob(w, e, seen.x, seen.y, "fire", TILE_PX * 0.85, 0.5, 700);
+      /*
+       * The brooder throws a coal that **hatches** where it lands, rather than
+       * one that burns (doc 019). The summoner's reinforcements arrive at the
+       * summoner, so the player can meet them on the way in; the brooder's
+       * arrive where the player is standing, so there is no ground that is
+       * safely far from it. Same arc, same tell, same 700 ms of flight.
+       */
+      throwLob(w, e, seen.x, seen.y, e.archetype === "brooder" ? "hatch" : "fire",
+        TILE_PX * 0.85, e.archetype === "brooder" ? 0 : 0.5, 700);
       break;
     case "bloom_cast": {
       // Eight seeds round where it saw the player, with two gaps to read.
@@ -536,13 +809,12 @@ function finishPose(w: World, e: Enemy, seen: { x: number; y: number }): void {
  * from `fire` where lightning and flame are). `seen` is its perception.
  */
 export function castRanged(w: World, e: Enemy, kind: string, seen: { x: number; y: number }): void {
-  const elite = isElite(e);
   const toward = Math.atan2(seen.y - e.y, seen.x - e.x);
   switch (kind) {
     case "rift": {
       if (e.pose !== "") return;
       e.casts++;
-      if (elite) {
+      if (e.archetype === "quaker") {
         /*
          * Fissure Walk: four short cracks walking toward the player, each
          * placed ahead of the last and erupting a beat after it appears. The
@@ -562,12 +834,14 @@ export function castRanged(w: World, e: Enemy, kind: string, seen: { x: number; 
       }
       pose(e, "telegraph", RIFT_TELE_MS);
       const len = lineToWall(w, e.x, e.y, toward, TILE_PX * 6);
+      /*
+       * One line, from the rifter toward where it saw you, and nothing else.
+       * Every third cast used to add a second crack across the first, through
+       * that point. It closed the one answer the rifter teaches, stepping
+       * across the line, and since perception lags it landed where the player
+       * had been: a crack at right angles to nothing, in empty floor.
+       */
       castRift(w, e.x, e.y, toward, len);
-      // Every third is a cross: the same line and one across it, through where it saw you.
-      if (e.casts % 3 === 0) {
-        const across = toward + Math.PI / 2;
-        castRift(w, seen.x - Math.cos(across) * TILE_PX * 2.5, seen.y - Math.sin(across) * TILE_PX * 2.5, across, TILE_PX * 5);
-      }
       return;
     }
     case "musket": {
@@ -578,7 +852,7 @@ export function castRanged(w: World, e: Enemy, kind: string, seen: { x: number; 
     }
     case "ward": {
       if (e.pose !== "") return;
-      if (elite) {
+      if (e.archetype === "pealer") {
         pose(e, "peal_windup", PEAL_WINDUP_MS);
         return;
       }
@@ -589,7 +863,7 @@ export function castRanged(w: World, e: Enemy, kind: string, seen: { x: number; 
     }
     case "hook": {
       if (e.pose !== "" || w.tethers.some((t) => t.alive && t.from === e.id)) return;
-      if (elite) {
+      if (e.archetype === "chainer") {
         pose(e, "anchor_cast", 600);
         return;
       }
@@ -606,7 +880,7 @@ export function castRanged(w: World, e: Enemy, kind: string, seen: { x: number; 
       return;
     }
     case "mine": {
-      if (elite) {
+      if (e.archetype === "planter") {
         e.casts++;
         if (e.casts % 4 === 0 && e.pose === "") pose(e, "bloom_cast", 900);
         return;
@@ -623,6 +897,20 @@ export function castRanged(w: World, e: Enemy, kind: string, seen: { x: number; 
 export function riftLance(w: World, e: Enemy, seen: { x: number; y: number }): void {
   const a = Math.atan2(seen.y - e.y, seen.x - e.x);
   castRift(w, e.x, e.y, a, lineToWall(w, e.x, e.y, a, TILE_PX * 6));
+}
+
+/**
+ * The slam's shockwave: a ring on the floor round the body that struck it.
+ *
+ * A zero-length rift, which is the roster's one "this ground erupts" — so it
+ * is drawn, timed and resolved exactly like a delver's emergence or a
+ * bellringer's toll, and the player has met the shape before. Short to grow,
+ * because the blade's own windup was the warning and this is the follow
+ * through; weaker than the blade, because it is the part that reaches.
+ */
+export const SLAM_SHOCK_RADIUS = TILE_PX * 2.3;
+export function shockRing(w: World, e: Enemy): void {
+  castRift(w, e.x, e.y, 0, 0, { width: SLAM_SHOCK_RADIUS * 2, teleMs: 300, damage: 0.5 });
 }
 
 /** The elite tank's chop sends a crack forward from where it lands. */
@@ -661,7 +949,10 @@ function stepDelve(w: World, e: Enemy, dtMs: number, seen: { x: number; y: numbe
         e.delveX = v.x;
         e.delveY = v.y;
         e.delve = "under";
-        e.delveMs = Math.min(2000, Math.max(900, (Math.hypot(seen.x - e.x, seen.y - e.y) / (e.speed * 1.4)) * 1000));
+        // Under for at most 1.2 s: it cannot be hit down there, and at 2 s a
+        // body spent most of its cycle out of reach ("its invulnerability is
+        // so long").
+        e.delveMs = Math.min(DELVE_UNDER_MAX_MS, Math.max(600, (Math.hypot(seen.x - e.x, seen.y - e.y) / (e.speed * 1.4)) * 1000));
       }
       return;
     case "under": {
@@ -672,11 +963,14 @@ function stepDelve(w: World, e: Enemy, dtMs: number, seen: { x: number; y: numbe
       if (e.delveMs <= 0 || (r.blockedX && r.blockedY)) {
         e.delve = "emerging";
         e.delveMs = EMERGE_MS;
+        // Coming up is the opening: it can be hit from the moment it breaks
+        // the surface, not only once it stands there.
+        e.airborne = false;
         pose(e, "emerge", EMERGE_MS);
         // Where the mound stopped is where it erupts, fixed 36 frames ahead.
         castRift(w, e.x, e.y, 0, 0, { width: TILE_PX * 2.4, teleMs: EMERGE_MS, damage: 0.9 });
         // Breach Line: two more behind and ahead along its heading.
-        if (isElite(e)) {
+        if (e.archetype === "burrower") {
           for (let i = 1; i <= 2; i++) {
             const x = e.x + e.delveX * TILE_PX * 1.6 * i;
             const y = e.y + e.delveY * TILE_PX * 1.6 * i;
@@ -715,14 +1009,14 @@ export function stepAttacks(w: World, dtMs: number, hooks: AttackHooks): void {
     if (!r.alive) continue;
     if (r.teleMs > 0) {
       r.teleMs -= dtMs;
-      if (r.teleMs <= 0) w.events.push({ kind: "hazard_tick", x: r.x, y: r.y, what: r.length > 0 ? "rift" : "burst" });
+      if (r.teleMs <= 0) w.events.push({ kind: "hazard_tick", x: r.x, y: r.y, what: r.bolt ? "lightning" : r.length > 0 ? "rift" : "burst" });
       continue;
     }
     if (r.activeMs > 0) {
       r.activeMs -= dtMs;
       if (!r.struck && riftHits(r, p.x, p.y, PLAYER_RADIUS)) {
         r.struck = true;
-        hooks.hurtPlayer(p.x, p.y, r.length > 0 ? "rift" : "burst", 0, r.damage);
+        hooks.hurtPlayer(p.x, p.y, r.bolt ? "lightning" : r.length > 0 ? "rift" : "burst", 0, r.damage);
       }
       continue;
     }
@@ -769,25 +1063,88 @@ export function stepAttacks(w: World, dtMs: number, hooks: AttackHooks): void {
     l.alive = false;
     w.events.push({ kind: "hazard_tick", x: l.x1, y: l.y1, what: `lob:${l.lands}` });
     if (l.lands === "fire") lightFire(w, l.x1, l.y1, "enemy");
+    // A hatching coal is a body arriving, which only the world can make.
+    if (l.lands === "hatch") hooks.hatch(l.x1, l.y1, l.from);
     if (dist2(l.x1, l.y1, p.x, p.y) <= (l.radius + PLAYER_RADIUS) ** 2)
       hooks.hurtPlayer(l.x1, l.y1, `lob:${l.from}`, 0, l.damage);
   }
 
-  p.slowed = false;
   for (const f of w.flames) if (f.alive) stepFlame(w, f, dtMs, hooks);
 
-  for (const f of w.slowFields) {
+  /*
+   * The travelling band. It charges where it was born — the tell — and then
+   * its inner edge runs outward; the player is caught by standing in the band
+   * without i-frames, and a dash across it is the answer the move is for.
+   */
+  for (const s of w.shockwaves) {
+    if (!s.alive) continue;
+    if (s.chargeMs > 0) {
+      s.chargeMs -= dtMs;
+      if (s.chargeMs <= 0) w.events.push({ kind: "hazard_tick", x: s.x, y: s.y, what: "shockwave" });
+      continue;
+    }
+    s.inner += s.speed * (dtMs / 1000);
+    if (s.inner > s.maxRadius) { s.alive = false; continue; }
+    /*
+     * Stone stops it, as it stops the rifter's crack: a band that runs
+     * through a pillar and hits the player standing behind it is a hit with
+     * no answer, and the pillars are the arena's own answer to the move.
+     */
+    if (!s.struck && !hooks.playerInvulnerable() && shockwaveHits(s, p.x, p.y, PLAYER_RADIUS)
+      && hasLineOfSight(w.room.grid, s.x, s.y, p.x, p.y)) {
+      s.struck = true;
+      hooks.hurtPlayer(p.x, p.y, "shockwave", 0, s.damage);
+    }
+  }
+
+  /*
+   * The rotating arms. The anchor is re-read from the owner every step, so a
+   * limb on a body that is walking sweeps a disc that walks with it; an arm
+   * whose owner is dead or gone withdraws rather than hanging in the air.
+   */
+  for (const a of w.arms) {
+    if (!a.alive) continue;
+    const owner = w.enemies.find((e) => e.id === a.owner);
+    if (!owner || owner.hp <= 0) { a.alive = false; continue; }
+    a.x = owner.x;
+    a.y = owner.y;
+    if (a.hitCooldownMs > 0) a.hitCooldownMs -= dtMs;
+    if (a.teleMs > 0) {
+      a.teleMs -= dtMs;
+      if (a.teleMs <= 0) w.events.push({ kind: "hazard_tick", x: a.x, y: a.y, what: "arm" });
+      continue;
+    }
+    a.activeMs -= dtMs;
+    if (a.activeMs <= 0) { a.alive = false; continue; }
+    a.angle += a.spin * (dtMs / 1000);
+    if (a.hitCooldownMs <= 0 && !hooks.playerInvulnerable() && armHits(a, p.x, p.y, PLAYER_RADIUS)) {
+      a.hitCooldownMs = ARM_HIT_COOLDOWN_MS;
+      hooks.hurtPlayer(p.x, p.y, "arm", 0, a.damage);
+    }
+  }
+
+  /*
+   * The bell's ringing: it hurries the bodies standing in it, and nothing
+   * else. `hastedMs` is topped up rather than set, so a body leaving the
+   * patch coasts out of the cue instead of snapping out of it.
+   */
+  for (const f of w.hasteFields) {
     if (!f.alive) continue;
     f.lifeMs -= dtMs;
     if (f.lifeMs <= 0) { f.alive = false; continue; }
-    if (dist2(f.x, f.y, p.x, p.y) <= f.radius * f.radius) p.slowed = true;
+    for (const e of w.enemies) {
+      if (e.hp <= 0 || baseArchetype(e.archetype) === "bellringer") continue;
+      if (dist2(f.x, f.y, e.x, e.y) <= f.radius * f.radius) e.hastedMs = Math.max(e.hastedMs, HASTE_CARRY_MS);
+    }
   }
 
   w.rifts = w.rifts.filter((r) => r.alive);
+  w.shockwaves = w.shockwaves.filter((s) => s.alive);
+  w.arms = w.arms.filter((a) => a.alive);
   w.mines = w.mines.filter((m) => m.alive);
   w.tethers = w.tethers.filter((t) => t.alive);
   w.lobs = w.lobs.filter((l) => l.alive);
-  w.slowFields = w.slowFields.filter((f) => f.alive);
+  w.hasteFields = w.hasteFields.filter((f) => f.alive);
   w.flames = w.flames.filter((f) => f.alive);
 }
 
@@ -833,6 +1190,8 @@ function stepTether(w: World, t: Tether, dtMs: number, hooks: AttackHooks): void
         if (t.ms <= 0) { t.alive = false; const b = byId(w, t.to); if (b) stripWard(b); }
         return;
       }
+      // The pulse the toll sent down the line, running out to the ally.
+      if (t.pulseMs > 0) t.pulseMs = Math.max(0, t.pulseMs - dtMs);
       // Standing in the line cuts it (research §2.2): the line is a place the player is invited into.
       t.cutMs = onLine ? t.cutMs + dtMs : Math.max(0, t.cutMs - dtMs * 0.5);
       if (t.cutMs >= WARD_CUT_MS) {
@@ -863,7 +1222,39 @@ function stepTether(w: World, t: Tether, dtMs: number, hooks: AttackHooks): void
           p.dragMs = DRAG_MS;
           p.dragX = p.x + v.x * Math.min(pull, TILE_PX * 4);
           p.dragY = p.y + v.y * Math.min(pull, TILE_PX * 4);
-          hooks.hurtPlayer(owner.x, owner.y, "hook", 200, 0.5);
+          /*
+           * The king's chain costs nothing and hands them to his sword: all
+           * the way in, to the ground in front of him where his cuts go out
+           * (doc 020; the slash is wound up as they land, in world.ts). A
+           * hurt here would also have given them the mercy frames the cut
+           * then fell inside.
+           */
+          if (owner.archetype === "boss") {
+            const stand = owner.radius + PLAYER_RADIUS + 18;
+            const front = !circleHitsWall(w.room.grid, owner.x, owner.y + stand, PLAYER_RADIUS);
+            p.dragX = front ? owner.x : owner.x - v.x * stand;
+            p.dragY = front ? owner.y + stand : owner.y - v.y * stand;
+            return;
+          }
+          // The snarecaster's is a tug.
+          hooks.hurtPlayer(owner.x, owner.y, "hook", 200, 0.5 * owner.damageMult);
+          /*
+           * **The lash** (doc 005, the snarecaster). A grab that reels the
+           * player in and then does nothing is a grab that helped them: it
+           * put a melee player exactly where they wanted to be, for half a
+           * heart. So the chain comes round the caster's own feet.
+           *
+           * The circle is cast *now*, with the drag inside its growth, so the
+           * player is watching it close while they are being pulled into it —
+           * `LASH_AFTER_MS` of it is left once they land, which is the
+           * reaction floor plus a dash. Answering it is the dash the hook
+           * should have been dodged with in the first place, one beat late.
+           */
+          if (baseArchetype(owner.archetype) === "snarecaster") {
+            pose(owner, "lash_windup", DRAG_MS + LASH_AFTER_MS);
+            castRift(w, owner.x, owner.y, 0, 0,
+              { width: LASH_RADIUS * 2, teleMs: DRAG_MS + LASH_AFTER_MS, damage: 0.8 });
+          }
           return;
         }
         if (t.ms <= 0) {
@@ -906,7 +1297,7 @@ export function onExpansionDeath(w: World, e: Enemy): void {
     t.alive = false;
     if (t.kind === "ward" && t.to >= 0) { const b = byId(w, t.to); if (b) stripWard(b); }
   }
-  if (e.archetype === "sower") {
+  if (baseArchetype(e.archetype) === "sower") {
     /*
      * Its seeds scatter as it bursts: flung out past arm's length, and slow
      * to arm. They fell at 14 px and armed at once, then after the ordinary

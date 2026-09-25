@@ -3,10 +3,25 @@
 ## Baseline production delivery — 436 frames
 
 This block supersedes the older totals below. The earlier sections remain as
-design history and prompt provenance; `assets/source/frames-melee.json` is the
-current machine-readable 896-frame manifest after the complete Parts A-D expansion.
+design history and prompt provenance.
 
-The baseline atlas was regenerated and accepted at **436 frames**; `docs/art-workorder-codex.md` records the subsequent Part A expansion. The
+**Where the current list lives.** `assets/source/frames-melee.json` is not
+written by hand: it is generated from the runtime manifest by
+`packages/harness/src/cli/art-workorder.ts`, and the manifest is in turn read
+from each body's sprite model (`assets/models/<body>/anims.json`, doc 016).
+So the authoritative count is whatever that CLI last emitted — 896 after
+Parts A–D, more since the bodies became models — and it is refreshed by
+re-running it rather than edited.
+
+`docs/art-workorder-codex.md` is the live order. Its top section is **batch
+E**, the key poses the rig cannot pose; Parts A–D below it were delivered and
+are kept there as provenance. Batch E also **states the hard-alpha rule
+exactly**: the pipeline binarises alpha at 128, so the "soft alpha on edges
+only" allowance under **Hard rules** below is a tolerance for art that
+reaches the sheet by another path, not an invitation to feather an entity's
+edge.
+
+The baseline atlas was regenerated and accepted at **436 frames**. The
 player's long, straight `weapon_player_sword` remains the hovering magic sword
 in front of the player; it was not redrawn as a dagger. The separate
 `weapon_enemy_rusher` is a monster claw with a chitin root, amber joint and
@@ -1263,7 +1278,7 @@ defect, and the reason its facing was hard to judge by eye.
 
 **There is now a checker for this.** `pnpm assets:facing-check` composites every
 archetype at every facing with a marker on the side the body should be looking
-at, and writes `docs/facing-check.png`. Three separate facing bugs were each
+at, and writes `art-review/facing-check.png`. Three separate facing bugs were each
 diagnosed from a single screenshot and each diagnosed wrongly before it existed.
 
 ### 13. The dropped heart is blue; the HUD heart is red
@@ -2135,7 +2150,7 @@ assets/sprites.json    { "frames": { "<name>": { "x": n, "y": n, "w": n, "h": n 
 
 ```sh
 pnpm assets:check          # must pass
-pnpm assets:facing-check   # eyeball docs/facing-check.png for anything with facings
+pnpm assets:facing-check   # eyeball art-review/facing-check.png for anything with facings
 ```
 
 ## What the checkers cannot see

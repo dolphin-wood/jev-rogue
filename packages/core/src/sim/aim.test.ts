@@ -3,7 +3,7 @@ import { assistAim, turnToward, angleDelta, ASSIST_CONE_DEG, ASSIST_RANGE } from
 import { createWorld } from "./world.ts";
 import { makeEnemy } from "./enemy.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
-import { staffFor, plainInstance } from "../spells/index.ts";
+import { plainInstance } from "../spells/index.ts";
 import { RngSource } from "../rng.ts";
 import type { World } from "./types.ts";
 
@@ -11,13 +11,13 @@ const src = new RngSource("aim");
 
 function world(): World {
   const g = generateRoom(
-    { space: "open_arena", symmetry: "mirrored", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
+    { space: "open_arena", symmetry: "mirrored", size: "vast", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
     "S", "combat", src.stream("room"), { plain: true },
   );
   return createWorld({
     room: toRoomPlan(g, { id: "a", seed_key: "a", reward_kind: "item", params_source: "rule" }),
     encounter: null,
-    staff: staffFor({ slots: "many", mana: "high", tempo: "steady", special: "none" }),
+    staff: { slots: 6, mana_max: 120 },
     slots: [plainInstance("magic_bolt"), null, null, null, null, null],
     hearts: 6, rng: src.stream("w"),
   });

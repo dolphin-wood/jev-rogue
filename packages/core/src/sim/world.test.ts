@@ -1,20 +1,23 @@
+import { featureCells } from "../rooms/features.ts";
+import { ENTRY_GRACE_MS } from "./enemy.ts";
 import { describe, it, expect } from "vitest";
-import { createWorld, step, worldCleared } from "./world.ts";
+import { createWorld, step, worldCleared, ELITE_HEAL_FRACTION, GRASS_CATCH_MS } from "./world.ts";
 import {
-  PLAYER_RADIUS, PLAYER_SPEED, NO_INPUT, ENEMY_BULLET_CAP, INVULN_MS,
+  PLAYER_RADIUS, PLAYER_SPEED, NO_INPUT, ENEMY_BULLET_CAP, INVULN_MS, MAX_HEARTS,
 } from "./types.ts";
 import type { Input, World } from "./types.ts";
 import {
-  beginWindup, makeEnemy, wake, SPAWN_FADE_MS, STAGGER_MS, TELEGRAPH_MS,
+  beginWindup, makeEnemy, wake, SPAWN_FADE_MS, STAGGER_MS, TELEGRAPH_MS, THREAT_CAP_MS,
 } from "./enemy.ts";
 import { liveCount, acquire } from "./bullets.ts";
+import { MELEE_ATTACKS } from "./melee.ts";
 import { SPELL_COST_BASE, SPELL_COST_PER_RANK, slotCost } from "./spells.ts";
 import { WORLD_W, WORLD_H, circleHitsWall, entryPosition } from "./collide.ts";
 import { GRID_W, GRID_H, TILE_PX, Tile } from "../types.ts";
 import { lightFire } from "./fire.ts";
-import { generateRoom, toRoomPlan } from "../rooms/index.ts";
-import { ENEMIES } from "../encounters/index.ts";
-import { staffFor, plainInstance, ITEMS } from "../spells/index.ts";
+import { cellAt, generateRoom, toRoomPlan } from "../rooms/index.ts";
+import { ENEMIES, rampMinimum } from "../encounters/index.ts";
+import { plainInstance, ITEMS } from "../spells/index.ts";
 import { RngSource } from "../rng.ts";
 import type { EncounterPlan, RoomPlan, SpaceArchetypeId } from "../types.ts";
 
@@ -22,14 +25,14 @@ const src = new RngSource("sim-test");
 
 function room(space: SpaceArchetypeId = "open_arena") {
   const g = generateRoom(
-    { space, symmetry: "mirrored", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
+    { space, symmetry: "mirrored", size: "vast", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
     "S", "combat", src.stream("room", space), { plain: true },
   );
   return toRoomPlan(g, { id: "r", seed_key: "k", reward_kind: "item", params_source: "rule" });
 }
 
 const encounter = (waves: EncounterPlan["waves"]): EncounterPlan => ({
-  profile: { composition: "mixed", density: "sparse", wave_structure: "two_waves", anchor: "none", entry: "far_front" },
+  profile: { composition: "mixed", density: "sparse", wave_structure: "steady", anchor: "none", entry: "far_front" },
   waves, measured_pressure: 2, band: [1, 3], elite_affixes: [], source: "rule",
 });
 
@@ -44,10 +47,13 @@ function world(over: Partial<Parameters<typeof createWorld>[0]> = {}): World {
     // could earn mana from a pot the test never asked for. The tests that are
     // about props ask for them.
     props: 0,
-    staff: staffFor({ slots: "many", mana: "high", tempo: "steady", special: "none" }),
+    staff: { slots: 6, mana_max: 120 },
     slots: [plainInstance("magic_bolt"), null, null, null, null, null],
     hearts: 6,
     rng: src.stream("world"),
+    // The whole room in view, so what a test places is seen; the view's own
+    // rule is tested on its own ("what the player cannot see").
+    viewHalf: { x: WORLD_W, y: WORLD_H },
     ...over,
   });
 }
@@ -92,7 +98,7 @@ function run(w: World, steps: number, i: Input = NO_INPUT): World {
 describe("determinism", () => {
   it("two worlds with the same seed and inputs end identical", () => {
     const seq = Array.from({ length: 120 }, (_, i) =>
-      input({ moveX: Math.sin(i / 7), moveY: Math.cos(i / 5), aimX: 100 + i, aimY: 200, fire: i % 3 !== 0 }));
+      input({ moveX: Math.sin(i / 7), moveY: Math.cos(i / 5), aimX: 100 + i, aimY: 200 }));
     const a = world({ rng: new RngSource("s").stream("w") });
     const b = world({ rng: new RngSource("s").stream("w") });
     for (const i of seq) { step(a, i); step(b, i); }
@@ -141,7 +147,8 @@ describe("casting and damage", () => {
     // down for a second does not buy a second's worth of casts.
     const w = world();
     const cast = input({ aimX: w.player.x + 100, aimY: w.player.y, spell: 0 });
-    step(w, cast);
+    // Past the bolt's windup: the shot has left.
+    run(w, 6, cast);
     expect(w.stats.shotsFired).toBeGreaterThan(0);
     const once = w.stats.shotsFired;
     run(w, 10, cast);
@@ -175,7 +182,8 @@ describe("casting and damage", () => {
     step(w, input({ aimX: w.player.x + 100, aimY: w.player.y, spell: 0 }));
     const spent = before - w.player.mana;
     // magic_bolt is rank 2 in the pool.
-    expect(spent).toBeCloseTo(SPELL_COST_BASE + SPELL_COST_PER_RANK, 5);
+    // A slot's cost is rounded to a tenth, so the bar reads in whole tenths.
+    expect(spent).toBeCloseTo(Math.round((SPELL_COST_BASE + SPELL_COST_PER_RANK) * 10) / 10, 5);
 
     // And the same slot on a deeper staff costs exactly the same.
     const deep = world({
@@ -209,6 +217,7 @@ describe("casting and damage", () => {
     const w = world({ slots: [plainInstance("spirit_blades"), null, null, null, null, null] });
     const cast = input({ aimX: w.player.x + 100, aimY: w.player.y, spell: 0 });
     step(w, cast);
+    run(w, 6);
     const ring = () => w.playerBullets.filter((b) => b.alive && b.orbitMs > 0).length;
     expect(ring()).toBe(3);
     // Past the cooldown, with the mana to pay: cast again.
@@ -216,6 +225,7 @@ describe("casting and damage", () => {
     w.player.mana = w.staff.mana_max;
     run(w, 30);
     step(w, cast);
+    run(w, 6);
     expect(ring()).toBe(3);
   });
 
@@ -303,7 +313,9 @@ describe("the player taking damage", () => {
       // Past the free first attack, then the real entry action wound forward
       // to one step short of the commit, where the blade goes live.
       e.hasAttacked = true;
-      beginWindup(e, w.player);
+      // A drive turn; see `chooseMelee`.
+      e.casts = 1;
+      beginWindup(w, e, w.player);
       e.attackMs = 1;
       w.enemies.push(e);
     };
@@ -333,7 +345,7 @@ describe("the player taking damage", () => {
     e.spawnFadeMs = 0;
     e.awake = true;
     e.hasAttacked = true;
-    beginWindup(e, w.player);
+    beginWindup(w, e, w.player);
     e.attackMs = 1;
     // Pointing away from the player, which is what happens for the rest of a
     // charge once it has gone past.
@@ -353,13 +365,15 @@ describe("the player taking damage", () => {
     expect(w.player.hearts).toBe(before);
   });
 
-  it("is hurt in front of a charging enemy", () => {
+  it("is hurt by a body that has closed on it", () => {
     const w = world();
     const e = makeEnemy(1, "rusher", w.player.x - 26, w.player.y, []);
     e.spawnFadeMs = 0;
     e.awake = true;
     e.hasAttacked = true;
-    beginWindup(e, w.player);
+    // A drive turn; see `chooseMelee`.
+    e.casts = 1;
+    beginWindup(w, e, w.player);
     e.attackMs = 1;
     w.enemies.push(e);
     // Events are per step, so the cause has to be collected as it goes.
@@ -402,19 +416,137 @@ describe("the player taking damage", () => {
   });
 });
 
+describe("wave release", () => {
+  it("never floods a player who is not killing: the wait's ceiling stops at a gated release's bodies", () => {
+    const wave = (at_ms: number) => ({ at_ms, spawns: [{ archetype: "rusher" as const, spawn_group: "far", count: 5 }] });
+    const w = world({ encounter: encounter([wave(0), wave(1000), wave(2000), wave(3000)]), invincible: true });
+    let most = 0;
+    // Ninety seconds standing still: every wave's time and its 16 s ceiling pass.
+    for (let n = 0; n < 60 * 90; n++) {
+      step(w, NO_INPUT);
+      most = Math.max(most, w.enemies.filter((e) => e.hp > 0).length);
+    }
+    expect(most).toBeLessThanOrEqual(8);
+    expect(w.pendingWaves.length).toBeGreaterThan(0);
+  });
+});
+
+describe("a fight room is never a free room", () => {
+  it("pads a roster below the ramp's minimum, and never starts one empty", () => {
+    /*
+     * The player walked into a combat room with no enemies in it. The cause
+     * was a beat-dealing bug that dropped later waves, and the sweep found no
+     * wholly empty rooms after it — but two rooms in five hundred were
+     * assembled with a roster of two, which is the same free room with a fig
+     * leaf. The world guarantees the floor now (doc 005, `rampMinimum`).
+     */
+    for (const [plan, what] of [
+      [[{ at_ms: 0, spawns: [{ archetype: "rusher" as const, spawn_group: "far", count: 1 }] }], "a one-body plan"],
+      [[{ at_ms: 0, spawns: [{ archetype: "shooter" as const, spawn_group: "far", count: 2 }] }], "a two-body plan"],
+    ] as const) {
+      const w = world({ encounter: encounter([...plan]), roomIndex: 8 });
+      step(w, NO_INPUT);
+      const planned = w.enemies.length + w.pendingWaves.reduce((n, x) => n + x.spawns.reduce((m, s) => m + s.count, 0), 0);
+      expect({ what, n: planned >= rampMinimum(8) }).toEqual({ what, n: true });
+    }
+  });
+});
+
+describe("an elite pays in health", () => {
+  /** Kills one elite in a fresh world at `hearts` health; true if it dropped. */
+  const eliteDropAt = (hearts: number, seed: number): { dropped: boolean; value: number } => {
+    const w = world();
+    w.player.hearts = hearts;
+    w.rng = new RngSource(`elite-heal-${seed}`).stream("gameplay");
+    const e = makeEnemy(1, "rusher", w.player.x + 40, w.player.y, ["armored"]);
+    e.spawnFadeMs = 0;
+    e.awake = true;
+    w.enemies.push(e);
+    e.hp = 0;
+    step(w, NO_INPUT);
+    const heart = w.pickups.find((p) => p.alive && p.kind === "heart");
+    return { dropped: heart !== undefined, value: heart?.value ?? 0 };
+  };
+
+  const dropRate = (hearts: number): number => {
+    let n = 0;
+    for (let i = 0; i < 400; i++) if (eliteDropAt(hearts, i).dropped) n++;
+    return n / 400;
+  };
+
+  it("drops a heal worth a tenth of the bar, when it drops one at all", () => {
+    const max = MAX_HEARTS;
+    // At a sliver of health it is all but certain, so one sample finds it.
+    const hit = Array.from({ length: 20 }, (_, i) => eliteDropAt(0.5, i)).find((r) => r.dropped);
+    expect(hit, "no drop even at half a heart").toBeDefined();
+    expect(hit!.value).toBeCloseTo(max * ELITE_HEAL_FRACTION, 5);
+  });
+
+  it("drops it more often the less health the player has", () => {
+    /*
+     * The drop **scales against what is left of the bar**: near certain at a
+     * sliver, near nothing at full. A heal that always came was a tenth of a
+     * bar handed to a player who could not hold it, and a reward stepped over
+     * teaches the player to stop looking at the floor.
+     */
+    const full = dropRate(MAX_HEARTS);
+    const half = dropRate(MAX_HEARTS / 2);
+    const sliver = dropRate(0.5);
+    expect(full, "an elite paid in health the player could not hold").toBe(0);
+    expect(half).toBeGreaterThan(0.1);
+    expect(half).toBeLessThan(0.45);
+    expect(sliver).toBeGreaterThan(0.7);
+    // Monotone: every step down the bar is at least as likely as the one above.
+    expect(half).toBeGreaterThan(full);
+    expect(sliver).toBeGreaterThan(half);
+  });
+
+  it("still always drops a coin, whatever the player's health", () => {
+    // The coin is the part that does not depend on how the last room went.
+    const w = world();
+    const e = makeEnemy(1, "rusher", w.player.x + 40, w.player.y, ["armored"]);
+    e.spawnFadeMs = 0;
+    e.awake = true;
+    w.enemies.push(e);
+    e.hp = 0;
+    step(w, NO_INPUT);
+    expect(w.pickups.filter((p) => p.alive && p.kind === "coin").length).toBeGreaterThan(0);
+  });
+
+  it("drops nothing extra for an ordinary body", () => {
+    const w = world();
+    const e = makeEnemy(1, "rusher", w.player.x + 40, w.player.y, []);
+    e.spawnFadeMs = 0;
+    e.awake = true;
+    w.enemies.push(e);
+    e.hp = 0;
+    step(w, NO_INPUT);
+    // At full health an ordinary kill never leaves a heart: a heart on the
+    // floor the player cannot take teaches them to ignore the next one.
+    expect(w.pickups.filter((p) => p.alive && p.kind === "heart")).toHaveLength(0);
+  });
+});
+
 describe("clear condition", () => {
-  it("is not cleared while a wave is still pending", () => {
+  it("is not cleared while a wave is still to come, and a cleared floor calls it at once", () => {
     const w = world({
+      /*
+       * Enough bodies for **two beats**: a room is told in beats now, and a
+       * plan small enough to fit in one is one wave (doc 005, the ramp), so a
+       * two-body plan no longer has a second wave to wait on.
+       */
       encounter: encounter([
-        { at_ms: 0, spawns: [{ archetype: "rusher", spawn_group: "far", count: 1 }] },
-        { at_ms: 4000, spawns: [{ archetype: "shooter", spawn_group: "far", count: 1 }] },
+        { at_ms: 0, spawns: [{ archetype: "rusher", spawn_group: "far", count: 6 }] },
+        { at_ms: 4000, spawns: [{ archetype: "shooter", spawn_group: "far", count: 6 }] },
       ]),
     });
     run(w, 4);
     w.enemies.length = 0;
     run(w, 2);
+    // Long before its 4 s: nothing was left standing to wait on.
     expect(worldCleared(w)).toBe(false);
-    expect(w.pendingWaves.length).toBe(1);
+    expect(w.pendingWaves.length).toBeLessThan(2);
+    expect(w.enemies.length).toBeGreaterThan(0);
   });
 
   it("clears once every wave has spawned and nothing is alive", () => {
@@ -422,7 +554,9 @@ describe("clear condition", () => {
       encounter: encounter([{ at_ms: 0, spawns: [{ archetype: "rusher", spawn_group: "far", count: 1 }] }]),
     });
     run(w, 4);
-    expect(w.enemies.length).toBe(1);
+    // Padded to the ramp's minimum: a planned fight is never a free room
+    // (doc 005, `rampMinimum`).
+    expect(w.enemies.length).toBe(rampMinimum(99));
     w.enemies.length = 0;
     // Events last one step by design: the renderer drains them every frame.
     run(w, 1);
@@ -472,7 +606,7 @@ describe("the room border", () => {
   it("puts every entry position on open floor", () => {
     const w = world();
     for (const side of ["N", "E", "S", "W"] as const) {
-      const p = entryPosition(side);
+      const p = entryPosition(side, w.room.extent);
       expect(circleHitsWall(w.room.grid, p.x, p.y, PLAYER_RADIUS), side).toBe(false);
     }
   });
@@ -655,6 +789,145 @@ describe("the melee cycle", () => {
   });
 });
 
+/**
+ * Doc 005, "Rhythm per archetype": the attack owns its shape and the body owns
+ * the tempo it performs it at, and what a body does with a turn is not the
+ * same thing twice running.
+ */
+describe("every body has its own rhythm", () => {
+  /** Drives one body to its first windup and reports how long the windup is. */
+  function firstWindup(id: Parameters<typeof makeEnemy>[1], at: [number, number]): number {
+    const w = world();
+    w.player.x = 400;
+    w.player.y = 200;
+    const e = makeEnemy(1, id, ...open(w.room, at[0], at[1]), []);
+    e.spawnFadeMs = 0;
+    e.awake = true;
+    w.enemies.push(e);
+    for (let i = 0; i < 900 && e.attack !== "windup"; i++) run(w, 1);
+    expect(e.attack).toBe("windup");
+    return e.windupMs;
+  }
+
+  it("winds a heavy body up for longer than a quick one, and never under the reaction floor", () => {
+    const rusher = firstWindup("rusher", [470, 200]);
+    const tank = firstWindup("tank", [520, 200]);
+    // The tank's charge is a slow tell to begin with; its tempo widens the
+    // gap rather than inventing it (doc 005, `TEMPO`).
+    expect(tank).toBeGreaterThan(rusher * 1.4);
+    // Nothing the tempo or its jitter produces is shorter than a reaction.
+    expect(rusher).toBeGreaterThanOrEqual(260);
+  });
+
+  it("does not wind up to a click: the same body's windups differ", () => {
+    const w = world();
+    w.player.x = 400;
+    w.player.y = 200;
+    const e = makeEnemy(1, "rusher", ...open(w.room, 470, 200), []);
+    e.spawnFadeMs = 0;
+    e.awake = true;
+    w.enemies.push(e);
+    const seen = new Set<number>();
+    for (let i = 0; i < 4000 && seen.size < 3; i++) {
+      run(w, 1);
+      if (e.attack === "windup") seen.add(Math.round(e.windupMs));
+    }
+    // Three different figures, all inside the band the jitter allows.
+    expect(seen.size).toBeGreaterThanOrEqual(3);
+    for (const ms of seen) expect(ms).toBeGreaterThanOrEqual(260);
+  });
+
+  it("never feints: every windup is followed by its blow", () => {
+    const w = world();
+    w.player.x = 400;
+    w.player.y = 200;
+    const e = makeEnemy(1, "rusher", ...open(w.room, 470, 200), []);
+    e.spawnFadeMs = 0;
+    e.awake = true;
+    w.enemies.push(e);
+    let windups = 0;
+    for (let i = 0; i < 6000; i++) {
+      const was = e.attack;
+      run(w, 1);
+      if (was === "windup" && e.attack !== "windup") {
+        windups++;
+        expect(e.attack).toBe("lunge");
+      }
+    }
+    expect(windups).toBeGreaterThanOrEqual(3);
+  });
+
+  it("strings a second blow onto the first without handing the turn back", () => {
+    const w = world();
+    w.player.x = 400;
+    w.player.y = 200;
+    const e = makeEnemy(1, "rusher", ...open(w.room, 470, 200), []);
+    e.spawnFadeMs = 0;
+    e.awake = true;
+    w.enemies.push(e);
+    let strings = 0;
+    for (let i = 0; i < 6000 && strings === 0; i++) {
+      const combo = e.comboLeft;
+      const phase = e.attack;
+      run(w, 1);
+      // The moment a recovery ends inside a string: the turn is kept and the
+      // rest is a fraction of the ordinary one.
+      if (phase === "recover" && e.attack === "approach" && combo > 0) {
+        expect(e.hasToken).toBe(true);
+        expect(e.attackCooldownMs).toBeLessThan(600);
+        strings++;
+      }
+    }
+    expect(strings).toBe(1);
+    // A string is a one-two: never longer.
+    expect(e.comboLeft).toBeLessThanOrEqual(1);
+  });
+
+  it("steps aside when the player swings at it", () => {
+    const w = world();
+    w.player.x = 400;
+    w.player.y = 200;
+    const e = makeEnemy(1, "rusher", ...open(w.room, 460, 200), []);
+    e.spawnFadeMs = 0;
+    e.awake = true;
+    e.alertMs = 0;
+    w.enemies.push(e);
+    // Swing, over and over, from inside the distance a body reacts to.
+    let juked = false;
+    for (let i = 0; i < 1200 && !juked; i++) {
+      step(w, input({ swing: true }));
+      if (e.jukeMs > 0) juked = true;
+    }
+    expect(juked).toBe(true);
+    // Across the line to the player, not along it: a dodge, not a retreat.
+    const along = Math.abs(e.jukeX * (w.player.x - e.x) + e.jukeY * (w.player.y - e.y))
+      / Math.max(1, Math.hypot(w.player.x - e.x, w.player.y - e.y));
+    expect(along).toBeLessThan(0.7);
+  });
+
+  it("stabs, and does nothing else", () => {
+    const w = world();
+    w.player.x = 400;
+    w.player.y = 200;
+    const e = makeEnemy(1, "rusher", ...open(w.room, 470, 200), []);
+    e.spawnFadeMs = 0;
+    e.awake = true;
+    w.enemies.push(e);
+    const kinds = new Set<string>();
+    for (let i = 0; i < 12000; i++) {
+      run(w, 1);
+      if (e.attack === "windup" && e.meleeKind) kinds.add(e.meleeKind);
+    }
+    /*
+     * **One attack, and it does not travel.** Summoners call rushers in three
+     * and four at a time, so nothing in this body's kit may cross ground at
+     * the player or ask to be read twice (doc 005, the rusher).
+     */
+    expect(kinds).toEqual(new Set(["bristle"]));
+    for (const k of kinds) expect(MELEE_ATTACKS[k as keyof typeof MELEE_ATTACKS].commitSpeed).toBe(0);
+  });
+});
+
 describe("enemy behaviour", () => {
   it("telegraphs before the first volley", () => {
     const w = world();
@@ -694,7 +967,9 @@ describe("enemy behaviour", () => {
     e.spawnFadeMs = 0;
     e.awake = true;
     e.alertMs = 0;
-    beginWindup(e, w.player);
+    // A drive turn; see `chooseMelee`.
+    e.casts = 1;
+    beginWindup(w, e, w.player);
     e.attackMs = 1;
     w.enemies.push(e);
 
@@ -711,7 +986,8 @@ describe("enemy behaviour", () => {
     // The second one is real.
     e.staggerMs = 0;
     e.attackCooldownMs = 0;
-    beginWindup(e, w.player);
+    e.casts = 1;
+    beginWindup(w, e, w.player);
     e.attackMs = 1;
     for (let n = 0; n < 30 && w.player.hearts === before; n++) step(w, NO_INPUT);
     expect(w.player.hearts).toBeCloseTo(before - 0.7, 5);
@@ -770,7 +1046,7 @@ describe("enemy behaviour", () => {
     e.alertMs = 0;
     e.hasAttacked = true;
     w.enemies.push(e);
-    beginWindup(e, w.player);
+    beginWindup(w, e, w.player);
     const hearts = w.player.hearts;
     for (let i = 0; i < 120 && w.player.hearts === hearts; i++) step(w, NO_INPUT);
     expect(w.player.hearts).toBeCloseTo(hearts - 1.5, 5);
@@ -790,7 +1066,7 @@ describe("enemy behaviour", () => {
     e.alertMs = 0;
     e.hasAttacked = true;
     w.enemies.push(e);
-    beginWindup(e, w.player);
+    beginWindup(w, e, w.player);
     e.attackMs = 40;
     e.swing.trackingMs = 0;
     const hearts = w.player.hearts;
@@ -815,7 +1091,9 @@ describe("enemy behaviour", () => {
     e.alertMs = 0;
     e.hasAttacked = true;
     w.enemies.push(e);
-    beginWindup(e, w.player);
+    // A lance turn, not a sweep turn: the two alternate (`chooseMelee`).
+    e.casts = 1;
+    beginWindup(w, e, w.player);
     let flying = 0;
     for (let i = 0; i < 60; i++) {
       step(w, NO_INPUT);
@@ -1066,14 +1344,16 @@ describe("enemy behaviour", () => {
     expect(shots).toBeLessThanOrEqual(2);
   });
 
-  it("drops a held volley, and its firing turn, when it moves inside the radius", () => {
+  it("plants to take its shot, and stands over it afterwards", () => {
     /*
-     * The move-or-shoot rule returned early and left the aimed volley and the
-     * fire token in place. An orbiter never stands still, so inside the
-     * radius it stayed mid-telegraph for as long as the player was near —
-     * a body blinking red forever, holding a turn nothing else could take.
+     * A ranged body may not shoot and reposition at once — but the rule used
+     * to be enforced by *cancelling* a moving body's volley, and every ranged
+     * archetype in the roster strafes, so near the player they simply never
+     * fired. The body stops instead: the plant is the trade, taken where the
+     * player can see it, and its tail is the window to close in (doc 005).
      */
     const w = world();
+    w.stats.elapsedMs = ENTRY_GRACE_MS; // past the room's first moment, when nothing shoots
     const o = makeEnemy(1, "orbiter", 300, 200, []);
     o.spawnFadeMs = 0;
     o.awake = true;
@@ -1081,15 +1361,17 @@ describe("enemy behaviour", () => {
     w.enemies.push(o);
     w.player.x = 400;
     w.player.y = 200;
-    // Circling, with a volley already aimed and the turn taken for it.
-    o.velX = 0;
-    o.velY = 80;
-    o.telegraphMs = 300;
-    o.pending = [{ size: 1, at_ms: 0, aim: "player", angle_deg: 0, speed: 100, from: "single", path: [0] }];
-    step(w, NO_INPUT);
-    expect(o.pending).toHaveLength(0);
-    expect(o.telegraphMs).toBe(0);
-    expect(o.hasToken).toBe(false);
+    // Circling, and its turn comes round.
+    for (let i = 0; i < 900 && o.plantMs <= 0; i++) step(w, NO_INPUT);
+    expect(o.plantMs).toBeGreaterThan(0);
+    expect(o.telegraphMs).toBeGreaterThan(0);
+    // Planted means planted: it does not travel while the volley is aimed.
+    const at = { x: o.x, y: o.y };
+    for (let i = 0; i < 12; i++) step(w, NO_INPUT);
+    expect(Math.hypot(o.x - at.x, o.y - at.y)).toBeLessThan(3);
+    // And the shot leaves, which is the whole point.
+    for (let i = 0; i < 90 && liveCount(w.enemyBullets) === 0; i++) step(w, NO_INPUT);
+    expect(liveCount(w.enemyBullets)).toBeGreaterThan(0);
   });
 
   it("silences a ranged body the player has closed on", () => {
@@ -1183,7 +1465,7 @@ describe("enemy behaviour", () => {
     e.spawnFadeMs = 0;
     e.awake = true;
     e.alertMs = 0;
-    beginWindup(e, w.player);
+    beginWindup(w, e, w.player);
     w.enemies.push(e);
     expect(e.attack).toBe("windup");
 
@@ -1215,7 +1497,7 @@ describe("enemy behaviour", () => {
     // of sight and never commit.
     w.player.x = 150;
     w.player.y = 200;
-    beginWindup(e, w.player);
+    beginWindup(w, e, w.player);
     // Past the tracking half of the windup, or the forced direction is
     // re-pointed at the player before it commits.
     e.attackMs = 40;
@@ -1242,7 +1524,7 @@ describe("enemy behaviour", () => {
     e.awake = true;
     e.alertMs = 0;
     expect(e.armour).toBeGreaterThan(0);
-    beginWindup(e, w.player);
+    beginWindup(w, e, w.player);
     w.enemies.push(e);
 
     w.player.facing = 0;
@@ -1280,18 +1562,24 @@ describe("enemy behaviour", () => {
     expect(e.staggerMs).toBeLessThanOrEqual(0);
 
     // Now a hit lands as a hit: it staggers, and it cancels the attack.
-    beginWindup(e, w.player);
+    beginWindup(w, e, w.player);
     for (let i = 0; i < 40 && e.staggerMs <= 0; i++)
       step(w, input({ swing: i % 20 === 0 }));
     expect(e.staggerMs, "a broken-armour body should stagger").toBeGreaterThan(0);
     expect(e.attack).toBe("approach");
   });
 
-  it("lets only two enemies attack at once, however many are in the room", () => {
+  it("caps how many enemies attack at once, and scales the cap with the room", () => {
     /*
      * The answer to a fight that is nothing but running away. Six bodies that
      * may each commit whenever they like will sometimes all commit at once,
      * and no position answers six simultaneous attacks.
+     *
+     * The cap is two **plus one per three awake bodies** (doc 005): a fixed
+     * two left four of six waiting at any moment, which is 57% of an awake
+     * body's time spent hovering. Six awake is four turns, and the ceiling —
+     * the twelve-body concurrency cap — is six, which still leaves half the
+     * floor waiting.
      */
     const w = world();
     for (let i = 0; i < 6; i++) {
@@ -1310,7 +1598,33 @@ describe("enemy behaviour", () => {
       peak = Math.max(peak, committed);
     }
     expect(peak).toBeGreaterThan(0);
-    expect(peak).toBeLessThanOrEqual(2);
+    // Six awake: two base plus two.
+    expect(peak).toBeLessThanOrEqual(4);
+  });
+
+  it("gives an awake body something to do while it waits for a turn", () => {
+    /*
+     * Waiting is the design; hovering while waiting is the fault. Nothing
+     * awake may go more than `THREAT_CAP_MS` without attacking or making a
+     * move the player can read — a step of the ring, a walk to a fresh firing
+     * post (doc 005, the token budget).
+     */
+    const w = world();
+    const bodies = [];
+    for (let i = 0; i < 6; i++) {
+      const e = makeEnemy(i + 1, i < 4 ? "rusher" : "shooter", w.player.x + 120 + i * 6, w.player.y + i * 18, []);
+      e.spawnFadeMs = 0;
+      e.awake = true;
+      e.alertMs = 0;
+      w.enemies.push(e);
+      bodies.push(e);
+    }
+    let worst = 0;
+    for (let i = 0; i < 900; i++) {
+      step(w, NO_INPUT);
+      for (const e of bodies) worst = Math.max(worst, e.threatMs);
+    }
+    expect(worst).toBeLessThanOrEqual(THREAT_CAP_MS);
   });
 
   it("holds waiting bodies at reach instead of pressing them into the player", () => {
@@ -1509,14 +1823,17 @@ describe("enemy behaviour", () => {
      * follows the flow field round.
      */
     const w = world({ room: room("cover_ring"), props: 0 });
-    const e = makeEnemy(1, "rusher", 120, 120, []);
+    // Opposite corners of the loop, the core between them: three tiles in,
+    // past the pillars on the outer track.
+    const ext = w.room.extent;
+    const e = makeEnemy(1, "rusher", 3.5 * TILE_PX, 3.5 * TILE_PX, []);
     e.spawnFadeMs = 0;
     e.awake = true;
     e.alertMs = 0;
     e.hasAttacked = true;
     w.enemies.push(e);
-    w.player.x = 560;
-    w.player.y = 330;
+    w.player.x = (ext.w - 3.5) * TILE_PX;
+    w.player.y = (ext.h - 3.5) * TILE_PX;
 
     const before = Math.hypot(e.x - w.player.x, e.y - w.player.y);
     run(w, 900);
@@ -1533,14 +1850,24 @@ describe("enemy behaviour", () => {
      * ever fired. Making no progress toward the player is the honest test.
      */
     const w = world({ room: room("broken_corridor"), props: 0 });
-    const e = makeEnemy(1, "tank", 120, 120, []);
+    // Where the base room put them — (3, 3) and (17, 10) — carried to this
+    // room's size, on the nearest floor: the room's outline may wall a cell.
+    const at = (c: [number, number]): [number, number] => {
+      const [cx, cy] = cellAt(c, w.room.extent);
+      for (let r = 0; r < 8; r++)
+        for (let dy = -r; dy <= r; dy++)
+          for (let dx = -r; dx <= r; dx++)
+            if (w.room.grid[(cy + dy) * GRID_W + cx + dx] === Tile.Floor) return [(cx + dx + 0.5) * TILE_PX, (cy + dy + 0.5) * TILE_PX];
+      return [(cx + 0.5) * TILE_PX, (cy + 0.5) * TILE_PX];
+    };
+    const [ex, ey] = at([3, 3]);
+    const e = makeEnemy(1, "tank", ex, ey, []);
     e.spawnFadeMs = 0;
     e.awake = true;
     e.alertMs = 0;
     e.hasAttacked = true;
     w.enemies.push(e);
-    w.player.x = 560;
-    w.player.y = 330;
+    [w.player.x, w.player.y] = at([17, 10]);
 
     const before = Math.hypot(e.x - w.player.x, e.y - w.player.y);
     run(w, 1200);
@@ -1729,5 +2056,479 @@ describe("per-room affix caps (doc 001)", () => {
     expect(w.pendingWaves).toHaveLength(0);
     expect(volatile.size).toBe(2);
     expect(shielded.size).toBe(1);
+  });
+});
+
+describe("emplacements are bolted down", () => {
+  it("a turret is not moved by the sword, by a body shoving into it, or by the player", () => {
+    const w = world();
+    const [tx, ty] = open(w.room, w.player.x + 24, w.player.y);
+    const t = makeEnemy(1, "turret", tx, ty, []);
+    t.spawnFadeMs = 0;
+    t.awake = true;
+    w.enemies.push(t);
+    const r = makeEnemy(2, "rusher", tx + 6, ty, []);
+    r.spawnFadeMs = 0;
+    w.enemies.push(r);
+    w.player.facing = Math.atan2(ty - w.player.y, tx - w.player.x);
+    step(w, input({ swing: true }));
+    for (let i = 0; i < 40; i++) { w.player.x = tx - 10; step(w, NO_INPUT); }
+    expect(t.x).toBe(tx);
+    expect(t.y).toBe(ty);
+  });
+});
+
+describe("the room's first moment", () => {
+  it("lets nothing shoot until the entry grace is over, then fires as normal", () => {
+    const w = world();
+    const [sx, sy] = open(w.room, w.player.x + 120, w.player.y);
+    const e = makeEnemy(1, "shooter", sx, sy, []);
+    e.spawnFadeMs = 0;
+    e.awake = true;
+    e.alertMs = 0;
+    w.enemies.push(e);
+    const live = () => w.enemyBullets.filter((b) => b.alive).length;
+    let early = 0;
+    while (w.stats.elapsedMs < ENTRY_GRACE_MS) { w.player.x = sx - 120; step(w, NO_INPUT); early += live(); }
+    expect(early).toBe(0);
+    for (let i = 0; i < 60 * 6 && live() === 0; i++) { w.player.x = sx - 120; step(w, NO_INPUT); }
+    expect(live()).toBeGreaterThan(0);
+  });
+});
+
+describe("lava and grass", () => {
+  /** An open arena with one zone, somewhere near the middle, given a feature. */
+  const withZone = (feature: string, cells: [number, number][]): RoomPlan => {
+    const r = room();
+    return { ...r, zones: [{ id: "test", feature, cells }] } as RoomPlan;
+  };
+  const cellCentre = ([x, y]: readonly [number, number]) => [(x + 0.5) * TILE_PX, (y + 0.5) * TILE_PX] as const;
+
+  it("runs lava one tile thick through the middle of its zone", () => {
+    const zone: [number, number][] = [];
+    for (let y = 4; y <= 6; y++) for (let x = 6; x <= 10; x++) zone.push([x, y]);
+    const line = featureCells("lava_channel", zone);
+    expect(line.length).toBe(5);
+    expect(new Set(line.map((c) => c[1]))).toEqual(new Set([5]));
+    expect(featureCells("spike_strip", zone)).toBe(zone);
+  });
+
+  it("burns a player who walks over it, and not one who dashes over it", () => {
+    const lava: [number, number][] = [[8, 6], [9, 6], [10, 6]];
+    const walked = world({ room: withZone("lava_channel", lava) });
+    const [lx, ly] = cellCentre([9, 6]);
+    walked.player.x = lx; walked.player.y = ly;
+    const before = walked.player.hearts;
+    for (let i = 0; i < 40; i++) { walked.player.x = lx; walked.player.y = ly; step(walked, NO_INPUT); }
+    expect(walked.player.hearts).toBeLessThan(before);
+
+    const dashed = world({ room: withZone("lava_channel", lava) });
+    dashed.player.x = lx; dashed.player.y = ly - TILE_PX * 1.2;
+    const start = dashed.player.hearts;
+    step(dashed, input({ moveY: 1, dash: true }));
+    for (let i = 0; i < 20; i++) step(dashed, NO_INPUT);
+    expect(dashed.player.hearts).toBe(start);
+    expect(dashed.player.y).toBeGreaterThan(ly + TILE_PX * 0.5);
+  });
+
+  it("routes bodies round lava rather than through it", () => {
+    const w = world({ room: withZone("lava_channel", [[8, 6], [9, 6], [10, 6]]) });
+    expect(w.pathGrid[6 * GRID_W + 9]).toBe(Tile.Wall);
+    expect(w.room.grid[6 * GRID_W + 9]).toBe(Tile.Floor);
+  });
+
+  it("lights grass from any fire, runs it cell to cell as the lighter's fire, and burns it once", () => {
+    const patch: [number, number][] = [[6, 6], [7, 6], [8, 6], [9, 6]];
+    const w = world({ room: withZone("grass_patch", patch) });
+    w.player.x = (15 + 0.5) * TILE_PX; w.player.y = (2 + 0.5) * TILE_PX;
+    const [fx, fy] = cellCentre([6, 6]);
+    lightFire(w, fx, fy, "player");
+    step(w, NO_INPUT);
+    const at = (x: number) => w.grass.find((c) => c.x === x)!;
+    // Touched grass smoulders first, then goes up.
+    expect(at(6).state).toBe("catching");
+    for (let i = 0; i < Math.ceil(GRASS_CATCH_MS / 16.67) + 1; i++) step(w, NO_INPUT);
+    expect(at(6).state).toBe("burning");
+    expect(at(6).owner).toBe("player");
+    expect(at(9).state).toBe("grass");
+    for (let i = 0; i < 150; i++) step(w, NO_INPUT);
+    expect(at(9).state).not.toBe("grass");
+    expect(at(9).owner).toBe("player");
+    for (let i = 0; i < 60 * 4; i++) step(w, NO_INPUT);
+    expect(w.grass.every((c) => c.state === "burnt")).toBe(true);
+    // Burnt grass does not light again.
+    lightFire(w, fx, fy, "enemy");
+    step(w, NO_INPUT);
+    expect(at(6).state).toBe("burnt");
+  });
+
+  it("burns the player in grass the player's fire shot lit", () => {
+    const patch: [number, number][] = [[6, 6], [7, 6], [8, 6], [9, 6]];
+    const w = world({ room: withZone("grass_patch", patch) });
+    const [px, py] = cellCentre([8, 6]);
+    const start = w.player.hearts;
+    const b = acquire(w.playerBullets, true)!;
+    const [bx, by] = cellCentre([6, 6]);
+    Object.assign(b, { alive: true, x: bx, y: by, vx: 0, vy: 0, lifeMs: 200, element: "fire", elementPower: 1 });
+    for (let i = 0; i < 60 * 3; i++) { w.player.x = px; w.player.y = py; step(w, NO_INPUT); }
+    expect(w.grass.find((c) => c.x === 8)!.state).not.toBe("grass");
+    expect(w.player.hearts).toBeLessThan(start);
+  });
+
+  it("burns the player in grass whoever lit it, the player's own ground included", () => {
+    // Burning grass is the room's fire: a trail or a field laid over grass
+    // lights it, and it burns the caster standing in it as an enemy's would.
+    const patch: [number, number][] = [[6, 6], [7, 6], [8, 6], [9, 6]];
+    const stand = (owner: "player" | "enemy") => {
+      const w = world({ room: withZone("grass_patch", patch) });
+      const [px, py] = cellCentre([8, 6]);
+      const [fx, fy] = cellCentre([6, 6]);
+      lightFire(w, fx, fy, owner);
+      const start = w.player.hearts;
+      for (let i = 0; i < 60 * 3; i++) { w.player.x = px; w.player.y = py; step(w, NO_INPUT); }
+      return { w, lost: start - w.player.hearts };
+    };
+    expect(stand("player").lost).toBeGreaterThan(0);
+    expect(stand("enemy").lost).toBeGreaterThan(0);
+  });
+
+  it("does not burn a body on grass while the grass is still catching", () => {
+    // The catch is what makes crossing lit grass fair: nothing burns until it goes up.
+    const w = world({ room: withZone("grass_patch", [[8, 6]]) });
+    const [px, py] = cellCentre([8, 6]);
+    // The player's own patch touches the grass and burns nobody itself; the grass does, once it goes up.
+    lightFire(w, px, py, "player", { radius: 6, lifeMs: 60 });
+    const hold = () => { w.player.x = px; w.player.y = py; step(w, NO_INPUT); };
+    hold();
+    expect(w.grass[0]!.state).toBe("catching");
+    while (w.grass[0]!.state === "catching") {
+      expect(w.fires.some((f) => f.alive && f.fromGrass)).toBe(false);
+      expect(w.player.burnBuild).toBe(0);
+      hold();
+    }
+    expect(w.grass[0]!.state).toBe("burning");
+  });
+
+  it("stands no breakable prop in a floor hazard", () => {
+    const pool: [number, number][] = [];
+    for (let y = 2; y < GRID_H - 2; y++) for (let x = 2; x < GRID_W - 2; x++) if ((x + y) % 3 !== 0) pool.push([x, y]);
+    const cells = new Set(pool.map(([x, y]) => y * GRID_W + x));
+    for (let seed = 0; seed < 8; seed++) {
+      const w = world({ room: withZone("poison_pool", pool), props: 12, rng: new RngSource(`pool-${seed}`).stream("w") });
+      const scattered = w.props.filter((p) => p.kind !== "pillar");
+      expect(scattered.length).toBeGreaterThan(0);
+      for (const p of scattered) expect(cells.has(p.gy * GRID_W + p.gx)).toBe(false);
+    }
+  });
+
+  it("lights the grass a fire shot flies over, and not the grass a plain shot does", () => {
+    const patch: [number, number][] = [[6, 6], [7, 6], [8, 6], [9, 6]];
+    const shoot = (element: "fire" | "none") => {
+      const w = world({ room: withZone("grass_patch", patch) });
+      w.player.x = (15 + 0.5) * TILE_PX; w.player.y = (2 + 0.5) * TILE_PX;
+      const b = acquire(w.playerBullets, true)!;
+      const [bx, by] = cellCentre([7, 6]);
+      Object.assign(b, { alive: true, x: bx, y: by, vx: 0, vy: 0, lifeMs: 2000, element, elementPower: 1 });
+      step(w, NO_INPUT);
+      return w.grass.find((c) => c.x === 7)!;
+    };
+    expect(shoot("fire").state).toBe("catching");
+    expect(shoot("fire").owner).toBe("player");
+    expect(shoot("none").state).toBe("grass");
+  });
+});
+
+describe("what the player cannot see", () => {
+  const shotsFrom = (half: { x: number; y: number }, centre: { x: number; y: number } | null = null) => {
+    const w = world({ viewHalf: half });
+    const [sx, sy] = open(w.room, w.player.x + 200, w.player.y);
+    const e = makeEnemy(1, "shooter", sx, sy, []);
+    e.spawnFadeMs = 0; e.awake = true; e.alertMs = 0;
+    w.enemies.push(e);
+    w.stats.elapsedMs = ENTRY_GRACE_MS;
+    let shots = 0;
+    for (let i = 0; i < 60 * 20; i++) {
+      w.player.x = sx - 200; w.player.y = sy; e.x = sx; e.y = sy;
+      w.viewCentre = centre ? { x: w.player.x + centre.x, y: w.player.y + centre.y } : null;
+      step(w, NO_INPUT);
+      shots += w.events.filter((ev) => ev.kind === "shot").length;
+    }
+    return { shots, radius: e.radius };
+  };
+
+  it("fires only with its whole body on the screen, easing in over the tile inside the edge", () => {
+    const r = shotsFrom({ x: WORLD_W, y: WORLD_H }).radius;
+    // 200 px out. A view whose edge cuts the body: quiet, since a shot from a
+    // body the player cannot see whole is an arrow from the dark. Half a tile
+    // inside: firing, less. The whole room: the full rate.
+    const cut = shotsFrom({ x: 200, y: 200 }).shots;
+    const fading = shotsFrom({ x: 200 + r + TILE_PX / 2, y: 200 + r + TILE_PX / 2 }).shots;
+    const seen = shotsFrom({ x: WORLD_W, y: WORLD_H }).shots;
+    expect(cut).toBe(0);
+    expect(fading).toBeGreaterThan(0);
+    expect(fading).toBeLessThan(seen);
+  });
+
+  it("measures the view from where the camera is, not from the player", () => {
+    // A view wide enough to hold the body round the player, but the camera has
+    // stopped short of it — held at the room's edge, or trailing a dash.
+    const half = { x: 200 + 40, y: 200 };
+    expect(shotsFrom(half).shots).toBeGreaterThan(0);
+    expect(shotsFrom(half, { x: -120, y: 0 }).shots).toBe(0);
+  });
+});
+
+describe("a room is populated across its floor (doc 005, stations)", () => {
+  it("spreads the opening roster into small groups instead of one knot", () => {
+    const w = world({
+      viewHalf: { x: 256, y: 144 },
+      encounter: encounter([
+        // Five, which is the most a planned wave releases at once (doc 005).
+        { at_ms: 0, spawns: [{ archetype: "rusher", spawn_group: "far", count: 5 }] },
+      ]),
+    });
+    step(w, NO_INPUT);
+    const bodies = w.enemies.filter((e) => e.hp > 0);
+    expect(bodies.length).toBe(5);
+    /*
+     * No knot. The opening roster used to put four bodies inside two tiles of
+     * one point in the entry view, which is what "the map is either full of
+     * enemies or empty" was; a station is a pair or a trio.
+     */
+    for (const a of bodies) {
+      const near = bodies.filter((b) => b !== a && Math.hypot(a.x - b.x, a.y - b.y) < 110).length;
+      expect(near).toBeLessThanOrEqual(2);
+    }
+    // And they are genuinely spread: some pair is most of a viewport apart.
+    const widest = Math.max(...bodies.flatMap((a) => bodies.map((b) => Math.hypot(a.x - b.x, a.y - b.y))));
+    expect(widest).toBeGreaterThan(200);
+    // A station is bodies standing near each other, never on each other.
+    for (const a of bodies)
+      for (const b of bodies)
+        if (a !== b) expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThan(8);
+  });
+
+  it("calls the next station while the one in front of the player is dying", () => {
+    /*
+     * The gap between two stations is what the player feels as "the map is
+     * empty": the fix is not to move a body but to have called the next one
+     * before the screen goes quiet (doc 005, "Where the bodies stand").
+     */
+    const w = world({
+      viewHalf: { x: 256, y: 144 },
+      encounter: encounter([
+        { at_ms: 0, spawns: [{ archetype: "rusher", spawn_group: "far", count: 5 }] },
+      ]),
+    });
+    step(w, NO_INPUT);
+    const bodies = w.enemies.filter((e) => e.hp > 0);
+    // The fight has started, and everything is down to one awake body.
+    w.stats.damageDealt = 10;
+    for (const e of bodies) e.awake = false;
+    bodies[0]!.awake = true;
+    bodies[0]!.x = w.player.x + 40;
+    bodies[0]!.y = w.player.y;
+    const awake0 = bodies.filter((e) => e.awake).length;
+    for (let i = 0; i < 120; i++) step(w, NO_INPUT);
+    // Another station has been called, with that last body still standing.
+    expect(bodies.filter((e) => e.awake).length).toBeGreaterThan(awake0);
+    expect(bodies[0]!.hp).toBeGreaterThan(0);
+  });
+
+  it("brings a later wave in awake, out of the view, and never onto the player", () => {
+    const w = world({
+      viewHalf: { x: 256, y: 144 },
+      invincible: true,
+      // Two beats' worth; see the clear-condition test above.
+      encounter: encounter([
+        { at_ms: 0, spawns: [{ archetype: "rusher", spawn_group: "far", count: 6 }] },
+        { at_ms: 500, spawns: [{ archetype: "shooter", spawn_group: "far", count: 6 }] },
+      ]),
+    });
+    step(w, NO_INPUT);
+    const opening = w.enemies.map((e) => e.id);
+    // The gate holds a beat until the floor thins, so the opening one has to
+    // be cleared before the next is called.
+    for (const e of w.enemies) e.hp = 0;
+    for (let i = 0; i < 60 * 20 && w.pendingWaves.length > 0; i++) step(w, NO_INPUT);
+    const arrived = w.enemies.find((e) => !opening.includes(e.id));
+    expect(arrived).toBeDefined();
+    /*
+     * A reinforcement is something that **walks in**: it lands off the edge
+     * of the screen and comes to the fight, rather than growing out of the
+     * floor beside the player.
+     */
+    const out = Math.abs(arrived!.x - w.player.x) > w.viewHalf.x
+      || Math.abs(arrived!.y - w.player.y) > w.viewHalf.y;
+    expect(out).toBe(true);
+    expect(arrived!.awake).toBe(true);
+  });
+});
+
+describe("a body that has not noticed the player is still alive", () => {
+  it("lifts a sleeper's head when the player comes near, and lets it settle", () => {
+    const w = world();
+    w.player.x = 200;
+    w.player.y = 200;
+    const e = makeEnemy(1, "rusher", 200, 200, []);
+    e.spawnFadeMs = 0;
+    e.idleRole = "sleeper";
+    // Just inside the stir range and well outside the range it wakes at.
+    const range = ENEMIES.rusher.aggro_range;
+    e.x = 200 + range * 0.65;
+    e.y = 200;
+    w.enemies.push(e);
+    for (let i = 0; i < 120 && e.idleAction !== "stir"; i++) step(w, NO_INPUT);
+    expect(e.idleAction).toBe("stir");
+    expect(e.awake).toBe(false);
+    // The player backs off during the beat, and it goes back down.
+    w.player.x = 200 - range;
+    for (let i = 0; i < 90 && e.idleAction === "stir"; i++) step(w, NO_INPUT);
+    expect(e.idleAction).toBe("still");
+    expect(e.awake).toBe(false);
+  });
+
+  it("turns a sleeper over rather than leaving it a statue", () => {
+    const w = world();
+    w.player.x = 40;
+    w.player.y = 40;
+    const e = makeEnemy(1, "rusher", 500, 300, []);
+    e.spawnFadeMs = 0;
+    e.idleRole = "sleeper";
+    w.enemies.push(e);
+    const facing0 = e.facing;
+    let shifted = false;
+    for (let i = 0; i < 60 * 12; i++) {
+      step(w, NO_INPUT);
+      if (e.idleAction === "shift") shifted = true;
+    }
+    expect(shifted).toBe(true);
+    expect(e.awake).toBe(false);
+    expect(Math.abs(e.facing - facing0)).toBeGreaterThan(0.2);
+  });
+});
+
+describe("camps", () => {
+  it("places the whole encounter at the start, unaware, away from the entry", () => {
+    const enc = encounter([
+      { at_ms: 0, spawns: [{ archetype: "rusher", count: 2, group: "far" }] },
+      { at_ms: 4000, spawns: [{ archetype: "shooter", count: 2, group: "far" }] },
+      { at_ms: 8000, spawns: [{ archetype: "orbiter", count: 2, group: "far" }] },
+    ] as unknown as EncounterPlan["waves"]);
+    const w = world({ encounter: enc, placement: "camps" });
+    const entry = { x: w.player.x, y: w.player.y };
+    step(w, NO_INPUT);
+    expect(w.enemies.length).toBe(6);
+    expect(w.pendingWaves.length).toBe(0);
+    for (const e of w.enemies) {
+      expect(e.spawnFadeMs).toBe(0);
+      expect(Math.hypot(e.x - entry.x, e.y - entry.y)).toBeGreaterThan(TILE_PX * 4);
+    }
+  });
+});
+
+describe("spawns keep out of floor hazards", () => {
+  it("never sets a body down in a poison pool, a turret included", () => {
+    for (let seed = 0; seed < 6; seed++) {
+      const r = room();
+      const [px, py] = open(r, 16 * TILE_PX, 9 * TILE_PX);
+      const cx = Math.floor(px / TILE_PX), cy = Math.floor(py / TILE_PX);
+      const pool: [number, number][] = [];
+      for (let y = cy - 1; y <= cy + 1; y++) for (let x = cx - 2; x <= cx + 2; x++)
+        if (r.grid[y * GRID_W + x] === Tile.Floor) pool.push([x, y]);
+      const plan: RoomPlan = { ...r, zones: [{ id: "pool", feature: "poison_pool", cells: pool }], spawn_groups: [{ id: "g", cells: pool }] };
+      const w = world({
+        room: plan,
+        rng: new RngSource(`hazard-${seed}`).stream("world"),
+        encounter: encounter([{ at_ms: 0, spawns: [{ archetype: "turret", spawn_group: "g", count: 2 }, { archetype: "rusher", spawn_group: "g", count: 3 }] }]),
+      });
+      step(w, NO_INPUT);
+      const inPool = new Set(pool.map(([x, y]) => y * GRID_W + x));
+      for (const e of w.enemies)
+        expect(inPool.has(Math.floor(e.y / TILE_PX) * GRID_W + Math.floor(e.x / TILE_PX))).toBe(false);
+      expect(w.enemies.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("a curving shot at close range", () => {
+  it("still lands: the arc closes on a body two tiles away", () => {
+    const r = room();
+    const w = world({ room: r, slots: [plainInstance("ember_dart"), null, null, null, null, null] });
+    const [px, py] = open(r, 12 * TILE_PX, 9 * TILE_PX);
+    w.player.x = px; w.player.y = py;
+    const e = makeEnemy(w.nextEnemyId++, "rusher", px + 70, py - 26, []);
+    e.spawnFadeMs = 0; e.awake = true; e.speed = 0; e.attackCooldownMs = 99999;
+    w.enemies.push(e);
+    let hits = 0;
+    for (let i = 0; i < 90; i++) {
+      step(w, input({ aimX: e.x, aimY: e.y, spell: i === 0 ? 0 : null }));
+      w.player.mana = w.staff.mana_max;
+      hits += w.events.filter((ev) => ev.kind === "enemy_hit").length;
+    }
+    expect(hits).toBeGreaterThan(0);
+  });
+});
+
+describe("the rage streak", () => {
+  it("counts only the sword's kills: spells that drop a pack bank no rage", () => {
+    const r = room();
+    const w = world({ room: r, slots: [plainInstance("scatter_shot"), null, null, null, null, null] });
+    const [px, py] = open(r, 12 * TILE_PX, 9 * TILE_PX);
+    w.player.x = px; w.player.y = py;
+    for (const [dx, dy] of [[40, -10], [44, 0], [40, 10], [48, 6]] as const) {
+      const e = makeEnemy(w.nextEnemyId++, "rusher", px + dx, py + dy, []);
+      e.spawnFadeMs = 0; e.awake = true; e.speed = 0; e.hp = e.maxHp = 1; e.attackCooldownMs = 99999;
+      w.enemies.push(e);
+    }
+    const before = w.player.rage;
+    for (let i = 0; i < 60; i++) {
+      step(w, input({ aimX: px + 60, aimY: py, spell: i === 0 ? 0 : null }));
+      w.player.mana = w.staff.mana_max;
+    }
+    expect(w.enemies.filter((e) => e.hp > 0).length).toBeLessThan(2);
+    expect(w.player.rage).toBe(before);
+  });
+});
+
+describe("the player's burning ground", () => {
+  it("builds the burn gauge on a body standing in it, until the body catches", () => {
+    const r = room();
+    const w = world({ room: r });
+    const [px, py] = open(r, 12 * TILE_PX, 9 * TILE_PX);
+    const e = makeEnemy(w.nextEnemyId++, "tank", px + 80, py, []);
+    e.spawnFadeMs = 0; e.awake = true; e.speed = 0; e.attackCooldownMs = 99999;
+    w.enemies.push(e);
+    lightFire(w, e.x, e.y, "player", { radius: 40, lifeMs: 6000, damage: 1 });
+    let caught = false;
+    for (let i = 0; i < 60 * 5 && !caught; i++) { step(w, NO_INPUT); e.x = px + 80; e.y = py; caught = e.burnMs > 0; }
+    expect(caught).toBe(true);
+  });
+});
+
+describe("counting spell presses (doc 011)", () => {
+  it("counts a held key as one press, and each new press once", () => {
+    const w = world({ slots: [plainInstance("magic_bolt"), null, null] });
+    const aim = { aimX: w.player.x + 100, aimY: w.player.y };
+    for (let i = 0; i < 60; i++) step(w, { ...NO_INPUT, ...aim, spell: 0 });
+    expect(w.stats.castPresses).toBe(1);
+    step(w, { ...NO_INPUT, ...aim, spell: null });
+    step(w, { ...NO_INPUT, ...aim, spell: 0 });
+    expect(w.stats.castPresses).toBe(2);
+  });
+});
+
+describe("clearing a room", () => {
+  it("puts out the fight's leftovers: armed seeds and shots still in the air", () => {
+    const w = world();
+    // A room that had a fight in it: an empty test room is cleared from its first frame.
+    w.stats.enemiesSpawned = 1;
+    w.mines.push({ alive: true, x: w.player.x + 80, y: w.player.y, inertMs: 0, fuseMs: 9000 } as never);
+    const b = acquire(w.enemyBullets, false)!;
+    Object.assign(b, { alive: true, x: w.player.x + 120, y: w.player.y, vx: -50, vy: 0, lifeMs: 5000 });
+    step(w, NO_INPUT);
+    expect(w.cleared).toBe(true);
+    expect(w.mines.length).toBe(0);
+    expect(w.enemyBullets.some((x) => x.alive)).toBe(false);
   });
 });

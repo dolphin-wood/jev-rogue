@@ -21,24 +21,24 @@
  * uses 16-26% for tight and pulls mixed's top from 18% to 16% so the three
  * bands stay contiguous and disjoint.
  */
-import { GRID_H, GRID_W, Tile } from "../types.ts";
+import { ROOM_EXTENT, Tile } from "../types.ts";
 import type {
-  Cell, Cover, DoorSide, RoomParams, RoomPlan, RoomType, RewardKind, SpaceArchetype,
+  Cell, Cover, DoorSide, Extent, RoomParams, RoomPlan, RoomType, RewardKind, SpaceArchetype,
   SpawnGroup, Symmetry, ZoneSlot,
 } from "../types.ts";
 import { DOOR_SIDES } from "../types.ts";
 import type { Rng } from "../rng.ts";
 import { clearanceField, loopCount } from "./melee-metrics.ts";
 import {
-  BOSS_COVER_CLEARANCE, archetype as archetypeById,
+  BOSS_COVER_CLEARANCE, archetype as archetypeById, archetypeAt,
 } from "./archetypes.ts";
 import {
-  DOOR_CELL, ENTRY_CELL, INTERIOR_X0, INTERIOR_X1, INTERIOR_Y0, INTERIOR_Y1,
-  applyDoors, at, idx, inInterior, maskFor, mirrorX,
+  INTERIOR_X0, INTERIOR_Y0, applyDoors, at, doorCell, entryCell, idx, inInterior,
+  interiorX1, interiorY1, maskFor, mirrorX,
 } from "./masks.ts";
-import { COVER_BANDS, bandsFor, measureRoom, measurementProblems, floodFill } from "./measure.ts";
+import { bandsFor, measureRoom, measurementProblems, floodFill } from "./measure.ts";
 import type { RoomMetrics } from "./measure.ts";
-import { authoredFor } from "./authored.ts";
+import { authoredFor, authoredGrid } from "./authored.ts";
 import type { AuthoredRoom } from "./authored.ts";
 import { bossCentreDistance, entryClearCells, narrowNear, validateRoom } from "./validate.ts";
 import { inSkeleton, skeletonById, skeletonMask, skeletonsFor } from "./skeletons.ts";
@@ -62,8 +62,10 @@ export interface RoomZone {
 export interface GeneratedRoom {
   readonly params: RoomParams;
   readonly room_type: RoomType;
-  /** The archetype actually built, which differs from the request after a relax. */
+  /** The archetype actually built, which differs from the request after a relax; at the room's extent. */
   readonly effective: SpaceArchetype;
+  /** The room's size in cells (`params.size`). */
+  readonly extent: Extent;
   /** The outline the room was built in (`skeletons.ts`); the shape's own id for an authored room. */
   readonly skeleton: string;
   /** That outline's mask, which the measurements and validation were taken against. */
@@ -107,8 +109,8 @@ export function relaxArchetype(a: SpaceArchetype): SpaceArchetype | null {
 
 interface Box { readonly x: number; readonly y: number; readonly w: number; readonly h: number }
 
-function mirrorBox(b: Box): Box {
-  return { x: mirrorX(b.x + b.w - 1), y: b.y, w: b.w, h: b.h };
+function mirrorBox(b: Box, ext: Extent): Box {
+  return { x: mirrorX(b.x + b.w - 1, ext), y: b.y, w: b.w, h: b.h };
 }
 
 interface Placer {
@@ -122,10 +124,11 @@ interface Placer {
   readonly entryCell: Cell;
   readonly doorCells: readonly Cell[];
   readonly mustReach: readonly Cell[];
+  readonly ext: Extent;
 }
 
 function boxFits(p: Placer, b: Box, isPillar: boolean): boolean {
-  if (b.x < 1 || b.y < 1 || b.x + b.w > GRID_W - 1 || b.y + b.h > GRID_H - 1) return false;
+  if (b.x < 1 || b.y < 1 || b.x + b.w > p.ext.w - 1 || b.y + b.h > p.ext.h - 1) return false;
   for (let y = b.y; y < b.y + b.h; y++) {
     for (let x = b.x; x < b.x + b.w; x++) {
       const i = idx(x, y);
@@ -140,14 +143,67 @@ function boxFits(p: Placer, b: Box, isPillar: boolean): boolean {
       if (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) continue;
       const t = at(p.grid, x, y);
       if (t === Tile.Pillar) return false;
-      if (isPillar && inBoundsIdx(x, y) && p.added[idx(x, y)] === 1) return false;
+      if (isPillar && inBoundsIdx(x, y, p.ext) && p.added[idx(x, y)] === 1) return false;
     }
   }
   return true;
 }
 
-function inBoundsIdx(x: number, y: number): boolean {
-  return x >= 0 && y >= 0 && x < GRID_W && y < GRID_H;
+/**
+ * Where two solids meet **at a corner only**: a 2×2 of cells with solid on one
+ * diagonal and floor on the other. The wall on one side and the block on the
+ * other look like they close the space between them and do not quite — a
+ * pinch no body can pass and no eye reads as a wall — and a space closed off
+ * by one is closed off by a point. Walls either share an edge or keep a tile
+ * apart. Returns the top-left of each such window inside the given bounds.
+ */
+function pinches(grid: Uint8Array, ext: Extent, x0 = 0, y0 = 0, x1 = ext.w - 2, y1 = ext.h - 2): [number, number][] {
+  const solid = (x: number, y: number) => {
+    const t = at(grid, x, y);
+    return t === Tile.Wall || t === Tile.Pillar;
+  };
+  const out: [number, number][] = [];
+  for (let y = Math.max(0, y0); y <= Math.min(ext.h - 2, y1); y++)
+    for (let x = Math.max(0, x0); x <= Math.min(ext.w - 2, x1); x++) {
+      const a = solid(x, y), b = solid(x + 1, y), c = solid(x, y + 1), d = solid(x + 1, y + 1);
+      if ((a && d && !b && !c) || (b && c && !a && !d)) out.push([x, y]);
+    }
+  return out;
+}
+
+/**
+ * Closes the corner-only meetings a layout still has — ones its mask or its
+ * fixtures made, which placement cannot refuse — by filling one of the
+ * window's two floor cells, so the two solids share an edge. A fill that would
+ * cut the room's floor apart, or take a reserved cell, is not made; the other
+ * cell is tried, and failing both, the room keeps the pinch and the
+ * validation that follows decides.
+ */
+function closePinches(grid: Uint8Array, entryCell: readonly [number, number], reserved: Uint8Array, mirrored: boolean, ext: Extent): void {
+  const floorCount = (g: Uint8Array) => { let n = 0; const seen = floodFill(g, entryCell); for (let i = 0; i < g.length; i++) if (seen[i] === 1) n++; return n; };
+  for (let pass = 0; pass < 8; pass++) {
+    const found = pinches(grid, ext);
+    if (found.length === 0) return;
+    let changed = false;
+    for (const [x, y] of found) {
+      const window: [number, number][] = [[x, y], [x + 1, y], [x, y + 1], [x + 1, y + 1]];
+      const floors = window.filter(([cx, cy]) => at(grid, cx, cy) === Tile.Floor);
+      if (floors.length !== 2) continue;
+      const before = floorCount(grid);
+      for (const [cx, cy] of floors) {
+        const cells: [number, number][] = mirrored && mirrorX(cx, ext) !== cx ? [[cx, cy], [mirrorX(cx, ext), cy]] : [[cx, cy]];
+        if (cells.some(([ux, uy]) => reserved[idx(ux, uy)] === 1 || at(grid, ux, uy) !== Tile.Floor)) continue;
+        for (const [ux, uy] of cells) grid[idx(ux, uy)] = Tile.Wall;
+        if (floorCount(grid) === before - cells.length) { changed = true; break; }
+        for (const [ux, uy] of cells) grid[idx(ux, uy)] = Tile.Floor;
+      }
+    }
+    if (!changed) return;
+  }
+}
+
+function inBoundsIdx(x: number, y: number, ext: Extent): boolean {
+  return x >= 0 && y >= 0 && x < ext.w && y < ext.h;
 }
 
 function connected(p: Placer): boolean {
@@ -159,7 +215,7 @@ function connected(p: Placer): boolean {
 
 /** Places a block (and its mirror when mirrored). Returns the cells taken. */
 function tryPlace(p: Placer, b: Box, tile: Tile, isPillar: boolean): number {
-  const boxes = p.mirrored ? [b, mirrorBox(b)] : [b];
+  const boxes = p.mirrored ? [b, mirrorBox(b, p.ext)] : [b];
   for (const bb of boxes) if (!boxFits(p, bb, isPillar)) return 0;
   const changed: number[] = [];
   for (const bb of boxes) {
@@ -176,6 +232,8 @@ function tryPlace(p: Placer, b: Box, tile: Tile, isPillar: boolean): number {
   let bad = false;
   for (const bb of boxes) {
     if (narrowNear(p.grid, bb.x, bb.y, bb.w, bb.h)) { bad = true; break; }
+    // Touching another solid only at a corner: placed elsewhere instead.
+    if (pinches(p.grid, p.ext, bb.x - 1, bb.y - 1, bb.x + bb.w, bb.y + bb.h).length > 0) { bad = true; break; }
   }
   if (!bad && !connected(p)) bad = true;
   if (bad) {
@@ -193,11 +251,12 @@ function tryPlace(p: Placer, b: Box, tile: Tile, isPillar: boolean): number {
  */
 function candidates(p: Placer, w: number, h: number, rng: Rng, pillar: boolean): Box[] {
   const out: Box[] = [];
-  const centre = (GRID_W - 1) / 2;
+  const { w: W, h: H } = p.ext;
+  const centre = (W - 1) / 2;
   const maxX = p.mirrored
-    ? Math.min(GRID_W - 1 - w, centre - w + (pillar ? 0 : 1))
-    : GRID_W - 1 - w;
-  for (let y = 1; y + h <= GRID_H - 1; y++) {
+    ? Math.min(W - 1 - w, centre - w + (pillar ? 0 : 1))
+    : W - 1 - w;
+  for (let y = 1; y + h <= H - 1; y++) {
     for (let x = 1; x <= maxX; x++) {
       let ok = true;
       for (let dy = 0; dy < h && ok; dy++) {
@@ -213,7 +272,7 @@ function candidates(p: Placer, w: number, h: number, rng: Rng, pillar: boolean):
   // mirrored room can hold an odd number of pillars, which some masks need to
   // reach the dense band at all.
   if (p.mirrored && pillar && w === 1) {
-    for (let y = 1; y + h <= GRID_H - 1; y++) {
+    for (let y = 1; y + h <= H - 1; y++) {
       let ok = true;
       for (let dy = 0; dy < h; dy++) {
         const i = idx(centre, y + dy);
@@ -226,16 +285,20 @@ function candidates(p: Placer, w: number, h: number, rng: Rng, pillar: boolean):
 }
 
 /** True when mirroring a box maps it onto itself. */
-function selfMirrored(b: Box): boolean {
-  return mirrorX(b.x + b.w - 1) === b.x;
+function selfMirrored(b: Box, ext: Extent): boolean {
+  return mirrorX(b.x + b.w - 1, ext) === b.x;
 }
 
-function pillarTargetFor(cover: Cover, symmetry: Symmetry, rng: Rng): number {
-  if (cover === "none") return 0;
-  const options = cover === "sparse"
-    ? (symmetry === "mirrored" ? [2, 4] : [2, 3, 4])
-    : (symmetry === "mirrored" ? [6, 8] : [5, 6, 7, 8]);
-  return rng.pick(options);
+/**
+ * How many pillars to aim for: any count in the cover's band at the room's
+ * extent, and under `mirrored` an even one, since pillars there come in pairs.
+ */
+function pillarTargetFor(a: SpaceArchetype, symmetry: Symmetry, rng: Rng, ext: Extent): number {
+  const [lo, hi] = bandsFor(a, ext).pillars;
+  if (hi === 0) return 0;
+  const options: number[] = [];
+  for (let n = lo; n <= hi; n++) if (symmetry !== "mirrored" || n % 2 === 0) options.push(n);
+  return rng.pick(options.length > 0 ? options : [hi]);
 }
 
 const STUB_SIZES: readonly (readonly [number, number])[] = [
@@ -267,27 +330,28 @@ function buildBlocked(
   a: SpaceArchetype,
   entry: DoorSide,
   mirrored: boolean,
+  ext: Extent,
 ): { blocked: Uint8Array; mustReach: Cell[] } {
   const blocked = new Uint8Array(mask.length);
   const mustReach: Cell[] = [];
   const reserve = (cell: Cell): void => {
     blocked[idx(cell[0], cell[1])] = 1;
-    if (mirrored) blocked[idx(mirrorX(cell[0]), cell[1])] = 1;
+    if (mirrored) blocked[idx(mirrorX(cell[0], ext), cell[1])] = 1;
   };
   for (const z of a.zoneSlots) for (const c of z.cells) { reserve(c); mustReach.push(c); }
   for (const g of a.spawnGroups) for (const c of g.cells) { reserve(c); mustReach.push(c); }
-  for (const c of entryClearCells(mask, entry)) blocked[idx(c[0], c[1])] = 1;
+  for (const c of entryClearCells(mask, entry, ext)) blocked[idx(c[0], c[1])] = 1;
   // Doorways need their approach kept open on both sides of the mirror line.
   for (const side of a.doors) {
-    const c = ENTRY_CELL[side];
+    const c = entryCell(side, ext);
     blocked[idx(c[0], c[1])] = 1;
-    if (mirrored) blocked[idx(mirrorX(c[0]), c[1])] = 1;
+    if (mirrored) blocked[idx(mirrorX(c[0], ext), c[1])] = 1;
   }
   if (a.boss === true) {
-    for (let y = 0; y < GRID_H; y++) {
-      for (let x = 0; x < GRID_W; x++) {
-        if (!inInterior(x, y)) continue;
-        if (bossCentreDistance(x, y) < BOSS_COVER_CLEARANCE) blocked[idx(x, y)] = 1;
+    for (let y = 0; y < ext.h; y++) {
+      for (let x = 0; x < ext.w; x++) {
+        if (!inInterior(x, y, ext)) continue;
+        if (bossCentreDistance(x, y, ext) < BOSS_COVER_CLEARANCE) blocked[idx(x, y)] = 1;
       }
     }
   }
@@ -302,22 +366,24 @@ function attemptLayout(
   entry: DoorSide,
   rng: Rng,
   skeleton: Skeleton,
+  ext: Extent,
 ): Attempt | null {
   const a = inSkeleton(archetype, skeleton);
-  const mask = skeletonMask(skeleton);
+  const mask = skeletonMask(skeleton, ext);
   const grid = mask.slice();
-  applyDoors(grid, a.doors);
+  applyDoors(grid, a.doors, ext);
   const mirrored = symmetry === "mirrored";
-  const { blocked, mustReach } = buildBlocked(mask, a, entry, mirrored);
+  const { blocked, mustReach } = buildBlocked(mask, a, entry, mirrored, ext);
   const p: Placer = {
     grid, mask, blocked, added: new Uint8Array(mask.length), mirrored,
-    entryCell: ENTRY_CELL[entry],
-    doorCells: a.doors.map((s) => DOOR_CELL[s]),
+    entryCell: entryCell(entry, ext),
+    doorCells: a.doors.map((s) => doorCell(s, ext)),
     mustReach,
+    ext,
   };
 
   // step 2a: pillars, whose count is the cover label.
-  const wantPillars = pillarTargetFor(a.cover, symmetry, rng);
+  const wantPillars = pillarTargetFor(a, symmetry, rng, ext);
   const sizes: readonly (readonly [number, number])[] =
     a.openness === "open" ? [[1, 1]] : [[2, 2], [1, 1]];
   let placedPillars = 0;
@@ -332,20 +398,20 @@ function attemptLayout(
     boxes.sort((l, r) => (score.get(r) ?? 0) - (score.get(l) ?? 0));
     for (const box of boxes) {
       if (placedPillars >= wantPillars) break;
-      const step = mirrored && !selfMirrored(box) ? 2 : 1;
+      const step = mirrored && !selfMirrored(box, ext) ? 2 : 1;
       if (placedPillars + step > wantPillars) continue;
       if (tryPlace(p, box, Tile.Pillar, true) > 0) placedPillars += step;
     }
   }
   // Falling short of the drawn target is fine as long as the cover band is
   // still met; only the band is a promise made to Jev.
-  if (placedPillars < COVER_BANDS[a.cover][0]) return null;
+  if (placedPillars < bandsFor(a, ext).pillars[0]) return null;
 
   // step 2b: wall stubs until the obstacle ratio reaches the openness band.
   // Stubs are tried against the cells they touch first, so blockwork grows off
   // the mask walls and off itself and the free floor stays in 3-wide lanes;
   // scattering them would stall well short of the tight band.
-  const band = bandsFor(a).obstacle;
+  const band = bandsFor(a, ext).obstacle;
   const span = band[1] - band[0];
   const targetRatio = band[0] + span * rng.range(0.25, 0.6);
   const maskFloor = (() => { let n = 0; for (let i = 0; i < mask.length; i++) if (mask[i] === Tile.Floor) n++; return n; })();
@@ -379,11 +445,12 @@ function attemptLayout(
   }
 
   placeKitingObstacle(p, ceiling);
+  closePinches(grid, p.entryCell, p.blocked, mirrored, ext);
 
-  const metrics = measureRoom(grid, mask, p.entryCell);
-  const v = validateRoom({ grid, mask, archetype: a, entry, zones: a.zoneSlots, spawnGroups: a.spawnGroups });
+  const metrics = measureRoom(grid, mask, p.entryCell, ext);
+  const v = validateRoom({ grid, mask, archetype: a, entry, zones: a.zoneSlots, spawnGroups: a.spawnGroups, ext });
   if (!v.ok) return null;
-  if (measurementProblems(metrics, a, symmetry).length > 0) return null;
+  if (measurementProblems(metrics, a, symmetry, ext).length > 0) return null;
   return { grid, metrics, skeleton, effective: a };
 }
 
@@ -395,7 +462,7 @@ function attemptLayout(
  * `open_arena`, `long_corridor`, `broken_corridor`, `choked_corridor` and
  * `cross_open`. In those, a cornered player has no geometry to use, and that
  * matters more than it sounds: the fastest body runs at 80% of the player, so
- * over the whole diagonal of a 21x13 room the player gains under two tiles.
+ * over the whole diagonal of a base-sized room the player gains under two tiles.
  * Running is not an escape. Putting something between yourself and a chaser
  * is.
  *
@@ -440,8 +507,8 @@ function placeKitingObstacle(p: Placer, ceiling: number): void {
   const clear = clearanceField(p.grid);
   const candidates: { box: Box; score: number }[] = [];
   for (const [w, h] of [[2, 2], [1, 1]] as const) {
-    for (let y = INTERIOR_Y0; y <= INTERIOR_Y1 - (h - 1); y++)
-      for (let x = INTERIOR_X0; x <= INTERIOR_X1 - (w - 1); x++) {
+    for (let y = INTERIOR_Y0; y <= interiorY1(p.ext) - (h - 1); y++)
+      for (let x = INTERIOR_X0; x <= interiorX1(p.ext) - (w - 1); x++) {
         const box: Box = { x, y, w, h };
         if (countObstacles(p) + w * h * (p.mirrored ? 2 : 1) > ceiling) continue;
         // Free-standing is the whole point, so anything touching is rejected
@@ -481,15 +548,17 @@ function fromAuthored(
   preferred: DoorSide,
   room: AuthoredRoom,
   attempts: number,
+  ext: Extent,
 ): GeneratedRoom {
-  const a = room.archetype;
+  const a = archetypeAt(room.archetype, ext);
   const entry = resolveEntry(a, preferred);
-  const grid = room.grid.slice();
-  const mask = maskFor(a.shape);
+  const grid = authoredGrid(room, ext);
+  const mask = maskFor(a.shape, ext);
   return {
     params,
     room_type: roomType,
     effective: a,
+    extent: ext,
     skeleton: a.shape,
     mask,
     grid,
@@ -497,7 +566,7 @@ function fromAuthored(
     entry,
     zones: zonesOf(a.zoneSlots),
     spawn_groups: a.spawnGroups,
-    measured: measureRoom(grid, mask, ENTRY_CELL[entry]),
+    measured: measureRoom(grid, mask, entryCell(entry, ext), ext),
     layout: "authored",
     attempts,
     relaxed: true,
@@ -522,26 +591,27 @@ export function generateRoom(
   rng: Rng,
   opts: { readonly avoid?: readonly string[]; readonly plain?: boolean } = {},
 ): GeneratedRoom {
-  const base = archetypeById(params.space);
+  const ext = ROOM_EXTENT[params.size];
+  const base = archetypeAt(archetypeById(params.space), ext);
   const entry = resolveEntry(base, entryRequest);
   const mirrored = params.symmetry === "mirrored";
   let attempts = 0;
   const draw = (a: SpaceArchetype): Skeleton => {
-    const fits = skeletonsFor(a, mirrored, entry);
+    const fits = skeletonsFor(a, mirrored, entry, ext);
     if (opts.plain) return skeletonById(a.shape);
     const fresh = fits.filter((s) => !(opts.avoid ?? []).includes(s.id));
     return rng.pick(fresh.length > 0 ? fresh : fits);
   };
   const built = (got: Attempt, relaxed: boolean): GeneratedRoom => ({
-    params, room_type: roomType, effective: got.effective, skeleton: got.skeleton.id,
-    mask: skeletonMask(got.skeleton), grid: got.grid, doors: got.effective.doors, entry,
+    params, room_type: roomType, effective: got.effective, extent: ext, skeleton: got.skeleton.id,
+    mask: skeletonMask(got.skeleton, ext), grid: got.grid, doors: got.effective.doors, entry,
     zones: zonesOf(got.effective.zoneSlots), spawn_groups: got.effective.spawnGroups, measured: got.metrics,
     layout: "generated", attempts, relaxed, authored_id: null,
   });
 
   for (let i = 0; i < MAX_SEED_ATTEMPTS; i++) {
     attempts++;
-    const got = attemptLayout(base, params.symmetry, entry, rng, draw(base));
+    const got = attemptLayout(base, params.symmetry, entry, rng, draw(base), ext);
     if (got) return built(got, false);
   }
 
@@ -549,12 +619,12 @@ export function generateRoom(
   if (relaxed) {
     for (let i = 0; i < MAX_RELAXED_ATTEMPTS; i++) {
       attempts++;
-      const got = attemptLayout(relaxed, params.symmetry, entry, rng, draw(relaxed));
+      const got = attemptLayout(relaxed, params.symmetry, entry, rng, draw(relaxed), ext);
       if (got) return built(got, true);
     }
   }
 
-  return fromAuthored(params, roomType, entry, authoredFor(base.shape), attempts);
+  return fromAuthored(params, roomType, entry, authoredFor(base.shape), attempts, ext);
 }
 
 /** Lifts a generated room into the `RoomPlan` of doc 004, adding run-level fields. */
@@ -578,6 +648,7 @@ export function toRoomPlan(
       reachable_ratio: room.measured.reachable_ratio,
     },
     grid: room.grid,
+    extent: room.extent,
     skeleton: room.skeleton,
     doors: room.doors,
     entry: room.entry,
@@ -594,13 +665,13 @@ export function toRoomPlan(
   };
 }
 
-/** Debug aid: the grid as 13 rows of 21 characters. */
-export function renderGrid(grid: Uint8Array): string {
+/** Debug aid: the room's extent of the grid as rows of characters. */
+export function renderGrid(grid: Uint8Array, ext: Extent): string {
   const chars = [".", "#", "O", "+"];
   const rows: string[] = [];
-  for (let y = 0; y < GRID_H; y++) {
+  for (let y = 0; y < ext.h; y++) {
     let row = "";
-    for (let x = 0; x < GRID_W; x++) row += chars[grid[idx(x, y)] ?? 1] ?? "?";
+    for (let x = 0; x < ext.w; x++) row += chars[grid[idx(x, y)] ?? 1] ?? "?";
     rows.push(row);
   }
   return rows.join("\n");

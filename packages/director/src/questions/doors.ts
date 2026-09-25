@@ -11,7 +11,7 @@ import type { ChoiceQuestion } from "../types.ts";
 /** One consequence per type, in the label vocabulary (doc 010). */
 const CONSEQUENCE: Readonly<Record<RoomType, string>> = {
   combat: "a fight at the chosen tension",
-  elite: "a harder fight for a better reward, and the only place the strongest counters appear",
+  elite: "a harder fight for a reward graded up, with the elite counters in it",
   treasure: "a guaranteed item with no fight",
   shop: "spend gold on four items with a reroll",
   rest: "recover, gain a slot, drop an item, or refresh the next reward pool",

@@ -64,7 +64,7 @@ Everything else stays in code: portal legality and count, pacing rules, the elit
 
 - One biome. A run is fourteen fights, a merchant-and-blacksmith room and a boss room, about 20 minutes (014).
 - Eight enemy archetypes with calibrated threat weights; elite rooms add an affix set drawn from the legal ones; one boss with three fixed phases.
-- 24 castable spells across seven schools, 13 affixes in three tiers, 12 stat upgrades in four families (006, 013).
+- 30 castable spells across seven schools, 20 affixes in three tiers, 12 stat upgrades in four families (006, 013).
 - Procedurally generated rooms and boss arena driven by Jev-chosen parameters, with three authored fallback rooms (004); room mood derived from Jev-chosen labels (008).
 - Encounters assembled from the archetypes to a calibrated pressure budget, with six tiered fallback presets (005).
 - Intent screen with five build styles and free text; pick-one-of-three cards per portal; merchant and blacksmith; gold economy.

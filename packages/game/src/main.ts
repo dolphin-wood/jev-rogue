@@ -1,15 +1,32 @@
 import Phaser from "phaser";
-import { PlayScene, VIEW } from "./scenes/play.ts";
+import { PlayScene, DPR, VIEW_W, VIEW_H, worldZoom, presentScale } from "./scenes/play.ts";
 import { BASE_PALETTE } from "@jr/core";
+import { getLang, loadFont } from "./i18n/index.ts";
+
+/**
+ * The canvas: the **viewport**, a fixed 16 x 9 tiles of the world (doc 008),
+ * fitted to the window whole with the rest of the window black. It is drawn
+ * at a whole number of canvas pixels to an art pixel (`worldZoom`) and shown
+ * at `presentScale` device pixels to a canvas pixel — one to one when the fit
+ * is whole, smoothly scaled down otherwise. The camera follows the player
+ * across the room.
+ */
+function canvasSize(): { css: [number, number]; px: [number, number]; shown: number } {
+  const zoom = worldZoom();
+  const px: [number, number] = [Math.round(VIEW_W * zoom), Math.round(VIEW_H * zoom)];
+  const shown = presentScale();
+  return { css: [(px[0] * shown) / DPR, (px[1] * shown) / DPR], px, shown };
+}
+
+// The first frame is drawn in the language's own font, not the fallback.
+await loadFont(getLang());
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: "game",
-  // The backing store is sized in physical pixels, art resolution times the
-  // device pixel ratio. That is what makes a HiDPI screen sharp; the earlier
-  // blur came from a 672-wide backing store stretched across the window.
-  width: VIEW.width,
-  height: VIEW.height,
+  // In physical pixels, so a HiDPI screen is sharp; see `canvasSize`.
+  width: canvasSize().px[0],
+  height: canvasSize().px[1],
   // The current delivery is pixel art. Texture canvases also opt into nearest
   // filtering after mood recolouring; this covers the initial sheet as well.
   pixelArt: true,
@@ -29,14 +46,18 @@ const game = new Phaser.Game({
 (globalThis as unknown as { jr?: unknown }).jr = game;
 
 /**
- * Presents the fixed backing store at the largest size that fits the window.
+ * Sizes the canvas to the window, shown at one device pixel per canvas pixel.
  * Done through the scale manager rather than by setting canvas styles, which
  * it overwrites on its own refresh.
  */
 function present(): void {
-  const zoom = Math.min(window.innerWidth / VIEW.width, window.innerHeight / VIEW.height);
-  game.scale.setZoom(zoom);
+  const { px, shown } = canvasSize();
+  game.scale.resize(px[0], px[1]);
+  game.scale.setZoom(shown / DPR);
   game.scale.refresh();
+  // Scaled down, the canvas is filtered, so every art pixel stays one width;
+  // one to one it is shown as it is.
+  game.canvas.style.imageRendering = shown < 1 - 1e-6 ? "auto" : "pixelated";
 }
 
 window.addEventListener("resize", present);

@@ -1,0 +1,21 @@
+# The Jev proxy (doc 009), deployed beside your own build of the game.
+# Secrets, set with `npx wrangler secret put <NAME>`:
+#   TYPESAFE_API_KEY  your TypeSafe key
+#   INVITE_CODES      comma-separated codes that may spend it; unset admits nobody
+name = "jev-rogue-proxy"
+main = "worker.ts"
+compatibility_date = "2026-09-01"
+
+[vars]
+# The origin your build of the game is served from.
+ALLOWED_ORIGIN = "https://example.github.io"
+
+# Per-IP limit on POST /invite/verify, the endpoint that tells the game whether
+# a code works. Optional: the endpoint falls back to an in-isolate counter if
+# this binding is absent, so if your plan refuses `[[ratelimits]]` at deploy
+# time, delete this block and deploy again. `namespace_id` is any number you
+# have not used for another limiter in this Worker.
+[[ratelimits]]
+binding = "INVITE_RATE_LIMIT"
+namespace_id = "1001"
+simple = { limit = 10, period = 60 }

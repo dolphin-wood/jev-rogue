@@ -10,11 +10,16 @@
  * round 2 can still fill their zones and the encounter can still pick a spawn
  * group. They are checked - for every supported door as the entry - by the
  * same `validateRoom` the generator uses.
+ *
+ * They are drawn on the base grid, 21 x 13, and stretched to a room's extent
+ * by `authoredGrid`: every base cell becomes the block it maps to, and the
+ * doors are stamped at the extent's own midpoints.
  */
 import { GRID_H, GRID_W, Tile } from "../types.ts";
-import type { Shape, SpaceArchetype } from "../types.ts";
+import type { Extent, Shape, SpaceArchetype } from "../types.ts";
 import { archetype } from "./archetypes.ts";
-import { idx } from "./masks.ts";
+import { applyDoors, idx } from "./masks.ts";
+import { BASE_EXTENT, baseCellOf } from "./extent.ts";
 
 export interface AuthoredRoom {
   readonly id: string;
@@ -31,12 +36,13 @@ const CODES: Readonly<Record<string, Tile>> = {
 };
 
 function parse(rows: readonly string[]): Uint8Array {
-  if (rows.length !== GRID_H) throw new Error(`authored room needs ${GRID_H} rows, got ${rows.length}`);
-  const grid = new Uint8Array(GRID_W * GRID_H);
-  for (let y = 0; y < GRID_H; y++) {
+  const { w, h } = BASE_EXTENT;
+  if (rows.length !== h) throw new Error(`authored room needs ${h} rows, got ${rows.length}`);
+  const grid = new Uint8Array(GRID_W * GRID_H).fill(Tile.Wall);
+  for (let y = 0; y < h; y++) {
     const row = rows[y]!;
-    if (row.length !== GRID_W) throw new Error(`authored row ${y} needs ${GRID_W} columns`);
-    for (let x = 0; x < GRID_W; x++) {
+    if (row.length !== w) throw new Error(`authored row ${y} needs ${w} columns`);
+    for (let x = 0; x < w; x++) {
       const tile = CODES[row[x]!];
       if (tile === undefined) throw new Error(`authored row ${y} has an unknown glyph ${row[x]}`);
       grid[idx(x, y)] = tile;
@@ -117,6 +123,19 @@ export const FALLBACK_CROSS: AuthoredRoom = {
 export const AUTHORED_ROOMS: readonly AuthoredRoom[] = [
   FALLBACK_ARENA, FALLBACK_CORRIDOR, FALLBACK_CROSS,
 ];
+
+/** An authored room's grid at an extent: each base cell stretched to its block, the doors at the extent's. */
+export function authoredGrid(room: AuthoredRoom, ext: Extent): Uint8Array {
+  const grid = new Uint8Array(GRID_W * GRID_H).fill(Tile.Wall);
+  for (let y = 0; y < ext.h; y++)
+    for (let x = 0; x < ext.w; x++) {
+      const [bx, by] = baseCellOf(x, y, ext);
+      const t = room.grid[idx(bx, by)]!;
+      grid[idx(x, y)] = t === Tile.Door ? Tile.Wall : t;
+    }
+  applyDoors(grid, room.archetype.doors, ext);
+  return grid;
+}
 
 /**
  * The fallback for a shape. A `ring` has no authored twin, and its E/W doors

@@ -1,17 +1,14 @@
 /**
- * Fires every castable item and reports what it actually did.
+ * Fires every spell in the pool and reports what it actually did.
  *
- * The pool has twenty castables and nothing had ever pressed all twenty. Each
- * one is authored data — mana, damage, count, spread, lifetime, pierce,
- * element, plus the payload triggers and multicast fan-out — and authored data
- * that is never executed is authored data that is wrong somewhere. The three
- * questions this answers, per spell:
+ * Each spell is authored data — mana, damage, count, spread, lifetime, pierce,
+ * element, shape — and authored data that is never executed is authored data
+ * that is wrong somewhere. The three questions this answers, per spell:
  *
  * - **Does it fire at all?** A spell whose mana cost exceeds the reference
- *   staff's pool, or whose unit fails to parse, silently does nothing.
+ *   staff's pool silently does nothing.
  * - **Does it reach and hurt something?** Projectiles that expire before the
- *   target, or carriers whose child never fires, look identical to a working
- *   spell from the outside.
+ *   target look identical to a working spell from the outside.
  * - **Is it distinguishable from its neighbours?** Twenty spells that all
  *   resolve to "one bolt, eight damage" is a content failure no unit test
  *   catches, because each row is individually valid.
@@ -27,12 +24,13 @@
  * early. What is asserted is that every spell *works*.
  */
 import {
-  createWorld, step, makeEnemy, generateRoom, toRoomPlan, staffFor,
+  createWorld, step, makeEnemy, generateRoom, toRoomPlan,
   plainInstance, RngSource, NO_INPUT, ITEMS, STEP_MS, GRID_W, GRID_H, TILE_PX, Tile,
 } from "@jr/core";
 import type { BaseItem, World } from "@jr/core";
+import { holdsKey } from "../play/hands.ts";
 
-/** Long enough for a slow mortar to land and its child to resolve. */
+/** Long enough for the slowest spell to land and its lingering effect to resolve. */
 const OBSERVE_MS = 2600;
 /** Where the dummy stands, in px from the player: inside every spell's range. */
 const TARGET_DIST = 150;
@@ -54,6 +52,9 @@ const src = new RngSource("spell-check");
 const g = generateRoom(
   {
     space: "open_arena", symmetry: "mirrored",
+    // Compact: at the standard size the room's kiting block stood on venom
+    // spit's curve from the caster to the dummy, and it reported never hitting.
+    size: "compact",
     mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" },
   },
   "S", "combat", src.stream("r"), { plain: true },
@@ -90,7 +91,6 @@ function onFloor(x: number, y: number): [number, number] {
 
 interface Result {
   readonly id: string;
-  readonly kind: string;
   readonly mana: number;
   /** Projectiles that existed at any point, which is the fan-out. */
   readonly spawned: number;
@@ -98,20 +98,6 @@ interface Result {
   /** Peak concurrent projectiles, which separates a volley from a stream. */
   readonly peak: number;
   readonly hitTarget: boolean;
-  /**
-   * The first projectile's properties at spawn.
-   *
-   * Measured because damage against a pinned dummy cannot see most of what a
-   * modifier does. Speed, size, pierce, homing, bounce and element all change
-   * the projectile without changing what it does to a stationary target at one
-   * fixed range — so scoring modifiers by damage reported six working ones as
-   * broken. The question "did the modifier reach the projectile" has a direct
-   * answer, and this is it.
-   */
-  readonly shot: {
-    speed: number; radius: number; pierce: number;
-    homing: number; bounce: number; split: number; element: string;
-  } | null;
   readonly notes: readonly string[];
 }
 
@@ -122,15 +108,11 @@ interface Result {
  * because a spell that kills it would stop the observation early and the
  * damage figure would then measure the dummy's health rather than the spell.
  */
-function fire(base: BaseItem, extra: readonly string[] = []): Result {
+function fire(base: BaseItem): Result {
   const w: World = createWorld({
     room, encounter: null,
-    staff: staffFor({ slots: "many", mana: "high", tempo: "steady", special: "none" }),
-    slots: [
-      plainInstance(base.id),
-      ...extra.map((id, i) => plainInstance(id, `${id}-${i}`)),
-      null, null, null, null, null,
-    ].slice(0, 8),
+    staff: { slots: 6, mana_max: 120 },
+    slots: [plainInstance(base.id), null, null, null, null, null],
     hearts: 999, rng: src.stream("w", base.id),
     /*
      * **No scenery.** This is the third measurement bug in this file and the
@@ -184,14 +166,24 @@ function fire(base: BaseItem, extra: readonly string[] = []): Result {
   if (base.params.shape === "dash") dummy.x = w.player.x + 70;
   // A ring thrown out all round stops short by design; its dummy stands inside the ring's reach.
   if (Number(base.params.spread ?? 0) >= 180) dummy.x = w.player.x + 60;
+  // So do rings of ground round the caster.
+  if (base.params.pattern === "ring") dummy.x = w.player.x + 60;
+  /*
+   * Doc 006's newer shapes, each where it reaches: a thrown blade inside its
+   * throw, an enchant's wave and a stance's answer beside the caster, and a
+   * trail's dummy on the ground the caster walks back and forth over.
+   */
+  const shape0 = String(base.params.shape ?? "bolt");
+  if (shape0 === "boomerang") dummy.x = w.player.x + Math.min(70, Number(base.params.reach ?? 110) * 0.6);
+  if (shape0 === "enchant" || shape0 === "stance" || shape0 === "trail") dummy.x = w.player.x + 36;
   w.enemies.push(dummy);
+  const dx0 = dummy.x, dy0 = dummy.y;
 
   const before = dummy.hp + dummy.armour;
   let peak = 0;
   let spawned = 0;
   let live = 0;
   let hit = false;
-  let shot: Result["shot"] = null;
 
   /*
    * Mana is read **immediately** after the first cast.
@@ -202,35 +194,85 @@ function fire(base: BaseItem, extra: readonly string[] = []): Result {
    * and that is only answerable on the frame it happened.
    */
   let manaAfterCast = Infinity;
+  /*
+   * What doc 006's options leave in the world, by the events they report:
+   * the doom mark bursting, the orb's ring of shards, the leap landing, the
+   * pull imploding. A spell with the option that never reports its event
+   * has the option in its params and not in its behaviour.
+   */
+  const whats = new Set<string>();
+  let marked = false;
+  let volley = 0;
+  const charge = Number(base.params.charge ?? 0);
+  /*
+   * What the newer shapes need of the hands: an enchant's caster swings (the
+   * waves leave only from swings), a trail's walks (the ground is laid only
+   * by travel), and a stance's is struck — a shot lands on the caster a few
+   * frames into each guard. What the sword's own blows did is kept apart, so
+   * an enchant is judged on its waves.
+   */
+  const hands = (ms: number) => ({
+    ...(shape0 === "enchant" ? { swing: true } : {}),
+    ...(shape0 === "trail" ? { moveX: Math.floor(ms / 500) % 2 === 0 ? 1 : -1 } : {}),
+  });
+  let struck = 0;
+  let throughGuard = 0;
+  let patchesLaid = 0;
+  let casterBurned = false;
+  let poisoned = false;
+  let burnedByCloud = false;
 
   for (let c = 0; c < CASTS; c++) {
     // The press is an edge, which is what the scene sends: holding a key must
     // not buy a cast per frame.
     w.player.mana = w.staff.mana_max;
-    step(w, { ...NO_INPUT, aimX: dummy.x, aimY: dummy.y, spell: 0 }, STEP_MS, ITEMS);
+    /*
+     * A `charge` spell is held to a full charge and then let go, which is
+     * the cast; the mana is read after the release, which is when it is
+     * paid (`holdsKey`). Everything else is the one press.
+     */
+    if (charge > 0) {
+      for (let ms = 0; ms < charge + 500 && holdsKey(w, 0); ms += STEP_MS)
+        step(w, { ...NO_INPUT, aimX: dummy.x, aimY: dummy.y, spell: 0 }, STEP_MS, ITEMS);
+      step(w, { ...NO_INPUT, aimX: dummy.x, aimY: dummy.y }, STEP_MS, ITEMS);
+    } else step(w, { ...NO_INPUT, aimX: dummy.x, aimY: dummy.y, spell: 0 }, STEP_MS, ITEMS);
     manaAfterCast = Math.min(manaAfterCast, w.player.mana);
+    if (c === 0) volley = w.playerBullets.filter((b) => b.alive).length;
 
     const window = c === CASTS - 1 ? OBSERVE_MS : CAST_GAP_MS;
+    const wasPatches = w.fires.map((f) => f.alive);
+    let shot = false;
     for (let ms = 0; ms < window; ms += STEP_MS) {
-      step(w, { ...NO_INPUT, aimX: dummy.x, aimY: dummy.y }, STEP_MS, ITEMS);
+      // Struck once a guard, while it is up: the check is the guard's, not the cooldown's.
+      if (shape0 === "stance" && !shot && ms >= 150 && w.player.stance) {
+        shot = true;
+        const b = w.enemyBullets.find((x) => !x.alive);
+        if (b) {
+          b.alive = true; b.x = w.player.x; b.y = w.player.y; b.vx = 0; b.vy = 0;
+          b.radius = 3; b.lifeMs = 200; b.damage = 1; b.from = "shooter";
+          struck++;
+        }
+      }
+      step(w, { ...NO_INPUT, aimX: dummy.x, aimY: dummy.y, ...hands(ms) }, STEP_MS, ITEMS);
+      w.fires.forEach((f, k) => { if (f.alive && !wasPatches[k] && f.owner === "player") patchesLaid++; wasPatches[k] = f.alive; });
+      if (w.player.burnBuild > 0 || w.player.burnMs > 0 || w.player.poisonBuild > 0) casterBurned = true;
+      if (dummy.poisonMs > 0) poisoned = true;
+      if (base.params.element === "poison" && (dummy.burnBuild > 0 || dummy.burnMs > 0)) burnedByCloud = true;
+      // The trail's dummy and the stance's stay where they were put.
+      dummy.x = dx0; dummy.y = dy0;
       let now = 0;
       for (const b of w.playerBullets) if (b.alive) now++;
-      if (!shot) {
-        const first = w.playerBullets.find((b) => b.alive);
-        if (first)
-          shot = {
-            speed: Math.round(Math.hypot(first.vx, first.vy)),
-            radius: Math.round(first.radius * 10) / 10,
-            pierce: first.pierce, homing: Math.round(first.homing * 100) / 100,
-            bounce: first.bounce, split: first.split, element: first.element,
-          };
-      }
       // Projectiles have no stable identity, so fan-out is counted from the
       // rising edges of the live count rather than from a set of ids.
       if (now > live) spawned += now - live;
       live = now;
       peak = Math.max(peak, now);
-      if (dummy.hp + dummy.armour < before) hit = true;
+      // An enchant's own evidence is what its waves did, not the sword's blows.
+      if (shape0 === "enchant" ? w.stats.damageDealt - w.stats.swordDamage > 0 : dummy.hp + dummy.armour < before) hit = true;
+      for (const ev of w.events) if (ev.what) whats.add(`${ev.kind}:${ev.what}`);
+      // The shot the stance was struck with, landing anyway.
+      if (shape0 === "stance") throughGuard += w.events.filter((ev) => ev.kind === "player_hit" && ev.what === "bullet:shooter").length;
+      if (w.eruptions.some((x) => x.alive && !x.fired && x.telegraphMs > 0)) marked = true;
     }
   }
 
@@ -245,91 +287,57 @@ function fire(base: BaseItem, extra: readonly string[] = []): Result {
     if (!w.props.some((p) => p.kind === "pillar")) notes.push("NO PILLAR RAISED");
   } else if (!hit) notes.push("NEVER HIT");
   if (shape === "summon" && !w.pets.some((x) => x.alive)) notes.push("NO COMPANION");
+  // Doc 006's options, each by what it leaves behind.
+  const p = base.params;
+  if (Number(p.charges ?? 0) > 1 && volley < Number(p.charges)) notes.push(`BANK LOOSED ${volley} OF ${p.charges}`);
+  if (Number(p.doom ?? 0) > 0 && !whats.has("eruption:doom")) notes.push("DOOM NEVER BURST");
+  if (Number(p.emit ?? 0) > 0 && !whats.has("shot:emit_burst")) notes.push("NO SHARD RING");
+  if (Number(p.contagion ?? 0) > 0 && dummy.contagion <= 0 && !whats.has("shot:contagion")) notes.push("NO CONTAGION CARRIED");
+  if (Number(p.telegraph_ms ?? 0) > 0 && !marked) notes.push("GROUND NEVER MARKED");
+  if (Number(p.land ?? 0) > 0 && !whats.has("shot:land")) notes.push("NEVER LANDED");
+  if (Number(p.collapse_damage ?? 0) > 0 && !whats.has("eruption:collapse")) notes.push("NEVER COLLAPSED");
+  // Doc 006's newer shapes, each by the rule it is said with.
+  if (shape === "orb" && !whats.has("spell:orb_strike")) notes.push("ORB NEVER STRUCK");
+  if (shape === "boomerang" && (!whats.has("spell:boomerang_turn") || !whats.has("spell:boomerang_caught"))) notes.push("BLADE NEVER CAME BACK");
+  if (shape === "enchant" && !whats.has("spell:wave")) notes.push("NO WAVE THROWN");
+  if (shape === "trail") {
+    if (patchesLaid === 0) notes.push("NO GROUND LAID");
+    if (casterBurned) notes.push("CASTER HARMED BY OWN GROUND");
+  }
+  if (shape === "stance") {
+    if (struck === 0 || !whats.has("spell:stance_guard")) notes.push("NO HIT CANCELLED");
+    if (throughGuard > 0) notes.push("A HIT LANDED THROUGH THE GUARD");
+    if (!whats.has("spell:stance_answer")) notes.push("NEVER ANSWERED");
+  }
+  if (shape === "field" && p.element === "poison") {
+    if (!poisoned) notes.push("CLOUD NEVER POISONED");
+    if (burnedByCloud) notes.push("CLOUD BURNED");
+    if (casterBurned) notes.push("CASTER HARMED BY OWN GROUND");
+  }
   return {
-    id: base.id, kind: base.kind, mana: base.mana,
+    id: base.id, mana: base.mana,
     spawned, damage: Math.round((before - (dummy.hp + dummy.armour)) * 10) / 10,
-    peak, hitTarget: hit, shot, notes,
+    peak, hitTarget: hit, notes,
   };
 }
 
-const castable = [...ITEMS.values()].filter(
-  (i) => i.kind === "attack" || i.kind === "payload" || i.kind === "multicast",
-);
+const spells = [...ITEMS.values()];
 
-console.log(`${castable.length} castables, cast ${CASTS}x each at a pinned dummy `
+console.log(`${spells.length} spells, cast ${CASTS}x each at a pinned dummy `
   + `${TARGET_DIST} px away in an empty room\n`);
-console.log("kind       id                 mana  shots  peak  damage  dmg/mana  notes");
+console.log("id                 mana  shots  peak  damage  dmg/mana  notes");
 
-// `map(fire)` would pass the array index as `extra`, which typechecks as a
-// number into a string array only because the parameter is optional.
-const results = castable.map((c) => fire(c));
+const results = spells.map((c) => fire(c));
 for (const r of results) {
   const perMana = r.mana > 0 ? (r.damage / r.mana).toFixed(1) : "-";
   console.log(
-    `${r.kind.padEnd(10)} ${r.id.padEnd(18)} ${String(r.mana).padStart(4)} `
+    `${r.id.padEnd(18)} ${String(r.mana).padStart(4)} `
     + `${String(r.spawned).padStart(6)} ${String(r.peak).padStart(5)} `
     + `${String(r.damage).padStart(7)} ${perMana.padStart(9)}  ${r.notes.join(", ")}`,
   );
 }
 
-/*
- * **Every modifier, attached to a spell, measured against the bare spell.**
- *
- * This is the half that was missing and it is where the dead content was. A
- * boost is authored as a row of numbers and nothing ever attached one to
- * anything: `makeSpell` parsed a single item, so a boost in a staff slot
- * became its own "spell" that did nothing when pressed and could not reach the
- * attack beside it either. Twenty of the forty items in the pool were inert.
- *
- * Two of them were doubly dead. `fracture_rune` sets `Bullet.split`, which the
- * *simulator* implemented and the **game read nowhere** — so the two disagreed
- * about what the item did, which doc 006 says must never happen. And the three
- * multicasts had nothing to consume at all.
- *
- * So each modifier is attached to `magic_bolt` and compared: more projectiles,
- * more damage, or something visible. A modifier that changes neither is a
- * modifier doing nothing, whatever its description says.
- */
-const bolt = ITEMS.get("magic_bolt")!;
-const soloBolt = fire(bolt);
-const modifiers = [...ITEMS.values()].filter((i) => i.kind === "boost");
-
-console.log(`\n${modifiers.length} modifiers, each attached to magic_bolt `
-  + `(bare: ${soloBolt.spawned} shots, ${soloBolt.damage} damage):`);
-console.log("id                 shots  damage  what it changed on the projectile");
-const modResults = modifiers.map((m) => {
-  const r = fire(bolt, [m.id]);
-  const dShots = r.spawned - soloBolt.spawned;
-  const dDamage = Math.round((r.damage - soloBolt.damage) * 10) / 10;
-
-  // Everything the modifier did to the projectile itself, named.
-  const a = soloBolt.shot;
-  const b = r.shot;
-  const changed: string[] = [];
-  if (dShots !== 0) changed.push(`${dShots > 0 ? "+" : ""}${dShots} shots`);
-  if (dDamage !== 0) changed.push(`${dDamage > 0 ? "+" : ""}${dDamage} dmg`);
-  if (a && b) {
-    if (b.speed !== a.speed) changed.push(`speed ${a.speed}->${b.speed}`);
-    if (b.radius !== a.radius) changed.push(`radius ${a.radius}->${b.radius}`);
-    if (b.pierce !== a.pierce) changed.push(`pierce ${a.pierce}->${b.pierce}`);
-    if (b.homing !== a.homing) changed.push(`homing ${a.homing}->${b.homing}`);
-    if (b.bounce !== a.bounce) changed.push(`bounce ${a.bounce}->${b.bounce}`);
-    if (b.split !== a.split) changed.push(`split ${a.split}->${b.split}`);
-    if (b.element !== a.element) changed.push(`element ${a.element}->${b.element}`);
-  }
-  const notes = changed.length === 0 ? ["NO EFFECT"] : [];
-  console.log(
-    `${m.id.padEnd(18)} ${String(r.spawned).padStart(5)} ${String(r.damage).padStart(7)}  `
-    + `${changed.join(", ") || "NO EFFECT"}`,
-  );
-  return { id: m.id, notes };
-});
-
-const broken = [
-  ...results.filter((r) => r.kind !== "multicast" && r.notes.length > 0),
-  ...modResults.filter((r) => r.notes.length > 0),
-];
-
+const broken = results.filter((r) => r.notes.length > 0);
 
 /*
  * Damage per mana is reported and **not asserted**. A pool is meant to have a
@@ -354,6 +362,5 @@ if (broken.length > 0) {
   for (const r of broken) console.log(`  ${r.id}: ${r.notes.join(", ")}`);
   process.exitCode = 1;
 } else {
-  console.log(`\nall ${results.length} keyed spells fire and hit, `
-    + `and all ${modifiers.length} modifiers change what they are attached to`);
+  console.log(`\nall ${results.length} keyed spells fire and hit`);
 }

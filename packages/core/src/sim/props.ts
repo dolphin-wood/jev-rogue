@@ -43,7 +43,9 @@ import type { Rng } from "../rng.ts";
  * drawn as an object that bodies and bullets passed straight through, which
  * is what both were.
  */
-export type PropKind = "pot" | "crate" | "urn" | FixtureKind | ConjuredKind;
+/** The throne hall's standing stone and iron (`RoomPlan.standing`, doc 020): cover that wears away. */
+export type HallKind = "column" | "candelabrum";
+export type PropKind = "pot" | "crate" | "urn" | FixtureKind | ConjuredKind | HallKind;
 
 /** The kinds the room scatters at random. Fixtures are placed by their zone. */
 export const PROP_KINDS: readonly PropKind[] = ["pot", "crate", "urn"];
@@ -86,6 +88,12 @@ const PROP_HP: Readonly<Record<PropKind, number>> = {
   // clock regardless. Dear enough that a shooter takes several volleys to
   // clear it, cheap enough that a tank's charge removes it in one.
   pillar: 24,
+  /*
+   * The throne hall's columns take four of the player's swings, and two of
+   * the king's (`BOSS_PROP_DAMAGE`): cover the fight wears away, a chip at a
+   * time, until the hall is open. A candelabrum goes in one.
+   */
+  column: 36, candelabrum: 9,
 };
 
 /** Mana returned on break, as a share of the cap — the same currency as a hit. */
@@ -183,6 +191,8 @@ export function placeProps(
   rng: Rng,
   avoid: readonly { x: number; y: number }[],
   count: number,
+  /** Cells (`y * GRID_W + x`) no prop may stand on. */
+  blocked: ReadonlySet<number> = new Set(),
 ): Destructible[] {
   const open = (gx: number, gy: number): boolean =>
     gx >= 1 && gy >= 1 && gx < GRID_W - 1 && gy < GRID_H - 1
@@ -191,7 +201,7 @@ export function placeProps(
   const eligible: [number, number][] = [];
   for (let gy = 1; gy < GRID_H - 1; gy++)
     for (let gx = 1; gx < GRID_W - 1; gx++) {
-      if (!open(gx, gy)) continue;
+      if (!open(gx, gy) || blocked.has(gy * GRID_W + gx)) continue;
       // Floor all round, so breaking one never opens the only route and
       // standing one never plugs a gap the generator sized deliberately.
       if (!open(gx - 1, gy) || !open(gx + 1, gy) || !open(gx, gy - 1) || !open(gx, gy + 1)) continue;
@@ -314,6 +324,22 @@ export function fixtureCells(cells: readonly (readonly [number, number])[]): [nu
  * clear of them, and subject to the same rule: a pillar may not be the only
  * way between two parts of the floor.
  */
+/** Stands a room's placed destructibles (`RoomPlan.standing`) on their cells, writing them into `grid`. */
+export function placeStanding(
+  grid: Uint8Array, standing: readonly { readonly kind: HallKind; readonly gx: number; readonly gy: number }[],
+): Destructible[] {
+  return standing.map(({ kind, gx, gy }) => {
+    grid[gy * GRID_W + gx] = Tile.Prop;
+    const hp = PROP_HP[kind];
+    return {
+      kind, gx, gy,
+      x: (gx + 0.5) * TILE_PX, y: (gy + 0.5) * TILE_PX,
+      radius: TILE_PX * 0.45,
+      hp, maxHp: hp, brokenMs: 0, hitFlashMs: 0,
+    };
+  });
+}
+
 export function placeFixtures(
   grid: Uint8Array,
   zones: readonly { readonly cells: readonly (readonly [number, number])[]; readonly feature: string }[],

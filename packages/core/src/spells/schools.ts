@@ -23,6 +23,12 @@ export const SCHOOL_OF: Readonly<Record<string, SpellSchool>> = {
   spirit_blades: "spirit", spirit_ally: "spirit", blink_strike: "spirit",
   stone_shard: "stone", stone_ward: "stone", scatter_shot: "stone", fault_line: "stone",
   frost_nova: "frost", seeker_swarm: "storm",
+  earth_spikes: "stone", flame_pillars: "flame", cinder_geysers: "flame",
+  mana_darts: "void", arcane_cannon: "void", doom_sigil: "void",
+  frozen_orb: "frost", contagion: "venom", meteor: "flame",
+  quake_ring: "stone", leap_slam: "stone",
+  ball_lightning: "storm", returning_edge: "spirit", crescent_edge: "spirit", counter_stance: "spirit",
+  cinder_stride: "flame", toxic_cloud: "venom",
 };
 
 export function schoolOf(itemId: string): SpellSchool | null {

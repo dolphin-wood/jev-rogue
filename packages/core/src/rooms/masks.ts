@@ -5,32 +5,39 @@
  * placed: `Tile.Wall` everywhere the shape excludes, `Tile.Floor` everywhere it
  * includes. Masks are code, never authored files.
  *
- * Grid is 21 x 13 with a wall ring, so the playable interior is x 1..19,
- * y 1..11 and the four doors sit at the edge midpoints.
+ * A room is its extent (`extent.ts`) with a wall ring, so the playable
+ * interior is x 1..w-2, y 1..h-2 and the four doors sit at the edge
+ * midpoints. The grid past the extent is wall.
  */
 import { GRID_W, GRID_H, Tile } from "../types.ts";
-import type { Cell, DoorSide, Shape } from "../types.ts";
+import type { Cell, DoorSide, Extent, Shape } from "../types.ts";
+import { edgeX, edgeY } from "./extent.ts";
 
+/** The playable interior: inside the wall ring, x 1..w-2 and y 1..h-2. */
+export const interiorX1 = (ext: Extent): number => ext.w - 2;
+export const interiorY1 = (ext: Extent): number => ext.h - 2;
 export const INTERIOR_X0 = 1;
-export const INTERIOR_X1 = GRID_W - 2; // 19
 export const INTERIOR_Y0 = 1;
-export const INTERIOR_Y1 = GRID_H - 2; // 11
 
 /** Door cells live in the wall ring at the midpoint of each side. */
-export const DOOR_CELL: Readonly<Record<DoorSide, Cell>> = {
-  N: [(GRID_W - 1) / 2, 0],
-  S: [(GRID_W - 1) / 2, GRID_H - 1],
-  W: [0, (GRID_H - 1) / 2],
-  E: [GRID_W - 1, (GRID_H - 1) / 2],
-};
+export function doorCell(side: DoorSide, ext: Extent): Cell {
+  switch (side) {
+    case "N": return [(ext.w - 1) / 2, 0];
+    case "S": return [(ext.w - 1) / 2, ext.h - 1];
+    case "W": return [0, (ext.h - 1) / 2];
+    case "E": return [ext.w - 1, (ext.h - 1) / 2];
+  }
+}
 
 /** The interior cell a player stands on immediately after walking through. */
-export const ENTRY_CELL: Readonly<Record<DoorSide, Cell>> = {
-  N: [(GRID_W - 1) / 2, INTERIOR_Y0],
-  S: [(GRID_W - 1) / 2, INTERIOR_Y1],
-  W: [INTERIOR_X0, (GRID_H - 1) / 2],
-  E: [INTERIOR_X1, (GRID_H - 1) / 2],
-};
+export function entryCell(side: DoorSide, ext: Extent): Cell {
+  switch (side) {
+    case "N": return [(ext.w - 1) / 2, INTERIOR_Y0];
+    case "S": return [(ext.w - 1) / 2, interiorY1(ext)];
+    case "W": return [INTERIOR_X0, (ext.h - 1) / 2];
+    case "E": return [interiorX1(ext), (ext.h - 1) / 2];
+  }
+}
 
 export function idx(x: number, y: number): number {
   return y * GRID_W + x;
@@ -40,8 +47,8 @@ export function inBounds(x: number, y: number): boolean {
   return x >= 0 && y >= 0 && x < GRID_W && y < GRID_H;
 }
 
-export function inInterior(x: number, y: number): boolean {
-  return x >= INTERIOR_X0 && x <= INTERIOR_X1 && y >= INTERIOR_Y0 && y <= INTERIOR_Y1;
+export function inInterior(x: number, y: number, ext: Extent): boolean {
+  return x >= INTERIOR_X0 && x <= interiorX1(ext) && y >= INTERIOR_Y0 && y <= interiorY1(ext);
 }
 
 /** Out-of-bounds reads as wall, so neighbourhood scans need no edge cases. */
@@ -64,8 +71,8 @@ export function isFloor(grid: Uint8Array, x: number, y: number): boolean {
   return at(grid, x, y) === Tile.Floor;
 }
 
-export function mirrorX(x: number): number {
-  return GRID_W - 1 - x;
+export function mirrorX(x: number, ext: Extent): number {
+  return ext.w - 1 - x;
 }
 
 /** "N tiles away" is Manhattan distance everywhere in this module. */
@@ -92,64 +99,75 @@ function carve(grid: Uint8Array, x0: number, y0: number, x1: number, y1: number)
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) put(grid, x, y, Tile.Floor);
 }
 
-/* ------------------------------- the four masks ------------------------------ */
+/*
+ * The four masks, drawn on the base grid's lines (`extent.ts`) and stretched
+ * to the room: a band or a core keeps its share of the room at every size.
+ */
 
-/** Full interior rectangle, 19 x 11. */
-export function arenaMask(): Uint8Array {
+/** Full interior rectangle: 19 x 11 on the base. */
+export function arenaMask(ext: Extent): Uint8Array {
   const g = blank();
-  carve(g, INTERIOR_X0, INTERIOR_Y0, INTERIOR_X1, INTERIOR_Y1);
+  carve(g, INTERIOR_X0, INTERIOR_Y0, interiorX1(ext), interiorY1(ext));
   return g;
 }
 
-/** Central band 19 x 7 (rows 3..9) plus four 3 x 2 alcoves off the long sides. */
+/** Central band (base rows 3..9) plus four alcoves (base 3 x 2) off the long sides. */
 export const CORRIDOR_BAND_Y0 = 3;
 export const CORRIDOR_BAND_Y1 = 9;
 export const CORRIDOR_ALCOVE_X: readonly number[] = [4, 14];
 
-export function corridorMask(): Uint8Array {
+export function corridorMask(ext: Extent): Uint8Array {
   const g = blank();
-  carve(g, INTERIOR_X0, CORRIDOR_BAND_Y0, INTERIOR_X1, CORRIDOR_BAND_Y1);
+  const b0 = edgeY(CORRIDOR_BAND_Y0, ext), b1 = edgeY(CORRIDOR_BAND_Y1 + 1, ext) - 1;
+  carve(g, INTERIOR_X0, b0, interiorX1(ext), b1);
   for (const x of CORRIDOR_ALCOVE_X) {
-    carve(g, x, INTERIOR_Y0, x + 2, CORRIDOR_BAND_Y0 - 1);
-    carve(g, x, CORRIDOR_BAND_Y1 + 1, x + 2, INTERIOR_Y1);
+    const a0 = edgeX(x, ext), a1 = edgeX(x + 3, ext) - 1;
+    carve(g, a0, INTERIOR_Y0, a1, b0 - 1);
+    carve(g, a0, b1 + 1, a1, interiorY1(ext));
   }
   return g;
 }
 
-/** Interior rectangle with a 7 x 5 block of wall at the centre. */
+/** Interior rectangle with a block of wall at the centre: 7 x 5 on the base. */
 export const RING_CORE_X0 = 7;
 export const RING_CORE_X1 = 13;
 export const RING_CORE_Y0 = 4;
 export const RING_CORE_Y1 = 8;
 
-export function ringMask(): Uint8Array {
-  const g = arenaMask();
-  for (let y = RING_CORE_Y0; y <= RING_CORE_Y1; y++) {
-    for (let x = RING_CORE_X0; x <= RING_CORE_X1; x++) put(g, x, y, Tile.Wall);
+export function ringMask(ext: Extent): Uint8Array {
+  const g = arenaMask(ext);
+  for (let y = edgeY(RING_CORE_Y0, ext); y < edgeY(RING_CORE_Y1 + 1, ext); y++) {
+    for (let x = edgeX(RING_CORE_X0, ext); x < edgeX(RING_CORE_X1 + 1, ext); x++) put(g, x, y, Tile.Wall);
   }
   return g;
 }
 
-/** Four 5 x 3 corner blocks of wall, leaving a 19 x 5 arm crossing a 9 x 11 arm. */
+/** Four corner blocks of wall, leaving a 19 x 5 arm crossing a 9 x 11 arm on the base. */
 export const CROSS_ARM_Y0 = 4;
 export const CROSS_ARM_Y1 = 8;
 export const CROSS_ARM_X0 = 6;
 export const CROSS_ARM_X1 = 14;
 
-export function crossMask(): Uint8Array {
+export function crossMask(ext: Extent): Uint8Array {
   const g = blank();
-  carve(g, INTERIOR_X0, CROSS_ARM_Y0, INTERIOR_X1, CROSS_ARM_Y1);
-  carve(g, CROSS_ARM_X0, INTERIOR_Y0, CROSS_ARM_X1, INTERIOR_Y1);
+  carve(g, INTERIOR_X0, edgeY(CROSS_ARM_Y0, ext), interiorX1(ext), edgeY(CROSS_ARM_Y1 + 1, ext) - 1);
+  carve(g, edgeX(CROSS_ARM_X0, ext), INTERIOR_Y0, edgeX(CROSS_ARM_X1 + 1, ext) - 1, interiorY1(ext));
   return g;
 }
 
-export function maskFor(shape: Shape): Uint8Array {
-  switch (shape) {
-    case "arena": return arenaMask();
-    case "corridor": return corridorMask();
-    case "ring": return ringMask();
-    case "cross": return crossMask();
-  }
+const MASKS = new Map<string, Uint8Array>();
+
+/** A shape's mask at an extent. Shared; do not mutate. */
+export function maskFor(shape: Shape, ext: Extent): Uint8Array {
+  const key = `${shape}:${ext.w}x${ext.h}`;
+  const cached = MASKS.get(key);
+  if (cached) return cached;
+  const m = shape === "arena" ? arenaMask(ext)
+    : shape === "corridor" ? corridorMask(ext)
+    : shape === "ring" ? ringMask(ext)
+    : crossMask(ext);
+  MASKS.set(key, m);
+  return m;
 }
 
 /** Number of cells the mask made floor; the denominator of the obstacle ratio. */
@@ -160,9 +178,9 @@ export function maskFloorCount(mask: Uint8Array): number {
 }
 
 /** Stamps the supported doors into a grid. */
-export function applyDoors(grid: Uint8Array, doors: readonly DoorSide[]): void {
+export function applyDoors(grid: Uint8Array, doors: readonly DoorSide[], ext: Extent): void {
   for (const side of doors) {
-    const c = DOOR_CELL[side];
+    const c = doorCell(side, ext);
     put(grid, c[0], c[1], Tile.Door);
   }
 }

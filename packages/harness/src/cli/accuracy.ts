@@ -3,18 +3,18 @@
  * model. Anything below a high hit rate here is an aiming bug, not a tactics
  * problem, because there is nothing to dodge and nothing to shoot around.
  */
-import { createWorld, step, makeEnemy, generateRoom, toRoomPlan, staffFor, plainInstance, RngSource } from "@jr/core";
+import { createWorld, step, makeEnemy, generateRoom, toRoomPlan, plainInstance, RngSource } from "@jr/core";
 
 const src = new RngSource("accuracy");
 const g = generateRoom(
-  { space: "open_arena", symmetry: "mirrored", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
+  { space: "open_arena", symmetry: "mirrored", size: "standard", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
   "S", "combat", src.stream("room"), { plain: true },
 );
 const room = toRoomPlan(g, { id: "r", seed_key: "k", reward_kind: "item", params_source: "rule" });
 
 const w = createWorld({
   room, encounter: null,
-  staff: staffFor({ slots: "many", mana: "high", tempo: "steady", special: "none" }),
+  staff: { slots: 6, mana_max: 120 },
   slots: [plainInstance("magic_bolt"), null, null, null, null, null],
   hearts: 6, rng: src.stream("w"),
 });

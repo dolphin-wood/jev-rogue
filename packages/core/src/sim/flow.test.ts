@@ -5,7 +5,7 @@ import { makeEnemy } from "./enemy.ts";
 import { NO_INPUT } from "./types.ts";
 import { GRID_W, GRID_H, TILE_PX, Tile } from "../types.ts";
 import type { RoomPlan } from "../types.ts";
-import { staffFor, plainInstance } from "../spells/index.ts";
+import { plainInstance } from "../spells/index.ts";
 import { RngSource } from "../rng.ts";
 
 /** An open room with one full-height wall, a gap at the bottom. */
@@ -20,12 +20,12 @@ function wallRoom(): RoomPlan {
     grid[y * GRID_W + GRID_W - 1] = Tile.Wall;
   }
   // A divider at x = 10, open only at y = 11.
-  for (let y = 1; y < GRID_H - 2; y++) grid[y * GRID_W + 10] = Tile.Wall;
+  for (let y = 1; y < 11; y++) grid[y * GRID_W + 10] = Tile.Wall;
   return {
     id: "w", room_type: "combat",
-    params: { space: "open_arena", symmetry: "mirrored", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
+    params: { space: "open_arena", symmetry: "mirrored", size: "vast", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
     measured: { open_ratio: 0.8, pillar_count: 0, symmetry_error: 0, reachable_ratio: 1 },
-    grid, doors: ["S"], entry: "S", zones: [], spawn_groups: [{ id: "far", cells: [[3, 3]] }],
+    grid, extent: { w: GRID_W, h: GRID_H }, doors: ["S"], entry: "S", zones: [], spawn_groups: [{ id: "far", cells: [[3, 3]] }],
     encounter: null, reward_kind: "item",
     source: { params: "rule", layout: "generated", encounter: "none" },
     seed_key: "w",
@@ -37,7 +37,7 @@ const src = new RngSource("flow");
 function world(room: RoomPlan) {
   return createWorld({
     room, encounter: null,
-    staff: staffFor({ slots: "many", mana: "high", tempo: "steady", special: "none" }),
+    staff: { slots: 6, mana_max: 120 },
     slots: [plainInstance("magic_bolt"), null, null, null, null, null],
     hearts: 6, rng: src.stream("w"),
   });

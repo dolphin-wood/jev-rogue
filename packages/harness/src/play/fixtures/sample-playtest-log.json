@@ -1,0 +1,44 @@
+{
+  "_note": "A synthetic playtest log in the shape the game's debug panel exports, for exercising `pnpm play:calibrate` before real logs arrive. The numbers are the one observed session (room 1 in about two minutes for 23 of 60 HP, mostly ranged) plus two plausible rooms after it. Replace it with a real export; do not fit anything to this file.",
+  "source": "game",
+  "seed": "sample-0000",
+  "at": "2026-09-24T00:00:00.000Z",
+  "rooms": [
+    {
+      "index": 1,
+      "type": "combat",
+      "ms": 118000,
+      "hpLost": 23,
+      "bySource": { "bullet:shooter": 9, "bullet:turret": 6, "melee:rusher": 6, "hazard:spike_strip": 2 },
+      "kills": 7,
+      "dashes": 3,
+      "casts": 14,
+      "swings": 41,
+      "nearMs": 26000
+    },
+    {
+      "index": 2,
+      "type": "combat",
+      "ms": 96000,
+      "hpLost": 14,
+      "bySource": { "bullet:shooter": 6, "bullet:orbiter": 4, "melee:rusher": 4 },
+      "kills": 8,
+      "dashes": 5,
+      "casts": 17,
+      "swings": 38,
+      "nearMs": 21000
+    },
+    {
+      "index": 3,
+      "type": "combat",
+      "ms": 104000,
+      "hpLost": 19,
+      "bySource": { "bullet:sentinel": 7, "lob:cinderling": 5, "melee:lancer": 4, "dot:burn": 3 },
+      "kills": 9,
+      "dashes": 4,
+      "casts": 19,
+      "swings": 44,
+      "nearMs": 24000
+    }
+  ]
+}

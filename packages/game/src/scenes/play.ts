@@ -5,71 +5,133 @@
  */
 import Phaser from "phaser";
 import {
-  GRID_W, GRID_H, TILE_PX, Tile, STEP_MS, MAX_HEARTS, HP_PER_HEART, ITEMS, SPELL_SLOTS, slotCost, runStaff,
+  GRID_W, GRID_H, TILE_PX, Tile, STEP_MS, MAX_HEARTS, HP_PER_HEART, ITEMS, SPELL_SLOTS, slotCost, runStaff, PLAYER_SPEED,
   RngSource, createWorld, step, worldCleared, plainInstance,
-  generateRoom, toRoomPlan,
+  generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
   moodTransform, dashInvulnerable, MELEE, ARMOUR_BREAK_MS, brakeFraction, ENEMIES,
-  BOSS_ARCHETYPES, makeEnemy, ENEMY_IDS, seenPlayer,
-  pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE, equipItem,
+  BOSS_ARCHETYPES, makeEnemy, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
+  pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
-  affixFits, affixFitsLine, itemShape,
-  spikesOut,
-  simulateStaff, bucketClearSpeed, bucketGold, bucketMovementPressure, bucketRunProgress,
+  affixFits, affixFitsPart, affixTierKey, affixFitsSpell, itemShape,
+  spikesOut, featureCells, fillSubspecies,
+  heldDominantTags, STYLE_START, bucketClearSpeed, bucketGold, bucketMovementPressure, bucketRunProgress,
   portalInReach, answerOffer, PORTAL_RISE_MS, bucketHealth, bucketRecentDamage,
-  rewardInReach, REWARD_RISE_MS, NO_INPUT, tetherEnds, ALERT_MS, MINE_BLAST, MINE_PRIME_MS,
+  rewardInReach, REWARD_RISE_MS, NO_INPUT, tetherEnds, TOLL_PULSE_MS, ALERT_MS, MINE_BLAST, MINE_PRIME_MS, MINE_BURST_MS,
   MUSKET_RANGE, MUSKET_SPREAD_DEG, MUSKET_WINDUP_MS, FLAME_ROLL_MS, FLAME_LIFE_MS, flameRays, muzzleOf,
+  ELEMENT_TINT, spellLookOf,
+  levelAt, withLevels, levelBonus, LEVEL_HP, swordAt,
 } from "@jr/core";
 import type {
   Bullet, Enemy, EnemyId, Input, ItemInstance, Mood, Offer, OfferCard, Portal,
   PlayerMods, RewardCardKind, RoomPlan, RoomType, RunHistory, World, AttachedAffix,
-  Element, Tension, RunContext, Staff, SpellSlot,
+  Element, Tension, RunContext, RunJournalEntry, Staff, SpellSlot, MeleeKind, MusicState,
 } from "@jr/core";
-import { createDirector, createEvaluator } from "@jr/director";
+import { createDirector, createEvaluator, EvaluatorError } from "@jr/director";
 import type {
   Decision, Director, DirectorArm, RoomPlanResult, DoorPlan, PortalPlan, CardPlan, CardRequest, ObservedRequest, OfferPlan, OfferRequest,
 } from "@jr/director";
-import { buildReadout, CATEGORIES, categoryOf, groupByCategory } from "../director-readout.ts";
+import { buildReadout, CATEGORIES, categoryOf, groupRequest, requestKey } from "../director-readout.ts";
+import type { NoteKey } from "../director-readout.ts";
 import { bakeFxTextures, FX_TEXTURE } from "../fx/textures.ts";
+import { LAVA_FRAMES } from "../fx/sheets.ts";
+import { SubspeciesVisuals, markFrame, type SubspeciesSwap } from "../fx/subspecies-visuals.ts";
 import type { FxSheetInfo } from "../fx/textures.ts";
 import type { OfferRecord, PlanRecord, ReadoutRequest } from "../director-readout.ts";
 import {
   cardPool, cardsFor, doorSpecs, goldRoomCoins, portalChoices, ruleDoors, CARDS_PER_OFFER, cardNeedsFor,
-  SMITH_PRICE, PREBOSS_MEND_HEARTS,
+  heldSpell, fixedExit, buildShapeFor, expectedClearMsFor, COIN_BOOST_MAX, bucketConsistency, cardStyleTags,
+  measureOf, observedLabels, UNMEASURED, type HeldSpell, type RoomMeasure,
+  SMITH_PRICE, MERCHANT_PRICE, FOUNTAIN_HEAL_FRACTION, fountainDrink, fountainWouldHeal,
+  ARCHETYPES, STYLE_CARDS, observedFigures,
 } from "@jr/core";
-import type { CardNeeds, NpcKind, OfferPromise, RoomStage, RunShape } from "@jr/core";
+import type { BaseItem, CardNeeds, NpcKind, OfferPromise, RoomStage, RunShape, WorldEvent } from "@jr/core";
 import {
-  BOSS_LEAP_MS, BOSS_LEAP_RISE_MS, BOSS_SLAM_MS, BOSS_SLAM_SAFE_PX, BOSS_LEAP_RADIUS,
-  withLevel, levelDamageMult, dismantleValue, spellDetail, offerStatParts, rarityOf, STAT_UPGRADES, statById, SPELL_LEVEL_MAX, SCHOOL_COLOUR, schoolOf, offerCards,
-  spellCooldownMs, BASELINE_MANA_MAX, DASH_COOLDOWN_MS, DASH_MS, strayEliteFor,
+  BOSS_LEAP_MS, BOSS_LEAP_RISE_MS, BOSS_SLAM_MS, BOSS_SLAM_IMPACT_PX, BOSS_LEAP_RADIUS, BOSS_QUAKE_MS, SLAM_SHOCK_RADIUS,
+  BOSS_POWER,
+  withLevel, levelDamageMult, dismantleValue, spellDetail, offerStatParts, slotStatParts, statusForecast, SPELL_DAMAGE_SCALE, rarityOf, STAT_UPGRADES, statById, SPELL_LEVEL_MAX, SCHOOL_COLOUR, schoolOf, spellSound, shapeEventSound, offerCards,
+  slotCooldownMs, DASH_COOLDOWN_MS, DASH_MS,
+  chargeShare, chargesOf, bankOf, chargeIntervalMs, chargeMsOf, DASH_SPEED, acquire,
 } from "@jr/core";
-import { DebugPanel } from "../debug-panel.ts";
-import type { DebugSnapshot } from "../debug-panel.ts";
+import { DebugPanel, playtestLog } from "../debug-panel.ts";
+import type { DebugSnapshot, FloorGrain } from "../debug-panel.ts";
+import { FLOOR_GRAINS } from "../debug-panel.ts";
 import {
   INVULN_MS, SPAWN_FADE_MS, SPAWN_TELEGRAPH_MS, STRIKE_FLASH_MS, STRIKE_MARK_MS, SWING_RECOVER_MS,
-  SWING_TOTAL_MS, SWING_WINDUP_MS, SWING_ACTIVE_MS, swingElapsed, fullReach,
+  SWING_TOTAL_MS, SWING_WINDUP_MS, SWING_ACTIVE_MS, SWING_CHAIN_MS, swingElapsed, fullReach,
   drawnBladeAngle, scorchProgress, strikeFlashing,
-  strikeMarked, swingPhase,
+  strikeMarked, swingPhase, waveCentre, waveHalfSpan, waveRadius,
 } from "@jr/core";
 import { RecolourableAtlas, facingFrame } from "../assets/atlas.ts";
 import { enemyFrame, frameForFacing, strideFor } from "./enemy-frames.ts";
-import { drawCrescent, ENEMY_CRESCENT, PLAYER_CRESCENT } from "./crescent.ts";
+import { bodyFeel, weightOf } from "./body-feel.ts";
+import { heldStaff, staffSpriteCentre, swingStaff, type HeldStaff } from "./blade.ts";
+import type { BodyFeel } from "./body-feel.ts";
+import { BOSS_CRESCENT, drawCrescent, ENEMY_CRESCENT, PLAYER_CRESCENT } from "./crescent.ts";
+import { drawCrescentWave, impactFrame, mix, wavePalette, waveTrailPoints } from "./wave-art.ts";
 import { drawCrackle, drawProjectile } from "./projectiles.ts";
+import { equipKeepingOthers } from "./equip-keys.ts";
+import { SHADOW_INK, drawLeapShadow, drawMeteorShadow } from "./spell-marks.ts";
 import { FireFx } from "./fire-fx.ts";
-import { KeyPrompt, keyLine } from "../ui/keycap.ts";
+import { drawHallArt, preloadHallArt } from "./hall-art.ts";
+import { fillKeyLine, KeyPrompt, keyLine, setCoinArt } from "../ui/keycap.ts";
 import type { ProjectileLook } from "./projectiles.ts";
-import { propState } from "@jr/core";
+import { drawArms, drawHasteCue, drawShockwaves, drawTollPulse } from "./ground.ts";
+import type { ViewBox } from "./ground.ts";
+import {
+  ART_SCALE, TELE_HOT, TELE_RIM, drawAimLine, drawBlastRing, drawFlameCone, drawLeapMark,
+  drawQuakeTell, drawRiftBurst, drawRiftCircle, drawRingTell, drawSectorTell,
+  drawSlamTell, drawStrikeMark,
+} from "./telegraph.ts";
+import { BAR_MS, BEAT_MS, BOSS_PHASES, MELEE_ATTACKS, RUN_BOSS_ROOM, forceBossBlade, propState, queueBossMove } from "@jr/core";
+import type { BossMove } from "@jr/core";
+import type { BossHold, BossLabFrame } from "../boss-lab.ts";
+import { SpellLab, spellLabAsked } from "../spell-lab.ts";
+import type { LabKey, SpellLabHost } from "../spell-lab.ts";
 import type { CrescentOptions } from "./crescent.ts";
 import type { FrameChoice } from "./enemy-frames.ts";
-import { Sfx, preloadSfx } from "../audio.ts";
+import { SOUND_STYLES, Sfx, preloadSfx } from "../audio.ts";
+import type { SfxName, SoundStyle } from "../audio.ts";
+import {
+  contentDescription, contentName, fontFamily, fontPx, getLang, LANG_NAMES, LANGS,
+  bodyPx, letterSpacing, lineLead, linePitch, localizeStat, measureText, setLang, t, term,
+  wrapText,
+} from "../i18n/index.ts";
+import type { StatText, StringKey } from "../i18n/index.ts";
+import { checkLayout, type LayoutReport } from "../ui/layout-check.ts";
+import { wrapSpans } from "../ui/wrap.ts";
+import { layoutDecisionTable, maxScrollFor } from "../ui/plan-table.ts";
+import { questionAsked, questionBase, questionName } from "../ui/question-names.ts";
+import type { TableRow } from "../ui/plan-table.ts";
 import type { AtlasJson } from "../assets/atlas.ts";
 
-const ART_SCALE = 2;
 /**
- * Bullet art is a 32px frame. Drawn honestly a bullet would span exactly its
+ * **Art pixels per world pixel**, declared in `telegraph.ts` and re-exported
+ * here.
+ *
+ * It lives there because the pixel telegraphs derive their cell from it —
+ * `TELE_PIX` is `1 / ART_SCALE`, one atlas pixel of a sprite — and that module
+ * is headless, so a harness and a test can read the number without Phaser. One
+ * source, so the warnings can never quantise on a different grid from the
+ * sprites they are drawn beside.
+ */
+export { ART_SCALE };
+/**
+ * The scale the hand-tuned art-pixel numbers below were measured at: frame
+ * coordinates, stroke widths and offsets written when the art was 2 px per
+ * world px. `TUNED` turns them into this scale's pixels.
+ */
+const TUNED_SCALE = 2;
+const TUNED = ART_SCALE / TUNED_SCALE;
+/** A body frame's side in art px: one tile. */
+const FRAME_PX = 32 * ART_SCALE;
+/** Texels per world px of the textures baked at boot (`fx/sheets.ts`), whatever the art's scale. */
+const FX_TEXEL = 2;
+/**
+ * Bullet art is a half-tile frame. Drawn honestly a bullet would span exactly its
  * own hitbox; a small margin keeps a radius-3 bolt visible without lying about
  * where it hits.
  */
-const BULLET_ART_PX = 32;
+const BULLET_ART_PX = 16 * ART_SCALE;
 /** Mirrors `MELEE.windupMs` in the sim, for the windup tell's progress. */
 /*
  * The enemy melee cycle's own timings, read from the simulation rather than
@@ -79,6 +141,16 @@ const BULLET_ART_PX = 32;
  * lies is worse than none.
  */
 const MELEE_WINDUP_MS = MELEE.windupMs;
+/**
+ * How thick a driven spike is drawn: the dark outline, the body of the stroke
+ * and how far the sprite is fattened across its own axis. Doubled from a
+ * 1.6 px line, which read as a scratch rather than as the heavy spine that a
+ * rusher's and a lancer's whole kit is.
+ */
+const SPIKE_OUTLINE_PX = 5;
+const SPIKE_BODY_PX = 3.2;
+const SPIKE_FAT = 2.2;
+
 const MELEE_LUNGE_MS = MELEE.lungeMs;
 /**
  * The hand-drawn strip the swing's crescent is textured with, if the sheet has
@@ -149,6 +221,16 @@ const CRESCENT: Omit<CrescentOptions, "width" | "fade" | "tailCut"> = {
   bodyClearPx: BODY_CLEAR_PX,
   radiusScale: VISUAL_RADIUS_SCALE,
 };
+/**
+ * An enchant's wave (`drawWaves`): how deep the crescent is at its middle,
+ * about the band the swing's trail leaves along the tip and inside the
+ * sim's thickness either side of the edge; and how far it flies white-hot
+ * before its bands settle, which is its launch.
+ */
+const WAVE_BODY_PX = 11;
+/** The king's sword wave in the danger palette: a dark lip, red light, an orange half-light and a hot core. */
+const KING_WAVE = { lip: 0x1a0806, aura: 0xe8344a, mid: mix(0xe8344a, 0xffb070, 0.6), core: 0xfff0d8 } as const;
+const WAVE_FLASH_PX = 10;
 /** How thick the crescent starts, as a fraction of its full thickness. */
 const SWING_MIN_WIDTH = 0.3;
 /**
@@ -206,8 +288,85 @@ const SWORD_TIP_X = 62;
  * knight — and a blade that orbits its owner is a much more natural
  * explanation for a 170 degree arc than a human shoulder is.
  */
-const SWORD_NATIVE_REACH = (SWORD_TIP_X - SWORD_GRIP_X) / ART_SCALE;
+const SWORD_NATIVE_REACH = (SWORD_TIP_X - SWORD_GRIP_X) / TUNED_SCALE;
 const SWORD_HOVER_PX = BLADE_REACH - SWORD_NATIVE_REACH;
+/**
+ * The focus the sword hand holds: the staff, whose conjured blade is the
+ * sword. `?focus=sword` shows the floating sword it replaces, and
+ * `?focus=dagger` the dagger it was chosen over, until both are removed.
+ */
+/** Where the debug panel keeps the floor's grain, per browser. */
+const FLOOR_GRAIN_KEY = "jr-floor-grain";
+/** As many two-tile floor drawings as the manifest makes (`MID_FLOOR_VARIANTS`). */
+const MID_FLOOR_VARIANTS = 3;
+/**
+ * How large the floor's stones are: `coarse` a tile each, as delivered and as
+ * big as a body; `mid` two thirds of a tile, three to two tiles; `fine` half,
+ * with the solid wall at half its grain too, which was too busy to stand on.
+ * Set on the debug panel, or `?floor=`.
+ */
+let floorGrain: FloorGrain = (() => {
+  const ok = (v: string | null): v is FloorGrain => (FLOOR_GRAINS as readonly string[]).includes(v ?? "");
+  const asked = new URLSearchParams(globalThis.location?.search ?? "").get("floor");
+  if (ok(asked)) return asked;
+  try { const kept = localStorage.getItem(FLOOR_GRAIN_KEY); if (ok(kept)) return kept; } catch { /* the default */ }
+  return "mid";
+})();
+/** `?spawn=camps`: the encounter placed when the room starts, in camps, rather than in waves. */
+const PLACEMENT: "waves" | "camps" = new URLSearchParams(globalThis.location?.search ?? "").get("spawn") === "camps" ? "camps" : "waves";
+const FOCUS: "dagger" | "staff" | null = (() => {
+  const f = new URLSearchParams(globalThis.location?.search ?? "").get("focus");
+  return f === "sword" ? null : f === "dagger" ? "dagger" : "staff";
+})();
+/**
+ * How far out from the swing's centre the hand carries the focus round the
+ * arc, px, where no drawn hand holds it: the hand plus the focus reach about
+ * where a drawn staff's crystal is, so a trail measured from here meets the
+ * blade growing from the drawn one. The body's own swing is in its frames.
+ */
+const FOCUS_HAND_R = 6;
+/** Grip to crystal along the staff, in world px, if the sprite's own anchor is missing. */
+const STAFF_LEN_PX = 10;
+/** How much further the hand is pushed out through the middle of the cut, px. */
+const FOCUS_HAND_PUSH = 2;
+/** The wrist: how far the hand leads the point at the start of a cut, and trails it at the end. */
+const WRIST_LEAD_DEG = 30;
+const WRIST_WHIP_DEG = 20;
+/** The angles the conjured blade is drawn at across its arc, and how long each is held. */
+const CUT_KEYS = 3;
+const KEY_MS = 20;
+/** How long the trail takes to be eaten from the tail once the blade has landed. */
+const TRAIL_RETRACT_MS = 100;
+/** How long the glint and streaks at the point last when the blade lands. */
+const LAND_FLASH_MS = 80;
+/** How far past the start of its arc the blade is wound back, radians. */
+const WOUND_EXTRA = 0.25;
+/**
+ * The slash's plane with a focus: at chest height and flattened a little, so
+ * a sweep reads as swung rather than laid on the floor. Only a little: the
+ * hitbox is a disc on the floor, and flattened by half the picture showed a
+ * north or south cut reaching half as far as it hit.
+ */
+/*
+ * **Neither**, in the end: 1 and 0.
+ *
+ * The squash was 0.85 and the lift 2, and both were measured against the
+ * complaint they caused. What hits is a disc about `SWING_ORIGIN_LIFT` above
+ * the footing, the same radius whichever way the cut faces. Flattening the
+ * picture by 0.85 made a north or south cut *look* a sixth shorter than a
+ * sideways one at the same reach — which is exactly "left and right swings
+ * have a bigger range than up and down" — and lifting the drawn arc two
+ * pixels off the hit arc drew an upward cut two pixels past what it hit and a
+ * downward one two pixels short of it.
+ *
+ * So the drawn arc is the hit arc: same centre, same radius, a circle. The
+ * two names are kept because the plane is still a hook for any later offset,
+ * and because a test reads them.
+ */
+const SLASH_SQUASH = 1;
+const SLASH_LIFT = 0;
+/** Grip to point of the focus, px: where the blade grows from. */
+const FOCUS_TIP_PX: Record<"dagger" | "staff", number> = { dagger: 6, staff: 8 };
 /** How far the float drifts in and out when nothing is being swung at. */
 const SWORD_BOB_PX = 1.6;
 
@@ -291,6 +450,107 @@ function shadowScale(
   return (1 / ART_SCALE) * Math.min(1, (body * 1.05) / shade);
 }
 
+/*
+ * **Where the king stands.** Every boss frame is drawn with the floor line 91
+ * art px below its cell's centre (`normalize-boss-king.ts`), which put his feet
+ * 45 world px below his body's centre — outside a collision circle of 22, so
+ * against the bottom wall he was drawn standing in it. He is drawn raised so
+ * his feet are on the circle, `BOSS_FOOT_PX` below its centre, and his body
+ * rises above it as a 3/4 view's does.
+ */
+const BOSS_FLOOR_PX = 91 / ART_SCALE;
+const BOSS_FOOT_PX = 10;
+const BOSS_DRAW_RISE_PX = BOSS_FLOOR_PX - BOSS_FOOT_PX;
+/** A depth's sheet (`docs/art-workorder-biomes.md`): its floor slabs, decals, floor patches and wall lights. */
+const BIOME_FLOOR_VARIANTS = 4;
+const BIOME_DECO_VARIANTS = 8;
+/**
+ * Where each inside corner's cap is cut from in the common walls, art px of
+ * the edge cell (`x, y, w, h`): the side bands are 13 px across (x 0–12 and
+ * 51–63) and the top and bottom ones 14 and 15 deep (y 0–13, 49–63), measured
+ * off `tile_wall_*`.
+ */
+const INNER_CAP: Readonly<Record<string, { from: "n" | "s"; crop: readonly [number, number, number, number] }>> = {
+  ne: { from: "n", crop: [51, 0, 13, 14] },
+  wn: { from: "n", crop: [0, 0, 13, 14] },
+  es: { from: "s", crop: [51, 49, 13, 15] },
+  sw: { from: "s", crop: [0, 49, 13, 15] },
+};
+/**
+ * Whether the depths' own wall sets are drawn. Off: the first delivery drew
+ * the autotile names as decorative variants (niches, skulls, rubble) rather
+ * than as which sides meet the floor, so a solid mass of wall came out as
+ * stripes of wall cap and random niches (art order, "The wall autotile").
+ * The common walls stand in until it is redrawn.
+ */
+const BIOME_WALLS = false;
+/**
+ * A depth's slab that carries a figure — the ossuary's carved ring — laid one
+ * cell in `BIOME_RARE_ONE_IN` rather than one in four: at a quarter of the
+ * floor the rings read as a room full of area telegraphs.
+ */
+const BIOME_RARE_FLOOR: Readonly<Partial<Record<string, number>>> = { ossuary: 2 };
+const BIOME_RARE_ONE_IN = 16;
+/** Which of a depth's floor slabs a cell gets, from its hash: the plain ones evenly, the figured one rarely. */
+function biomeFloorVariant(biome: string, h: number): number {
+  const rare = BIOME_RARE_FLOOR[biome];
+  if (rare === undefined) return h % BIOME_FLOOR_VARIANTS;
+  if (h % BIOME_RARE_ONE_IN === 0) return rare;
+  const plain = Array.from({ length: BIOME_FLOOR_VARIANTS }, (_, i) => i).filter((i) => i !== rare);
+  return plain[Math.floor(h / BIOME_RARE_ONE_IN) % plain.length]!;
+}
+const BIOME_PATCH_VARIANTS = 3;
+/** A broken column keeps the bottom of its drawing, in art px: the plinth and a short stub of shaft. */
+const COLUMN_STUMP_PX = 84;
+/*
+ * The entrance's timings, ms, and where things happen, in cells: the player
+ * is walked in from the door and stands; a moment later he notices them,
+ * looks for a beat, throws, and stands; the goblet breaks on the carpet
+ * before the dais; he stands up just in front of the throne.
+ */
+const KING_WALK_IN_PX = TILE_PX * 3;
+/** The longest the walk-in may take, should anything be in the way. */
+const KING_WALK_MAX_MS = 2500;
+const KING_PAUSE_MS = 700;
+/** His wine while he waits (`boss_throne_sip`, when drawn): the goblet held this long, then at his visor this long. */
+const KING_HOLD_MS = 950;
+const KING_SIP_MS = 550;
+/** Down the steps of his dais, from the throne to where he stands: long enough to be seen walking. */
+const KING_DESCEND_MS = 600;
+/** Where his boots rest in the throne's drawings, art px from the frame's top (`boss_throne_rise`). */
+const KING_THRONE_FEET_ART = 210;
+const KING_LOOK_MS = 600;
+const KING_THROW_MS = 350;
+const KING_RISE_MS = 700;
+const KING_GOBLET_FLIGHT_MS = 520;
+/** The entrance: how long the HUD takes to fade out and back, and the depth his name is drawn over it at. */
+const CINE_SLIDE_MS = 380;
+const CINE_NAME_DEPTH = 255;
+/** From his standing up to his first turn: his name, the bars away, and a moment with the controls. */
+const BOSS_FIRST_TURN_MS = 3400 + KING_DESCEND_MS;
+/** Where the goblet breaks and where he stands up, in rows below the throne's (`THRONE_CELLS`). */
+const KING_GOBLET_ROW = 2.9;
+// At the foot of the dais: his body clear of the throne's cells, his radius off their edge.
+const KING_STAND_ROW = 1.75;
+/** The king's thrown chain: its link sheet's scale (a link about nine world px) and the spacing it is laid at. */
+const BOSS_CHAIN_LINK_SCALE = 0.4;
+const BOSS_CHAIN_LINK_PITCH_PX = 7;
+/**
+ * Whether the king's sword is a separate sprite the renderer turns to the cut,
+ * or drawn into his frames. True while the atlas holds the sword-less model
+ * frames; false once B8's sworded frames are packed.
+ */
+const BOSS_PLACED_SWORD = false;
+/** How long his crescent lasts into the recovery, fading, ms. */
+const BOSS_CRESCENT_TAIL_MS = 200;
+
+/** The king's floor shadow, centred under his feet. */
+function bossShadowOffset(atlas: RecolourableAtlas, shadowFrame: string): number {
+  const shade = atlas.frame(shadowFrame);
+  const blob = (atlas.contentTop(shadowFrame) + atlas.contentBottom(shadowFrame)) / 2 - shade.h / 2;
+  return BOSS_FOOT_PX - blob / ART_SCALE;
+}
+
 function shadowOffset(atlas: RecolourableAtlas, bodyFrame: string, shadowFrame: string): number {
   const body = atlas.frame(bodyFrame);
   const shade = atlas.frame(shadowFrame);
@@ -316,31 +576,76 @@ function shadowOffset(atlas: RecolourableAtlas, bodyFrame: string, shadowFrame: 
  * shuffle. 17 is about nine steps a second, the brisk end of a walk, and the
  * feet still land roughly with the distance covered.
  */
-const WALK_FRAME_PX = 17;
+/*
+ * Per step of the whole cycle, not per frame: the walk has as many frames as
+ * the atlas delivers (a sprite model's cycle is as long as its pose list,
+ * doc 016), and a cycle of four at 17 px a frame is one stride every 68 px.
+ */
+/**
+ * How far the player travels in one full walk cycle, in world px.
+ *
+ * It sets the cadence: 120 px/s over 32 px is nearly four cycles a second,
+ * seven and a half footfalls, which is a sprint. At 56 — a little over two
+ * cycles — the player was reported as walking, and at 40 the feet still
+ * read as slow. The body's forward lean and the lift between
+ * footfalls (`bodyFeel`, `moveX`) carry the rest of the speed.
+ */
+const WALK_CYCLE_PX = 32;
 /** How long the walk pose survives after movement stops. */
 const WALK_HOLD_MS = 90;
 const IDLE_FRAME_TICKS = 15;
+/** How long a cast holds the off hand up. */
+const CAST_POSE_MS = 120;
+/** The opening of that, which is the arm still travelling rather than settling. */
+const CAST_RELEASE_MS = 60;
 /** How long the recoil pose is held out of the 600 ms invulnerability. */
 const HURT_POSE_MS = 110;
 /** Minimum radial thickness of the crescent, so it is never a hairline. */
 const MIN_BAND_PX = 14;
 
 const BULLET_SPRITE_MARGIN = 1.25;
+/** Destructibles are drawn at this share of the cell they block (`drawProps`). */
+const PROP_DRAW_SCALE = 0.78;
 function bulletScale(radius: number): number {
   return (radius * 2 * BULLET_SPRITE_MARGIN) / BULLET_ART_PX;
 }
-const VIEW_W = GRID_W * TILE_PX;
-const VIEW_H = GRID_H * TILE_PX;
+/**
+ * The viewport: a fixed 16 x 9 tiles of the world, whatever the window
+ * (doc 008): eleven and a half bodies tall, as the pixel-art top-down games
+ * that read best keep it, at 16:9. A room is larger — one and a half to twice
+ * it, by its size label (doc 017) — and the camera follows the player across
+ * it; what a body past the view may do is measured from this.
+ */
+export const VIEW_TILES_W = 16;
+export const VIEW_TILES_H = 9;
+export const VIEW_W = VIEW_TILES_W * TILE_PX;
+export const VIEW_H = VIEW_TILES_H * TILE_PX;
+/**
+ * The frame the HUD and the screens are laid out in, fitted to the canvas by
+ * the HUD's own camera: 416 units tall, as the screens were drawn, and as
+ * wide as the viewport's shape.
+ */
+export const UI_H = 416;
+export const UI_W = (UI_H * VIEW_W) / VIEW_H;
 /*
  * The HUD is an **overlay on the room**, not a strip under it. The strip put
  * every number the player reads a hand's width below the fight; laid over the
  * room's own border walls, the top row carries the body (health, mana, spin,
  * dodge, gold) and the bottom row the spells, and nothing covers the floor.
  */
-const HUD_H = 0;
+export const HUD_H = 0;
+/**
+ * How far the HUD is held off the edges of the view.
+ *
+ * The gauges sat at y 9 with a backing plate that started at y 2, so the
+ * plate's top edge was all but flush with the frame and read as clipped
+ * rather than as a panel; the gold and the minimap crowded the top-right
+ * corner the same way. One margin, used by every corner of the HUD.
+ */
+const HUD_INSET = 14;
 /** The two HUD rows, over the top and bottom wall rows. */
-const HUD_TOP_Y = 9;
-const HUD_BOTTOM_Y = VIEW_H - 12;
+const HUD_TOP_Y = HUD_INSET;
+const HUD_BOTTOM_Y = UI_H - HUD_INSET;
 
 /**
  * Device pixel ratio, capped so a 3x phone does not ask for a nine-times
@@ -352,6 +657,103 @@ export const DPR = Math.min(typeof window === "undefined" ? 1 : window.devicePix
 
 /** World units to backing-store pixels. */
 export const ZOOM = ART_SCALE * DPR;
+/**
+ * The permanent HUD control row's style, named because the row is **rebuilt**
+ * when the language changes (`rebuildHintStrip`) and the two calls have to
+ * agree — the strip is made once in `create()` and only redrawn, so a player
+ * who switched language mid-run kept the English row until they died.
+ */
+const HINT_STRIP_STYLE = {
+  px: 7, colour: "#8a84a0", zoom: ZOOM, depth: 100, originX: 1, panel: true,
+} as const;
+/**
+ * CSS px to a world px: the viewport fitted to the window, whole, and the
+ * rest of the window left black. The size is the window's, not a setting —
+ * with the view fixed in tiles, a scale setting could only have made the
+ * canvas larger or smaller than the window, never shown more or less.
+ */
+function fitCss(): number {
+  if (typeof window === "undefined") return 2;
+  return Math.min(window.innerWidth / VIEW_W, window.innerHeight / VIEW_H);
+}
+/** Device pixels per art pixel at that fit, usually a fraction. */
+function artDevicePx(): number {
+  return (fitCss() * DPR) / ART_SCALE;
+}
+/**
+ * Canvas pixels per art pixel: the whole number at or above the screen's.
+ * At a fraction, drawn straight to the screen, art pixels came out two and
+ * three wide in turn and outlines wavered; so the world is drawn at the next
+ * whole number and the canvas shown smoothly scaled down to size
+ * (`presentScale`), which keeps every pixel the same width at the cost of a
+ * device pixel's blend at its edges.
+ */
+export function renderTexel(): number {
+  return Math.max(1, Math.ceil(artDevicePx() - 1e-6));
+}
+/** Device pixels per canvas pixel: 1 at a whole fit, below it when the canvas is scaled down. */
+export function presentScale(): number {
+  return artDevicePx() / renderTexel();
+}
+/** Canvas pixels per world pixel. */
+export function worldZoom(): number {
+  return renderTexel() * ART_SCALE;
+}
+/** Half the close camera's dead zone, px: how far the player moves from its centre before it follows. */
+const CLOSE_DEAD_X = 34;
+/**
+ * The throne hall's fixed view: its height over the room's. None spare: the
+ * hall is the viewport's shape (`rooms/fixed.ts`), so it fills the view with
+ * its one cell of wall, and the HUD lies over the room as it does everywhere.
+ */
+const BOSS_VIEW_SPARE = 1;
+const CLOSE_DEAD_Y = 20;
+/**
+ * The fastest the view moves, px/s, and how fast it may change speed, px/s²
+ * (`holdCamera`). Above the walking speed and well under the dash's 580.
+ */
+const CAM_MAX_SPEED = 300;
+const CAM_ACCEL = 2600;
+/** Any speed up to this the view simply matches: walking, with the movement upgrades. */
+const CAM_RIGID_SPEED = 200;
+
+/**
+ * The smallest world distance, in half-pixel steps, that is a whole number of
+ * screen pixels at `zoom`: the unit the camera moves in (`holdCamera`).
+ */
+function camStep(zoom: number): number {
+  for (let k = 0.5; k <= 8; k += 0.5) if (Math.abs(k * zoom - Math.round(k * zoom)) < 1e-6) return k;
+  return 1 / zoom;
+}
+/** A tile on the close camera's minimap, px, and its top edge: under the gold. */
+const MINIMAP_CELL = 3;
+/** The minimap's widest, in HUD units: a vast room's cells are drawn smaller to stay in the corner. */
+const MINIMAP_MAX_W = 96;
+function minimapCell(ext: { readonly w: number }): number {
+  return Math.min(MINIMAP_CELL, MINIMAP_MAX_W / ext.w);
+}
+const MINIMAP_TOP = HUD_INSET + 16;
+/*
+ * The spacing scale, in room px.
+ *
+ * Every inset inside a box — a panel, a card, a slot, a plate — is one of
+ * these four rather than a number chosen at the call site. The affix slots
+ * were drawn two pixels from their own border, which is what padding looks
+ * like when each box picks its own, and the layout check now measures the
+ * distance from a box's inner edge to what is in it (`layout-check.ts`).
+ */
+/** The smallest gap that still reads as inside rather than against. */
+const PAD_S = 4;
+/** The usual inset for a slot or a card's contents. */
+const PAD_M = 6;
+/** A panel's own margin, where its contents need room to breathe. */
+const PAD_L = 10;
+/** Between stacked rows of the same list. */
+const ROW_GAP = 6;
+/** What a HUD block is faded to when a body stands under it; see `fadeIfCovering`. */
+const HUD_FADE = 0.28;
+/** Depths from here up are the HUD and menus, drawn by the HUD camera. */
+const UI_DEPTH = 99;
 
 /**
  * The frame a kill pop is drawn from.
@@ -368,7 +770,7 @@ function popFrame(id: EnemyId, facing: number, has: (n: string) => boolean): Fra
   return frameForFacing(base, "idle0", facing, has);
 }
 
-const ENEMY_FRAME: Record<EnemyId, string> = {
+const ENEMY_FRAME: Record<EnemyId, string> = fillSubspecies<string>({
   rusher: "enemy_rusher", shooter: "enemy_shooter", turret: "enemy_turret",
   orbiter: "enemy_orbiter", tank: "enemy_tank", summoner: "enemy_summoner",
   lancer: "enemy_lancer", sentinel: "enemy_sentinel",
@@ -376,17 +778,102 @@ const ENEMY_FRAME: Record<EnemyId, string> = {
   snarecaster: "enemy_snarecaster", delver: "enemy_delver", cinderling: "enemy_cinderling", sower: "enemy_sower",
   // Undirected and three-phase, like the turret is undirected.
   boss: "boss_p1",
-};
+});
 
 export class PlayScene extends Phaser.Scene {
   private atlas!: RecolourableAtlas;
   private textureKey = "sheet_mood";
   private world!: World;
   private accumulator = 0;
+  /*
+   * The boss lab (the debug panel's BOSS tab, `boss-lab.ts`). `labOn` once it
+   * has been entered: from then the boss is held as `labHold` says. The
+   * speed scales the fixed-step accumulator — 0 is paused, and `labSteps` are
+   * frames asked for one at a time — and the scene's timers and tweens with
+   * it, so the effects slow with the bodies.
+   */
+  private labOn = false;
+  // Free by default: held, he walked up and stood there, which read as the lab being broken.
+  private labHold: BossHold = { moves: false, blades: false, volleys: false };
+  private labSpeed = 1;
+  private labSteps = 0;
+  /**
+   * The spell lab (the debug panel's SPELLS tab, `spell-lab.ts`), made only
+   * when the page asks for it with `?lab=spells`; it shares the boss lab's
+   * clock. `labIcons` are the list's icons, cut from the crisp sheet once.
+   */
+  private spellLab: SpellLab | null = null;
+  private labIcons = new Map<string, string>();
+  private labMetronome = false;
+  private labBeat = -1;
+  /** A short replacement drawing while armour pieces leave the phase body. */
+  private bossUnbind = new Map<number, { frame: string; until: number }>();
   private sfx!: Sfx;
   private swingGfx!: Phaser.GameObjects.Graphics;
+  /** The enchant's waves, drawn in code (`drawCrescentWave`) and redrawn every frame. */
+  private waveGfx!: Phaser.GameObjects.Graphics;
   /** The magic blade drawn over the sword while it swings; see `drawMagicBlade`. */
   private magicGfx!: Phaser.GameObjects.Graphics;
+  /** The ground eruptions, drawn fresh each frame (`drawEruptions`). */
+  private eruptGfx!: Phaser.GameObjects.Graphics;
+  /** Cracks a stone eruption left in the floor, outliving the cell that made them. */
+  private eruptCracks: { x: number; y: number; ms: number; variant: number }[] = [];
+  /** Where each burrowing body last cracked the floor, so the trail is spaced by distance. */
+  private burrowTrail = new Map<number, { x: number; y: number }>();
+  /** The focus in the fist, when the sword is conjured (`?focus=`). */
+  private focusGfx!: Phaser.GameObjects.Graphics;
+  /** The conjured blade, drawn solid (`drawConjured`). */
+  private conjureGfx!: Phaser.GameObjects.Graphics;
+  /** The HUD's own camera; the main one is the world's, near and following. */
+  private uiCam: Phaser.Cameras.Scene2D.Camera | null = null;
+  private worldZoom(): number {
+    return worldZoom();
+  }
+
+  /** Where the close camera is, its velocity, and the simulation step it was last moved on. */
+  private camFocus: { x: number; y: number } | null = null;
+  private camVel = { x: 0, y: 0 };
+  private camAnchor = { x: 0, y: 0 };
+  /** Set while a shove holds the view still, until it has eased back onto its anchor. */
+  private camHeld = false;
+  private camTick = 0;
+  /** Pointers at bodies off the close camera's view. */
+  private offscreenGfx: Phaser.GameObjects.Graphics | null = null;
+  /** The close camera's minimap. */
+  private minimapGfx: Phaser.GameObjects.Graphics | null = null;
+  /**
+   * The standing key strip in the bottom-right corner (`[E] use …`).
+   *
+   * Held so it can be hidden while a modal is up: it names the *world's*
+   * verbs, and every modal states its own keys along the same bottom edge, so
+   * with both drawn the two rows landed on each other and Esc meant two
+   * different things at once.
+   */
+  private hintStrip: Phaser.GameObjects.Container | null = null;
+  /** This frame's staff crystal in world space: the sprite's, since no frame draws one. */
+  private frameCrystal: { x: number; y: number } | null = null;
+  /** The held staff's grip and crystal this frame, for light drawn along the shaft; null with no staff. */
+  private frameShaft: { gx: number; gy: number; cx: number; cy: number } | null = null;
+  /**
+   * The drawn hand that holds the staff, in world px.
+   *
+   * Kept beside `frameCrystal` because the two together are the staff's own
+   * line, and the conjured blade is drawn along it (`blade.ts`).
+   */
+  private frameHand: { x: number; y: number } | null = null;
+  /**
+   * This frame's staff data, read off the frame's anchors (`atlas.ts`).
+   *
+   * Grip to crystal in world px, which way the pose holds it, and whether it
+   * is painted over the body or behind it. All three come from the model, so
+   * the renderer has no per-facing table of its own; the back view's higher
+   * grip and its staff-in-front are the model saying so.
+   */
+  private frameStaff: { gripToCrystal: number; angleDeg: number; depth: number; flipX: boolean } = {
+    gripToCrystal: STAFF_LEN_PX, angleDeg: -90, depth: 1, flipX: false,
+  };
+  /** The focus's point this frame, where the light stays between the swings of a chain. */
+  private focusPoint: { x: number; y: number } | null = null;
   /** Enemy attack ground, under the bodies; and enemy blades, over them. */
   private threatGfx!: Phaser.GameObjects.Graphics;
   private bladeGfx!: Phaser.GameObjects.Graphics;
@@ -406,13 +893,24 @@ export class PlayScene extends Phaser.Scene {
   private readonly blastMasks = new Map<World["flames"][number], Phaser.GameObjects.Graphics>();
   /** A dear spell's kick on the player's body, render only. */
   private recoil: { a: number; ms: number } | null = null;
+  /** The body's velocity as drawn, eased, px/s: what the lean, the dust and the scarf read. */
+  private moveVel = { x: 0, y: 0 };
+  private movePrev: { x: number; y: number } | null = null;
+  private dustMs = 0;
+  /** The scarf: a short chain hung from the neck and simulated as it is drawn (`drawScarf`). */
+  private scarf: { x: number; y: number; px: number; py: number }[] = [];
+  private scarfGfx!: Phaser.GameObjects.Graphics;
   /** Effect animations playing: each a baked sheet stepped on its own clock. See `drawFxAnims`. */
   private fxAnims: { sheet: string; x: number; y: number; rot: number; ms: number; frameMs: number; depth: number; tint?: number }[] = [];
+  /** One-shot painted spell frames, advanced independently of simulation state. */
+  private spellAnims: { prefix: string; x: number; y: number; ms: number; frameMs: number; frames: number; depth: number; scale: number }[] = [];
   private readonly teachAt = new Map<string, { x: number; y: number; ms: number }>();
   private walkDistance = 0;
   private walkHoldMs = 0;
   private readonly trail: { x: number; y: number }[] = [];
   private lastX = 0;
+  /** The eased x of the running direction, -1 to 1, for the body's lean. */
+  private runX = 0;
   private lastY = 0;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private tiles!: Phaser.GameObjects.Group;
@@ -436,11 +934,116 @@ export class PlayScene extends Phaser.Scene {
    * room plan page (`buildReadout`). Cleared when the next room begins.
    */
   private directorLog: ObservedRequest[] = [];
+  /**
+   * What each Jev request cost, keyed by `purpose:round`.
+   *
+   * Filled by the evaluator wrapper, which is the only place that sees a call
+   * start and finish; joined onto the readout in `debugSnapshot`. Cleared
+   * with the log, so it can only ever describe the room on screen.
+   */
+  private requestStats = new Map<string, { ms: number; tokens: number | null; error?: string; retries?: number }>();
+  /** Whether Jev answered anything for the current room, and what made it fall back. */
+  private roomUsedJev = false;
+  private roomFellBack: string | null = null;
   private planRecords = new Map<string, PlanRecord>();
-  private readonly director: Director = createDirector(directorArm(), {
-    observe: (r) => { this.directorLog.push(r); },
-    ...(directorArm() === "jev" ? { evaluate: createEvaluator({ url: DECIDE_URL }) } : {}),
-  });
+  /**
+   * The Director, rebuilt at each run start.
+   *
+   * It used to be built once with the field initialiser, so the arm was
+   * whatever the page had loaded with and the title menu's switch could not
+   * reach it — a player turning Jev on would have had to reload. The key is
+   * read through a function for the same reason: a key typed on the title
+   * screen has to reach a Director built before it was typed.
+   */
+  private director: Director = this.buildDirector();
+
+  /**
+   * Set when the relay answered 401, so the run can say once that the key
+   * was refused. Cleared when a key is set or the title is returned to.
+   */
+  private jevKeyRejected = false;
+  private jevKeySaid = false;
+
+  /**
+   * A Director on the arm the title menu currently says, with the stored key
+   * — or on the rule arm whatever it says (`rule`), for a room that is not a
+   * run's: the title's backdrop is scenery, and asking Jev to plan it spent
+   * two paid requests before the player had chosen to play.
+   */
+  private buildDirector(rule = false): Director {
+    const arm = rule ? "rule" : directorArm();
+    /*
+     * The evaluator, wrapped only to notice a 401.
+     *
+     * The Director's own fallback contract already turns any failure into a
+     * rule-table answer, so the run does not stop — but a *rejected key* is
+     * the one failure the player can do something about, and it is
+     * indistinguishable from a good run unless it is said out loud. The
+     * error's own message carries the status; nothing here reads the key.
+     */
+    const inner = createEvaluator({ url: DECIDE_URL, invite: () => storedInvite() });
+    const watched: typeof inner = async (req) => {
+      /*
+       * **What the request cost, recorded where it is known.**
+       *
+       * `ObservedRequest` carries who answered and why it fell back, but not
+       * how long it took or what it spent — the Director has no reason to
+       * know either. The evaluator wrapper does: it is the only place that
+       * sees the call begin and end, and the reply's own usage. Keyed by
+       * purpose and round, which is what identifies a request on the readout.
+       */
+      const key = requestKey(req.meta.purpose, req.meta.round);
+      const began = performance.now();
+      try {
+        const reply = await inner(req);
+        this.requestStats.set(key, {
+          ms: Math.round(performance.now() - began),
+          tokens: reply.usage?.input_tokens ?? null,
+          ...(reply.retries ? { retries: reply.retries } : {}),
+        });
+        return reply;
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        if (/ 401\b/.test(message)) this.jevKeyRejected = true;
+        const retries = e instanceof EvaluatorError ? e.retries : 0;
+        this.requestStats.set(key, {
+          ms: Math.round(performance.now() - began),
+          tokens: null,
+          // The status is the useful half of the message; the rest is prose.
+          error: / 401\b/.test(message) ? "401" : /timed? ?out|abort/i.test(message) ? "timeout"
+            : (/HTTP (\d+)/.exec(message)?.[1] ?? "failed"),
+          ...(retries ? { retries } : {}),
+        });
+        throw e;
+      }
+    };
+    /*
+     * **Which state format this run sends Jev**: the briefing, the run
+     * written out for a reader, which beat the label table on every run-level
+     * measure (doc 011). `?state=labels` sends the table instead, so a
+     * browser session can still be compared with a harness run of either.
+     */
+    const stateFormat = new URLSearchParams(location.search).get("state") === "labels"
+      ? "labels" as const : "briefing" as const;
+    return createDirector(arm, {
+      state_format: stateFormat,
+      observe: (r) => {
+        this.directorLog.push(r);
+        /*
+         * What this room's Director actually did, for the badge on the HUD.
+         *
+         * `source` is per request, and a room takes two: a run can have Jev
+         * answer the first and the rule table answer the second after a
+         * timeout. The badge reports the room, so any request that fell back
+         * makes the room a fallback — which is the honest reading, and the
+         * one a player checking "is Jev actually planning this" wants.
+         */
+        if (r.source === "jev") this.roomUsedJev = true;
+        if (r.fallback_path) this.roomFellBack = r.fallback_path;
+      },
+      ...(arm === "jev" ? { evaluate: watched } : {}),
+    });
+  }
   /**
    * The run's seed. It was the constant "play", so every run was the same
    * run: the same rooms in the same order with the same enemies, which is
@@ -454,9 +1057,19 @@ export class PlayScene extends Phaser.Scene {
   /** The Director's portals out of this room and its cards in it (docs 003, 007). */
   private portalPlan: PortalPlan | null = null;
   private cardPlan: CardPlan | null = null;
-  /** A vendor's room mid-run: which vendor stands in it, or null for a fight. */
+  /** A room with no fight met mid-run: which of them stands in it, or null for a fight. */
   private npcRoom: NpcKind | null = null;
   private npcRooms = 0;
+  /**
+   * Vendor portals this run has put on the list, met or declined
+   * (`NPC_OFFERS_MAX`). A cap on what the run *says about* the vendors, as
+   * `npcRooms` is a cap on what it spends on them.
+   */
+  private npcOffers = 0;
+  /** Fountain rooms met this run, counted apart from the vendors (`portalChoices`). */
+  private fountains = 0;
+  /** Fountain portals this run has put on the list (`FOUNTAIN_OFFERS_MAX`). */
+  private fountainOffers = 0;
   private lastWasNpc = false;
   /** Doc 007's pity and temptation clocks: offers made, and offers since one held a need. */
   private offersMade = 0;
@@ -465,6 +1078,16 @@ export class PlayScene extends Phaser.Scene {
   /** Set while a room is being planned, so nothing steps a world that is being replaced. */
   private entering = false;
   private lastClearMs = 30_000;
+  /**
+   * Every cleared fight's length this run, for the pace `clear_speed` is read
+   * against (`expectedClearMsFor`). A flat thirty seconds was the reference
+   * player's pace, so a person read `slow` in every room they ever played.
+   */
+  private clearedMs: number[] = [];
+  /** The share of the last fight spent with an enemy bullet close (doc 011). */
+  private lastNearShare = 0;
+  /** What each fight measured, for the observed labels (`run/observed.ts`). */
+  private measures: RoomMeasure[] = [];
   private heartsLostRecent = 0;
   private debug!: DebugPanel;
   private debugAt = 0;
@@ -499,13 +1122,57 @@ export class PlayScene extends Phaser.Scene {
   private history: RunHistory = emptyHistory();
   private owned: string[] = [];
   private runGold = 0;
+  /**
+   * What the run has done, for the game-over card.
+   *
+   * `World.stats` is per room and goes with the room, so a death screen built
+   * from it could only ever report the last fight. These two count the run:
+   * bodies killed, and milliseconds of play (the sum of each room's elapsed
+   * time, so a paused menu is not counted as playing).
+   */
+  private runKills = 0;
+  private runMs = 0;
   /** The reward kind the player chose at the portal into this room. */
   private roomReward: RewardCardKind = "spell";
   /** Whether this room is an elite one, from the portal that led here. */
   private elite = false;
   private lastWasElite = false;
+  /** Elite rooms entered this run, and ordinary fights since the last (`legalDifficulties`). */
+  private eliteRooms = 0;
+  private fightsSinceElite: number | undefined = undefined;
   /** What the run has improved. Survives the room; the player does not. */
   private mods: PlayerMods = noMods();
+  /**
+   * **Experience earned this run, and the level it has bought**
+   * (`run/levels.ts`).
+   *
+   * Carried across the portal like `mods`, the gold and the spin charges: the
+   * world is rebuilt every room and would otherwise forget it. `createWorld`
+   * folds the level into the body, so what is held here is the run's total and
+   * never the modifiers it produced — the harness does exactly the same two
+   * lines, which is what keeps a played run and a measured run levelling
+   * alike.
+   */
+  private runXp = 0;
+  /**
+   * The stat cards' modifiers with the level's share folded in, as the world
+   * builds them.
+   *
+   * **The live world is the authority on the level, not `runXp`.** `runXp` is
+   * the run's carried total and is only refreshed when the player steps
+   * through a portal, so between levelling mid-fight and leaving the room it
+   * is a level or two behind. Reading it here meant that taking a stat card —
+   * which happens after the fight and before the portal — rebuilt the player's
+   * modifiers at the level the room *started* on and silently threw away every
+   * level the room had just paid for. The symptom was the one that got
+   * reported: "at level 4 the sword still hits 9".
+   */
+  private liveMods(): PlayerMods {
+    return withLevels(this.mods, this.world?.level ?? levelAt(this.runXp).level);
+  }
+  /** Experience gained in the last moment, for the bar's lurch; see `drawXpBar`. */
+  private xpFlash = 0;
+  private xpFlashMs = 0;
   /** The staff. Also survives the room; see `enterRoom`. */
   private slots: (ItemInstance | null)[] = [];
   /**
@@ -520,11 +1187,22 @@ export class PlayScene extends Phaser.Scene {
   private shopStock: OfferCard[] = [];
   /** A card being bought, charged when it lands (a staff-screen step may still be cancelled). */
   private shopPending: OfferCard | null = null;
-  /** The two vendors, drawn in the merchant's room. */
+  /** The vendors and the fountain, drawn in a room with no fight in it. */
   private npcs: {
-    kind: "merchant" | "smith"; x: number; y: number;
+    kind: NpcKind; x: number; y: number;
     img: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Ellipse; badge: Phaser.GameObjects.Image | null;
   }[] = [];
+  /**
+   * The fountain in this room, once drunk. One drink each: it restores
+   * `FOUNTAIN_HEAL_FRACTION` of the bar and then stands dry, which is why it
+   * has a dry frame at all — a fountain that looked the same after the drink
+   * would read as a prompt that stopped working.
+   */
+  private fountainDry = false;
+  /** The last footfall the king made, as a count of two-beat steps on his fight clock. */
+  private kingStep = -1;
+  /** The drain grates drawn in this room, which is where its dripping comes from. */
+  private drainSpots: { x: number; y: number }[] = [];
   /**
    * Spells taken off a key, lying on the floor with the level and affixes
    * they had. A tap on E picks one up (onto a free key, or into the replace
@@ -534,11 +1212,72 @@ export class PlayScene extends Phaser.Scene {
   /** The floor spell being put on a key through the replace step. */
   private floorPending: FloorSpell | null = null;
   /** How long E has been held over a floor spell, and whether that hold already dismantled it. */
+  /** Where the player is in the body band this frame; see `draw`. */
+  private playerDepth = 8;
+  /**
+   * **A spell key that did nothing, and why** — `SpellStep.refused`, arriving
+   * as a `cast_refused` event.
+   *
+   * The commonest way to be refused is the bar sitting a point or two under
+   * the key's cost, and with nothing on screen saying so the press reads as a
+   * dropped input rather than as an answer. `refusedMs` counts a short cue
+   * down; the mana one is louder than the rest because it is the only one the
+   * player can act on, and a key can be pressed a hundred times in a fight.
+   */
+  private refusedKey = -1;
+  private refusedWhy: "mana" | "cooldown" | "busy" | "empty" | "" = "";
+  private refusedMs = 0;
+  /**
+   * **The mana refusal, answered where the player is looking.**
+   *
+   * The slot shake and the bar's shortfall band are both in the HUD, at the
+   * bottom of the screen, and in a fight the eyes are on the body in the
+   * middle of it — measured in one real run, 86 of 271 presses in a single
+   * room were refused for mana and the player never changed what they were
+   * doing. So the refusal also pops a small mark over the player's head.
+   *
+   * The **mana** refusal's mark says "not enough mana"; a cooldown's says
+   * "cooldown" and the seconds left, smaller and in its own colour
+   * (`drawCooldownCue`), so the two are never read as the same answer
+   * (`noteRefusal`).
+   *
+   * `manaCueMs` ages one cue; `manaCueGapMs` counts since the last one
+   * *started*, which is the rate limit. A key held down refuses every frame,
+   * and a mark that restarted on each of those would be a label stapled over
+   * the player rather than a cue.
+   */
+  private manaCueMs = 0;
+  private manaCueGapMs = MANA_CUE_EVERY_MS;
+  /**
+   * The cooldown refusal's own mark over the head (`drawCooldownCue`): the
+   * word and the seconds the key still has to wait, small and pale gold, once per fresh
+   * press and at most every `COOLDOWN_CUE_EVERY_MS`. `lastRefusalAt` is when
+   * each key was last refused, which is what tells a press from a held key.
+   */
+  private cooldownCueMs = 0;
+  private cooldownCueGapMs = COOLDOWN_CUE_EVERY_MS;
+  private cooldownCueText = "";
+  private readonly lastRefusalAt = new Map<number, number>();
+  /**
+   * The spell key last pressed, whether or not it fired: the mana bar marks
+   * that key's cost, so "how far off am I" is a glance rather than a sum.
+   */
+  private lastSpellKey: number | null = null;
   private floorHoldMs = 0;
+  /**
+   * Holding E on a card screen, and whether this press has already paid out.
+   *
+   * The world takes a floor spell apart on a held E; the card screens did
+   * the same on X, which is one action with two keys. They share this now.
+   */
+  private modalHoldMs = 0;
+  private modalHoldSpent = false;
   private floorHoldSpent = false;
   /** How long the current E press has lasted, to tell a tap from a hold. */
   private floorPressMs = 0;
   private holdGfx!: Phaser.GameObjects.Graphics;
+  /** The same bar, over a modal screen rather than over the room. */
+  private modalHoldGfx!: Phaser.GameObjects.Graphics;
   /** What the portal this room was entered through promised. */
   private roomPromise: { school?: string; family?: string; grade: number } = { grade: 1 };
   /** True in the merchant's room, where the cards cost gold instead of a slot. */
@@ -548,6 +1287,8 @@ export class PlayScene extends Phaser.Scene {
   /** The last reward taken, shown briefly so a pickup reads as an acquisition. */
   private tookMs = 0;
   private tookLabel = "";
+  /** What the offer screen's hint row currently says; see `paintSelection`. */
+  private offerHintStr = "";
   /** Rebuilt per room: portals with their type badge, and the reward cards. */
   /** "ELITE" over the portals that lead to one. Rebuilt with the portals. */
   private eliteMarks: { portal: Portal; mark: Phaser.GameObjects.Image | Phaser.GameObjects.Text }[] = [];
@@ -604,7 +1345,14 @@ export class PlayScene extends Phaser.Scene {
   private spinPressed = false;
   /** The stat cards taken this run, by id, for the attributes panel. */
   private statsTaken: string[] = [];
-  private lastSpinPhase: ReturnType<typeof swingPhase> = "none";
+  /**
+   * The style tags of each card taken, for `preference.consistency`. Without
+   * it the label was hard-coded `on_plan` and `variety` answered `low` for
+   * every offer of every run.
+   */
+  private pickTags: string[][] = [];
+  /** The card kept in this room, for the briefing's room-by-room journal. */
+  private pickedThisRoom: string | null = null;
 
   /** The reward standing on the floor, its beam, and its glow. */
   /** The reward's column of light, redrawn each frame; see `buildRewardDrop`. */
@@ -617,6 +1365,8 @@ export class PlayScene extends Phaser.Scene {
   } | null = null;
   /** The one key prompt, moved onto whatever is in reach. See `updateExits`. */
   private prompt!: KeyPrompt;
+  /** What was just gained — a level, a dismantle's coins — for a moment above the action bar. */
+  private toast!: KeyPrompt;
   /**
    * The sword's resting angle for this frame's facing, cached by `draw`.
    *
@@ -630,11 +1380,17 @@ export class PlayScene extends Phaser.Scene {
   /** Where the blade hangs when not swinging, eased between sheathed and ready. */
   private swordPose = { dx: -7, dy: -5, rot: -Math.PI / 2 };
   /** Short-lived visuals that outlive the entity that caused them. */
-  private pops: { x: number; y: number; frame: string; flipX: boolean; ms: number }[] = [];
+  private pops: KillPop[] = [];
+  /** The colours each death frame bursts into (`popColours`). */
+  private popPalette = new Map<string, number[]>();
   /**
    * Standing features with a light in them, so the flame or the glow has two
    * frames rather than one. Rebuilt per room with the tile layer.
    */
+  /** The room's lava cells: all on one frame, so a channel flows as one. */
+  private lavaTiles: { img: Phaser.GameObjects.Image; sheet: string }[] = [];
+  /** The room's grass cells by grid index, and which of the two drawings each is. */
+  private grassTiles = new Map<number, { img: Phaser.GameObjects.Image; v: number }>();
   private featureLights: {
     img: Phaser.GameObjects.Image; a: string; b: string;
     /** Whether the pair is a state worth animating; see the update loop. */
@@ -647,8 +1403,9 @@ export class PlayScene extends Phaser.Scene {
    * Damage numbers, off unless the player turns them on (Tab screen, N).
    * Remembered in the browser: a preference, not a save.
    */
-  private damageNumbersOn = (() => { try { return localStorage.getItem(DAMAGE_NUMBERS_KEY) === "1"; } catch { return false; } })();
-  private damageNumbers: { id: number; x: number; y: number; text: string; colour: string; ms: number; drift: number }[] = [];
+  // On unless turned off.
+  private damageNumbersOn = (() => { try { return localStorage.getItem(DAMAGE_NUMBERS_KEY) !== "0"; } catch { return true; } })();
+  private damageNumbers: FloatingNumber[] = [];
   private damageNumberId = 0;
   /**
    * Text drawn every frame, **kept** rather than rebuilt (task 11).
@@ -661,6 +1418,8 @@ export class PlayScene extends Phaser.Scene {
    * hidden at the end of a frame nothing asked for it in.
    */
   private readonly textCache = new Map<string, { t: Phaser.GameObjects.Text; used: boolean; style: string; idle: number }>();
+  /** The kept texts drawn this frame, in order, so a HUD block can fade its own; see `fadeMark`. */
+  private keptDrawn: Phaser.GameObjects.Text[] = [];
   private shards: { x: number; y: number; a: number; ms: number }[] = [];
   /** Settings: damage dealt and taken, as multiples. Remembered like the rest. */
   private dealtMult = readSetting(DEALT_KEY, 1);
@@ -676,8 +1435,39 @@ export class PlayScene extends Phaser.Scene {
   private invincible = (() => { try { return localStorage.getItem(INVINCIBLE_KEY) === "1"; } catch { return false; } })();
   /** The pause menu (Esc): its page, the highlighted row, and what it drew. */
   private pauseUi: { page: "main" | "settings" | "controls"; selected: number; objects: Phaser.GameObjects.GameObject[] } | null = null;
-  /** The title screen, over a fresh first room until a key is pressed. */
-  private titleUi: Phaser.GameObjects.GameObject[] | null = null;
+  /**
+   * The title screen, over a fresh first room until a key is pressed.
+   *
+   * A menu rather than one "press Enter": the two things a player wants
+   * before a run — the settings, and which Director is going to run it —
+   * were reachable only after starting one, and the Jev arm had no way in
+   * at all short of editing the URL.
+   *
+   */
+  private titleUi: { selected: number; objects: Phaser.GameObjects.GameObject[] } | null = null;
+  /**
+   * The invitation-code dialog, over the title or Settings.
+   *
+   * The typing is done by a real `<input>` laid over the canvas, invisible
+   * and always focused while the dialog is up, and the game's own keyboard is
+   * switched off for as long as it is there. Both halves are needed: an
+   * earlier key field kept the menu's own key handling running, so W moved
+   * the cursor behind the dialog and Phaser's capture list swallowed the
+   * letter before the field ever saw it.
+   */
+  private inviteUi: {
+    objects: Phaser.GameObjects.GameObject[];
+    field: HTMLInputElement;
+    /** Which of `inviteActions` Enter will run. */
+    action: number;
+    status: InviteStatus;
+    /** Rising with each check, so a slow reply to an abandoned one is dropped. */
+    checking: number;
+    closing: boolean;
+    onResize: () => void;
+  } | null = null;
+  /** A code taken out of the URL in `create`, waiting for the title to be up. */
+  private claimedInvite = "";
   /**
    * The run's intent (doc 003's intent screen): a build style, and in Jev
    * mode the player's own words. It reaches the Director's context, the
@@ -686,7 +1476,18 @@ export class PlayScene extends Phaser.Scene {
    */
   private intent: { preset: "spam" | "nuke" | "area" | "dot" | "melee"; free_text?: string } = { preset: "spam" };
   private intentUi: { selected: number; text: string; objects: Phaser.GameObjects.GameObject[] } | null = null;
-  private demo: { spell: string; world: World; acc: number; ageMs: number; numbers: { x: number; y: number; text: string; colour: string; ms: number }[] } | null = null;
+  private demo: {
+    spell: string; world: World; acc: number; ageMs: number;
+    numbers: FloatingNumber[];
+    /** The preview's own kills, drawn as play draws them (`drawPops`). */
+    pops: KillPop[];
+    /** Where the preview's camera looks, fixed for the loop. */
+    camX: number; camY: number;
+    /** Where each demo body stands, the body standing there, and how long it has been down. */
+    slots: { dx: number; dy: number; id: number; downMs: number }[];
+    /** A stance demo's guards raised so far: every other one is shot at. */
+    guards?: number;
+  } | null = null;
   private demoCam: Phaser.Cameras.Scene2D.Camera | null = null;
   /** Screen objects made once (the controls line) that the demo camera must not show. */
   private demoIgnore: Phaser.GameObjects.GameObject[] = [];
@@ -694,9 +1495,66 @@ export class PlayScene extends Phaser.Scene {
   private renderingDemo = false;
   /** The character screen was opened from the pause menu, so Esc goes back there. */
   private staffFromPause = false;
+  /** Settings was opened from the title menu, so closing it goes back there rather than into the room. */
+  private pauseFromTitle = false;
+  /** The controls page was opened from the settings page, so Back returns there. */
+  private controlsFromSettings = false;
+  /**
+   * The intent screen's free-text field: a real `<input>` over the canvas.
+   *
+   * A canvas cannot host an IME, and this is the one place in the game the
+   * player writes rather than chooses — so in Chinese and Japanese it has to
+   * be a DOM element or it cannot be typed into at all.
+   */
+  private intentInput: HTMLInputElement | null = null;
   /** The game-over card, while the run is dead. */
   private gameOverUi: Phaser.GameObjects.GameObject[] | null = null;
+  /**
+   * The key guide shown once, on the first room of a player's first run.
+   *
+   * A game whose verbs are eight keys cannot leave a first-time player to
+   * find them: the action bar names the keys but not what they do, and the
+   * Controls page is behind a menu nobody opens before they have a reason to.
+   * Shown once, dismissed by anything, and pointed at where it lives after.
+   */
+  private hintsUi: { objects: Phaser.GameObjects.GameObject[]; off: () => void } | null = null;
+  /** Set when the guide is owed but the room plan is still up. */
+  private pendingHints = false;
   private gameOverKeys: (() => void) | null = null;
+  /** The results card, once the boss is down: the game-over card's twin. */
+  private victoryUi: Phaser.GameObjects.GameObject[] | null = null;
+  private victoryKeys: (() => void) | null = null;
+  /** How long the boss room took, banked at the win for the results card. */
+  private bossMs = 0;
+  /*
+   * **Retrying the boss.** A death in the boss room offers the fight again
+   * (`retryBoss`): the same build, at full health, as many times as they
+   * like. Fifteen rooms of a run are what the boss is a test of, and losing
+   * all of them to one fight read as the game taking the run away rather than
+   * the king winning it. `bossTries` counts the attempts for the results card.
+   */
+  private bossTries = 1;
+  /*
+   * **The king's entrance** (doc 020, "Staging"). He is on his throne with a
+   * goblet when the player comes in; he sees them, throws the goblet down,
+   * and stands — and the fight, its clock and its music start on that. Until
+   * he stands he is only the throne's drawing (`throneImg`): the boss body is
+   * spawned at the end, so nothing of the fight can begin early. Played on
+   * every attempt, a retry included.
+   *
+   * `clock` is the fight's, from the goblet leaving his hand: the boss theme
+   * comes in there, and the body he stands up into takes the clock on.
+   */
+  private kingIntro: { phase: "walk" | "pause" | "notice" | "throw" | "rise"; ms: number; total: number; clock: number } | null = null;
+  /**
+   * **The walk into the throne hall**, every time: the player is walked in
+   * from the door to `toY` facing him, the controls theirs again once
+   * `release` is set after his name; the entrance is played with the HUD
+   * faded out (`k`, 0 to 1).
+   */
+  private bossCine: { toY: number; bars: boolean; k: number; release: boolean } | null = null;
+  private kingGoblet: { x0: number; y0: number; x1: number; y1: number; ms: number } | null = null;
+  private throneImg: Phaser.GameObjects.Image | null = null;
   /** Set by "Return to title": the title goes up once the new run's first room is built. */
   private pendingTitle = false;
   /**
@@ -709,6 +1567,13 @@ export class PlayScene extends Phaser.Scene {
     objects: Phaser.GameObjects.GameObject[]; dots: Phaser.GameObjects.Text | null;
     /** The plan page's tab (room, Director inputs, Director questions) and scroll, in lines. */
     page: number; scroll: number; maxScroll: number;
+    /**
+     * The lowest y the page's column may use: above the Begin plate and the
+     * key hints, both of which are measured before the column is laid out.
+     */
+    floor?: number;
+    /** The Begin plate's own rectangle, which nothing may be drawn under. */
+    plate?: Phaser.Geom.Rectangle;
   } | null = null;
   /** Settings: show the plan before a room starts (on), or start it as soon as it is ready. */
   /** How long the Director took over the last room's plan, doors included. */
@@ -722,8 +1587,8 @@ export class PlayScene extends Phaser.Scene {
     /** A spell's hit is coloured by its element; the sword's stays white. */
     color?: number;
   }[] = [];
-  /** Where a shot came into being: the hand, or a carrier's burst. See `CAST_MS`. */
-  private casts: { x: number; y: number; ms: number; element: Element; scale: number }[] = [];
+  /** Where a shot came into being: the hand, or where an affix cast it. See `CAST_MS`. */
+  private casts: { x: number; y: number; ms: number; element: Element; scale: number; light?: { core: number; glow: number } }[] = [];
   /** Where a shot stopped without hitting a body. See `PUFF_MS`. */
   private puffs: { x: number; y: number; ms: number; element: Element; scale: number }[] = [];
   /**
@@ -732,14 +1597,76 @@ export class PlayScene extends Phaser.Scene {
    * no event for either, so the renderer has to remember for itself.
    */
   private readonly bulletMemory = new Map<Bullet, {
-    x: number; y: number; alive: boolean; payload: boolean; element: Element;
+    x: number; y: number; alive: boolean; element: Element;
+    /**
+     * The sound this shot's spell makes where it lands, resolved once at
+     * birth from `Bullet.spellIndex`. Kept here rather than looked up at the
+     * hit, because by then the shot is dead and its slot may already have
+     * been recycled by the next cast.
+     */
+    impact: { name: SfxName; pitch: number } | null;
     /** Where it has been, oldest first, for shots drawn as the path they took. */
     trail: { x: number; y: number }[];
+    /**
+     * How far a `charge` spell was held when this shot left, 0 to 1 (doc
+     * 006); 1 for every other shot. Read at birth off the key that was let go,
+     * because nothing on the bullet says it — its radius does, but only
+     * against a build's own size multiplier.
+     */
+    charge: number;
   }>();
+  /**
+   * The charge the player was holding before this step, and on which key:
+   * the shot a `charge` spell looses on release is born in the step the key
+   * came up, by which point the sim has already put the charge out.
+   */
+  private chargeBefore = { key: -1, share: 0 };
+  /** The last share a key was released at, for a shot born without a release this step (an echo). */
+  private releasedShare = new Map<number, number>();
+  /** Whether the charge being held was full last frame, so "full" is cued once, on the edge. */
+  private chargeFull = false;
+  /** The dash cuts cast free this step, read before the sim spends them, for their colour and size. */
+  private freeBefore: { x: number; y: number; radius: number; element: Element; spellIndex: number }[] = [];
+  /**
+   * The spell-option effects of doc 006 that outlive their event: a poison
+   * jumping (`spores`), the rings a quake has already thrown (`ringCasts`, by eruption cast, so each ring is
+   * marked once), and which pooled eruption cells have been seen to fire.
+   */
+  private spores: { x0: number; y0: number; x1: number; y1: number; to: number; ms: number; life: number }[] = [];
+  /**
+   * **The newer shapes' effects that outlive their event** (doc 006): a dash
+   * cut cast free, drawn a beat after the sword's own hit flash so it is not
+   * buried under it (`freeCuts`); a stance's answering spin slash
+   * (`answers`); and each thrown blade's spin so far, kept here so it can
+   * slow into its turn without jumping (`bladeSpin`).
+   */
+  private freeCuts: { x: number; y: number; angle: number; len: number; core: number; glow: number; ms: number }[] = [];
+  private answers: { x: number; y: number; r: number; share: number; ms: number; turn: number }[] = [];
+  private readonly bladeSpin = new Map<Bullet, number>();
+  /**
+   * Each enchant wave in flight (`drawWaves`): its flicker's seed. Keyed by
+   * where it was thrown from as well, because the pool recycles slots.
+   */
+  private readonly waveEdges = new Map<Bullet, { ox: number; oy: number; seed: number }>();
+  private readonly ringCasts = new Map<number, { x: number; y: number; rings: Set<number> }>();
+  private readonly firedCells = new Map<object, number>();
+  /** A leap in the air: where it left, where it will come down, how long it flies, and how wide its ring is. */
+  private leap: { x0: number; y0: number; x1: number; y1: number; totalMs: number; ring: number } | null = null;
+  /** Where the off hand is this frame, for what gathers in it. */
+  private handAt: { x: number; y: number } | null = null;
+  /** The doom marks drawn last frame, so a burst can be sized by the mark it came from. */
+  /** The spell-option floor marks: normal blend, under the bodies, over the ground. */
+  private spellFloorGfx!: Phaser.GameObjects.Graphics;
+  /** What a spell puts in the air over the room — a falling rock, a lobbed poison: matter, over the bodies. */
+  private airGfx!: Phaser.GameObjects.Graphics;
   /** The off-hand flame flares on a cast, then settles. Counts down from `CAST_MS`. */
   private flareMs = 0;
   /** Additive layers for spell light: under the bodies, and over them. */
   private fxGfx!: Phaser.GameObjects.Graphics;
+  /** Ground rings under the bodies: the boss's shockwave (`drawShockwaves`). */
+  private ringGfx!: Phaser.GameObjects.Graphics;
+  /** Broken ground and the boss's limbs: dark, so normal-blended. See `drawShockwaves`. */
+  private soilGfx!: Phaser.GameObjects.Graphics;
   private fxTopGfx!: Phaser.GameObjects.Graphics;
   /**
    * Hit sparks, kill bursts and slash marks: short-lived, additive, drawn as
@@ -757,9 +1684,18 @@ export class PlayScene extends Phaser.Scene {
   private ramSkidMs = 0;
   private ramSkidDir = 0;
   private fxRings: { x: number; y: number; ms: number; life: number; r0: number; r1: number; colour: number; width: number }[] = [];
-  /** Edges for the cues that are states in the sim rather than events. */
-  private wasCommitting = false;
+  /** The edge for the cue that a body in the room has just noticed the player. */
   private wasNoticing = false;
+  /**
+   * The rest of the audio edges, in one bag: last frame's value for each of
+   * the player states that have a sound on their rising edge, and the ids of
+   * the bodies already winding up, so a new windup is cued once. See
+   * `playWorldSounds`.
+   */
+  private audio = {
+    swingMs: 0, strikeMs: 0, castPending: -1, chargeKey: -1, chargeFull: false,
+    cooldowns: [] as number[], winding: new Set<number>(), lunging: new Set<number>(),
+  };
 
   constructor() {
     super("play");
@@ -767,14 +1703,36 @@ export class PlayScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image("sheet", "sprites.png");
+    this.load.image("gameLogo", "logo.png");
     this.load.json("atlasJson", "sprites.json");
+    preloadHallArt(this);
     preloadSfx(this);
   }
 
   create(): void {
+    // Before anything reads the setting: an invite arriving in the URL is
+    // taken and the address bar wiped, so it is not in the first screenshot.
+    // It is verified once the title is up (`settleInvite`), not stored here.
+    this.claimedInvite = claimInviteFromUrl();
+    // The backdrop behind the title is planned by the rule arm; the run's
+    // Director is built when the run starts (`showIntent`).
+    this.director = this.buildDirector(true);
     this.sfx = new Sfx(this);
+    /*
+     * The audio context starts on the first gesture, because a browser will
+     * not let it start on anything else. Both handlers, because the game is
+     * played on the keyboard and reached with the mouse, and whichever comes
+     * first has to be the one that wakes the sound up.
+     */
+    this.input.keyboard?.on("keydown", () => this.sfx.unlock());
+    this.input.on("pointerdown", () => this.sfx.unlock());
     this.swingGfx = this.add.graphics().setDepth(9);
+    this.waveGfx = this.add.graphics().setDepth(9);
     this.magicGfx = this.add.graphics().setDepth(8.7).setBlendMode(Phaser.BlendModes.ADD);
+    this.eruptGfx = this.add.graphics().setDepth(5.6);
+    this.scarfGfx = this.add.graphics();
+    this.focusGfx = this.add.graphics();
+    this.conjureGfx = this.add.graphics().setDepth(8.65);
     // Under the bodies (6) so a telegraph never hides what is standing on it,
     // and over them for the live blade so the thing that hits you is on top.
     this.threatGfx = this.add.graphics().setDepth(4);
@@ -787,12 +1745,25 @@ export class PlayScene extends Phaser.Scene {
     // layer carries the flash and the fizzle, which must not hide behind the
     // body they happen on.
     this.fxGfx = this.add.graphics().setDepth(5.5).setBlendMode(Phaser.BlendModes.ADD);
+    // The player's own spell marks on the floor (`spell-marks.ts`): over the ground's
+    // own marks, under the enemies' threats, so a threat is never hidden by a lure.
+    this.spellFloorGfx = this.add.graphics().setDepth(2.2);
+    this.airGfx = this.add.graphics().setDepth(9.55);
+    this.ringGfx = this.add.graphics().setDepth(1.97).setBlendMode(Phaser.BlendModes.ADD);
+    /*
+     * The soil layer: **normal-blended**, and directly under the additive
+     * ring. Upturned earth and the boss's limbs are darker than the floor
+     * they are on, and an additive layer can only add light — drawn on
+     * `ringGfx` the shockwave could only ever be a ring of glow, which is
+     * exactly what made it look like an overlay rather than ground.
+     */
+    this.soilGfx = this.add.graphics().setDepth(1.96);
     this.fxTopGfx = this.add.graphics().setDepth(9.6).setBlendMode(Phaser.BlendModes.ADD);
     this.sparkGfx = this.add.graphics().setDepth(9.65).setBlendMode(Phaser.BlendModes.ADD);
     this.projGfx = this.add.graphics().setDepth(5.4);
     this.holdGfx = this.add.graphics().setDepth(9.3);
+    this.modalHoldGfx = this.add.graphics().setDepth(250);
     this.beamGfx = this.add.graphics().setDepth(9.2).setBlendMode(Phaser.BlendModes.ADD);
-    this.fireFx = new FireFx(this);
     this.fxSheets = bakeFxTextures(this, { blastLen: Math.round(MUSKET_RANGE * 2), blastSpreadDeg: MUSKET_SPREAD_DEG });
     const image = this.textures.get("sheet").getSourceImage() as HTMLImageElement;
     const canvas = document.createElement("canvas");
@@ -805,11 +1776,69 @@ export class PlayScene extends Phaser.Scene {
       { width: image.width, height: image.height, data: pixels.data },
       this.cache.json.get("atlasJson") as AtlasJson,
     );
+    this.ensurePlainSheet();
+    this.fireFx = new FireFx(this, this.uiTextureKey);
+    /*
+     * The subspecies palettes (doc 019), which ship in the atlas JSON beside
+     * the frames so the table and the sheet can never disagree.
+     */
+    this.subspecies = new SubspeciesVisuals(
+      this.game,
+      ((this.cache.json.get("atlasJson") as { subspecies?: SubspeciesSwap[] }).subspecies) ?? [],
+    );
+    setCoinArt(this.uiTextureKey, "pickup_coin_0");
 
-    this.keys = this.input.keyboard!.addKeys("W,A,S,D,UP,LEFT,DOWN,RIGHT,E,R,M,J,K,L,U,I,O,X,N,ONE,TWO,THREE,SPACE,SHIFT,ENTER,ESC,BACKTICK,TAB") as Record<string, Phaser.Input.Keyboard.Key>;
+    this.input.on("wheel", (_p: unknown, _o: unknown, _dx: number, dy: number) => this.scrollPlan(dy));
+    /*
+     * **One key per action.**
+     *
+     * The list had grown a second and third key for half of them — Space and
+     * Shift both dodged, Space and J both confirmed, 1/2/3 picked a card
+     * that A/D and Enter already picked, X dismantled what holding E
+     * dismantles everywhere else — and the controls page had become a page
+     * of synonyms. What is left is the set the game is actually played with;
+     * the arrow keys stay for menus only, unlisted, because a menu is the
+     * one place a player reaches for them without being told.
+     */
+    this.keys = this.input.keyboard!.addKeys("W,A,S,D,UP,LEFT,DOWN,RIGHT,E,J,K,L,U,I,O,ENTER,ESC,BACKTICK,TAB") as Record<string, Phaser.Input.Keyboard.Key>;
+    if (spellLabAsked()) this.spellLab = new SpellLab(this.spellLabHost());
     this.debug = new DebugPanel({
+      ...(this.spellLab ? { spellLab: this.spellLab } : {}),
       swapSpells: (a, b) => this.swapSpells(a, b),
       spawnEnemy: (id, elite) => this.debugSpawn(id, elite),
+      floorGrain: () => floorGrain,
+      setFloorGrain: (grain) => this.setFloorGrain(grain),
+      resetFirstLaunch: () => {
+        try { localStorage.removeItem(SEEN_CONTROLS_KEY); } catch { /* nothing to forget */ }
+      },
+      skipRoom: () => { if (!this.entering) void this.enterRoom(this.roomIndex + 1); },
+      bossLab: {
+        enter: () => this.enterBossLab(),
+        setPhase: (phase) => {
+          const boss = this.world.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
+          // Just inside the phase; the change itself is the sim's, as in a fight.
+          if (boss) boss.hp = Math.max(1, Math.round(boss.maxHp * (BOSS_PHASES[phase - 1]!.at - 0.005)));
+          // And the fight clock back to its start when he is between moves, so a
+          // long session in the lab does not drift into the enrage (125 s) unseen.
+          if (boss && boss.bossCast === "none" && boss.attack === "approach" && boss.bossNext === "none") boss.bossFightMs = 0;
+        },
+        hold: () => ({ ...this.labHold }),
+        setHold: (hold) => { this.labHold = { ...hold }; if (this.labOn) this.world.bossHold = this.labHold; },
+        move: (name) => queueBossMove(this.world, name as BossMove),
+        blade: (kind) => forceBossBlade(this.world, kind),
+        speed: () => this.labSpeed,
+        setSpeed: (speed) => this.setLabSpeed(speed),
+        stepFrame: () => { this.setLabSpeed(0); this.labSteps++; },
+        metronome: () => this.labMetronome,
+        setMetronome: (on) => { this.labMetronome = on; },
+        clearAdds: () => { this.world.enemies = this.world.enemies.filter((e) => e.archetype === "boss"); },
+      },
+      invincible: () => this.invincible,
+      setInvincible: (on) => {
+        this.invincible = on;
+        this.world.invincible = on;
+        try { localStorage.setItem(INVINCIBLE_KEY, on ? "1" : "0"); } catch { /* still applies */ }
+      },
     });
     this.tiles = this.add.group();
     this.sprites = this.add.group();
@@ -821,13 +1850,24 @@ export class PlayScene extends Phaser.Scene {
      * ran under the controls; the dodge moved to a key letter beside the rage
      * gauge, where the spin's already is, and the rest fits at 9 px.
      */
-    this.hud = this.add.text(VIEW_W - 8, 22, "", {
-      fontFamily: "monospace", fontSize: `${Math.round(8 * ZOOM)}px`, color: "#c9cfe8", align: "right",
+    this.hud = this.add.text(UI_W - 8, 22, "", {
+      fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(8, ZOOM) * ZOOM)}px`, color: "#c9cfe8", align: "right",
       backgroundColor: "#0d0b1f99", padding: { x: 3 * ZOOM, y: 1 * ZOOM },
     }).setScale(1 / ZOOM).setOrigin(1, 0).setDepth(100);
 
-    // The key drawn as a key: see `ui/keycap.ts`.
-    this.prompt = new KeyPrompt(this, { px: 9, colour: "#ffe9a8", zoom: ZOOM, depth: 9, panel: true });
+    /*
+     * The key drawn as a key: see `ui/keycap.ts`.
+     *
+     * **Above everything the world draws over a body.** At depth 9 it was
+     * under the vendors' trade badges (9.4), which hang at the same height:
+     * the merchant's coin purse was drawn on top of its own `[E] Merchant`
+     * and covered the first glyph of the name. The prompt is the one thing
+     * in the room that has to be readable whatever is behind it, so it takes
+     * the top of the world layer; the positions below keep it clear of the
+     * badges as well, so the fix does not depend on the ordering alone.
+     */
+    this.prompt = new KeyPrompt(this, { px: 9, colour: "#ffe9a8", zoom: ZOOM, depth: 12.5, panel: true });
+    this.toast = new KeyPrompt(this, { px: 9, colour: "#ffe9a8", zoom: ZOOM, depth: UI_DEPTH + 6, panel: true });
 
     /*
      * The controls, on screen, permanently.
@@ -847,20 +1887,160 @@ export class PlayScene extends Phaser.Scene {
      * U, I and O, each beside the spell it casts — are dropped from it.
      */
     // L and K are on the gauges they spend; the rest is here.
-    this.demoIgnore.push(keyLine(this, VIEW_W - 8, HUD_BOTTOM_Y, "[E] use  [Tab] character  [Esc] menu", {
-      px: 7, colour: "#8a84a0", zoom: ZOOM, depth: 100, originX: 1, panel: true,
-    }));
+    this.hintStrip = keyLine(this, UI_W - 10, HUD_BOTTOM_Y, this.hintStripText(), HINT_STRIP_STYLE);
+    this.demoIgnore.push(this.hintStrip);
 
     const cam = this.cameras.main;
     cam.setZoom(ZOOM);
     // Zoom is applied about the centre, so the origin has to be re-anchored.
-    cam.centerOn(VIEW_W / 2, (VIEW_H + HUD_H) / 2);
+    cam.centerOn(UI_W / 2, (UI_H + HUD_H) / 2);
+    {
+      cam.setRoundPixels(true);
+      this.uiCam = this.cameras.add(0, 0, cam.width, cam.height).setZoom(ZOOM);
+      this.uiCam.centerOn(UI_W / 2, (UI_H + HUD_H) / 2);
+      this.offscreenGfx = this.add.graphics().setDepth(12);
+      this.minimapGfx = this.add.graphics().setDepth(UI_DEPTH + 1);
+      this.events.on(Phaser.Scenes.Events.PRE_RENDER, () => this.assignCameras());
+    }
 
     // Dev builds expose the scene for poking at from the console.
-    // Muted is a setting too, and is remembered like the others.
-    try { if (localStorage.getItem(MUTE_KEY) === "1") this.sfx.setMuted(true); } catch { /* not available */ }
-    if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) (window as unknown as { __scene?: PlayScene }).__scene = this;
-    void this.enterRoom(1).then(() => this.showTitle());
+    /*
+     * Sound is **off until it is asked for**, and remembered like the other
+     * settings. A page that starts making noise on its own is a page people
+     * close, and a browser may refuse to play it before a gesture anyway —
+     * so the default is the honest one, and the menu offers it.
+     */
+    this.sfx.setStyle(soundStyle());
+    (window as unknown as { __scene?: PlayScene }).__scene = this;
+    // `?lab=boss`: straight into the boss lab, with no title and no invite.
+    if (new URLSearchParams(location.search).get("lab") === "boss")
+      void this.enterRoom(1).then(() => { this.debug.showBossLab(); this.enterBossLab(); });
+    // `?lab=spells`: straight into the spell lab's arena, likewise.
+    else if (this.spellLab) void this.enterRoom(1).then(() => { this.debug.showSpellLab(); this.spellLab?.start(); });
+    else void this.enterRoom(1).then(() => { this.showTitle(); void this.settleInvite(); });
+  }
+
+  /** The boss lab's start: the boss room, the boss held, the player invincible (not remembered). */
+  private enterBossLab(): void {
+    if (this.entering) return;
+    this.hideTitle();
+    this.labOn = true;
+    this.invincible = true;
+    void this.enterRoom(RUN_BOSS_ROOM).then(() => {
+      this.world.invincible = true;
+      this.world.bossHold = this.labHold;
+    });
+  }
+
+  /** What the spell lab asks of the scene (`spell-lab.ts`): its arena built here, on the boss lab's clock. */
+  private spellLabHost(): SpellLabHost {
+    return {
+      build: (room, keys) => this.buildSpellLab(room, keys),
+      world: () => (this.world && !this.entering ? this.world : null),
+      speed: () => this.labSpeed,
+      setSpeed: (speed) => this.setLabSpeed(speed),
+      stepFrame: () => { this.setLabSpeed(0); this.labSteps++; },
+      icon: (frame) => this.labIcon(frame),
+    };
+  }
+
+  /**
+   * The spell lab's arena, entered as a room is but with no run around it:
+   * the lab's room and keys, no encounter, no offer, the player invincible
+   * (not remembered). The keys' affixes and levels are put on the way
+   * `enterRoom` puts a run's back on.
+   */
+  private buildSpellLab(room: RoomPlan, keys: readonly (LabKey | null)[]): World | null {
+    if (this.entering) return null;
+    this.hideTitle();
+    this.invincible = true;
+    const staff = runStaff();
+    this.slots = Array.from({ length: staff.slots }, (_, i) => {
+      const k = keys[i];
+      return k ? plainInstance(k.spell, `${k.spell}-lab-${i}`) : null;
+    });
+    this.spellAffixes = this.slots.map((_, i) => [...(keys[i]?.affixes ?? [])]);
+    this.spellLevels = this.slots.map((_, i) => keys[i]?.level ?? 1);
+    this.won = false;
+    this.shopping = false;
+    this.kingIntro = null;
+    this.kingGoblet = null;
+    this.camFocus = null;
+    this.offer = null;
+    // Through a local: `room-index.test.ts` reads the scene's first `this.world = createWorld`, which is `enterRoom`'s.
+    const arena = createWorld({
+      room, encounter: null, staff, slots: this.slots, props: 0,
+      roomIndex: this.roomIndex,
+      hearts: MAX_HEARTS + this.liveMods().maxHearts,
+      rng: new RngSource("spell-lab").stream("world"),
+      dealtMult: this.dealtMult,
+      takenMult: this.takenMult,
+      invincible: true,
+      mods: this.mods,
+      xp: this.runXp,
+      viewHalf: { x: this.scale.width / this.worldZoom() / 2, y: this.scale.height / this.worldZoom() / 2 },
+    });
+    this.world = arena;
+    this.world.spells.forEach((slot, i) => {
+      if (!slot) return;
+      let next = slot;
+      for (const a of this.spellAffixes[i] ?? []) next = attachAffix(next, a.id, a.tier) ?? next;
+      this.world.spells[i] = withLevel(next, this.spellLevels[i] ?? 1);
+    });
+    this.applyMood(room.params.mood);
+    this.drawTiles();
+    this.buildExits();
+    return this.world;
+  }
+
+  /** A crisp-sheet frame as a data URL, for the spell lab's list; cut once per frame. */
+  private labIcon(frame: string): string | null {
+    const had = this.labIcons.get(frame);
+    if (had) return had;
+    if (!this.atlas || !this.atlas.has(frame) || !this.textures.exists(this.crispTextureKey)) return null;
+    const src = this.textures.get(this.crispTextureKey).getSourceImage() as HTMLCanvasElement;
+    const r = this.atlas.frame(frame);
+    const c = document.createElement("canvas");
+    c.width = r.w;
+    c.height = r.h;
+    c.getContext("2d")?.drawImage(src, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
+    const url = c.toDataURL();
+    this.labIcons.set(frame, url);
+    return url;
+  }
+
+  private setLabSpeed(speed: number): void {
+    this.labSpeed = speed;
+    this.time.timeScale = speed;
+    this.tweens.timeScale = speed;
+    // The music cannot slow with the fight; it goes quiet off 1× and is re-seated on the clock at 1×.
+    this.sfx.setMusicHeld(speed !== 1 || this.kingIntro !== null);
+  }
+
+  /** Every frame in the lab: the hold onto the world (a new room is a new world), and the metronome. */
+  private labTick(): void {
+    this.world.bossHold = this.labHold;
+    const b = this.world.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
+    if (!b) return;
+    const beat = Math.floor(b.bossFightMs / BEAT_MS + 1e-6);
+    if (beat === this.labBeat) return;
+    this.labBeat = beat;
+    // The downbeat an octave up: "three, four, ONE" (doc 020).
+    if (this.labMetronome) this.sfx.play("ui_move", beat % 4 === 0 ? 2 : 1);
+  }
+
+  /** What the BOSS tab's strip shows, off the boss. */
+  private bossLabFrame(): BossLabFrame | null {
+    const b = this.world.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
+    if (!b) return null;
+    const t = b.bossFightMs;
+    return {
+      fightMs: t, phase: b.phase, hpFraction: b.hp / Math.max(1, b.maxHp),
+      cast: b.bossCast, commitInMs: b.bossCast !== "none" && b.bossCommitAt >= t ? b.bossCommitAt - t : null,
+      next: b.bossNext, startInMs: b.bossNext !== "none" ? b.bossStartAt - t : null,
+      attack: b.attack, blade: b.attack !== "approach" ? b.meleeKind : null,
+      bladeInMs: b.attack === "windup" ? Math.max(0, b.bossBladeAt - t) : null,
+    };
   }
 
   /**
@@ -874,13 +2054,25 @@ export class PlayScene extends Phaser.Scene {
   private async enterRoom(index: number, hearts?: number, through?: Portal): Promise<void> {
     this.entering = true;
     this.roomIndex = index;
+    // A new room, a new reward screen: what was kept in the last one belongs
+    // to the last one's journal entry, which has already been written.
+    this.pickedThisRoom = null;
     this.roomReward = through?.reward ?? "spell";
     this.roomPromise = { school: through?.school, family: through?.family, grade: through?.grade ?? 1 };
     this.lastWasElite = this.elite;
     this.elite = through?.elite ?? false;
+    /*
+     * The elite spacing, counted on entry so the portals decided below already
+     * know where this room stands (`ELITE_GAP_FIGHTS`, `ELITE_ROOMS_MAX`). A
+     * room with no fight in it is neither an elite nor a gap between two.
+     */
+    if (this.elite) { this.eliteRooms++; this.fightsSinceElite = 0; }
+    else if (this.fightsSinceElite !== undefined && stageFor(index) === "combat" && !(through?.npc))
+      this.fightsSinceElite++;
     this.lastWasNpc = this.npcRoom !== null;
     this.npcRoom = through?.npc ?? null;
-    if (this.npcRoom) this.npcRooms++;
+    if (this.npcRoom === "fountain") this.fountains++;
+    else if (this.npcRoom) this.npcRooms++;
     const src = new RngSource(`${this.runSeed}-${index}`);
     /*
      * The run's shape decides what this room is: fights, then the merchant,
@@ -892,7 +2084,9 @@ export class PlayScene extends Phaser.Scene {
     // A vendor's room mid-run is a shop room with one vendor in it and no fight.
     const fight = stage === "combat" && !this.npcRoom;
     const roomType: RoomType = fight ? (this.elite ? "elite" : "combat") : stage === "boss" ? "boss" : "shop";
-    const hearts0 = hearts ?? this.world?.player.hearts ?? MAX_HEARTS + this.mods.maxHearts;
+    // Starts this room's playtest record, which also closes the last one.
+    playtestLog.begin(this.runSeed, index, roomType);
+    const hearts0 = hearts ?? this.world?.player.hearts ?? MAX_HEARTS + this.liveMods().maxHearts;
     const staff = runStaff();
 
     /*
@@ -914,11 +2108,12 @@ export class PlayScene extends Phaser.Scene {
      * what is bound to them.
      */
     if (this.slots.length === 0) {
+      // One spell to start: the chosen style's, on the first key (`STYLE_START`).
       this.slots = Array.from({ length: staff.slots }, (_, i) =>
-        i === 0 ? plainInstance("magic_bolt") : i === 1 ? plainInstance(STYLE_START[this.intent.preset]) : null);
+        i === 0 ? plainInstance(STYLE_START[this.intent.preset]) : null);
       /*
-       * The starting staff counts as owned, or the first room offers
-       * `magic_bolt` to a player already holding one.
+       * The starting spell counts as owned, or the first room offers it to a
+       * player already holding it.
        */
       for (const inst of this.slots) if (inst) this.owned.push(inst.base);
     }
@@ -934,16 +2129,30 @@ export class PlayScene extends Phaser.Scene {
      * portals can be placed at room start and stand shut where the player can
      * read them during the fight.
      */
-    const startHearts = hearts ?? this.world?.player.hearts ?? MAX_HEARTS + this.mods.maxHearts;
+    const startHearts = hearts ?? this.world?.player.hearts ?? MAX_HEARTS + this.liveMods().maxHearts;
     this.won = false;
-    const held = this.slots.flatMap((x) => (x ? [itemShape(ITEMS.get(x.base))] : []));
+    const held = this.slots.flatMap((x, i) =>
+      (x ? [heldSpell(ITEMS.get(x.base), (this.spellAffixes[i] ?? []).map((a) => a.id))] : []));
     const run: RunShape = {
       style: this.intent.preset,
       roomIndex: index,
-      lastWasElite: this.lastWasElite,
+      /*
+       * **This room's own difficulty**, not the one before it. These portals
+       * decide the *next* room, so "no elite after an elite" is a statement
+       * about the room the player is standing in; `this.lastWasElite` is one
+       * room too far back, and with it rooms 4 and 5 of a real run were both
+       * elite (`RunShape.lastWasElite`).
+       */
+      lastWasElite: this.elite,
+      elitesSoFar: this.eliteRooms,
+      ...(this.fightsSinceElite === undefined ? {} : { fightsSinceElite: this.fightsSinceElite }),
       // Doc 003 forbids an elite while the player is one hit from dying.
       critical: startHearts <= 1,
       npcRooms: this.npcRooms,
+      npcOffers: this.npcOffers,
+      fountains: this.fountains,
+      fountainOffers: this.fountainOffers,
+      hurt: startHearts < MAX_HEARTS + this.liveMods().maxHearts,
       lastWasNpc: this.npcRoom !== null,
     };
     const ctx = this.directorContext(index, startHearts, staff);
@@ -979,24 +2188,67 @@ export class PlayScene extends Phaser.Scene {
     this.shopPending = null;
     const worldOffer: Offer = fight ? offer : { ...offer, cards: [], coins: 0 };
     this.offer = worldOffer;
+    // The room that is ending banks its play time before its world is thrown
+    // away; the game-over card adds the live room's own elapsed to it.
+    if (this.world) this.runMs += this.world.stats.elapsedMs;
     this.world = createWorld({
       room, encounter, staff, slots,
+      /*
+       * **Which room of the run this is.** Left out, the world took it as
+       * room 99: every room in the browser ran the late run's ramp — full
+       * waves and bodies at once, late health and damage, no early softening
+       * of hurt, aim, shot speed or tells — while the harness, which passes
+       * it, measured the ramp everyone was tuning. Room 1 of a real session
+       * held 18 bodies against a ramp of 4.
+       */
+      roomIndex: index,
       hearts: startHearts,
       rng: src.stream("gameplay"),
       offer: worldOffer,
       dealtMult: this.dealtMult,
       takenMult: this.takenMult,
       invincible: this.invincible,
+      placement: PLACEMENT,
+      // What the camera shows round the player: bodies beyond it hold their fire.
+      viewHalf: { x: this.scale.width / this.worldZoom() / 2, y: this.scale.height / this.worldZoom() / 2 },
       // The spin charges banked in the last room come through the portal.
       rage: index > 1 && this.world ? this.world.player.rage : 0,
-      // A normal room may hide one elite body.
-      strayElite: fight && !this.elite ? strayEliteFor(index, src.stream("stray")) : [],
+      /*
+       * How many elites a normal room hides is the Director's `elite_presence`
+       * (doc 019), which rides on the encounter profile; the world converts it
+       * and caps it. Nothing to pass here any more.
+       */
       // What the run has permanently improved, carried across the room
       // boundary: the player is rebuilt every room and the upgrades are not.
       mods: this.mods,
+      // And what the kills have paid for: the level is derived from it in
+      // `createWorld`, so the two callers cannot hold different bodies.
+      xp: this.runXp,
+      /*
+       * **The early economy** (doc 003): a run whose build has not taken shape
+       * is paid more per body, so it can reach a vendor and buy the piece the
+       * floor has not offered it. Capped by `COIN_BOOST_MAX` in the world.
+       */
+      coinBoost: ctx.labels.build_shape === "formed" ? 1
+        : ctx.labels.build_shape === "forming" ? 1.4 : COIN_BOOST_MAX,
     });
 
-    if (stage === "boss") this.spawnBoss();
+    // A new room starts with the close camera on the player, not panning from the last one.
+    this.camFocus = null;
+
+    this.kingIntro = null;
+    this.kingGoblet = null;
+    this.bossCine = null;
+    bossEntrance.clear();
+    if (stage === "boss") {
+      // In at the door, facing him.
+      const p = this.world.player;
+      p.facing = -Math.PI / 2;
+      // The whole entrance, every attempt: a retry sees it again.
+      this.bossCine = { toY: p.y - KING_WALK_IN_PX, bars: true, k: 0, release: false };
+      this.kingIntro = { phase: "walk", ms: 0, total: 0, clock: 0 };
+      this.world.awaitingBoss = true;
+    }
     /*
      * The merchant's room clears itself, because it has no enemies.
      *
@@ -1008,13 +2260,17 @@ export class PlayScene extends Phaser.Scene {
     this.shopping = !fight && stage !== "boss";
     // A vendor stands on clear ground: nothing solid and nothing breakable in front of it.
     if (this.shopping) this.clearVendorGround();
-    // The stop before the boss mends: see `PREBOSS_MEND_HEARTS`.
-    if (stage === "shop" && !this.npcRoom) {
-      const cap = MAX_HEARTS + this.mods.maxHearts;
-      const before = this.world.player.hearts;
-      this.world.player.hearts = Math.min(cap, before + PREBOSS_MEND_HEARTS);
-      if (this.world.player.hearts > before) this.levelUpFx("The fire mends you", "");
-    }
+    /*
+     * **The stop before the boss mends, and the player does the mending.**
+     *
+     * It used to top the bar up on entry, silently, while the room was still
+     * fading in: the one moment the run gives back was a number that had
+     * already changed by the time anyone could look at it. The stop now holds
+     * a fountain beside the two vendors, so the heal is an act — walk to it,
+     * press E — and it is the same fountain, with the same drink and the same
+     * dry state, that a portal can lead to mid-run.
+     */
+    this.fountainDry = false;
 
     // Re-attach what the run has put on each spell: the world's slots are
     // fresh, and an affix that vanished at a portal would look like a bug in
@@ -1030,6 +2286,9 @@ export class PlayScene extends Phaser.Scene {
       const slot = this.world.spells[i];
       if (slot && level > 1) this.world.spells[i] = withLevel(slot, level);
     });
+    // `?spells=`: a development loadout, put on the keys in every room it is asked for in.
+    const loadout = DEBUG_SPELLS();
+    if (loadout.length > 0) this.debugSpells(loadout);
 
     this.applyMood(mood);
     this.drawTiles();
@@ -1067,8 +2326,18 @@ export class PlayScene extends Phaser.Scene {
     return {
       kind, promise,
       request: {
-        // The last shop's portals open onto the boss; nothing to ask about them.
-        ...(stage === "shop" ? {} : { portals: portalChoices(run, src.stream("portal-count")) }),
+        /*
+         * **The run narrows twice, and neither narrowing is a question.**
+         *
+         * The last fight opens onto the vendors' stop and the stop opens onto
+         * the boss (`fixedExit`), so at both of those rooms there is one legal
+         * answer and doc 002 does not ask a question that has one. The last
+         * fight used to fall through to the portal question anyway and end
+         * with three badges promising a spell, an affix and a stat, every one
+         * of which led to the same merchant — reported from play as random
+         * doors around the shop.
+         */
+        ...(fixedExit(run.roomIndex) ? {} : { portals: portalChoices(run, src.stream("portal-count")) }),
         cards,
       },
     };
@@ -1109,16 +2378,27 @@ export class PlayScene extends Phaser.Scene {
         this.portalPlan = plan.portals;
         record(plan.portals.decisions);
       }
-      const doors = plan.portals
-        ? doorSpecs(plan.portals.doors, run.roomIndex)
-        : doorSpecs(ruleDoors(run, src.stream("offer")), run.roomIndex);
+      /*
+       * The vendors' stop asks no portal question, because there is nothing to
+       * ask: its one way on is the boss. It used to fall through to
+       * `ruleDoors`, which drew up to three portals with three different
+       * reward badges, every one of them opening onto the same fight.
+       */
+      const doors = fixedExit(run.roomIndex)
+        ?? (plan.portals
+          ? doorSpecs(plan.portals.doors, run.roomIndex)
+          : doorSpecs(ruleDoors(run, src.stream("offer")), run.roomIndex));
+      // Counted where the list is made, so a declined vendor still spends one
+      // of the run's `NPC_OFFERS_MAX`.
+      if (doors.some((d) => d.npc && d.npc !== "fountain")) this.npcOffers++;
+      if (doors.some((d) => d.npc === "fountain")) this.fountainOffers++;
       let cards: OfferCard[] = [];
       let stock: OfferCard[] = [];
       const reqs = ask.request.cards ?? [];
       const cardPlan = plan.cards[0];
       if (fight && kind !== "gold" && cardPlan && reqs[0]) {
         this.cardPlan = cardPlan;
-        record(cardPlan.decisions, { prefix: "", label: `${kind} cards`, blended: cardPlan.blended, ids: cardPlan.ids });
+        record(cardPlan.decisions, { prefix: "", label: kind, blended: cardPlan.blended, ids: cardPlan.ids });
         cards = cardsFor(ITEMS, kind, cardPlan.ids, promise);
         const pool = reqs[0].pool;
         const hadNeed = cardPlan.ids.some((id) => pool.candidates.find((c) => c.id === id)?.facts.includes("need"));
@@ -1129,7 +2409,7 @@ export class PlayScene extends Phaser.Scene {
           const k = reqs[i]!.pool.kind;
           const prefix = `shop_${k}__`;
           record(p.decisions.map((d) => ({ ...d, question: `${prefix}${d.question ?? ""}` })),
-            { prefix, label: `shelf: ${k}`, blended: p.blended, ids: p.ids });
+            { prefix, label: k, blended: p.blended, ids: p.ids });
           const c = cardsFor(ITEMS, k, p.ids)[0];
           return c ? [c] : [];
         });
@@ -1140,8 +2420,10 @@ export class PlayScene extends Phaser.Scene {
       };
     } catch (err) {
       console.warn("[director] offer fell back to the rules:", err);
-      const offer = ruleOffer(ITEMS, src.stream("offer"), this.owned, run,
+      const fallbackOffer = ruleOffer(ITEMS, src.stream("offer"), this.owned, run,
         stage === "shop" ? shopKind(src.stream("shop")) : kind, held, promise);
+      const fixed = fixedExit(run.roomIndex);
+      const offer = fixed ? { ...fallbackOffer, doors: fixed } : fallbackOffer;
       const stockRng = src.stream("stock");
       const stock = fight ? [] : SHELF_KINDS
         .map((k) => offerCards(ITEMS, stockRng, this.owned, k, held)[0])
@@ -1172,28 +2454,64 @@ export class PlayScene extends Phaser.Scene {
    * builds, so the browser and the measurement plan from the same facts.
    */
   private directorContext(index: number, hearts: number, staff: Staff): RunContext {
-    const sim = simulateStaff(staff, this.slots, ITEMS);
     // Doc 003's pacing rule: no hazards when the player is critical or has
     // just taken heavy damage.
     const hazard_cap = hearts <= 1 || this.heartsLostRecent >= 2 ? "none" : hearts <= 2 ? "low" : "high";
     return {
       run_id: this.runSeed, seed: this.runSeed, room_index: index,
+      // The bar, its cap after upgrades, and the purse, for the briefing
+      // (`RunContext.health`): a reader told "low" and never told how low
+      // cannot say whether a fountain is worth a room.
+      health: hearts * HP_PER_HEART,
+      max_health: (MAX_HEARTS + this.liveMods().maxHearts) * HP_PER_HEART,
+      gold: this.runGold,
+      // The body's level and how far into the next, as plain facts
+      // (`RunContext.level`); nothing in the Director reacts to them.
+      level: levelAt(this.runXp).level,
+      xp_into: levelAt(this.runXp).into,
+      xp_to_next: levelAt(this.runXp).toNext,
+      ...(observedFigures(this.measures) ? { observed_figures: observedFigures(this.measures)! } : {}),
       labels: {
         health: bucketHealth(hearts),
         recent_damage: bucketRecentDamage(this.heartsLostRecent),
-        clear_speed: bucketClearSpeed(this.lastClearMs, 30_000),
-        movement_pressure_recent: bucketMovementPressure(0.5),
+        clear_speed: bucketClearSpeed(this.lastClearMs, expectedClearMsFor(index, this.clearedMs)),
+        movement_pressure_recent: bucketMovementPressure(this.lastNearShare),
         run_progress: bucketRunProgress(index),
         gold: bucketGold(this.runGold),
         tension_cap: "peak_allowed", hazard_cap, pressure_cap: 5,
-        build: {
-          archetype: sim.archetype, bottleneck: sim.bottleneck,
-          mana_sustain: sim.mana_sustain, range: "mid",
-          missing_roles: sim.missing_roles, dominant_tags: sim.dominant_tags,
+        build: { range: "mid" },
+        preference: {
+          dominant: heldDominantTags(this.slots, ITEMS),
+          consistency: bucketConsistency(this.pickTags, this.intent.preset),
         },
-        preference: { dominant: sim.dominant_tags.slice(0, 3), consistency: "on_plan" },
+        // What the last two fights measured.
+        observed: observedLabels(this.measures),
+        // Doc 007's completion signal: what the offer is grounded on.
+        build_shape: buildShapeFor({
+          keysFilled: this.slots.filter((x) => x !== null).length,
+          keySlots: staff.slots,
+          affixesAttached: this.spellAffixes.reduce((t, a) => t + (a?.length ?? 0), 0),
+          affixSlotsPerKey: AFFIX_SLOTS,
+          levels: this.slots.flatMap((x, i) => (x ? [this.spellLevels[i] ?? 1] : [])),
+          levelMax: SPELL_LEVEL_MAX,
+        }),
       },
-      staff, slots: this.slots, inventory: [], history: this.history, intent: this.intent,
+      staff, slots: this.slots, inventory: [],
+      // `stats_taken` rides on the history so `mana_stats_taken` reads the
+      // whole run rather than the room (`run/build-facts.ts`).
+      history: { ...this.history, stats_taken: this.statsTaken },
+      intent: this.intent,
+      /*
+       * **What the keys are actually holding** (`run/build-facts.ts`). It was
+       * folded into `build_shape` and thrown away, so the Director chose cards
+       * for a staff it had never been shown.
+       */
+      power: {
+        levels: this.slots.map((_, i) => this.spellLevels[i] ?? 1),
+        affixes: this.slots.map((_, i) => (this.spellAffixes[i] ?? []).map((a) => ({ id: a.id, tier: a.tier }))),
+        // The live bar: the stat cards and the level both, as the HUD shows it.
+        mana_max: this.world?.staff.mana_max ?? staff.mana_max * this.mods.manaMax,
+      },
     };
   }
 
@@ -1225,7 +2543,7 @@ export class PlayScene extends Phaser.Scene {
       room: {
         index: this.roomIndex, stage: stageFor(this.roomIndex), type: room.room_type, elite: this.elite,
         tension: this.tension,
-        space: room.params.space, symmetry: room.params.symmetry,
+        space: room.params.space, symmetry: room.params.symmetry, size: room.params.size,
         mood: `${room.params.mood.temperature} / ${room.params.mood.brightness} / ${room.params.mood.particle_intensity}`,
         measured: room.measured as unknown as Record<string, number>,
         zones: room.zones.map((z) => ({ id: z.id, feature: z.feature })),
@@ -1245,7 +2563,11 @@ export class PlayScene extends Phaser.Scene {
           roster: enc.waves.reduce((a, wave) => a + wave.spawns.reduce((b, x) => b + x.count, 0), 0),
           waves: enc.waves.map((wave) => ({
             atMs: wave.at_ms,
+            // English, for the debug sidebar, which is internal and stays in
+            // core's own words; the room plan page reads `parts` and says the
+            // same thing in the player's language.
             spawns: wave.spawns.map((x) => `${x.count} ${x.archetype}${x.count > 1 ? "s" : ""} @${x.spawn_group}`).join(", "),
+            parts: wave.spawns.map((x) => ({ count: x.count, archetype: x.archetype, group: x.spawn_group })),
           })),
         }
         : null,
@@ -1260,7 +2582,7 @@ export class PlayScene extends Phaser.Scene {
             : this.offer.cards.length ? "rule code (fallback)" : "no cards",
           portalsBy: this.portalPlan ? `Director (${this.portalPlan.source})` : this.offer.doors.length ? "rule code (the merchant's doors to the boss)" : "no portals",
           portals: this.offer.doors.map((d) => ({
-            reward: d.npc ? `${d.npc} (vendor)` : d.reward, elite: d.elite, type: d.type,
+            reward: d.npc ? `${d.npc} (no fight)` : d.reward, elite: d.elite, type: d.type,
             promise: [d.school, d.family, (d.grade ?? 1) > 1 ? `grade ${d.grade}` : ""].filter(Boolean).join(" · "),
           })),
         }
@@ -1277,14 +2599,24 @@ export class PlayScene extends Phaser.Scene {
       },
       spells: w.spells.map((slot, i) => ({
         key: SPELL_KEYS[i] ?? String(i + 1),
-        name: slot ? titleOfId(slot.item.base) : null,
+        name: slot ? contentName(slot.item.base, titleOfId(slot.item.base)) : null,
         cost: slot ? slotCost(slot, ITEMS, w.staff) : null,
         cooldownMs: slot?.cooldownMs ?? 0,
         affixes: slot ? slot.affixes.map((a) => `${a.id}${a.tier > 1 ? ` x${a.tier}` : ""}`) : [],
       })),
       enemies: { alive: w.enemies.filter((e) => e.hp > 0).length, pending: w.pendingWaves.length, byArchetype },
       history: { rooms: this.history.rooms, tensions: this.history.tensions },
-      director: buildReadout(this.directorLog, this.planRecords),
+      /*
+       * The room round 1 produced, which round 2 was then asked about. It is
+       * the reason a room takes two requests rather than one: round 2's
+       * options — which zones a room can hold, which bodies fit it — do not
+       * exist until round 1's room has been generated.
+       */
+      // What round 2 was shown: the room round 1 produced, named rather than
+      // spelled as the three ids it is.
+      director: buildReadout(this.directorLog, this.planRecords, this.requestStats, [
+        this.planned?.plan.params.space, this.planned?.plan.params.symmetry, this.planned?.plan.params.size,
+      ].filter(Boolean).map((id) => term(String(id))).join(" · ")),
     };
   }
 
@@ -1323,7 +2655,9 @@ export class PlayScene extends Phaser.Scene {
           if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
           if (floor(gx + dx, gy + dy)) { gx += dx; gy += dy; break search; }
         }
-    const nextId = w.enemies.reduce((m, e) => Math.max(m, e.id), 0) + 1;
+    // Past both the bodies here and the world's counter, and the counter moved on, so no later spawn repeats it.
+    const nextId = Math.max(w.nextEnemyId, w.enemies.reduce((m, e) => Math.max(m, e.id), 0) + 1);
+    w.nextEnemyId = nextId + 1;
     const e = makeEnemy(
       nextId, id as EnemyId, (gx + 0.5) * TILE_PX, (gy + 0.5) * TILE_PX,
       elite ? ["armored", "swift"] : [],
@@ -1334,12 +2668,231 @@ export class PlayScene extends Phaser.Scene {
     w.cleared = false;
   }
 
-  private spawnBoss(): void {
+  private spawnBoss(fightMs = 0): Enemy {
     const w = this.world;
-    const boss = makeEnemy(1, "boss", (GRID_W / 2) * TILE_PX, (GRID_H / 2) * TILE_PX, []);
+    const ext = w.room.extent;
+    // Where he stands up: in front of his throne, when the hall has one; the room's middle otherwise.
+    const hall = w.room.id === "fixed-boss";
+    const x = hall ? (THRONE_CELLS[1]![0] + 0.5) * TILE_PX : (ext.w / 2) * TILE_PX;
+    const y = hall ? (THRONE_CELLS[1]![1] + KING_STAND_ROW) * TILE_PX : (ext.h / 2) * TILE_PX;
+    // From the world's own counter: a fixed id 1 was also the first add's, and the renderer's per-body
+    // state (the phase-change burst among it) drew the add as the king.
+    const boss = makeEnemy(w.nextEnemyId++, "boss", x, y, []);
     boss.spawnFadeMs = 0;
     boss.awake = true;
+    // The fight's clock, and the music's, from the goblet (`kingIntro.clock`).
+    boss.bossFightMs = fightMs;
+    // He stands in the ceremony through his name and a beat past it, before his first turn (`showKingName`).
+    boss.bossMoveMs = BOSS_FIRST_TURN_MS;
     w.enemies.push(boss);
+    w.awaitingBoss = false;
+    w.cleared = false;
+    this.throneImg?.setFrame("boss_throne_empty");
+    return boss;
+  }
+
+  /**
+   * The throne's drawing for each beat of the entrance, where it has been
+   * drawn (art order B10): the goblet held while the player walks in and
+   * stands, then each key held for its beat. While he waits he drinks —
+   * `goblet` and `throne_sip` in a slow loop (`KING_HOLD_MS`) — once the sip
+   * is drawn over `goblet` itself (art order B10); the delivered `notice` is
+   * a separate drawing of the whole figure, and looped with `goblet` it shook
+   * everything but the throne.
+   */
+  private throneFrame(phase: NonNullable<PlayScene["kingIntro"]>["phase"], total = 0): string {
+    if ((phase === "walk" || phase === "pause") && this.atlas.has("boss_throne_sip")
+      && total % (KING_HOLD_MS + KING_SIP_MS) >= KING_HOLD_MS) return "boss_throne_sip";
+    const want = { walk: "boss_throne_goblet", pause: "boss_throne_goblet", notice: "boss_throne_notice", throw: "boss_throne_throw", rise: "boss_throne_rise" }[phase];
+    return this.atlas.has(want) ? want : "boss_throne_seated";
+  }
+
+  /**
+   * One frame of the entrance. The player is walked in and stands; a moment
+   * later he looks up, and throws the goblet — it flies out and breaks on the
+   * carpet before the dais, and the boss theme comes in as it leaves his hand,
+   * which is the fight clock's zero — and stands; then the boss is spawned
+   * where he stood up, planted on his sword, and his name goes up.
+   */
+  private tickKingIntro(delta: number): void {
+    const intro = this.kingIntro;
+    if (!intro) return;
+    intro.ms += delta;
+    intro.total += delta;
+    if (intro.phase === "throw" || intro.phase === "rise") intro.clock += delta;
+    const w = this.world;
+    // The throne's drawing is set once, after the beat has moved on (below), so a change never shows a frame late.
+    const next = (phase: NonNullable<PlayScene["kingIntro"]>["phase"]) => {
+      intro.phase = phase;
+      intro.ms = 0;
+    };
+    if (intro.phase === "walk") {
+      if ((this.bossCine && w.player.y <= this.bossCine.toY) || intro.total > KING_WALK_MAX_MS) {
+        next("pause");
+      }
+    } else if (intro.phase === "pause") {
+      if (intro.ms >= KING_PAUSE_MS) {
+        next("notice");
+        // The cup stops at his helm and the eyes come up: he has seen them.
+        this.sfx.play("enemy_wake", 0.6);
+      }
+    } else if (intro.phase === "notice") {
+      if (intro.ms >= KING_LOOK_MS) {
+        next("throw");
+        const [tx, ty] = THRONE_CELLS[1]!;
+        const hx = (tx + 0.5) * TILE_PX + 14, hy = (ty + 0.4) * TILE_PX;
+        this.kingGoblet = { x0: hx, y0: hy, x1: (tx + 0.5) * TILE_PX - 10, y1: (ty + KING_GOBLET_ROW) * TILE_PX, ms: 0 };
+        this.sfx.play("swing_light", 1.5);
+      }
+    } else if (intro.phase === "throw") {
+      if (intro.ms >= KING_THROW_MS) next("rise");
+    } else if (intro.phase === "rise") {
+      if (intro.ms >= KING_RISE_MS) {
+        this.kingIntro = null;
+        const boss = this.spawnBoss(intro.clock);
+        /*
+         * **Down from the throne.** The standing body appears where the
+         * half-risen drawing left him — his boots on the dais, `dy` above
+         * where the body stands — and walks down to it (`bossEntrance`); his
+         * name goes up and the floor takes his weight as he arrives.
+         */
+        const throneTop = (THRONE_CELLS[1]![1] + 1) * TILE_PX - 0.86 * this.atlas.frame("boss_throne_rise").h / ART_SCALE;
+        const stand = `boss_p1_ceremony0`;
+        const feet = boss.y - BOSS_DRAW_RISE_PX + (this.atlas.has(stand) ? this.atlas.contentBottom(stand) - this.atlas.frame(stand).h / 2 : 0) / ART_SCALE;
+        bossEntrance.set(boss.id, { ms: 0, dy: Math.min(0, throneTop + KING_THRONE_FEET_ART / ART_SCALE - feet) });
+      }
+    }
+    // Seated from the first frame, whichever of the room's drawing and the entrance came first; empty once he stands.
+    if (this.kingIntro) {
+      const seated = this.throneFrame(intro.phase, intro.total);
+      if (this.throneImg && this.throneImg.frame.name !== seated) this.throneImg.setFrame(seated);
+    }
+    // Silent until the goblet leaves his hand.
+    const hushed = this.kingIntro !== null && this.kingIntro.phase !== "throw" && this.kingIntro.phase !== "rise";
+    this.sfx.setMusicHeld(this.labSpeed !== 1 || hushed);
+  }
+
+  /** The HUD fading out for the entrance and back. */
+  private tickBossCine(delta: number): void {
+    for (const [id, walk] of bossEntrance) {
+      walk.ms += delta;
+      if (walk.ms < KING_DESCEND_MS) continue;
+      bossEntrance.delete(id);
+      this.showKingName();
+      this.sfx.play("boss_impact", 0.85);
+      this.world.trauma = Math.min(1, this.world.trauma + 0.35);
+    }
+    const c = this.bossCine;
+    if (!c) return;
+    if (c.bars) c.k = Math.max(0, Math.min(1, c.k + ((c.release ? -1 : 1) * delta) / CINE_SLIDE_MS));
+    if (c.release && (!c.bars || c.k <= 0)) this.bossCine = null;
+  }
+
+  /**
+   * **The entrance has the screen to itself**: the HUD fades away while it
+   * plays and comes back with the controls. Letterbox bars were tried and
+   * cut across the king on his throne, which is at the top of the view.
+   * Everything on the HUD's camera goes, except his name (`showKingName`,
+   * drawn above `CINE_NAME_DEPTH`).
+   */
+  private drawCinema(): void {
+    const c = this.bossCine;
+    if (!c || !c.bars || c.k <= 0) return;
+    const keep = 1 - c.k * c.k * (3 - 2 * c.k);
+    for (const go of this.sprites.getChildren()) {
+      const o = go as unknown as { depth: number; alpha: number; setAlpha?: (a: number) => void };
+      if (o.depth >= UI_DEPTH && o.depth < CINE_NAME_DEPTH) o.setAlpha?.(o.alpha * keep);
+    }
+    for (const t of this.keptDrawn) t.setAlpha(t.alpha * keep);
+    this.minimapGfx?.setAlpha(this.minimapGfx.alpha * keep);
+    this.hintStrip?.setAlpha(this.hintStrip.alpha * keep);
+  }
+
+  /** The goblet in flight, and where it breaks. Drawn each frame with the bodies. */
+  private drawKingGoblet(delta: number): void {
+    const g = this.kingGoblet;
+    if (!g) return;
+    g.ms += delta;
+    const t = Math.min(1, g.ms / KING_GOBLET_FLIGHT_MS);
+    const x = g.x0 + (g.x1 - g.x0) * t;
+    const y = g.y0 + (g.y1 - g.y0) * t - Math.sin(t * Math.PI) * 26;
+    if (t < 1) {
+      const spin = Math.floor(g.ms / 60) % 4;
+      if (this.atlas.has(`vfx_goblet_${spin}`))
+        this.sprites.add(this.add.image(x, y, this.textureKey, `vfx_goblet_${spin}`).setScale(1 / ART_SCALE).setDepth(9));
+      else this.sprites.add(this.add.circle(x, y, 2, 0xd8b56a).setDepth(9));
+      return;
+    }
+    // It breaks: glass off the carpet, and the wine left on it.
+    this.kingGoblet = null;
+    this.sfx.play("prop_break", 1.6);
+    this.burst(g.x1, g.y1, 0xd8e4ec, 10, 150, -Math.PI / 2, Math.PI, 0.6, 260);
+    this.burst(g.x1, g.y1, 0x6e1022, 8, 90, undefined, Math.PI * 2, 0.9, 200);
+    const stain = this.atlas.has("deco_wine_splash")
+      ? this.add.image(g.x1, g.y1 + 2, this.textureKey, "deco_wine_splash").setScale(1 / ART_SCALE)
+      : this.add.ellipse(g.x1, g.y1 + 2, 18, 7, 0x4a0a16, 0.75);
+    this.tiles.add(stain.setDepth(0.3));
+  }
+
+  /*
+   * **The throne hall's columns and candelabra** (`RoomPlan.standing`), drawn
+   * from the hall's own sheets (`hall-art.ts`) as they wear: whole, then
+   * darker while cracked, then a heap of stone on the floor. A struck one
+   * shivers and lightens. The stages drawn for them (art order B10) replace
+   * the tint and the heap when they arrive.
+   */
+  private drawHallProp(p: (typeof this.world.props)[number], state: "intact" | "cracked" | "broken"): void {
+    const column = p.kind === "column";
+    const stage = column ? `hall_column_${state}` : `hall_candelabrum_${state}`;
+    const foot = p.y + TILE_PX / 2;
+    let img: Phaser.GameObjects.Image;
+    if (this.textures.exists(stage)) img = this.add.image(p.x, foot, stage);
+    else if (state === "broken" && column) {
+      // The plinth left standing and a stub of the shaft over it, floor to walk over: the column cropped to its foot.
+      img = this.add.image(p.x, foot, "hall_throne_column").setOrigin(0.5, 1).setScale(1 / ART_SCALE);
+      const h = img.frame.height;
+      img.setCrop(0, h - COLUMN_STUMP_PX, img.frame.width, COLUMN_STUMP_PX).setTint(0x8a8490).setDepth(bodyDepth(foot, 0) - 0.5);
+      this.sprites.add(img);
+      return;
+    } else if (state === "broken") {
+      img = this.add.image(p.x, p.y, this.textureKey, safeFrame(this.atlas, "prop_break_urn_2", "prop_break_crate_0"));
+      img.setScale((column ? 1.6 : 0.9) / ART_SCALE).setDepth(1).setAlpha(0.9);
+      this.sprites.add(img);
+      return;
+    } else img = this.add.image(p.x, foot, column ? "hall_throne_column" : "hall_throne_candelabra", column ? undefined : 0);
+    img.setOrigin(0.5, 1).setScale(1 / ART_SCALE).setDepth(bodyDepth(foot, 0));
+    if (state === "cracked") img.setTint(0x9a93a0);
+    if (p.hitFlashMs > 0) {
+      img.x += ((this.world.tick >> 1) & 1 ? 1 : -1) * 1.2;
+      img.setTint(0xffe2c0);
+    }
+    this.sprites.add(img);
+  }
+
+  /** The name card, over the hall for a bar as he stands (doc 020). */
+  /**
+   * His name, between him and the player with the HUD away, with a gold
+   * rule drawn out either side of it. When it has gone the HUD comes back and
+   * the controls are the player's (`bossCine`).
+   */
+  private showKingName(): void {
+    // Between the two of them: halfway from his boots to the player's head, carried into the HUD's frame.
+    const boss = this.world.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
+    const cam = this.cameras.main, ui = this.uiCam;
+    const midY = boss ? (boss.y + 20 + this.world.player.y - BODY_LIFT - 14) / 2 : null;
+    const y = midY !== null && ui
+      ? ui.worldView.y + (midY - cam.worldView.y) * (cam.zoom / ui.zoom)
+      : UI_H / 2;
+    const text = this.uiText(UI_W / 2, y, t("hud.bossTitle"), 30, "#ffe9a8").setOrigin(0.5).setDepth(CINE_NAME_DEPTH + 5).setAlpha(0);
+    const ruleY = y + text.displayHeight / 2 + 6;
+    const rules = [-1, 1].map((side) => this.add.rectangle(UI_W / 2, ruleY, text.displayWidth * 0.6, 1, 0xd8b060, 1)
+      .setOrigin(side < 0 ? 1 : 0, 0.5).setDepth(CINE_NAME_DEPTH + 5).setScale(0, 1).setAlpha(0));
+    const hold = BAR_MS + 300;
+    this.tweens.add({ targets: text, alpha: 1, duration: 320, yoyo: true, hold, onComplete: () => text.destroy() });
+    this.tweens.add({
+      targets: rules, alpha: 1, scaleX: 1, duration: 420, ease: "Cubic.easeOut", yoyo: true, hold: hold - 100,
+      onComplete: () => { for (const r of rules) r.destroy(); if (this.bossCine) this.bossCine.release = true; },
+    });
   }
 
   /**
@@ -1358,6 +2911,8 @@ export class PlayScene extends Phaser.Scene {
     this.fxSparks = [];
     this.fxRings = [];
     this.fxSlashes = [];
+    this.freeCuts = [];
+    this.answers = [];
     this.ramSkidMs = 0;
     for (const n of this.npcs) { n.img.destroy(); n.glow.destroy(); n.badge?.destroy(); }
     this.npcs = [];
@@ -1374,14 +2929,21 @@ export class PlayScene extends Phaser.Scene {
       for (const { kind, gx, gy } of this.vendorSpots()) {
         const x = (gx + 0.5) * TILE_PX;
         const y = (gy + 0.5) * TILE_PX;
-        const frame = kind === "merchant" ? "prop_merchant_0" : "prop_blacksmith_0";
-        const glow = this.add.ellipse(x, y + 10, 58, 20, 0xffc868, 0.28).setDepth(1.9)
+        const frame = kind === "merchant" ? "prop_merchant_0"
+          : kind === "fountain" ? fountainFrame(this.fountainDry, 0)
+          : "prop_blacksmith_0";
+        // The fountain's pool is cool light, not the vendors' lamplight: a
+        // thing to drink from rather than a stall to be sold at.
+        const glowColour = kind === "fountain" ? 0x6fd8e8 : 0xffc868;
+        const glow = this.add.ellipse(x, y + 10, 58, 20, glowColour, 0.28).setDepth(1.9)
           .setBlendMode(Phaser.BlendModes.ADD);
         const img = this.add.image(x, y + 10, this.uiTextureKey, safeFrame(this.atlas, frame, "prop_shop_0"))
           .setOrigin(0.5, 0.85).setScale(1.6 / ART_SCALE).setDepth(5);
-        const badgeFrame = kind === "merchant" ? "icon_npc_merchant" : "icon_npc_smith";
+        const badgeFrame = kind === "merchant" ? "icon_npc_merchant"
+          : kind === "fountain" ? "icon_npc_fountain"
+          : "icon_npc_smith";
         const badge = this.atlas.has(badgeFrame)
-          ? this.add.image(x, y - 44, this.crispTextureKey, badgeFrame).setOrigin(0.5).setScale(1.25).setDepth(9.4)
+          ? this.add.image(x, y - 44, this.crispTextureKey, badgeFrame).setOrigin(0.5).setScale(1.25 / TUNED).setDepth(9.4)
           : null;
         this.npcs.push({ kind, x, y, img, glow, badge });
       }
@@ -1393,7 +2955,17 @@ export class PlayScene extends Phaser.Scene {
     this.hideRewards();
     this.destroyRewardDrop();
 
+    this.buildPortalGfx();
+  }
+
+  /**
+   * The drawing for each portal that has none yet. The world makes its portals
+   * when the way out opens, in front of the player (`portalsBefore`), so they
+   * are drawn then rather than when the room is built.
+   */
+  private buildPortalGfx(): void {
     for (const portal of this.world.portals) {
+      if (this.portalGfx.some((g) => g.portal === portal)) continue;
       const body = this.add.image(portal.x, portal.y, this.textureKey, "prop_portal_shut_0")
         .setOrigin(0.5).setScale(1 / ART_SCALE).setDepth(2.5);
       /*
@@ -1417,9 +2989,24 @@ export class PlayScene extends Phaser.Scene {
        * the card screen; `stat` has no art at all yet and falls through to the
        * old door icon. All four are requested in the art work order.
        */
-      const npcFrame = portal.npc === "merchant" ? "icon_npc_merchant" : portal.npc === "smith" ? "icon_npc_smith" : "";
-      const badgeFrame = portal.npc
-        ? (this.atlas.has(npcFrame) ? npcFrame : portal.npc === "merchant" ? "prop_merchant_0" : "prop_blacksmith_0")
+      const npcFrame = portal.npc === "merchant" ? "icon_npc_merchant"
+        : portal.npc === "smith" ? "icon_npc_smith"
+        : portal.npc === "fountain" ? "icon_npc_fountain"
+        : "";
+      const npcProp = portal.npc === "merchant" ? "prop_merchant_0"
+        : portal.npc === "fountain" ? "prop_fountain_0"
+        : "prop_blacksmith_0";
+      /*
+       * **A door that pays nothing does not wear a reward badge.** The two
+       * doors the run's shape fixes (`fixedExit`) promise the room ahead, not
+       * a currency, and the badge used to read `gold` over both of them —
+       * which is the reward screen telling the player something the room will
+       * never do.
+       */
+      const badgeFrame = portal.onward
+        ? `icon_door_${portal.type}`
+        : portal.npc
+        ? (this.atlas.has(npcFrame) ? npcFrame : npcProp)
         : this.atlas.has(`icon_reward_${portal.reward}`)
         ? `icon_reward_${portal.reward}`
         : this.atlas.has(`prop_reward_${portal.reward}_0`)
@@ -1435,10 +3022,10 @@ export class PlayScene extends Phaser.Scene {
       if (portal.elite) {
         const mark = this.atlas.has("ui_elite_badge")
           ? this.add.image(portal.x, portal.y - TILE_PX * 1.72, this.crispTextureKey, "ui_elite_badge")
-            .setOrigin(0.5).setScale(1).setDepth(8.6)
+            .setOrigin(0.5).setScale(1 / TUNED).setDepth(8.6)
           : this.add.text(
-            portal.x, portal.y - TILE_PX * 1.75, "ELITE",
-            { fontFamily: "monospace", fontSize: `${Math.round(7 * ZOOM)}px`, color: "#ff8877" },
+            portal.x, portal.y - TILE_PX * 1.75, t("roomType.elite"),
+            { fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(7, ZOOM) * ZOOM)}px`, color: "#ff8877" },
           ).setOrigin(0.5).setScale(1 / ZOOM).setDepth(8.6);
         // Hidden with its portal; see `updateExits`. It was created visible
         // and never touched again, so the badge stood on bare floor for the
@@ -1451,14 +3038,31 @@ export class PlayScene extends Phaser.Scene {
        * stat door's family, and the grade as pips — "the build question at
        * the door". An elite door's grade is why it is worth the harder room.
        */
+      /*
+       * **Every door is named**, not only the ones with a school or a grade.
+       *
+       * A plain spell door and a plain gold door both fell through to an
+       * empty label, so the choice at the end of a room was two unexplained
+       * icons floating over two identical arches — the one moment in the room
+       * that is a decision, with nothing on screen saying what was being
+       * decided between. The school or the family stays the headline where
+       * there is one, because it is the sharper promise; the reward kind is
+       * the fallback, which is what the badge was always trying to say.
+       */
       const grade = portal.grade ?? 1;
       const pips = grade > 1 ? ` ${"★".repeat(grade - 1)}` : "";
-      const label = portal.npc ? (portal.npc === "merchant" ? "merchant" : "blacksmith")
-        : portal.school ? `${portal.school}${pips}` : portal.family ? `${portal.family}${pips}` : pips.trim();
+      const named = (id: string) => contentName(id, titleOfId(id));
+      const label = portal.onward ? roomTypeName(portal.type)
+        : portal.npc ? roomTypeName(NPC_ROOM_ID[portal.npc])
+        : portal.school ? `${term(portal.school, "spell_school")}${pips}`
+        : portal.family ? `${term(portal.family, "stat_family")}${pips}`
+        // A plain door promises a kind — spell, affix, stat, gold — and the
+        // kinds are ids like everything else.
+        : `${term(portal.reward ?? portal.type ?? "", "reward_kind")}${pips}`;
       const colour = portal.school ? (SCHOOL_COLOUR as Record<string, string>)[portal.school] ?? "#e8e3d8" : grade > 1 ? "#ffd45e" : "#c9cfe8";
       const tag = label
-        ? this.add.text(portal.x, portal.y - TILE_PX * 0.55, label.toUpperCase(), {
-          fontFamily: "monospace", fontSize: `${Math.round(7 * ZOOM)}px`, color: colour,
+        ? this.add.text(portal.x, portal.y - TILE_PX * 0.55, label, {
+          fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(7, ZOOM) * ZOOM)}px`, color: colour,
           backgroundColor: "#0d0b1fcc", padding: { x: 2 * ZOOM, y: 1 * ZOOM },
         }).setOrigin(0.5).setScale(1 / ZOOM).setDepth(8.6).setVisible(false)
         : null;
@@ -1481,22 +3085,59 @@ export class PlayScene extends Phaser.Scene {
    * or a rusher — behind the action bar; faded, the HUD stays readable and
    * the thing behind it is seen.
    */
-  private fadeIfCovering(from: number, x: number, y: number, w: number, h: number): void {
-    const world = this.world;
-    const under = (px: number, py: number, r: number) =>
-      px + r > x && px - r < x + w && py + r > y && py - r < y + h;
-    const covering = under(world.player.x, world.player.y - BODY_LIFT, 14)
-      || world.enemies.some((e) => e.hp > 0 && under(e.x, e.y, e.radius));
-    if (!covering) return;
+  /** Where a HUD block's objects start, in both the frame's group and the kept texts; see `fadeIfCovering`. */
+  private fadeMark(): { sprites: number; kept: number } {
+    return { sprites: this.sprites.getLength(), kept: this.keptDrawn.length };
+  }
+
+  /**
+   * Fades a HUD block drawn since `from` when a body stands under it — its
+   * frame-built objects **and** its kept texts. Only the first were faded,
+   * so a bar's keycap letters and captions stayed solid over a player the
+   * rest of the bar had gone transparent to reveal.
+   */
+  private fadeIfCovering(from: { sprites: number; kept: number }, x: number, y: number, w: number, h: number): void {
+    if (!this.bodyUnder(x, y, w, h)) return;
     const kids = this.sprites.getChildren();
-    for (let i = from; i < kids.length; i++) {
+    for (let i = from.sprites; i < kids.length; i++) {
       const k = kids[i] as unknown as { setAlpha?: (a: number) => void; alpha?: number };
-      k.setAlpha?.((k.alpha ?? 1) * 0.28);
+      k.setAlpha?.((k.alpha ?? 1) * HUD_FADE);
+    }
+    for (let i = from.kept; i < this.keptDrawn.length; i++) {
+      const t = this.keptDrawn[i]!;
+      t.setAlpha(t.alpha * HUD_FADE);
     }
   }
 
+  /**
+   * Whether a body stands under a HUD rectangle.
+   *
+   * Split out of `fadeIfCovering` because the HUD's two kept widgets — the
+   * minimap's one Graphics and the hint strip's container — are built once
+   * and merely redrawn, so they are in neither the frame's group nor the
+   * kept-text list and have to set their own alpha from the same test.
+   */
+  private bodyUnder(x: number, y: number, w: number, h: number): boolean {
+    const world = this.world;
+    // The rectangle is in the HUD's frame and the bodies are in the world's,
+    // which the near camera scrolls: a body is carried onto the screen and
+    // back into the HUD's frame before it is compared.
+    const cam = this.cameras.main, ui = this.uiCam;
+    const k = ui ? cam.zoom / ui.zoom : 1;
+    const toUi = (px: number, py: number): [number, number] => ui
+      ? [ui.worldView.x + (px - cam.worldView.x) * k, ui.worldView.y + (py - cam.worldView.y) * k]
+      : [px, py];
+    const under = (wx: number, wy: number, wr: number) => {
+      const [px, py] = toUi(wx, wy);
+      const r = wr * k;
+      return px + r > x && px - r < x + w && py + r > y && py - r < y + h;
+    };
+    return under(world.player.x, world.player.y - BODY_LIFT, 14)
+      || world.enemies.some((e) => e.hp > 0 && under(e.x, e.y, e.radius));
+  }
+
   private drawActionBar(w: World): void {
-    const fadeFrom = this.sprites.getLength();
+    const fadeFrom = this.fadeMark();
     const SLOT = 22;
     const GAP = 5;
     const p = w.player;
@@ -1504,6 +3145,16 @@ export class PlayScene extends Phaser.Scene {
       key: string; icon: string | null; sheet: "crisp" | "art";
       /** 0..1 of the slot covered by the cooldown, from the top. */
       cooling: number; usable: boolean; corner: string; accent: number; ring?: number;
+      /** The corner's ink, where it is not a plain count: a spell's level is gold, as levels are everywhere. */
+      cornerColour?: string;
+      /** A press this slot refused, fading: how far through the cue, and whether it was the bar's or the clock's doing. */
+      refused?: { k: number; mana: boolean; cooldown: boolean };
+      /** A `charge` spell being held on this key: how full, 0 to 1. */
+      charge?: number;
+      /** A `charges` spell's bank: what it holds, how many it can, and how far the next one has come. */
+      pips?: { have: number; max: number; next: number };
+      /** The light the key's own spell is drawn in, for its charge and its pips. */
+      tint?: number;
     };
     const slots: Slot[] = [];
     // The three innate verbs have their own delivered icons.
@@ -1511,28 +3162,56 @@ export class PlayScene extends Phaser.Scene {
     slots.push({ key: "J", icon: verb("icon_action_attack", "icon_stat_keen_edge"), sheet: "crisp", cooling: 0, usable: true, corner: "", accent: 0xe8e3d8 });
     for (let i = 0; i < SPELL_KEYS.length; i++) {
       const slot = w.spells[i] ?? null;
-      if (!slot) { slots.push({ key: SPELL_KEYS[i]!, icon: null, sheet: "crisp", cooling: 0, usable: false, corner: "", accent: 0x4a5480 }); continue; }
+      if (!slot) { slots.push({ key: SPELL_KEYS[i]!, icon: null, sheet: "crisp", cooling: 0, usable: false, corner: "", accent: 0x4a5480, refused: this.refusalOn(i) }); continue; }
       const cost = slotCost(slot, ITEMS, w.staff);
-      const full = spellCooldownMs(cost / BASELINE_MANA_MAX);
+      // The cooldown the cast really starts: the spell's own scale, and a trail's, enchant's or orb's floor.
+      const full = slotCooldownMs(slot, ITEMS, cost);
       const level = this.spellLevels[i] ?? 1;
+      /*
+       * Doc 006's two options that change what a key means, each shown on
+       * the key. A `charge` being held fills a bar along the key's foot and
+       * turns the key white when it is full — the moment to let go. A
+       * `charges` bank is a row of pips along its head, one per dart banked,
+       * the next one filling; an empty bank also covers the key, as a
+       * cooldown does, because until a dart lands the key does nothing.
+       */
+      const max = chargesOf(ITEMS, slot.item.base);
+      const bank = max > 0 ? bankOf(slot, ITEMS) : 0;
+      const nextShare = max > 0 && bank < max ? Math.min(1, (slot.bankMs ?? 0) / chargeIntervalMs(ITEMS, slot.item.base)) : 0;
+      const bankEmpty = max > 0 && bank < 1 ? 1 - nextShare : 0;
+      const tint = spellLookOf(slot.item.base, "none").glow;
       slots.push({
         key: SPELL_KEYS[i]!, icon: `icon_${slot.item.base}`, sheet: "crisp",
-        cooling: slot.cooldownMs > 0 ? Math.min(1, slot.cooldownMs / Math.max(1, full)) : 0,
-        usable: p.mana >= cost, corner: level > 1 ? "I".repeat(level) : "",
+        charge: p.chargeKey === i ? chargeShare(w, ITEMS) : undefined,
+        pips: max > 0 ? { have: bank, max, next: nextShare } : undefined,
+        tint,
+        cooling: Math.max(bankEmpty, slot.cooldownMs > 0 ? Math.min(1, slot.cooldownMs / Math.max(1, full)) : 0),
+        usable: p.mana >= cost,
+        /*
+         * The level, as a level. It was `"I".repeat(level)` — a fourth-level
+         * spell read "IIII", which is not a number in any notation the game
+         * uses and looked like a rendering fault. "Lv4" is what the cards,
+         * the floor prompts and the blacksmith say, tightened by one space
+         * for a 22 px corner.
+         */
+        corner: level > 1 ? t("grade.lvTight", { n: level }) : "",
+        cornerColour: "#ffd45e",
         accent: 0x8fdcff,
+        refused: this.refusalOn(i),
       });
     }
+    // In the keys' own order on the keyboard: J, K, L.
+    slots.push({
+      key: "K", icon: verb("icon_action_dodge", "icon_stat_second_wind"), sheet: "crisp",
+      cooling: p.dashCooldownMs > 0 ? Math.min(1, p.dashCooldownMs / (DASH_COOLDOWN_MS * p.mods.dashCooldown + DASH_MS)) : 0,
+      usable: p.dashCooldownMs <= 0, corner: "", accent: 0x8fdcff,
+    });
     const charges = Math.floor(p.rage);
     slots.push({
       key: "L", icon: verb("icon_action_spin", "icon_stat_keen_edge"), sheet: "crisp",
       // The spin's slot fills from the bottom as the next charge is earned.
       cooling: charges > 0 ? 0 : 1 - (p.rage - charges), usable: charges > 0,
       corner: `${charges}`, accent: 0xff7a4a, ring: 0xff7a4a,
-    });
-    slots.push({
-      key: "K", icon: verb("icon_action_dodge", "icon_stat_second_wind"), sheet: "crisp",
-      cooling: p.dashCooldownMs > 0 ? Math.min(1, p.dashCooldownMs / (DASH_COOLDOWN_MS * p.mods.dashCooldown + DASH_MS)) : 0,
-      usable: p.dashCooldownMs <= 0, corner: "", accent: 0x8fdcff,
     });
 
     /*
@@ -1544,7 +3223,9 @@ export class PlayScene extends Phaser.Scene {
      */
     const spells = slots.slice(1, 1 + SPELL_KEYS.length);
     const innate = [slots[0]!, ...slots.slice(1 + SPELL_KEYS.length)];
-    const y = VIEW_H - 27;
+    // Lifted so the keycaps under the slots sit on the same baseline as the
+    // key strip in the corner, and the bar keeps the HUD's own margin.
+    const y = UI_H - 32;
     // No names on the bar: there is no room for them, and the Tab screen has them.
     const SMALL = 17;
     const spellPitch = SLOT + GAP;
@@ -1552,26 +3233,92 @@ export class PlayScene extends Phaser.Scene {
     const spellW = (spells.length - 1) * spellPitch + SLOT;
     const innateW = (innate.length - 1) * innatePitch + SMALL;
     const GROUP_GAP = 18;
-    const sx0 = VIEW_W / 2 - (spellW + GROUP_GAP + innateW) / 2;
+    const sx0 = UI_W / 2 - (spellW + GROUP_GAP + innateW) / 2;
     const ix0 = sx0 + spellW + GROUP_GAP;
     const top = 0;
     this.sprites.add(this.add.rectangle(sx0 - 7, y - SLOT / 2 - 5 - top, spellW + 14, SLOT + 22 + top, 0x0d0b1f, 0.7).setOrigin(0).setDepth(99));
     this.sprites.add(this.add.rectangle(ix0 - 6, y - SMALL / 2 - 4 - top, innateW + 12, SMALL + 20 + top, 0x0d0b1f, 0.55).setOrigin(0).setDepth(99));
+    /*
+     * No captions over the groups. The icons and their keycaps say what each
+     * slot is, the first-launch card and the controls page name them in
+     * words, and a caption is a kept text the HUD's fade under the player
+     * could not reach — it stayed opaque while the bar went transparent.
+     */
     spells.forEach((sl, i) => this.drawSlot(sl, sx0 + i * spellPitch + SLOT / 2, y, SLOT, 0x8fdcff));
     innate.forEach((sl, i) => this.drawSlot(sl, ix0 + i * innatePitch + SMALL / 2, y + (SLOT - SMALL) / 2, SMALL, 0xd8d0bc));
     this.fadeIfCovering(fadeFrom, sx0 - 7, y - SLOT / 2 - 18, ix0 + innateW + 6 - (sx0 - 7), SLOT + 36);
   }
 
+  /**
+   * Who planned this room, in the corner.
+   *
+   * The whole point of the project is that a Director decided the room, and
+   * until now the game never said which one — a run on the rule table and a
+   * run on Jev looked identical, including the run that *said* Jev and fell
+   * back on every request. Bottom-left, where nothing else lives: the gold
+   * and the minimap have the top-right, the hint strip the bottom-right, and
+   * the gauges the top-left.
+   */
+  private drawDirectorBadge(): void {
+    const fadeFrom = this.fadeMark();
+    const fell = !!this.roomFellBack;
+    const jev = this.roomUsedJev || directorArm() === "jev";
+    const label = fell ? t("hud.jevFallback") : t(jev ? "hud.jev" : "hud.rule");
+    const colour = fell ? "#ffb080" : jev ? "#8fdcff" : "#6f7ba3";
+    const x = HUD_INSET + 4;
+    const y = HUD_BOTTOM_Y - 2;
+    const text = this.ftext("hud:director", x + 9, y, label, {
+      fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(6.5, ZOOM) * ZOOM)}px`, color: colour,
+      letterSpacing: letterSpacing() * ZOOM,
+    }).setScale(1 / ZOOM).setOrigin(0, 0.5).setDepth(101);
+    const w = text.displayWidth + 17;
+    this.sprites.add(this.add.rectangle(x - 4, y, w, 13, 0x0d0b1f, 0.75)
+      .setOrigin(0, 0.5).setStrokeStyle(1, 0x2a2750, 0.8).setDepth(100));
+    // The dot: lit for Jev, dim for the rule table. A colour alone would be
+    // one more coloured word in a HUD that has several.
+    this.sprites.add(this.add.circle(x + 3, y, 2.2, fell ? 0xffb080 : jev ? 0x8fdcff : 0x4a5480, 1).setDepth(101));
+    this.fadeIfCovering(fadeFrom, x - 4, y - 8, w, 16);
+  }
+
+  /**
+   * How far through its refusal cue key `i` is, or nothing.
+   *
+   * One shape for all four reasons, and only the strength and the colour
+   * differ — see `noteRefusal` for why they are not equals.
+   */
+  private refusalOn(i: number): { k: number; mana: boolean; cooldown: boolean } | undefined {
+    if (this.refusedKey !== i || this.refusedMs <= 0) return undefined;
+    const mana = this.refusedWhy === "mana";
+    const cooldown = this.refusedWhy === "cooldown";
+    return { k: this.refusedMs / (mana ? REFUSED_MANA_MS : cooldown ? REFUSED_COOLDOWN_MS : REFUSED_QUIET_MS), mana, cooldown };
+  }
+
   /** One action-bar slot: frame, icon, cooldown, corner count, and its keycap. */
   private drawSlot(
-    sl: { key: string; icon: string | null; cooling: number; usable: boolean; corner: string; accent: number; ring?: number },
+    sl: {
+      key: string; icon: string | null; cooling: number; usable: boolean; corner: string;
+      accent: number; ring?: number; cornerColour?: string; refused?: { k: number; mana: boolean; cooldown: boolean };
+
+      charge?: number; pips?: { have: number; max: number; next: number }; tint?: number;
+    },
     x: number, y: number, size: number, groupAccent: number,
   ): void {
     const accent = sl.ring ?? groupAccent;
+    /*
+     * **The refused press, answered on the key that was pressed.**
+     *
+     * A short sideways shake, because a slot that only changed colour was
+     * lost among a HUD that is already all colour — and the shake is only on
+     * the mana refusal, which is the one worth interrupting a fight for. The
+     * ink is the mana blue rather than an alarm red, so the eye is carried
+     * from the key to the bar that refused it, which is where the answer is.
+     */
+    const cue = sl.refused;
+    if (cue?.mana) x += Math.sin(this.time.now / 21) * 2.2 * cue.k;
     this.sprites.add(this.add.rectangle(x, y, size, size, 0x161334, 1).setDepth(101)
       .setStrokeStyle(1.5, sl.usable ? accent : 0x3a3f5a, sl.usable ? 0.9 : 0.7));
     if (sl.icon && this.atlas.has(sl.icon)) {
-      const img = this.add.image(x, y, this.crispTextureKey, sl.icon).setOrigin(0.5).setScale(size / 20).setDepth(102);
+      const img = this.add.image(x, y, this.crispTextureKey, sl.icon).setOrigin(0.5).setScale((size / 20) / TUNED).setDepth(102);
       if (!sl.usable) img.setTint(0x55506a);
       this.sprites.add(img);
     }
@@ -1580,20 +3327,72 @@ export class PlayScene extends Phaser.Scene {
       this.sprites.add(this.add.circle(x, y, size / 2 - 2.5, 0, 0).setStrokeStyle(1.2, sl.ring, sl.usable ? 0.9 : 0.35).setDepth(102.5));
     if (sl.cooling > 0)
       this.sprites.add(this.add.rectangle(x - size / 2, y - size / 2, size, size * sl.cooling, 0x0d0b1f, 0.72).setOrigin(0).setDepth(103));
+    const tint = sl.tint ?? accent;
+    if (sl.pips) {
+      // One pip per charge the key can bank, across its head: lit for each banked, the next one filling.
+      const { have, max, next } = sl.pips;
+      const gap = 1;
+      const pw = (size - 4 - gap * (max - 1)) / max;
+      const py = y - size / 2 + 1.5;
+      for (let k = 0; k < max; k++) {
+        const px = x - size / 2 + 2 + k * (pw + gap);
+        this.sprites.add(this.add.rectangle(px, py, pw, 2.5, 0x0d0b1f, 0.85).setOrigin(0).setDepth(103.2));
+        if (k < have) this.sprites.add(this.add.rectangle(px, py, pw, 2.5, have >= max ? 0xffffff : tint, 1).setOrigin(0).setDepth(103.3));
+        else if (k === have && next > 0) this.sprites.add(this.add.rectangle(px, py, pw * next, 2.5, tint, 0.55).setOrigin(0).setDepth(103.3));
+      }
+    }
+    if (sl.charge !== undefined) {
+      // The charge, filling along the key's foot; full, the whole key goes white and blinks.
+      const full = sl.charge >= 1;
+      const blinkOn = ((this.world.tick >> 2) & 1) === 0;
+      const by = y + size / 2 - 4;
+      this.sprites.add(this.add.rectangle(x - size / 2 + 2, by, size - 4, 2.5, 0x0d0b1f, 0.9).setOrigin(0).setDepth(103.2));
+      this.sprites.add(this.add.rectangle(x - size / 2 + 2, by, (size - 4) * Math.min(1, sl.charge), 2.5, full ? 0xffffff : tint, 1).setOrigin(0).setDepth(103.3));
+      this.sprites.add(this.add.rectangle(x, y, size, size, 0, 0)
+        .setStrokeStyle(full ? 2 : 1.5, full && blinkOn ? 0xffffff : tint, 1).setDepth(103.4));
+      if (full && blinkOn) this.sprites.add(this.add.rectangle(x, y, size, size, 0xffffff, 0.18).setDepth(103.35));
+    }
+    if (cue?.cooldown) {
+      /*
+       * **Not yet**, on the key: the cooldown's own cover flashes up in a
+       * pale gold — the part of the key still waiting, lit rather than dark
+       * — and the key is ringed in the same gold; the words are over the
+       * head (`drawCooldownCue`). Gold rather than the mana blue, so "wait" is never read as "not
+       * enough", and no shake: nothing is wrong, it is only early.
+       */
+      const ink = 0xffd98a;
+      const cover = Math.max(0.15, sl.cooling);
+      this.sprites.add(this.add.rectangle(x - size / 2, y - size / 2, size, size * cover, ink, 0.34 * cue.k).setOrigin(0).setDepth(103.4));
+      this.sprites.add(this.add.rectangle(x, y, size, size, 0, 0)
+        .setStrokeStyle(2, ink, 0.9 * Math.min(1, cue.k * 1.4)).setDepth(103.5));
+    } else if (cue) {
+      const ink = cue.mana ? 0x8fdcff : 0x8792b5;
+      this.sprites.add(this.add.rectangle(x, y, size, size, ink, (cue.mana ? 0.3 : 0.12) * cue.k).setDepth(103.4));
+      this.sprites.add(this.add.rectangle(x, y, size, size, 0, 0)
+        .setStrokeStyle(2, ink, (cue.mana ? 1 : 0.55) * cue.k).setDepth(103.5));
+    }
     if (sl.corner)
       this.ftext(`slot:corner:${sl.key}`, x + size / 2 - 1, y + size / 2 - 1, sl.corner, {
-        fontFamily: "monospace", fontSize: `${Math.round(6 * ZOOM)}px`, color: "#ffffff",
+        fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(6, ZOOM) * ZOOM)}px`,
+        color: sl.cornerColour ?? "#ffffff",
         stroke: "#0d0b1f", strokeThickness: 2 * ZOOM,
       }).setScale(1 / ZOOM).setOrigin(1, 1).setDepth(104);
-    const capY = y + size / 2 + 7;
+    // The chip is sized from the letter it holds, which grew with the body
+    // floor; a fixed 12x10 box clipped a `Tab`-sized cap and crowded the rest.
+    const capPx = bodyPx(7, ZOOM);
+    const capW = Math.max(12, Math.ceil(capPx * 0.72 * sl.key.length) + 6);
+    const capH = Math.ceil(capPx * 1.15);
+    const capY = y + size / 2 + capH / 2 + 2;
     const cap = this.add.graphics().setDepth(103);
     cap.fillStyle(0x2a2750, 1);
-    cap.fillRoundedRect(x - 6, capY - 5, 12, 10, 2.5);
+    cap.fillRoundedRect(x - capW / 2, capY - capH / 2, capW, capH, 2.5);
     cap.lineStyle(1, 0x8792b5, 0.9);
-    cap.strokeRoundedRect(x - 6, capY - 5, 12, 10, 2.5);
+    cap.strokeRoundedRect(x - capW / 2, capY - capH / 2, capW, capH, 2.5);
     this.sprites.add(cap);
+    // The key on the cap is the thing the bar exists to tell you, so it takes
+    // the body floor like every other word a player reads.
     this.ftext(`slot:key:${sl.key}`, x, capY, sl.key, {
-      fontFamily: "monospace", fontSize: `${Math.round(7 * ZOOM)}px`, color: "#e8e3d8",
+      fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(7, ZOOM) * ZOOM)}px`, color: "#e8e3d8",
     }).setScale(1 / ZOOM).setOrigin(0.5).setDepth(104);
   }
 
@@ -1601,11 +3400,61 @@ export class PlayScene extends Phaser.Scene {
 
   private showGameOver(): void {
     const o: Phaser.GameObjects.GameObject[] = [];
-    o.push(this.add.rectangle(VIEW_W / 2, VIEW_H / 2, VIEW_W, VIEW_H, 0x0d0b1f, 0.78).setDepth(229));
-    o.push(this.menuText(VIEW_W / 2, VIEW_H / 2 - 30, "GAME OVER", 22, "#ff8877"));
-    o.push(this.menuText(VIEW_W / 2, VIEW_H / 2, `room ${this.roomIndex} · ${stageFor(this.roomIndex)} · ${this.runGold + this.world.gold} gold`, 8, "#c9cfe8"));
+    const cx = UI_W / 2;
+    const cy = UI_H / 2;
+    /*
+     * A death screen is where a run is read back, so it says what the run
+     * did — how far, how many, how long, how rich — and shows the build that
+     * got there as its own icons. It used to be the title and one line, which
+     * told a player nothing they could learn from.
+     */
+    const panelW = 300;
+    const panelH = 190;
+    o.push(...this.modalPanel(panelW, panelH, { depth: 229, cy }));
+    const top = cy - panelH / 2;
+    o.push(this.menuText(cx, top + 30, t("head.gameOver"), 22, "#ff8877"));
+    o.push(this.add.rectangle(cx, top + 48, panelW - 40, 1, 0x2a2750, 1).setDepth(229.5));
+    const ms = this.runMs + this.world.stats.elapsedMs;
+    const mins = Math.floor(ms / 60_000);
+    const secs = Math.floor((ms % 60_000) / 1000);
+    const summary: [string, string][] = [
+      [t("over.roomsCleared"), `${Math.max(0, this.roomIndex - 1)}`],
+      [t("over.diedIn"), t("over.diedInValue", { room: this.roomIndex, type: roomTypeName(stageFor(this.roomIndex)) })],
+      [t("over.bodiesFelled"), `${this.runKills}`],
+      [t("over.time"), `${mins}:${String(secs).padStart(2, "0")}`],
+      [t("over.gold"), `${this.runGold + this.world.gold}`],
+    ];
+    summary.forEach(([k, v], i) => {
+      const y = top + 62 + i * 12;
+      o.push(this.uiText(cx - panelW / 2 + 28, y, k, 7, "#8792b5").setOrigin(0, 0.5).setDepth(230));
+      o.push(this.uiText(cx + panelW / 2 - 28, y, v, 7, "#e8e3d8").setOrigin(1, 0.5).setDepth(230));
+    });
+    // The build, as the three keys carried it: icon, name, level.
+    const buildY = top + 136;
+    o.push(this.uiText(cx - panelW / 2 + 28, buildY - 14, t("head.theBuild"), 6, "#8fdcff").setOrigin(0, 0.5).setDepth(230));
+    const held = this.world.spells.filter((s): s is SpellSlot => !!s);
+    if (held.length === 0)
+      o.push(this.uiText(cx - panelW / 2 + 28, buildY, t("over.noSpells"), 7, "#5a5f7a").setOrigin(0, 0.5).setDepth(230));
+    this.world.spells.forEach((slot, i) => {
+      if (!slot) return;
+      const x = cx - panelW / 2 + 28 + i * 88;
+      const icon = `icon_${slot.item.base}`;
+      if (this.atlas.has(icon))
+        o.push(this.add.image(x + 6, buildY, this.crispTextureKey, icon)
+          .setOrigin(0.5).setScale(1 / TUNED).setDepth(230));
+      o.push(this.uiText(x + 17, buildY - 4, contentName(slot.item.base, titleOfId(slot.item.base)), 6, "#c9cfe8").setOrigin(0, 0.5).setDepth(230));
+      // "Lv 3" and the pips, as the attributes screen and the results card
+      // both say it. Pips alone were a row of squares the eye had to count.
+      const lvl = this.spellLevels[i] ?? 1;
+      o.push(this.keys_(x + 17, buildY + 5, `${t("grade.lv", { n: lvl })} {pips:${lvl}/${SPELL_LEVEL_MAX}}`, 6, "#ffd45e", 230, 0));
+    });
     // A new run from room one, not a revive: everything the run carried goes.
-    o.push(this.keys_(VIEW_W / 2, VIEW_H / 2 + 30, "[R] new run from room 1     [Esc] title", 9, "#e8e3d8"));
+    // In the boss room the fight itself can be taken again, with the build that reached it.
+    const canRetry = stageFor(this.roomIndex) === "boss";
+    const hints = canRetry
+      ? t("over.hintsBoss", { retry: t("hint.retryBoss"), newRun: t("hint.newRun"), title: t("hint.title") })
+      : t("over.hints", { newRun: t("hint.newRun"), title: t("hint.title") });
+    o.push(this.fittedKeys(cx, cy + panelH / 2 - 14, hints, 8, "#e8e3d8", panelW - 24, 230));
     this.gameOverUi = o;
     /*
      * Answered by key events rather than by polling `JustDown`: the polled
@@ -1615,9 +3464,19 @@ export class PlayScene extends Phaser.Scene {
     const kb = this.input.keyboard!;
     const toTitle = () => { this.pendingTitle = true; this.restartRun(); };
     const again = () => this.restartRun();
+    const retry = () => this.retryBoss();
     kb.once("keydown-ESC", toTitle);
-    kb.once("keydown-R", again);
-    this.gameOverKeys = () => { kb.off("keydown-ESC", toTitle); kb.off("keydown-R", again); };
+    kb.once("keydown-ENTER", again);
+    if (canRetry) kb.once("keydown-R", retry);
+    this.gameOverKeys = () => { kb.off("keydown-ESC", toTitle); kb.off("keydown-ENTER", again); kb.off("keydown-R", retry); };
+  }
+
+  /** The boss fight again, from its door: the same build, at full health. */
+  private retryBoss(): void {
+    if (this.entering) return;
+    this.hideGameOver();
+    this.bossTries++;
+    void this.enterRoom(RUN_BOSS_ROOM, MAX_HEARTS + this.liveMods().maxHearts);
   }
 
   private hideGameOver(): void {
@@ -1625,6 +3484,134 @@ export class PlayScene extends Phaser.Scene {
     this.gameOverUi = null;
     this.gameOverKeys?.();
     this.gameOverKeys = null;
+  }
+
+  /* --------------------------------- victory -------------------------------- */
+
+  /**
+   * The results card, after the boss.
+   *
+   * A finished run used to end in a HUD line that never cleared — "RUN
+   * COMPLETE 16 rooms, 30 gold — R to run again" — over a run that could not
+   * actually be restarted, because R was bound to nothing and only Enter was
+   * polled. A cleared run is worth reading back, and it is read back the same
+   * way a lost one is: the same panel, the same two keys, answered by key
+   * events rather than by a poll another reader can eat.
+   *
+   * What it says that the game-over card cannot: how long the boss itself
+   * took, what the run cost in hearts, the affixes on each spell, and which
+   * Director planned the whole thing — which is the question the project is
+   * about.
+   */
+  private showVictory(): void {
+    // Once. A second card over the first would leak the first's listeners,
+    // and every later Enter would restart the run from under whatever is up.
+    if (this.victoryUi) return;
+    // The win's toast has said its piece; the card carries all of it now.
+    this.tookLabel = "";
+    this.tookMs = 0;
+    const o: Phaser.GameObjects.GameObject[] = [];
+    const cx = UI_W / 2;
+    const cy = UI_H / 2;
+    const panelW = 360;
+    const panelH = 318;
+    o.push(...this.modalPanel(panelW, panelH, { depth: 229, cy }));
+    const top = cy - panelH / 2;
+    const left = cx - panelW / 2 + 28;
+    const right = cx + panelW / 2 - 28;
+    o.push(this.menuText(cx, top + 26, t("head.runComplete"), 22, "#ffd45e"));
+    o.push(this.add.rectangle(cx, top + 44, panelW - 40, 1, 0x2a2750, 1).setDepth(229.5));
+    const clock = (ms: number) =>
+      `${Math.floor(ms / 60_000)}:${String(Math.floor((ms % 60_000) / 1000)).padStart(2, "0")}`;
+    // The live room's own elapsed is not banked until a portal is taken, and
+    // the boss room has no portal: it is added here, as the death card does.
+    const runMs = this.runMs + this.world.stats.elapsedMs;
+    const hurt = (this.history.hearts_lost ?? []).reduce((s, n) => s + n, 0) + this.world.stats.heartsLost;
+    const summary: [string, string][] = [
+      [t("over.roomsCleared"), `${this.roomIndex}`],
+      [t("over.time"), clock(runMs)],
+      [t("over.bossTime"), this.bossTries > 1 ? t("over.bossTimeTries", { time: clock(this.bossMs), n: this.bossTries }) : clock(this.bossMs)],
+      [t("over.gold"), `${this.runGold + this.world.gold}`],
+      [t("over.bodiesFelled"), `${this.runKills}`],
+      [t("over.heartsLost"), `${Math.round(hurt)}`],
+      [t("over.director"), t(directorArm() === "jev" ? "hud.jev" : "hud.rule")],
+    ];
+    summary.forEach(([k, v], i) => {
+      const y = top + 60 + i * 12;
+      o.push(this.uiText(left, y, k, 7, "#8792b5").setOrigin(0, 0.5).setDepth(230));
+      o.push(this.uiText(right, y, v, 7, "#e8e3d8").setOrigin(1, 0.5).setDepth(230));
+    });
+    o.push(this.add.rectangle(cx, top + 148, panelW - 40, 1, 0x2a2750, 1).setDepth(229.5));
+    // The build, one spell per row: icon, name, level, and what is attached.
+    // A row each rather than three across, because the affixes are the half
+    // of a build that a column of three names cannot hold.
+    o.push(this.uiText(left, top + 158, t("head.theBuild"), 6, "#8fdcff").setOrigin(0, 0.5).setDepth(230));
+    if (this.world.spells.every((s) => !s))
+      o.push(this.uiText(left, top + 174, t("over.noSpells"), 7, "#5a5f7a").setOrigin(0, 0.5).setDepth(230));
+    this.world.spells.forEach((slot, i) => {
+      if (!slot) return;
+      const y = top + 174 + i * 22;
+      const icon = `icon_${slot.item.base}`;
+      if (this.atlas.has(icon))
+        o.push(this.add.image(left + 7, y, this.crispTextureKey, icon)
+          .setOrigin(0.5).setScale(1 / TUNED).setDepth(230));
+      const name = this.uiText(left + 20, y - 5, contentName(slot.item.base, titleOfId(slot.item.base)), 7, "#c9cfe8")
+        .setOrigin(0, 0.5).setDepth(230);
+      o.push(name);
+      // The same "Lv 3" and pips as the death card and the attributes screen:
+      // one way of saying a level, on every screen that says one.
+      const lvl = this.spellLevels[i] ?? 1;
+      o.push(this.keys_(name.x + name.width / ZOOM + 6, y - 5,
+        `${t("grade.lv", { n: lvl })} {pips:${lvl}/${SPELL_LEVEL_MAX}}`, 6, "#ffd45e", 230, 0));
+      const affixes = slot.affixes.map((a) => contentName(a.id, spellAffixById(a.id)?.name ?? a.id));
+      o.push(this.uiText(left + 20, y + 5,
+        affixes.length > 0 ? affixes.join(t("list.sep")) : t("over.noAffixes"),
+        6, affixes.length > 0 ? "#a88fe0" : "#4a4f6a").setOrigin(0, 0.5).setDepth(230));
+    });
+    // The other half of a build: what the body took, in the character
+    // screen's own green.
+    o.push(this.uiText(left, top + 244, t("head.upgradesTaken"), 6, "#a8f0a0").setOrigin(0, 0.5).setDepth(230));
+    /*
+     * Counted rather than listed twice. A run takes the same upgrade several
+     * times, and "Keen Edge, Keen Edge, Keen Edge" is both longer than the
+     * card has room for and worse at saying what the build leaned on.
+     */
+    const taken = new Map<string, number>();
+    for (const id of this.statsTaken) taken.set(id, (taken.get(id) ?? 0) + 1);
+    const takenLine = [...taken].map(([id, n]) => {
+      const name = contentName(id, titleOfId(id));
+      return n > 1 ? t("over.statTimes", { name, n }) : name;
+    }).join(t("list.sep"));
+    o.push(this.uiText(left, top + 254, takenLine || t("char.noneYet"), 7,
+      takenLine ? "#c9cfe8" : "#5a5f7a",
+      { wordWrap: { width: (panelW - 56) * ZOOM } }).setOrigin(0, 0).setDepth(230));
+    o.push(this.fittedKeys(cx, top + panelH - 16,
+      t("over.hintsWin", { newRun: t("hint.newRun"), title: t("hint.title") }), 8, "#e8e3d8", panelW - 24, 230));
+    this.victoryUi = o;
+    /*
+     * The same listeners the game-over card uses, and for the same reason:
+     * a polled `JustDown` can be consumed by another reader in the same
+     * frame, and the card then ignores the key. R answers as well as Enter,
+     * because R is what the old line promised and what the hand reaches for.
+     */
+    const kb = this.input.keyboard!;
+    const toTitle = () => { this.pendingTitle = true; this.restartRun(); };
+    const again = () => this.restartRun();
+    kb.once("keydown-ESC", toTitle);
+    kb.once("keydown-ENTER", again);
+    kb.once("keydown-R", again);
+    this.victoryKeys = () => {
+      kb.off("keydown-ESC", toTitle);
+      kb.off("keydown-ENTER", again);
+      kb.off("keydown-R", again);
+    };
+  }
+
+  private hideVictory(): void {
+    for (const g of this.victoryUi ?? []) g.destroy();
+    this.victoryUi = null;
+    this.victoryKeys?.();
+    this.victoryKeys = null;
   }
 
   /* ------------------------------ title, pause ------------------------------ */
@@ -1638,25 +3625,116 @@ export class PlayScene extends Phaser.Scene {
    * input that would be ignored.
    */
   private showIntent(): void {
+    // The run starts here, so the Director is built here: the title menu may
+    // have changed the arm, or set a key, since the last one was made.
+    this.director = this.buildDirector();
     this.intentUi = { selected: STYLES.findIndex((x) => x.id === this.intent.preset), text: this.intent.free_text ?? "", objects: [] };
     if (this.intentUi.selected < 0) this.intentUi.selected = 0;
-    if (this.director.mode === "jev") this.input.keyboard!.on("keydown", this.onIntentType, this);
+    this.makeIntentInput();
     this.renderIntent();
   }
 
-  private readonly onIntentType = (ev: KeyboardEvent): void => {
-    const ui = this.intentUi;
-    if (!ui) return;
-    if (ev.key === "Backspace") ui.text = ui.text.slice(0, -1);
-    else if (ev.key.length === 1 && ui.text.length < 80 && !/[wsad]/i.test(ev.key) || (ev.key.length === 1 && ev.shiftKey)) ui.text += ev.key;
-    this.renderIntent();
-  };
+  /**
+   * The free-text field, as a **real `<input>` over the canvas**.
+   *
+   * It was Phaser keydowns appended to a string, and that could never work
+   * here for two reasons. The screen spends A, D, J, Enter and Esc on its own
+   * controls, so half the alphabet was either a hotkey or had to be excluded
+   * from the field; and a canvas cannot host an IME at all, so Chinese and
+   * Japanese — the two languages this field most needs to accept, since it is
+   * the one place the player writes rather than chooses — could not be typed.
+   *
+   * A DOM input solves both: while it has focus the browser owns the
+   * keyboard, composition works, and the game's own keys are suspended
+   * because Phaser never sees them.
+   */
+  private makeIntentInput(): void {
+    this.removeIntentInput();
+    const el = document.createElement("input");
+    el.type = "text";
+    el.maxLength = 120;
+    el.autocomplete = "off";
+    el.spellcheck = false;
+    el.setAttribute("aria-label", t("intent.ownWords"));
+    el.value = this.intentUi?.text ?? "";
+    Object.assign(el.style, {
+      position: "fixed", margin: "0", padding: "0", border: "0", outline: "none",
+      background: "transparent", color: "#e8e3d8", caretColor: "#ffe9a8", zIndex: "6",
+    });
+    /*
+     * Enter confirms the text and hands the keyboard back; it does **not**
+     * start the run, because a player finishing a sentence should not find
+     * the game has begun. `isComposing` guards it: while an IME candidate
+     * list is open, Enter is choosing a candidate and nothing else.
+     */
+    el.addEventListener("keydown", (ev) => {
+      ev.stopPropagation();
+      if (ev.key === "Enter" && !ev.isComposing) { ev.preventDefault(); el.blur(); }
+      else if (ev.key === "Escape") { ev.preventDefault(); el.blur(); }
+    });
+    el.addEventListener("input", () => {
+      if (this.intentUi) this.intentUi.text = el.value;
+      this.renderIntent();
+    });
+    el.addEventListener("focus", () => this.renderIntent());
+    el.addEventListener("blur", () => { this.game.canvas.focus(); this.renderIntent(); });
+    document.body.appendChild(el);
+    this.intentInput = el;
+    this.placeIntentInput();
+  }
+
+  /**
+   * Puts the input exactly over the box the canvas draws for it.
+   *
+   * The screens are laid out in the room's coordinates and fitted into a
+   * canvas that follows the window, so the field's place on the page is the
+   * HUD camera's — the same transform the demo stage is placed with, and
+   * recomputed on every render so a resize cannot leave the two apart.
+   */
+  private placeIntentInput(): void {
+    const el = this.intentInput;
+    if (!el) return;
+    const ui0 = this.uiCam;
+    const z = ui0 ? ui0.zoom : ZOOM;
+    const ox = ui0 ? this.scale.width / 2 - (UI_W / 2) * z : 0;
+    const oy = ui0 ? this.scale.height / 2 - ((UI_H + HUD_H) / 2) * z : 0;
+    /*
+     * Game pixels to **CSS** pixels.
+     *
+     * The cameras work in the backing store's pixels, which on a retina
+     * display are two or three to the CSS pixel a DOM element is positioned
+     * in. Taking the ratio from the canvas's own box rather than from `DPR`
+     * covers browser zoom and a canvas the page has scaled as well.
+     */
+    const rect = this.game.canvas.getBoundingClientRect();
+    const k = this.scale.width > 0 ? rect.width / this.scale.width : 1;
+    const box = intentFieldBox();
+    Object.assign(el.style, {
+      left: `${rect.left + (ox + (box.x + 6) * z) * k}px`,
+      top: `${rect.top + (oy + (box.y - box.h / 2) * z) * k}px`,
+      width: `${(box.w - 12) * z * k}px`,
+      height: `${box.h * z * k}px`,
+      fontFamily: fontFamily(),
+      fontSize: `${Math.max(9, fontPx(7, z) * z * k)}px`,
+      lineHeight: `${box.h * z * k}px`,
+    });
+  }
+
+  private removeIntentInput(): void {
+    this.intentInput?.remove();
+    this.intentInput = null;
+  }
+
+  /** Whether the free-text field currently owns the keyboard. */
+  private get intentTyping(): boolean {
+    return !!this.intentInput && document.activeElement === this.intentInput;
+  }
 
   private hideIntent(): void {
     for (const g of this.intentUi?.objects ?? []) g.destroy();
     this.demo = null;
     if (this.demoCam) { this.cameras.remove(this.demoCam); this.demoCam = null; }
-    this.input.keyboard!.off("keydown", this.onIntentType, this);
+    this.removeIntentInput();
     this.intentUi = null;
   }
 
@@ -1665,32 +3743,42 @@ export class PlayScene extends Phaser.Scene {
     if (!ui) return;
     for (const g of ui.objects) g.destroy();
     ui.objects = [];
-    const cx = VIEW_W / 2;
+    const cx = UI_W / 2;
     // Opaque: the demo is drawn in the room behind this screen, and at 0.94
     // the bodies moving there showed through.
-    ui.objects.push(this.add.rectangle(cx, VIEW_H / 2, VIEW_W, VIEW_H, 0x0d0b1f, 1).setDepth(230));
-    ui.objects.push(this.menuText(cx, 34, "HOW DO YOU WANT TO PLAY?", 13, "#ffe9a8"));
-    ui.objects.push(this.menuText(cx, 52, "the Director leans the run toward it: your second spell, the doors, the cards", 7, "#8792b5"));
-    const W = 116;
+    ui.objects.push(this.add.rectangle(cx, UI_H / 2, UI_W * 3, UI_H * 3, 0x0d0b1f, 1).setDepth(230));
+    ui.objects.push(this.menuText(cx, 34, t("intent.title"), 13, "#ffe9a8"));
+    ui.objects.push(this.menuText(cx, 52, t("intent.sub"), 7, "#8792b5"));
+    /*
+     * **One focus at a time.** While the text box has the keyboard, the style
+     * card drops its gold frame and keeps a quieter one: the player still
+     * sees which style is chosen, but nothing on the screen claims to be
+     * taking the keys except the thing that is.
+     */
+    const typing = this.intentTyping;
+    const W = STYLE_CARD_W;
     const H = 128;
     const CY = 136;
     STYLES.forEach((st, i) => {
-      const x = cx + (i - (STYLES.length - 1) / 2) * (W + 10);
+      const x = cx + (i - (STYLES.length - 1) / 2) * (W + STYLE_CARD_GAP);
       const on = i === ui.selected;
       const panel = this.add.rectangle(x, CY, W, H, on ? 0x221d46 : 0x161334, 0.97).setDepth(231)
-        .setStrokeStyle(on ? 2 : 1, on ? 0xffe9a8 : 0x4a5480, 1);
+        .setStrokeStyle(on ? 2 : 1, on ? (typing ? 0x8a8296 : 0xffe9a8) : 0x4a5480, 1);
       ui.objects.push(panel);
       // The style's own picture: its starting spell's icon.
       // Spirit Blades has no icon drawn yet; the sword stands in for the Blade style.
       const own = `icon_${STYLE_START[st.id]}`;
       const icon = this.atlas.has(own) ? own : "icon_stat_keen_edge";
-      if (this.atlas.has(icon)) ui.objects.push(this.add.image(x, CY - 42, this.crispTextureKey, icon).setScale(2).setDepth(232));
-      ui.objects.push(this.menuText(x, CY - 16, st.name, 10, on ? "#ffe9a8" : "#e8e3d8").setDepth(232));
-      ui.objects.push(this.menuText(x, CY - 4, st.id.toUpperCase(), 6, "#6a7396").setDepth(232));
-      ui.objects.push(this.add.text(x, CY + 6, st.desc, {
-        fontFamily: "monospace", fontSize: `${Math.round(7 * ZOOM)}px`, color: "#c9cfe8", align: "center",
-        wordWrap: { width: (W - 14) * ZOOM },
-      }).setOrigin(0.5, 0).setScale(1 / ZOOM).setDepth(232));
+      if (this.atlas.has(icon)) ui.objects.push(this.add.image(x, CY - 42, this.crispTextureKey, icon).setScale(2 / TUNED).setDepth(232));
+      ui.objects.push(this.menuText(x, CY - 16, contentName(`style.${st.id}`, st.name), 10,
+        on ? (typing ? "#c9bfa0" : "#ffe9a8") : "#e8e3d8").setDepth(232));
+      // The style's short id under its name, as a subtitle in every language.
+      ui.objects.push(this.menuText(x, CY - 3, st.id.toUpperCase(), 7, "#8792b5").setDepth(232));
+      // The blurb at the pixel font's own size: below it the face resamples,
+      // and this is the copy a player actually reads to choose a style.
+      ui.objects.push(this.uiText(x, CY + 9, contentDescription(`style.${st.id}`, st.desc), nativePx(1.5), "#c9cfe8", {
+        align: "center", wordWrap: { width: (W - 14) * ZOOM },
+      }).setOrigin(0.5, 0).setDepth(232));
     });
     /*
      * The starting spell of the chosen style, shown: its card on the right,
@@ -1701,46 +3789,115 @@ export class PlayScene extends Phaser.Scene {
     const start = STYLE_START[STYLES[ui.selected]!.id];
     const def = ITEMS.get(start);
     const PY = 262;
-    ui.objects.push(this.add.rectangle(cx, PY, 560, 92, 0x161334, 0.97).setStrokeStyle(1, 0x4a5480, 1).setDepth(231));
-    ui.objects.push(this.add.rectangle(cx - 190, PY, 170, 80, 0x0d0b1f, 1).setStrokeStyle(1, 0x2a2750, 1).setDepth(231.5));
-    ui.objects.push(this.menuText(cx + 90, PY - 34, `STARTING SPELL  ·  ${titleOfId(start).toUpperCase()}`, 8, "#ffe9a8").setDepth(232));
+    /*
+     * The preview panel is **as wide as the row of styles above it**, so the
+     * screen has one left edge and one right edge rather than two of each:
+     * the panel was 560 against a 620 card row, which reads as a mistake
+     * rather than as a choice at that small a difference.
+     */
+    const rowW = styleRowWidth();
+    ui.objects.push(this.add.rectangle(cx, PY, rowW, 92, 0x161334, 0.97).setStrokeStyle(1, 0x4a5480, 1).setDepth(231));
+    ui.objects.push(this.add.rectangle(styleStageX(), PY, STYLE_STAGE_W, STYLE_STAGE_H, 0x0d0b1f, 1).setStrokeStyle(1, 0x2a2750, 1).setDepth(231.5));
+    ui.objects.push(this.menuText(cx + 90, PY - 34,
+      t("intent.startingSpell", { spell: contentName(start, titleOfId(start)).toUpperCase() }), 8, "#ffe9a8").setDepth(232));
     if (def) {
       const row = this.statRow(offerStatParts(def), 330, 7, 232, "center");
       row.box.setPosition(cx + 90, PY - 24);
       ui.objects.push(row.box);
     }
-    ui.objects.push(this.add.text(cx + 90, PY - 8, (def ? spellDetail(def) : ""), {
-      fontFamily: "monospace", fontSize: `${Math.round(6.5 * ZOOM)}px`, color: "#c9cfe8", align: "center",
-      wordWrap: { width: 330 * ZOOM },
-    }).setOrigin(0.5, 0).setScale(1 / ZOOM).setDepth(232));
-    ui.objects.push(this.menuText(cx + 90, PY + 38, "with Magic Bolt, which every style starts with", 6, "#6a7396").setDepth(232));
-    const jev = this.director.mode === "jev";
+    ui.objects.push(this.uiText(cx + 90, PY - 8, def ? contentDescription(start, spellDetail(def)) : "", nativePx(1.5), "#c9cfe8", {
+      align: "center", wordWrap: { width: 330 * ZOOM },
+    }).setOrigin(0.5, 0).setDepth(232));
+    const jev = directorArm() === "jev";
+    const box = intentFieldBox();
+    const FW = box.w;
+    const FH = box.h;
+    const fy = box.y;
     /*
-     * An input field, drawn as one: a label above, a bordered box, and inside
-     * it either what the player has typed with a caret, or — when the rule
-     * arm plans the run and cannot read words — a greyed placeholder in a
-     * dimmed box, the way a disabled field looks.
+     * **The switch, beside the field it governs.**
+     *
+     * The field said "Needs the Jev Director" and the screen offered no way
+     * to give it one, which is the shape of a dead end: a message naming a
+     * setting, on a screen that cannot reach it. The switch is the title
+     * menu's own row, on its own key, right where the consequence is.
      */
-    const FW = 380;
-    const FH = 18;
-    const fy = 340;
-    ui.objects.push(this.add.text(cx - FW / 2, fy - FH / 2 - 8, jev ? "In your own words (optional)" : "In your own words", {
-      fontFamily: "monospace", fontSize: `${Math.round(7 * ZOOM)}px`, color: jev ? "#c9cfe8" : "#5a5f7a",
-    }).setOrigin(0, 0.5).setScale(1 / ZOOM).setDepth(232));
+    const available = jevAvailable();
+    const rowY = fy - FH / 2 - 22;
+    const jevColour = !available ? "#5a5f7a" : typing ? "#8a8296" : jev ? "#ffe9a8" : "#8792b5";
+    ui.objects.push(this.uiText(cx - FW / 2, rowY, t("menu.jevDirector"), 8, jevColour)
+      .setOrigin(0, 0.5).setDepth(232));
+    ui.objects.push(this.uiText(cx - FW / 2 + 92, rowY, available ? `◂ ${t(jev ? "menu.on" : "menu.off")} ▸` : t("menu.off"), 8, jevColour)
+      .setOrigin(0, 0.5).setDepth(232));
+    ui.objects.push(this.keys_(cx - FW / 2 + 150, rowY, available
+      ? t("intent.jevChange")
+      : t("intent.jevUnavailable"), 6.5, "#5a5f7a", 232, 0));
+    /*
+     * The field: a label above and a bordered box, with the **text drawn by a
+     * real `<input>` laid exactly over the box** (`makeIntentInput`). The
+     * canvas draws the frame and the disabled state; the browser draws the
+     * value, the caret and any IME candidates, because only it can.
+     */
+    // The label sits a CJK line clear of the box: at the Latin spacing the
+    // full-height glyphs touched the border under them.
+    const labelY = fy - FH / 2 - 8 * linePitch();
+    const label = this.uiText(cx - FW / 2, labelY,
+      t(jev ? "intent.ownWordsOptional" : "intent.ownWords"), 7, jev ? "#c9cfe8" : "#5a5f7a")
+      .setOrigin(0, 0.5).setDepth(232);
+    ui.objects.push(label);
+    /*
+     * The key that reaches the box, on the label — the same shape as the `J`
+     * beside the Director switch. The game is played from the keyboard, so a
+     * field that could only be clicked into was a field half the players
+     * could not use.
+     */
+    if (jev) ui.objects.push(this.keys_(cx - FW / 2 + label.width / ZOOM + 8, labelY, "[Tab]", 6.5, "#5a5f7a", 232, 0));
+    const focused = this.intentTyping;
     const field = this.add.graphics().setDepth(231.5);
     field.fillStyle(jev ? 0x0d0b1f : 0x14122a, 1);
     field.fillRoundedRect(cx - FW / 2, fy - FH / 2, FW, FH, 3);
-    field.lineStyle(1, jev ? 0x8792b5 : 0x2e2b4a, 1);
+    field.lineStyle(focused ? 2 : 1, focused ? 0xffe9a8 : jev ? 0x8792b5 : 0x2e2b4a, 1);
     field.strokeRoundedRect(cx - FW / 2, fy - FH / 2, FW, FH, 3);
     ui.objects.push(field);
-    const typed = jev && ui.text.length > 0;
-    ui.objects.push(this.add.text(cx - FW / 2 + 6, fy, jev
-      ? `${typed ? ui.text : ""}${(this.time.now >> 9) & 1 ? "|" : ""}${typed ? "" : "  e.g. I want to freeze things and shatter them"}`
-      : "Needs the Jev Director. This run is planned by the rule arm.", {
-      fontFamily: "monospace", fontSize: `${Math.round(7 * ZOOM)}px`,
-      color: typed ? "#e8e3d8" : jev ? "#5a5f7a" : "#46435e",
-    }).setOrigin(0, 0.5).setScale(1 / ZOOM).setDepth(232));
-    ui.objects.push(this.keys_(cx, VIEW_H - 40, "[A][D] choose     [Enter] begin", 8, "#8792b5", 232));
+    /*
+     * The input is disabled with the rule arm, and says which key turns the
+     * Director on rather than stating a fact the player cannot act on. The
+     * placeholder is the element's own, so it appears and vanishes with the
+     * value without the canvas having to know.
+     */
+    const el = this.intentInput;
+    if (el) {
+      el.disabled = !jev;
+      el.placeholder = jev ? t("intent.placeholder").trim() : t("intent.needsJev");
+      el.style.color = jev ? "#e8e3d8" : "#46435e";
+      if (el.value !== ui.text) el.value = ui.text;
+      this.placeIntentInput();
+    }
+    // A click on the box is the other way in, beside the key named in the hints.
+    const hit = this.add.rectangle(cx, fy, FW, FH, 0x000000, 0).setDepth(232).setInteractive();
+    if (jev) hit.on("pointerdown", () => this.intentInput?.focus());
+    ui.objects.push(hit);
+    /*
+     * The way on, bottom right and large. Built first so the hint row knows
+     * how much of the line is left, and **placed from its own measured
+     * width** rather than from a guess: the plate ran off the right edge once
+     * `Begin` became `开始`, and off the bottom once the row under it grew.
+     */
+    const beginPad = 22;
+    const probe = this.keys_(0, 0, `[Enter] ${t("hint.begin")}`, 15, "#ffe9a8", 233, 1);
+    const pw = probe.getBounds().width + beginPad;
+    probe.destroy();
+    const beginRight = UI_W - 18;
+    const begin = this.keys_(beginRight - beginPad / 2, UI_H - 34, `[Enter] ${t("hint.begin")}`, 15, "#ffe9a8", 233, 1);
+    const bb = begin.getBounds();
+    // The hint row gets the width the plate does not want, and sits clear of
+    // the view's bottom edge rather than 40 px from a number that moved.
+    ui.objects.push(this.fittedKeys(cx - pw / 2, UI_H - 26, focused
+      ? `[Enter] ${t("hint.select")}     [Esc] ${t("hint.back")}`
+      : `[A][D] ${t("hint.choose")}     [Tab] ${t("intent.ownWords")}     [J] ${t("menu.jevDirector")}     [Esc] ${t("hint.back")}`,
+    8, "#8792b5", UI_W - pw - 40, 232));
+    ui.objects.push(this.add.rectangle(bb.centerX, bb.centerY, bb.width + beginPad, bb.height + 14, 0x2a2350, 0.95)
+      .setStrokeStyle(1.5, 0xffe9a8, 0.9).setDepth(232.5));
+    ui.objects.push(begin);
   }
 
   /**
@@ -1754,9 +3911,16 @@ export class PlayScene extends Phaser.Scene {
   private drawIntentDemo(): void {
     const ui = this.intentUi;
     if (!ui) { this.demo = null; return; }
-    const spell = STYLE_START[STYLES[ui.selected]!.id];
+    const spell = DEMO_SPELL() ?? STYLE_START[STYLES[ui.selected]!.id];
     const delta = this.game.loop.delta;
-    if (!this.demo || this.demo.spell !== spell || this.demo.ageMs > 3600) this.demo = { spell, world: this.demoWorld(spell), acc: 0, ageMs: 0, numbers: [] };
+    if (!this.demo || this.demo.spell !== spell || this.demo.ageMs > demoLoopMs(spell)) {
+      const world = this.demoWorld(spell);
+      this.demo = {
+        spell, world, acc: 0, ageMs: 0, numbers: [], pops: [],
+        camX: world.player.x + DEMO_CAM_AHEAD, camY: world.player.y - 4,
+        slots: DEMO_SPOTS.map(([dx, dy]) => ({ dx, dy, id: this.demoEnemy(world, dx, dy, spell, true).id, downMs: 0 })),
+      };
+    }
     const d = this.demo;
     d.ageMs += delta;
     d.acc += Math.min(delta, 100);
@@ -1766,20 +3930,58 @@ export class PlayScene extends Phaser.Scene {
       const target = w.enemies.find((e) => e.hp > 0);
       const slot = w.spells[0];
       const ready = !!slot && slot.cooldownMs <= 0 && d.ageMs > 250;
-      // A spell that works at the caster's side is shown by walking it
-      // through the enemies and back, which is how it is played.
-      const close = ["orbit", "pillar"].includes(String(ITEMS.get(spell)?.params["shape"] ?? ""));
-      const walk = close ? (d.ageMs < 400 ? 0 : d.ageMs < 1900 ? 1 : d.ageMs < 3400 ? -1 : 0) : 0;
+      /*
+       * Each shape is shown the way it is played. One worn at the caster's
+       * side — an orbit, a pillar, a trail laid by walking — by walking it
+       * through the enemies and back. An enchant by swinging the sword while
+       * it runs, since its waves come off the swings. A stance by being shot
+       * at: every other guard, a body throws a shot that lands inside it, so
+       * the preview shows the full answer to a taken hit and then the weak
+       * one of a guard that ran out.
+       */
+      const shape = String(ITEMS.get(spell)?.params["shape"] ?? "");
+      const walk = DEMO_WALKED.has(shape) ? (d.ageMs < 400 ? 0 : d.ageMs < 1900 ? 1 : d.ageMs < 3400 ? -1 : 0)
+        // A guard answers round the caster, so the caster steps in among the bodies first.
+        : shape === "stance" && w.player.x < d.camX - DEMO_CAM_AHEAD + DEMO_GUARD_STEP_PX ? 1 : 0;
+      const guarding = !!w.player.stance;
       step(w, {
         ...NO_INPUT, moveX: walk, aimX: target?.x ?? w.player.x + 64, aimY: target?.y ?? w.player.y,
         spell: ready ? 0 : null,
+        swing: shape === "enchant" && !!w.player.enchant,
       }, STEP_MS, ITEMS);
+      if (shape === "stance" && !guarding && w.player.stance && target) {
+        d.guards = (d.guards ?? 0) + 1;
+        if (d.guards % 2 === 1) this.demoShotAt(w, target);
+      }
+      // A shape's own moments — a guard taking a shot, its answer, a blade turning — drawn as play draws them.
+      if (w.events.some((ev) => ev.kind === "spell")) {
+        const real = this.world;
+        this.world = w;
+        try { for (const ev of w.events) if (ev.kind === "spell") this.noteShapeEvent(ev); } finally { this.world = real; }
+      }
       w.player.mana = w.staff.mana_max;
       w.player.hearts = 99;
-      for (const e of w.enemies) { e.attackCooldownMs = 99999; if (e.hp < 1) e.hp = e.maxHp; }
+      for (const e of w.enemies) e.attackCooldownMs = 99999;
+      /*
+       * The demo's bodies fall, and stand up again where they stood. They
+       * were topped up to a bottomless pool, so no spell ever put one down and
+       * the preview could not show what the spell is for.
+       */
+      // What they drop is not the demo's subject. The pool is fixed-size, so each slot is put out, not removed.
+      for (const p of w.pickups) p.alive = false;
+      for (const slot of d.slots) {
+        const e = w.enemies.find((x) => x.id === slot.id);
+        if (e && e.hp > 0) { slot.downMs = 0; continue; }
+        slot.downMs += STEP_MS;
+        if (slot.downMs >= DEMO_RESPAWN_MS) slot.id = this.demoEnemy(w, slot.dx, slot.dy, spell, false).id;
+      }
+      // Its kills pop as play's do: the preview is where a style is first seen.
+      for (const ev of w.events)
+        if (ev.kind === "enemy_killed" && ev.what && !ev.what.startsWith("prop:")) d.pops.push(this.killPop(ev));
+      // Merged as the room's numbers are, so the preview shows what play shows (`addDamageNumber`).
       for (const ev of w.events)
         if (ev.kind === "damage" && (ev.amount ?? 0) > 0)
-          d.numbers.push({ x: ev.x, y: ev.y, text: `${Math.floor(ev.amount!)}`, colour: damageColour(ev.what ?? ""), ms: 0 });
+          addDamageNumber(d.numbers, ev.x, ev.y, ev.amount!, damageColour(ev.what ?? ""), "", () => 0);
     }
   }
 
@@ -1800,6 +4002,7 @@ export class PlayScene extends Phaser.Scene {
       this.draw();
       this.drawHazards();
       this.drawExpansion();
+      this.drawEruptions();
       this.drawSwing();
       this.drawEnemyBlades();
       // The spell's particles in the preview too.
@@ -1807,28 +4010,65 @@ export class PlayScene extends Phaser.Scene {
       this.fireFx.update(this.world, this.game.loop.delta);
       for (const n of d.numbers) {
         n.ms += this.game.loop.delta;
+        if (n.bumpMs !== undefined) n.bumpMs += this.game.loop.delta;
+        const pop = (n.bumpMs ?? n.ms) / 700;
         this.sprites.add(this.add.text(n.x, n.y - (n.ms / 700) * 16, n.text, {
-          fontFamily: "monospace", fontSize: `${Math.round(8 * ZOOM)}px`, color: n.colour, stroke: "#0d0b1f", strokeThickness: 2 * ZOOM,
-        }).setScale(1 / ZOOM).setOrigin(0.5).setAlpha(1 - n.ms / 700).setDepth(9.9));
+          fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(8, ZOOM) * ZOOM)}px`, color: n.colour, stroke: "#0d0b1f", strokeThickness: 2 * ZOOM,
+        }).setScale((1 / ZOOM) * (pop < 0.12 ? 1.3 - pop * 2.5 : 1)).setOrigin(0.5).setAlpha(1 - n.ms / 700).setDepth(9.9));
       }
       d.numbers = d.numbers.filter((n) => n.ms < 700);
+      d.pops = this.agePops(d.pops, this.game.loop.delta);
     } finally {
       this.world = real;
       this.renderingDemo = false;
     }
-    // The camera over the preview box, following the demo's player.
-    const bx = VIEW_W / 2 - 190;
-    const by = 262;
-    const BW = 170;
-    const BH = 80;
-    if (!this.demoCam) {
-      this.demoCam = this.cameras.add((bx - BW / 2) * ZOOM, (by - BH / 2) * ZOOM, BW * ZOOM, BH * ZOOM);
-      this.demoCam.setZoom(ZOOM * 0.62);
-    }
-    this.demoCam.centerOn(d.world.player.x + 52, d.world.player.y - 4);
+    // The camera over the preview box, following the demo's player. The box
+    // is placed off the panel's own left edge (`renderIntent`), so this has
+    // to be derived the same way rather than from a copy of the old number.
+    const bx = styleStageX();
+    const by = STYLE_STAGE_Y;
+    const BW = STYLE_STAGE_W;
+    const BH = STYLE_STAGE_H;
+    /*
+     * Placed on the canvas where the HUD camera draws the box: the screens are
+     * laid out in the room's coordinates and fitted into a canvas that follows
+     * the window, so the box's place on the canvas is the HUD camera's, not a
+     * fixed multiple.
+     */
+    const ui0 = this.uiCam;
+    const z = ui0 ? ui0.zoom : ZOOM;
+    const ox = ui0 ? this.scale.width / 2 - (UI_W / 2) * z : 0;
+    const oy = ui0 ? this.scale.height / 2 - ((UI_H + HUD_H) / 2) * z : 0;
+    if (!this.demoCam) this.demoCam = this.cameras.add(0, 0, 1, 1);
+    this.demoCam.setViewport(ox + (bx - BW / 2) * z, oy + (by - BH / 2) * z, BW * z, BH * z);
+    this.demoCam.setZoom(z * 0.62);
+    /*
+     * A still camera over the arena, not one riding the player. It was centred
+     * on the player every frame, and the player only moves on the
+     * simulation's steps: with the zoom and nearest-pixel sampling the whole
+     * picture lurched on each one, which read as the walk stuttering (the
+     * blade spells walk the caster through the bodies and back). Framed from
+     * where the player started, with room for that walk.
+     */
+    this.demoCam.centerOn(d.camX, d.camY);
     // Only the world: every screen and HUD object stays off this camera.
-    const ui = this.intentUi?.objects ?? [];
+    const ui = [...(this.intentUi?.objects ?? []), ...(this.titleUi?.objects ?? [])];
     this.demoCam.ignore([...ui, this.hud, this.prompt.box, ...this.demoIgnore]);
+  }
+
+  /** A plain enemy shot from `from` at the demo's caster, for a stance to take. */
+  private demoShotAt(w: World, from: Enemy): void {
+    const b = acquire(w.enemyBullets, true);
+    if (!b) return;
+    const p = w.player;
+    const d = Math.hypot(p.x - from.x, p.y - from.y) || 1;
+    b.x = from.x; b.y = from.y; b.originX = from.x; b.originY = from.y;
+    b.vx = ((p.x - from.x) / d) * 170;
+    b.vy = ((p.y - from.y) / d) * 170;
+    b.radius = 3;
+    b.damage = 1;
+    b.lifeMs = 2000;
+    b.from = "shooter";
   }
 
   /** A small world for the style screen's demo: the player, the spell, two enemies that stand still. */
@@ -1846,35 +4086,92 @@ export class PlayScene extends Phaser.Scene {
       staff: runStaff(),
       slots: [plainInstance(spell), null, null, null, null, null], hearts: 99, rng: src.stream("world"),
     });
-    w.player.x = VIEW_W / 2 - 70;
-    w.player.y = VIEW_H / 2;
+    w.player.x = (w.room.extent.w / 2) * TILE_PX - 70;
+    w.player.y = (w.room.extent.h / 2) * TILE_PX;
     const real = this.world;
     this.world = w;
     try { this.drawTiles(); } finally { this.world = real; }
-    // Three, so a chain has somewhere to go twice.
-    for (const [dx, dy] of [[70, -26], [96, 22], [128, -6]] as const) {
-      const e = makeEnemy(w.nextEnemyId++, "rusher", w.player.x + dx, w.player.y + dy, []);
-      // Facing the caster from the first frame, not the default east.
-      e.facing = Math.atan2(w.player.y - e.y, w.player.x - e.x);
-      e.spawnFadeMs = 0;
-      e.awake = true;
-      e.speed = 0;
-      e.hp = e.maxHp = 99999;
-      e.attackCooldownMs = 99999;
-      w.enemies.push(e);
-    }
     return w;
+  }
+
+  /**
+   * One demo body at `dx, dy` from the caster: standing, harmless, and put
+   * down by about three casts of the spell, so the preview shows the spell
+   * finishing a body and the next standing up in its place. The first
+   * bodies are already standing (`standing`); one that replaces a fallen
+   * body climbs out of the floor as a spawn does in play.
+   */
+  private demoEnemy(w: World, dx: number, dy: number, spell: string, standing: boolean): Enemy {
+    const e = makeEnemy(w.nextEnemyId++, "rusher", w.player.x + dx, w.player.y + dy, []);
+    // Facing the caster from the first frame, not the default east.
+    e.facing = Math.atan2(w.player.y - e.y, w.player.x - e.x);
+    if (standing) e.spawnFadeMs = 0;
+    e.awake = true;
+    e.speed = 0;
+    const def = ITEMS.get(spell);
+    // What a hit really lands: the params are scaled at the cast
+    // (`SPELL_DAMAGE_SCALE`), and a body sized off the raw figure fell in two.
+    const damage = Number(def?.params["damage"] ?? 8) * SPELL_DAMAGE_SCALE;
+    /*
+     * An elemental spell's point is its status, so its body lasts until the
+     * gauge has filled, and then through the status's own run on top: an
+     * ember dart put a body down on the same third hit that would have lit
+     * it, and the preview never showed a burn.
+     */
+    const status = def ? statusForecast(def) : null;
+    const toStatus = status ? status.hits + 1 : 0;
+    e.hp = e.maxHp = Math.max(12, Math.round(damage * Math.max(DEMO_CASTS_TO_FALL, toStatus) + (status?.damage ?? 0)));
+    e.attackCooldownMs = 99999;
+    w.enemies.push(e);
+    return e;
   }
 
   private readIntentKeys(): void {
     const ui = this.intentUi;
     if (!ui) return;
+    /*
+     * While the field has focus the browser owns the keyboard and none of
+     * this screen's keys mean anything: A and D are letters being typed, Esc
+     * belongs to the field, and Enter is finishing a sentence or choosing an
+     * IME candidate. Phaser never sees them — the input stops propagation —
+     * but the polled `JustDown` edges would still fire, so the reader stands
+     * down explicitly.
+     */
+    if (this.intentTyping) return;
+    // Tab moves the keyboard into the field; the hint row says so.
+    if (Phaser.Input.Keyboard.JustDown(this.keys.TAB!) && directorArm() === "jev") {
+      this.intentInput?.focus();
+      return;
+    }
     const down = (k?: Phaser.Input.Keyboard.Key) => !!k && Phaser.Input.Keyboard.JustDown(k);
+    /*
+     * **Esc goes back to the title.** This screen names the Jev Director in
+     * its own disabled field and gave the player no way to reach it: the only
+     * ways off the screen were forward into a run or the browser's back
+     * button. Anything that tells a player about a setting has to be one key
+     * from it.
+     */
+    if (down(this.keys.ESC)) { this.sfx.play("ui_back"); this.hideIntent(); this.showTitle(); return; }
+    /*
+     * **J toggles the Director from here.** The row under the styles is the
+     * same setting the title menu holds, on its own key rather than on the
+     * arrows the style cards already own — so the cards keep A/D and the
+     * switch needs no focus of its own to reach.
+     */
+    if (down(this.keys.J)) {
+      if (jevAvailable()) {
+        setDirectorArm(directorArm() === "jev" ? "rule" : "jev");
+        this.director = this.buildDirector();
+        this.sfx.play("ui_select");
+      } else this.sfx.play("ui_deny");
+      this.renderIntent();
+      return;
+    }
     let moved = false;
     if (down(this.keys.A) || down(this.keys.LEFT)) { ui.selected = (ui.selected + STYLES.length - 1) % STYLES.length; moved = true; }
     if (down(this.keys.D) || down(this.keys.RIGHT)) { ui.selected = (ui.selected + 1) % STYLES.length; moved = true; }
-    if (moved) this.renderIntent();
-    if (down(this.keys.ENTER)) void this.beginRun();
+    if (moved) { this.sfx.play("ui_move"); this.renderIntent(); }
+    if (down(this.keys.ENTER)) { this.sfx.play("ui_select"); void this.beginRun(); }
   }
 
   /**
@@ -1891,39 +4188,160 @@ export class PlayScene extends Phaser.Scene {
     this.clearDirectorLog();
     this.slots = [];
     this.owned = [];
-    await this.enterRoom(1, MAX_HEARTS + this.mods.maxHearts);
+    await this.enterRoom(1, MAX_HEARTS + this.liveMods().maxHearts);
     if (this.showRoomParams) this.showRoomPlan();
     else this.hideTransition();
+    // The first room of a first run opens with the key guide over it — after
+    // the room plan, when the room plan is on.
+    let seen = true;
+    try { seen = localStorage.getItem(SEEN_CONTROLS_KEY) === "1"; } catch { /* show it */ }
+    if (!seen) { if (this.transitionUi) this.pendingHints = true; else this.showFirstLaunchHints(); }
   }
 
   /** The title card, over the first room, which stands still behind it. */
   private showTitle(): void {
     this.hideTitle();
+    this.titleUi = { selected: 0, objects: [] };
+    this.renderTitle();
+  }
+
+  /** The title menu's rows: start a run, or change what a run will be. */
+  private titleRows(): {
+    label: string; value?: string; act: () => void;
+    adjust?: (dir: 1 | -1) => void; disabled?: boolean; heading?: string;
+  }[] {
+    return [
+      { label: t("menu.newGame"), act: () => { this.hideTitle(); this.showIntent(); } },
+      { label: t("menu.settings"), act: () => { this.hideTitle(); this.showPause(); this.pauseUi!.page = "settings"; this.pauseUi!.selected = 0; this.pauseFromTitle = true; this.renderPause(); } },
+      { label: t("menu.controls"), act: () => { this.hideTitle(); this.showPause(); this.pauseUi!.page = "controls"; this.pauseUi!.selected = 0; this.pauseFromTitle = true; this.controlsFromSettings = false; this.renderPause(); } },
+      // The title menu has no headings to divide, so the Jev row loses its.
+      ...this.jevRows().map((r) => ({ ...r, heading: undefined })),
+      this.roomPlanRow(),
+      this.soundRow(),
+      this.languageRow(),
+    ];
+  }
+
+  private renderTitle(): void {
+    const ui = this.titleUi;
+    if (!ui) return;
+    for (const g of ui.objects) g.destroy();
+    ui.objects = [];
     // The room's own frame, not the camera's view: before the first render
     // the view is still empty, and the title is drawn before it.
-    const view = new Phaser.Geom.Rectangle(0, 0, VIEW_W, VIEW_H);
-    const o: Phaser.GameObjects.GameObject[] = [];
-    o.push(this.add.rectangle(view.centerX, view.centerY, view.width, view.height, 0x0d0b1f, 0.86).setDepth(230));
-    o.push(this.menuText(view.centerX, view.centerY - 36, "JEV ROGUE", 22, "#ffe9a8"));
-    o.push(this.keys_(view.centerX, view.centerY + 26, "press [Enter] to start", 10, "#e8e3d8"));
-    // The seed, small, in the corner: something to quote, not something to read.
-    o.push(this.add.text(8, VIEW_H - 8, `seed ${this.runSeed}`, {
-      fontFamily: "monospace", fontSize: `${Math.round(6 * ZOOM)}px`, color: "#5a5f7a",
-    }).setOrigin(0, 1).setScale(1 / ZOOM).setDepth(231));
-    this.titleUi = o;
+    const view = new Phaser.Geom.Rectangle(0, 0, UI_W, UI_H);
+    const cx = view.centerX;
+    const rows = this.titleRows();
+    ui.objects.push(this.add.rectangle(cx, view.centerY, view.width * 3, view.height * 3, 0x0d0b1f, 0.86).setDepth(230));
+    const panelW = 280;
+    // The rows are centred in the panel: laying them from a fixed top inset
+    // left a growing band of nothing under the last one as rows came and went.
+    // CJK rows are full-height squares with no space of their own, so the
+    // pitch the Latin was laid out on has them touching (`linePitch`).
+    const pitch = 19 * linePitch();
+    const rowsH = (rows.length - 1) * pitch;
+    const panelH = rowsH + 34;
+    /*
+     * **Stacked, not placed.** The logo sat at a fixed height and the menu at
+     * another, so each row the menu gained grew it up into the logo — seven
+     * rows at the CJK pitch put New Game on top of the title. Now the logo,
+     * the panel, the note and the key hints are laid top to bottom as one
+     * column centred in the frame, and the logo gives up height (down to a
+     * floor) when the menu needs it. The panel tucks a little under the
+     * logo's foot (`LOGO_TUCK`) — the logo is drawn over it, so the overlap
+     * frames the title rather than covering it.
+     */
+    const LOGO_ASPECT = 520 / 1024;
+    const LOGO_TUCK = 0.2;
+    const noteH = jevAvailable() ? 0 : 24;
+    const rest = panelH + 12 + noteH + 14;
+    const logoH = Math.max(64, Math.min(Math.round(340 * LOGO_ASPECT), Math.floor((UI_H - 16 - rest) / (1 - LOGO_TUCK))));
+    // Far enough to read as one piece; the logo's own foot is transparent, so the first row stays clear.
+    const GAP = -Math.min(18, Math.round(logoH * LOGO_TUCK));
+    const below = GAP + rest;
+    const stackTop = Math.max(8, (UI_H - (logoH + below)) / 2);
+    ui.objects.push(this.add.image(cx, stackTop + logoH / 2, "gameLogo")
+      .setDisplaySize(Math.round(logoH / LOGO_ASPECT), logoH).setDepth(231));
+    const menuY = stackTop + logoH + GAP + panelH / 2;
+    ui.objects.push(this.add.rectangle(cx, menuY, panelW, panelH, 0x161334, 0.9)
+      .setStrokeStyle(1, 0x4a5480, 0.9).setDepth(230.5));
+    const top = menuY - rowsH / 2;
+    rows.forEach((r, i) => { this.drawMenuRow(ui.objects, r, cx, top + i * pitch, panelW, i === ui.selected); });
+    /*
+     * Why the switch will not move, and what to do about it.
+     *
+     * This build's Jev arm runs on **the host's** key, so it is not the
+     * player's to turn on; the honest and useful thing to tell them is the
+     * one route that is actually open to them, which is running their own
+     * copy. Nothing here mentions how a hosted build lets anyone through:
+     * that is a private door, and naming it would be advertising it.
+     */
+    let noteY = menuY + panelH / 2 + 12;
+    if (!jevAvailable()) {
+      ui.objects.push(this.menuText(cx, noteY,
+        t("menu.jevHint"), 6, "#5a5f7a").setWordWrapWidth(panelW * 1.6 * ZOOM));
+      noteY += 24;
+    }
+    ui.objects.push(this.fittedKeys(cx, noteY, t("title.hints", { choose: t("hint.choose"), change: t("hint.change"), select: t("hint.select") }), 7, "#8792b5", UI_W - 80, 231));
+    // The seed, small, in the corner: something to quote, not something to
+    // read, so it only shows with the debug panel open.
+    if (this.debug.isOpen())
+      ui.objects.push(this.add.text(8, UI_H - 8, `seed ${this.runSeed}`, {
+        fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(6, ZOOM) * ZOOM)}px`, color: "#5a5f7a",
+      }).setOrigin(0, 1).setScale(1 / ZOOM).setDepth(231));
   }
 
   private hideTitle(): void {
-    for (const g of this.titleUi ?? []) g.destroy();
+    for (const g of this.titleUi?.objects ?? []) g.destroy();
     this.titleUi = null;
   }
 
   private readTitleKeys(): void {
+    const ui = this.titleUi;
+    if (!ui) return;
     const down = (k?: Phaser.Input.Keyboard.Key) => !!k && Phaser.Input.Keyboard.JustDown(k);
-    if (down(this.keys.ENTER) || down(this.keys.SPACE) || down(this.keys.J)) {
-      this.hideTitle();
-      this.showIntent();
+    const rows = this.titleRows();
+    let changed = false;
+    if (down(this.keys.W) || down(this.keys.UP)) { ui.selected = (ui.selected + rows.length - 1) % rows.length; changed = true; this.sfx.play("ui_move"); }
+    if (down(this.keys.S) || down(this.keys.DOWN)) { ui.selected = (ui.selected + 1) % rows.length; changed = true; this.sfx.play("ui_move"); }
+    const row = rows[Math.min(ui.selected, rows.length - 1)];
+    const nudge = (dir: 1 | -1) => {
+      // A row that cannot move says so, rather than answering with silence.
+      if (!row?.adjust) { this.sfx.play("ui_deny"); return; }
+      row.adjust(dir);
+      this.sfx.play("ui_select");
+    };
+    if (down(this.keys.A) || down(this.keys.LEFT)) { nudge(-1); changed = true; }
+    if (down(this.keys.D) || down(this.keys.RIGHT)) { nudge(1); changed = true; }
+    if (down(this.keys.ENTER)) {
+      this.sfx.play(row?.disabled ? "ui_deny" : "ui_select");
+      row?.act();
+      // `act` may have closed the title (New Game, Settings) or only changed
+      // a row's value, so the redraw is guarded rather than unconditional.
+      if (this.titleUi) this.renderTitle();
+      return;
     }
+    // Turning Jev off takes the key row away, so the cursor can be left
+    // pointing past the end of the menu.
+    if (ui.selected >= rows.length) { ui.selected = rows.length - 1; changed = true; }
+    if (changed) this.renderTitle();
+  }
+
+  /**
+   * **A spell's numbers line with the mana part telling the truth.**
+   *
+   * `offerStatParts` prices a spell from its base cost and its level, because
+   * it is given an item and an item has no affixes. A *slot* does, and an
+   * affix that multiplies how often a press lands charges for it
+   * (`affixCostMult`), so every panel that showed a slotted spell's numbers
+   * was printing a cost the bar does not charge — a fork-and-chain bolt read
+   * "10 mana" over a key that spends twenty-two. `slotCost` is the figure the
+   * simulation itself subtracts, so it is the figure every panel prints.
+   */
+  private slotStatParts(
+    def: BaseItem, level: number, cost: number,
+  ): readonly (StatText & { readonly tone?: string })[] {
+    return slotStatParts(def, level, cost);
   }
 
   /**
@@ -1933,7 +4351,7 @@ export class PlayScene extends Phaser.Scene {
    * figure ended and the next began. Wraps at `width`; `align` places each line.
    */
   private statRow(
-    parts: readonly { text: string; tone: string }[], width: number, px: number, depth: number,
+    parts: readonly (StatText & { readonly tone?: string })[], width: number, px: number, depth: number,
     align: "left" | "center" = "left",
   ): { box: Phaser.GameObjects.Container; height: number } {
     const box = this.add.container(0, 0).setDepth(depth);
@@ -1948,13 +4366,25 @@ export class PlayScene extends Phaser.Scene {
       return line;
     };
     for (const part of parts) {
-      const t = this.add.text(0, 0, part.text, {
-        fontFamily: "monospace", fontSize: `${Math.round(px * ZOOM)}px`, color: TONE_COLOUR[part.tone] ?? "#f5a623",
+      // Core writes these in English for the harness and the Director; this
+      // is where the line becomes the player's language (`localizeStat`).
+      const t = this.add.text(0, 0, localizeStat(part), {
+        fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(px, ZOOM) * ZOOM)}px`, color: TONE_COLOUR[part.tone ?? ""] ?? "#f5a623",
       }).setOrigin(0, 0).setScale(1 / ZOOM);
       let line = lines[lines.length - 1]!;
       // A part wider than the row wraps inside itself, on a line of its own.
       if (t.width / ZOOM > width) {
-        t.setWordWrapWidth(width * ZOOM);
+        /*
+         * Wrapped here rather than by Phaser, for the reason `uiText` is:
+         * Phaser breaks on whitespace and Chinese and Japanese have none, so
+         * `Chain`'s tier line — 向另一个敌人放出一枚减弱的同款法术 — came back
+         * as one row that ran clean across the card beside it. The leading is
+         * set too, because a pixel face draws to the full em box and two CJK
+         * rows at Phaser's default touch.
+         */
+        const size = bodyPx(px, ZOOM);
+        t.setText(wrapText(localizeStat(part), width, size, 0));
+        t.setLineSpacing(Math.round(size * lineLead() * ZOOM));
         if (line.items.length > 0) line = newLine();
         t.setPosition(0, line.y);
         line.items.push(t);
@@ -1983,10 +4413,203 @@ export class PlayScene extends Phaser.Scene {
     return keyLine(this, x, y, str, { px, colour, zoom: ZOOM, depth, originX });
   }
 
+  /**
+   * A key line that is **made to fit the width it is given**.
+   *
+   * A hint row is written in English and measured in English, and then a
+   * translation makes it a third longer — or a CJK font makes every glyph
+   * 12 px wide — and it runs out past both edges of the panel it belongs to.
+   * The row is built, measured, and if it is too wide the gaps between its
+   * groups are squeezed and then the type is stepped down, until it fits.
+   * Nothing is cut: every hint on the row is one the player needs.
+   */
+  private fittedKeys(
+    x: number, y: number, str: string, px: number, colour: string, maxW: number, depth = 231,
+  ): Phaser.GameObjects.Container {
+    // Five spaces between groups is the authored rhythm; three and then two
+    // are the first things to go, because whitespace carries no information.
+    for (const gap of ["     ", "   ", "  "]) {
+      const text = str.replace(/ {4,}/g, gap);
+      for (const size of [px, px - 1, px - 2]) {
+        if (size < 5) break;
+        const box = this.keys_(x, y, text, size, colour, depth);
+        if (box.getBounds().width <= maxW) return box;
+        box.destroy();
+      }
+    }
+    // Still too wide: the smallest we will draw, and let it be tight.
+    return this.keys_(x, y, str.replace(/ {4,}/g, "  "), Math.max(5, px - 2), colour, depth);
+  }
+
   private menuText(x: number, y: number, str: string, px: number, color: string): Phaser.GameObjects.Text {
     return this.add.text(x, y, str, {
-      fontFamily: "monospace", fontSize: `${Math.round(px * ZOOM)}px`, color, align: "center",
+      fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(px, ZOOM) * ZOOM)}px`, color, align: "center",
+      letterSpacing: letterSpacing() * ZOOM,
     }).setOrigin(0.5).setScale(1 / ZOOM).setDepth(231);
+  }
+
+  /**
+   * A UI label in the current language's font.
+   *
+   * The game's own monospace has no CJK glyphs, so every string a player
+   * reads has to come through here or through `menuText`; the sizes are
+   * snapped to the pixel font's native 12 for Chinese and Japanese so the
+   * glyphs are not resampled into a blur (`i18n/index.ts`).
+   */
+  private uiText(x: number, y: number, str: string, px: number, color: string, extra: Partial<Phaser.Types.GameObjects.Text.TextStyle> = {}): Phaser.GameObjects.Text {
+    const size = bodyPx(px, ZOOM);
+    const spacing = letterSpacing();
+    /*
+     * **Wrapped here rather than by Phaser**, when a width is asked for.
+     *
+     * Phaser breaks on whitespace, and Chinese and Japanese have none: a
+     * card blurb came back as a single line that ran across its neighbours
+     * and off both sides of the screen. `wrapText` breaks between characters
+     * and keeps the kinsoku rules; Latin still breaks at spaces, so English
+     * is unchanged by it.
+     */
+    const width = (extra.wordWrap as { width?: number } | undefined)?.width;
+    const rest = { ...extra };
+    let text = str;
+    if (width) {
+      delete rest.wordWrap;
+      text = wrapText(str, width / ZOOM, size, spacing);
+    }
+    /*
+     * Leading comes from the language unless the call site insists. A pixel
+     * face draws to the full em box, so `lineSpacing: 0` is not normal
+     * leading — it is none, and wrapped Chinese came out with its lines
+     * touching.
+     */
+    const lead = rest.lineSpacing ?? Math.round(size * lineLead() * ZOOM);
+    return this.add.text(x, y, text, {
+      fontFamily: fontFamily(), fontSize: `${Math.round(size * ZOOM)}px`, color,
+      letterSpacing: spacing * ZOOM, ...rest, lineSpacing: lead,
+    }).setScale(1 / ZOOM);
+  }
+
+  /**
+   * Measures the screen that is up and reports what is unreadable.
+   *
+   * Screenshots catch what somebody looks at; three screens in three
+   * languages is nine looks, and the faults that kept coming back — touching
+   * CJK lines, a hint row past its panel, type below the font's own size —
+   * are all measurable. Exposed on `window.__scene` so it can be driven from
+   * the browser after every layout change. It reads and changes nothing.
+   */
+  checkLayout(): LayoutReport {
+    // The frame everything is expected to stay inside, in the space
+    // `getBounds` reports: the room's own view, not the window's.
+    const view = new Phaser.Geom.Rectangle(0, 0, UI_W, UI_H);
+    /*
+     * The plan page's Begin plate is drawn over the column rather than beside
+     * it, so it is handed to the check as reserved: without that, text under
+     * it is layering as far as the same-depth rule is concerned.
+     */
+    const reserved: Phaser.Geom.Rectangle[] = [];
+    if (this.transitionUi?.plate) reserved.push(this.transitionUi.plate);
+    // The plan page's own backdrop is opaque, so nothing below it is on
+    // screen; every other screen dims rather than covers.
+    return checkLayout(this, view, reserved, this.transitionUi ? 241 : 0);
+  }
+
+  /** Whether any screen that stops the fight is up. */
+  private get modalOpen(): boolean {
+    return !!(this.titleUi || this.intentUi || this.transitionUi || this.offerUi
+      || this.pauseUi || this.staffUi || this.gameOverUi || this.victoryUi || this.hintsUi
+      || this.inviteUi);
+  }
+
+  /**
+   * The key guide, once, at the start of a player's first run.
+   *
+   * Grouped by what the keys are for rather than listed in key order: a
+   * first-time player is asking "how do I move, how do I hit things, how do I
+   * cast" — three questions — not "what does K do".
+   */
+  private showFirstLaunchHints(): void {
+    if (this.hintsUi) return;
+    const o: Phaser.GameObjects.GameObject[] = [];
+    const cx = UI_W / 2;
+    const cy = UI_H / 2;
+    const groups: [string, [string, string][]][] = [
+      [t("first.move"), [["W A S D", t("first.walk")], ["K", t("first.dodge")]]],
+      [t("first.fight"), [["J", t("first.sword")], ["L", t("first.spin")]]],
+      [t("first.spells"), [["U I O", t("first.cast")]]],
+      [t("first.menus"), [["E", t("first.use")], ["Tab", t("first.character")], ["Esc", t("first.menu")]]],
+    ];
+    const lines = groups.reduce((n, [, rows]) => n + rows.length, 0);
+    const panelW = 320;
+    const panelH = 66 + groups.length * 12 + lines * 13;
+    o.push(...this.modalPanel(panelW, panelH, { depth: 228, cy }));
+    const top = cy - panelH / 2;
+    o.push(this.menuText(cx, top + 18, `—  ${t("head.controls")}  —`, 12, "#ffe9a8").setDepth(229));
+    o.push(this.add.rectangle(cx, top + 30, panelW - 28, 1, 0x2a2750, 1).setDepth(228.5));
+    let y = top + 44;
+    const capsX = cx - panelW / 2 + 118;
+    for (const [head, rows] of groups) {
+      o.push(this.uiText(cx - panelW / 2 + 20, y, head.toUpperCase(), 6.5, "#8fdcff").setOrigin(0, 0.5).setDepth(229));
+      y += 12;
+      for (const [k, v] of rows) {
+        const caps = k.split(/\s+/).map((tk) => `[${tk}]`).join("");
+        o.push(this.keys_(capsX, y, caps, 7, "#8792b5", 229, 1));
+        o.push(this.uiText(capsX + 10, y, v, 7, "#c9cfe8").setOrigin(0, 0.5).setDepth(229));
+        y += 13;
+      }
+    }
+    o.push(this.fittedKeys(cx, cy + panelH / 2 - 16, t("first.footer"), 6.5, "#6a7396", panelW - 24, 229));
+    /*
+     * Dismissed by **anything**, because a card in the way of the first room
+     * should not also be a puzzle. Listened for on the keyboard and the
+     * pointer rather than polled, so the press that closes it cannot also be
+     * read by the game underneath as a cast.
+     */
+    const close = () => this.hideFirstLaunchHints();
+    const kb = this.input.keyboard!;
+    kb.once("keydown", close);
+    this.input.once("pointerdown", close);
+    this.hintsUi = {
+      objects: o,
+      off: () => { kb.off("keydown", close); this.input.off("pointerdown", close); },
+    };
+  }
+
+  private hideFirstLaunchHints(): void {
+    if (!this.hintsUi) return;
+    for (const g of this.hintsUi.objects) g.destroy();
+    this.hintsUi.off();
+    this.hintsUi = null;
+    try { localStorage.setItem(SEEN_CONTROLS_KEY, "1"); } catch { /* shown again next time */ }
+  }
+
+  /**
+   * The backing every modal shares: a dim over the world, then a panel.
+   *
+   * Every screen that pauses the fight used to draw its text straight onto the
+   * lit room, so a menu row landed on a portal and "GAME OVER" had an enemy
+   * showing through its letters. One helper, so the pause menu, the settings,
+   * the controls, the game-over card and the character screen all read as the
+   * same object rather than as five different treatments of bare text.
+   *
+   * `w`/`h` of `null` fills the view (the character screen, which is a page
+   * rather than a card).
+   */
+  private modalPanel(
+    w: number | null, h: number | null,
+    opts: { depth?: number; dim?: number; cy?: number } = {},
+  ): Phaser.GameObjects.GameObject[] {
+    const depth = opts.depth ?? 230;
+    const view = new Phaser.Geom.Rectangle(0, 0, UI_W, UI_H);
+    const cx = view.centerX;
+    const cy = opts.cy ?? view.centerY;
+    const out: Phaser.GameObjects.GameObject[] = [];
+    // The world, dimmed: three times the view so a shaken camera cannot slide
+    // an undimmed edge into frame.
+    out.push(this.add.rectangle(cx, view.centerY, view.width * 3, view.height * 3, 0x0d0b1f, opts.dim ?? 0.7).setDepth(depth));
+    if (w !== null && h !== null)
+      out.push(this.add.rectangle(cx, cy, w, h, 0x161334, 0.9)
+        .setStrokeStyle(1, 0x4a5480, 0.9).setDepth(depth + 0.1));
+    return out;
   }
 
   private showPause(): void {
@@ -1999,8 +4622,567 @@ export class PlayScene extends Phaser.Scene {
     this.pauseUi = null;
   }
 
-  /** The rows of the current page: a label and what Enter does. */
-  private pauseRows(): { label: string; act: () => void; adjust?: (dir: 1 | -1) => void }[] {
+  /**
+   * The rows of the current page: a label, a value, and what Enter does.
+   *
+   * `value` is separate from `label` so the settings page can left-align every
+   * name and right-align every value in one column. Centring whole rows put
+   * `x1`, `on` and `reduced` at a different x on every line, which is the one
+   * thing a settings list must not do.
+   */
+  /**
+   * One menu row, wherever a menu is drawn.
+   *
+   * **Every row is laid out the same way**: the marker at a fixed x, the
+   * label starting at a fixed x after it, the value right-aligned in its own
+   * column. The title menu used to centre its action rows and split its
+   * setting rows left-and-right, so "New Game" and "Jev Director" did not
+   * share a single edge and the menu read as two menus stacked. An action
+   * row simply has no value, which leaves its label where every other label
+   * is; the trailing `◂` is gone, since one marker is enough to say which
+   * row is live and two made the action rows a different shape again.
+   */
+  private drawMenuRow(
+    into: Phaser.GameObjects.GameObject[],
+    r: { label: string; value?: string; adjust?: (dir: 1 | -1) => void; disabled?: boolean },
+    cx: number, y: number, panelW: number, on: boolean,
+    /** The menus all sit at 231; a dialog drawn over one has to say so. */
+    depth = 231,
+  ): void {
+    const dim = r.disabled;
+    const colour = dim ? (on ? "#8a8296" : "#5a5f7a") : on ? "#ffe9a8" : "#8792b5";
+    const markX = cx - panelW / 2 + 16;
+    const labelX = markX + 12;
+    if (on) into.push(this.uiText(markX, y, "▸", 9, colour).setOrigin(0, 0.5).setDepth(depth));
+    into.push(this.uiText(labelX, y, r.label, 9, colour).setOrigin(0, 0.5).setDepth(depth));
+    if (r.value === undefined) return;
+    // A row that cannot move is shown without the arrows that say it can.
+    into.push(this.uiText(cx + panelW / 2 - 16, y, r.adjust ? `◂ ${r.value} ▸` : r.value, dim ? 8 : 9,
+      dim ? "#5a5f7a" : on ? "#ffe9a8" : "#c9cfe8").setOrigin(1, 0.5).setDepth(depth));
+  }
+
+  /** The permanent control row over the bottom wall, in the current language. */
+  private hintStripText(): string {
+    return t("hud.hintStrip", {
+      use: t("hud.use"), character: t("hud.character"), menu: t("hud.menu"),
+    });
+  }
+
+  /**
+   * Rebuilds that row after a language change.
+   *
+   * It is the one piece of HUD text made once in `create()` and never
+   * rewritten — everything else on the HUD is drawn per frame — so a player
+   * who opened Settings mid-run and switched to 中文 got a Chinese pause menu
+   * over an English `[E] use  [Tab] character  [Esc] menu`.
+   */
+  private rebuildHintStrip(): void {
+    if (this.hintStrip) fillKeyLine(this, this.hintStrip, this.hintStripText(), HINT_STRIP_STYLE);
+  }
+
+  /**
+   * The language switch, shared by the title menu and Settings.
+   *
+   * Each language is named in its own script, because the player most in need
+   * of this row is the one who has landed in a language they cannot read.
+   * Changing it redraws the screen at once rather than on the next open: a
+   * settings change you cannot see is one you cannot tell you made.
+   */
+  private languageRow(): { label: string; value: string; act: () => void; adjust: (dir: 1 | -1) => void } {
+    const step = (dir: 1 | -1) => {
+      const at = LANGS.indexOf(getLang());
+      setLang(LANGS[(at + dir + LANGS.length) % LANGS.length]!);
+      this.rebuildHintStrip();
+      if (this.titleUi) this.renderTitle();
+      else if (this.pauseUi) this.renderPause();
+    };
+    return {
+      label: t("menu.language"),
+      value: LANG_NAMES[getLang()],
+      act: () => step(1),
+      adjust: step,
+    };
+  }
+
+  /**
+   * The room-plan switch, shared by the title menu and Settings.
+   *
+   * On the title because it decides what the *first* thing a run shows is,
+   * and a player who does not want the plan page wants to say so before the
+   * run rather than after seeing it once. Default on: the page is the
+   * project's thesis made visible, so it is opt-out rather than opt-in.
+   */
+  private roomPlanRow(): { label: string; value: string; act: () => void; adjust: (dir: 1 | -1) => void } {
+    const flip = () => {
+      this.showRoomParams = !this.showRoomParams;
+      try { localStorage.setItem(ROOM_PARAMS_KEY, this.showRoomParams ? "1" : "0"); } catch { /* still toggles */ }
+    };
+    return {
+      label: t("menu.roomPlan"),
+      value: t(this.showRoomParams ? "menu.on" : "menu.off"),
+      act: flip,
+      adjust: flip,
+    };
+  }
+
+  /**
+   * The sound setting, shared by the title menu and Settings: off, 8-bit or
+   * 16-bit, one choice for the music and the effects together.
+   *
+   * It reads the `Sfx`'s own state rather than the stored value, so the menu
+   * and the sound cannot disagree on screen.
+   */
+  private soundRow(): { label: string; value: string; act: () => void; adjust: (dir: 1 | -1) => void } {
+    const step = (dir: 1 | -1) => {
+      const i = SOUND_STYLES.indexOf(this.sfx.getStyle());
+      const next = SOUND_STYLES[(i + dir + SOUND_STYLES.length) % SOUND_STYLES.length]!;
+      setSoundStyle(next);
+      this.sfx.setStyle(next);
+      this.sfx.unlock();
+      this.sfx.play("ui_select");
+    };
+    const style = this.sfx.getStyle();
+    return { label: t("menu.sound"), value: style === "off" ? t("menu.off") : style === "8bit" ? "8-bit" : "16-bit", act: () => step(1), adjust: step };
+  }
+
+  /**
+   * The two volumes, under the switch that silences both.
+   *
+   * Greyed while sound is off rather than hidden: a row that vanishes makes
+   * the menu jump, and a player turning sound on wants to see what it will
+   * come back at.
+   */
+  private volumeRows(): {
+    label: string; value: string; act: () => void; adjust: (dir: 1 | -1) => void; disabled?: boolean;
+  }[] {
+    const on = this.sfx.isEnabled();
+    const step = (get: () => number, set: (v: number) => void) => (dir: 1 | -1) => {
+      if (!on) { this.sfx.play("ui_deny"); return; }
+      set(Math.max(0, Math.min(1, Math.round(get() * 10 + dir) / 10)));
+    };
+    const pct = (v: number) => `${Math.round(v * 100)}%`;
+    return [
+      {
+        label: t("menu.musicVolume"), value: pct(this.sfx.getMusicVolume()), disabled: !on,
+        act: () => undefined,
+        adjust: step(() => this.sfx.getMusicVolume(), (v) => this.sfx.setMusicVolume(v)),
+      },
+      {
+        label: t("menu.sfxVolume"), value: pct(this.sfx.getSfxVolume()), disabled: !on,
+        act: () => undefined,
+        adjust: step(() => this.sfx.getSfxVolume(), (v) => this.sfx.setSfxVolume(v)),
+      },
+    ];
+  }
+
+  /**
+   * The Jev rows, shared by the title menu and Settings: the arm, and the
+   * code that unlocks it.
+   *
+   * **The invite has a row now.** It used to arrive only as `?invite=` in a
+   * link and was never named on screen, which meant a player whose link had
+   * been mangled, or who wanted to move their code to another browser, had
+   * nowhere to put it and nothing to tell them why the arm would not turn on.
+   * The row says what it is and shows only the last four of a held code — it
+   * is a credential, and it spends somebody else's key.
+   */
+  private jevRows(): {
+    label: string; value?: string; act: () => void;
+    adjust?: (dir: 1 | -1) => void; disabled?: boolean; heading?: string;
+  }[] {
+    const available = jevAvailable();
+    const on = directorArm() === "jev";
+    const toggleArm = () => {
+      if (!available) return;
+      setDirectorArm(on ? "rule" : "jev");
+      this.director = this.buildDirector();
+    };
+    const held = storedInvite();
+    // A proxy with no gate wants no code, so the row says so instead of
+    // offering a field that nothing will ever check an answer against.
+    const ungated = inviteGateNeeded === false;
+    return [
+      {
+        heading: t("menu.jevHeading"),
+        label: t("menu.jevDirector"),
+        value: available ? t(on ? "menu.on" : "menu.off") : t("menu.jevOffInviteOnly"),
+        act: toggleArm,
+        ...(available ? { adjust: toggleArm } : {}),
+        disabled: !available,
+      },
+      {
+        /*
+         * An action row with a value, not a switch: there is nothing here to
+         * step through with the arrows, and it is never greyed out — even
+         * where no code is wanted, the row is how a player finds out that no
+         * code is wanted.
+         */
+        label: t("menu.invite"),
+        value: ungated ? t("menu.inviteNotNeeded") : held ? maskedInvite(held) : t("menu.inviteNone"),
+        act: () => this.showInvite(),
+      },
+    ];
+  }
+
+  /**
+   * The invitation-code dialog: enter one, change one, or take one away.
+   *
+   * `prefill` is the code that arrived in the link, which is checked on the
+   * way in so the first thing the player sees is whether it worked.
+   */
+  private showInvite(prefill?: string, autoVerify = false): void {
+    if (this.inviteUi) return;
+    /*
+     * The game's keyboard off, at **both** levels.
+     *
+     * The scene plugin is what turns keys into menu moves; the game-level
+     * manager is what calls `preventDefault` on every key the scene captured
+     * — W, A, S, D, E, J, K, L, Enter, Tab and the arrows, which is most of a
+     * code's alphabet. Leaving the second one on is why the earlier key field
+     * dropped characters, and it is not fixed by focusing harder.
+     */
+    const kb = this.input.keyboard;
+    if (kb) { kb.enabled = false; kb.manager.enabled = false; kb.resetKeys(); }
+
+    const field = document.createElement("input");
+    field.type = "text";
+    field.value = prefill ?? storedInvite();
+    field.maxLength = MAX_INVITE_CHARS;
+    field.autocomplete = "off";
+    field.spellcheck = false;
+    field.setAttribute("autocapitalize", "off");
+    field.setAttribute("autocorrect", "off");
+    field.setAttribute("aria-label", t("menu.invite"));
+    /*
+     * Invisible, but really there: the caret and the text are drawn by the
+     * scene in the game's own pixel font, and this element is what the
+     * browser gives the keystrokes, the clipboard and the IME to. `opacity`
+     * rather than `visibility` or `display`, which would make it unfocusable
+     * and take the typing with them. 16 px so a phone does not zoom the page
+     * when it is focused.
+     */
+    Object.assign(field.style, {
+      position: "fixed", left: "0px", top: "0px", width: "1px", height: "1px",
+      margin: "0", padding: "0", border: "0", outline: "none", opacity: "0",
+      background: "transparent", color: "transparent", caretColor: "transparent",
+      fontSize: "16px", zIndex: "5",
+    } satisfies Partial<CSSStyleDeclaration>);
+    document.body.appendChild(field);
+
+    const ui = {
+      objects: [] as Phaser.GameObjects.GameObject[], field, action: 0,
+      status: (autoVerify ? "checking" : "idle") as InviteStatus,
+      checking: 0, closing: false, onResize: () => this.renderInvite(),
+    };
+    this.inviteUi = ui;
+
+    field.addEventListener("input", () => {
+      if (this.inviteUi !== ui) return;
+      // A fresh keystroke retires the last verdict: it was about other text.
+      ui.checking++;
+      if (ui.status !== "idle") ui.status = "idle";
+      this.renderInvite();
+    });
+    field.addEventListener("keydown", (e) => this.readInviteKey(e));
+    // Selecting with the mouse moves the caret, which is drawn from the
+    // element's own selection, so the drawing has to follow it.
+    field.addEventListener("select", () => this.renderInvite());
+    field.addEventListener("click", () => this.renderInvite());
+    /*
+     * The dialog owns the keyboard while it is up, so a blur inside this page
+     * — clicking the canvas, say — takes the focus straight back. A blur
+     * because the whole window went away is left alone: yanking focus out of
+     * the address bar is worse than a dialog that waits.
+     */
+    field.addEventListener("blur", () => {
+      if (this.inviteUi !== ui || ui.closing) return;
+      setTimeout(() => {
+        if (this.inviteUi === ui && !ui.closing && document.hasFocus()) field.focus();
+      }, 0);
+    });
+    window.addEventListener("resize", ui.onResize);
+    field.focus();
+    field.select();
+    this.renderInvite();
+    if (autoVerify) void this.verifyInviteField();
+  }
+
+  private hideInvite(): void {
+    const ui = this.inviteUi;
+    if (!ui) return;
+    ui.closing = true;
+    for (const g of ui.objects) { this.tweens.killTweensOf(g); g.destroy(); }
+    window.removeEventListener("resize", ui.onResize);
+    ui.field.remove();
+    this.inviteUi = null;
+    const kb = this.input.keyboard;
+    if (kb) { kb.manager.enabled = true; kb.enabled = true; kb.resetKeys(); }
+    this.redrawMenus();
+  }
+
+  /** The dialog's actions, in the order Tab walks them. */
+  private inviteActions(): { label: string; run: () => void }[] {
+    if (inviteGateNeeded === false)
+      return [{ label: t("invite.close"), run: () => this.hideInvite() }];
+    return [
+      { label: t("invite.verifySave"), run: () => void this.verifyInviteField() },
+      { label: t("invite.clear"), run: () => this.clearInvite() },
+      { label: t("invite.cancel"), run: () => this.hideInvite() },
+    ];
+  }
+
+  /**
+   * Keys inside the field.
+   *
+   * Only the three the dialog claims — Enter, Escape and Tab — are taken;
+   * everything else is the browser's to put in the field, which is what makes
+   * paste, selection, undo and an IME work without any of them being written
+   * here. Nothing propagates: the page below must not hear a keystroke meant
+   * for the field.
+   */
+  private readInviteKey(e: KeyboardEvent): void {
+    const ui = this.inviteUi;
+    if (!ui) return;
+    e.stopPropagation();
+    // Mid-composition, Enter and Escape belong to the IME's candidate list.
+    if (e.isComposing || e.keyCode === 229) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      this.sfx.play("ui_back");
+      this.hideInvite();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      this.sfx.play("ui_select");
+      this.inviteActions()[ui.action]?.run();
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      const n = this.inviteActions().length;
+      ui.action = (ui.action + (e.shiftKey ? n - 1 : 1)) % n;
+      this.sfx.play("ui_move");
+      this.renderInvite();
+    } else {
+      // A caret that moved has to be redrawn, and the key that moved it has
+      // not been applied yet when this fires.
+      setTimeout(() => { if (this.inviteUi === ui) this.renderInvite(); }, 0);
+    }
+  }
+
+  /** Checks what is in the field, and keeps it if the proxy says it works. */
+  private async verifyInviteField(): Promise<void> {
+    const ui = this.inviteUi;
+    if (!ui) return;
+    const code = ui.field.value.trim();
+    if (!code) {
+      ui.status = "empty";
+      this.sfx.play("ui_deny");
+      this.renderInvite();
+      return;
+    }
+    const token = ++ui.checking;
+    ui.status = "checking";
+    this.renderInvite();
+    const res = await checkInviteCode(code);
+    // Abandoned: the dialog closed, or the text changed while this was away.
+    if (this.inviteUi !== ui || ui.checking !== token) return;
+    if (!res.ok) ui.status = res.why === "rate" ? "tooMany" : "unreachable";
+    else if (!res.needed) ui.status = "notNeededStatus";
+    else if (res.valid) {
+      setStoredInvite(code);
+      // A code is only worth having for the arm it opens, so it opens it.
+      setDirectorArm("jev");
+      this.director = this.buildDirector(true);
+      ui.status = "accepted";
+    } else ui.status = "rejected";
+    this.sfx.play(ui.status === "accepted" ? "ui_select" : "ui_deny");
+    this.renderInvite();
+    this.redrawMenus();
+  }
+
+  /** Forgets the code, and the arm with it if the code was what allowed it. */
+  private clearInvite(): void {
+    const ui = this.inviteUi;
+    if (!ui) return;
+    ui.checking++;
+    ui.field.value = "";
+    setStoredInvite("");
+    this.director = this.buildDirector(true);
+    ui.status = "cleared";
+    this.renderInvite();
+    this.redrawMenus();
+  }
+
+  /** Whichever menu is behind the dialog, redrawn so its rows tell the truth. */
+  private redrawMenus(): void {
+    if (this.titleUi) this.renderTitle();
+    else if (this.pauseUi) this.renderPause();
+  }
+
+  /**
+   * A code that came in a link, answered on the title screen.
+   *
+   * With no code, one question is still worth asking: whether this
+   * deployment has a gate at all. A developer running their own key needs the
+   * row to say so rather than send them looking for a code.
+   */
+  private async settleInvite(): Promise<void> {
+    const claimed = this.claimedInvite;
+    this.claimedInvite = "";
+    if (claimed) { this.showInvite(claimed, true); return; }
+    await probeInviteGate();
+    if (this.inviteUi) this.renderInvite();
+    this.redrawMenus();
+  }
+
+  /** The line under the field, and what colour it is said in. */
+  private static readonly INVITE_STATUS: Readonly<Record<InviteStatus, readonly [StringKey, string] | null>> = {
+    idle: null,
+    checking: ["invite.checking", "#ffe9a8"],
+    accepted: ["invite.accepted", "#8ce8a0"],
+    rejected: ["invite.rejected", "#ff9aa8"],
+    empty: ["invite.empty", "#ff9aa8"],
+    cleared: ["invite.cleared", "#8792b5"],
+    notNeededStatus: ["invite.notNeededStatus", "#8792b5"],
+    unreachable: ["invite.unreachable", "#ff9aa8"],
+    tooMany: ["invite.tooMany", "#ff9aa8"],
+  };
+
+  private renderInvite(): void {
+    const ui = this.inviteUi;
+    if (!ui) return;
+    for (const g of ui.objects) { this.tweens.killTweensOf(g); g.destroy(); }
+    const o: Phaser.GameObjects.GameObject[] = [];
+    ui.objects = o;
+    const cx = UI_W / 2;
+    const cy = UI_H / 2;
+    const panelW = 316;
+    const inner = panelW - 40;
+    const ungated = inviteGateNeeded === false;
+    const actions = this.inviteActions();
+    const pitch = 15 * linePitch();
+
+    /*
+     * Measured, then placed. The blurb is one sentence in English and two
+     * lines of it in Japanese, and a panel sized from a guess is a panel with
+     * a band of nothing in it in one language and text off the bottom in
+     * another.
+     */
+    const blurb = this.uiText(0, -9999, t(ungated ? "invite.notNeededBody" : "invite.blurb"), 7, "#8792b5",
+      { wordWrap: { width: inner * ZOOM } }).setOrigin(0, 0).setDepth(247);
+    o.push(blurb);
+    const blurbH = blurb.displayHeight;
+    const said = PlayScene.INVITE_STATUS[ui.status];
+    // Measured too: "Invitation code accepted. Jev Director is on." is one
+    // line in English and two in Japanese, and a fixed band puts the second
+    // one through the Verify row.
+    const status = said
+      ? this.uiText(0, -9999, t(said[0]), 7, said[1], { wordWrap: { width: inner * ZOOM }, align: "center" })
+        .setOrigin(0.5, 0).setDepth(247)
+      : null;
+    if (status) o.push(status);
+    const fieldH = ungated ? 0 : 34;
+    const statusH = Math.max(16, (status?.displayHeight ?? 0) + 8);
+    const bodyH = blurbH + 10 + fieldH + statusH + actions.length * pitch;
+    const panelH = Math.round(bodyH + 74);
+    const top = cy - panelH / 2;
+
+    // Darker than the usual modal dim: this one sits over the title menu,
+    // whose own rows are the same shape as this dialog's and read as part of
+    // it through a light dim.
+    o.push(...this.modalPanel(panelW, panelH, { depth: 246, cy, dim: 0.88 }));
+    o.push(this.menuText(cx, top + 18, `—  ${t("head.invite")}  —`, 12, "#ffe9a8").setDepth(247));
+    o.push(this.add.rectangle(cx, top + 30, panelW - 28, 1, 0x2a2750, 1).setDepth(246.5));
+
+    let y = top + 42;
+    blurb.setPosition(cx - inner / 2, y);
+    y += blurbH + 10;
+
+    if (!ungated) {
+      /*
+       * The field, drawn rather than shown: the `<input>` over it is
+       * invisible, so this box, this text and this caret are the whole of
+       * what the player sees of their own typing.
+       */
+      const boxW = inner;
+      const boxH = 20;
+      const boxY = y + boxH / 2;
+      o.push(this.add.rectangle(cx, boxY, boxW, boxH, 0x0f0d24, 1)
+        .setStrokeStyle(1, ui.status === "rejected" ? 0x8a4a5a : 0x4a5480, 1).setDepth(246.6));
+      const pad = 6;
+      const size = bodyPx(9, ZOOM);
+      const value = ui.field.value;
+      const caretAt = Math.max(0, Math.min(value.length, ui.field.selectionEnd ?? value.length));
+      /*
+       * Long codes scroll rather than run out of the box: the window shown is
+       * the widest tail ending at the caret that still fits, so what is being
+       * typed is always the part on screen.
+       */
+      const room = boxW - pad * 2 - 2;
+      let from = 0;
+      while (from < caretAt && measureText(value.slice(from, caretAt), size) > room) from++;
+      const shown = value.slice(from, from + 200);
+      const leftX = cx - boxW / 2 + pad;
+      o.push(this.uiText(leftX, boxY, shown, 9, "#e8ecff").setOrigin(0, 0.5).setDepth(247));
+      const caret = this.add.rectangle(
+        leftX + measureText(value.slice(from, caretAt), size), boxY, 1, boxH - 8, 0xffe9a8, 1,
+      ).setOrigin(0, 0.5).setDepth(247);
+      o.push(caret);
+      // Blinking on a tween rather than a redraw: the caret is the only thing
+      // on this screen that changes on its own.
+      this.tweens.add({ targets: caret, alpha: 0, duration: 520, yoyo: true, repeat: -1, hold: 60 });
+      y += fieldH;
+    }
+
+    status?.setPosition(cx, y + 4);
+    y += statusH;
+
+    actions.forEach((a, i) => {
+      this.drawMenuRow(o, { label: a.label }, cx, y + pitch / 2 + i * pitch, panelW, i === ui.action, 247);
+    });
+
+    // One action needs no way to choose between actions.
+    o.push(this.fittedKeys(cx, cy + panelH / 2 - 16,
+      t(actions.length > 1 ? "invite.hints" : "invite.hintsOne",
+        { select: t("hint.select"), choose: t("hint.choose"), back: t("hint.back") }),
+      7, "#8792b5", panelW - 24, 247));
+
+    if (!ungated) this.placeInviteField(cx - inner / 2, y - statusH - fieldH, inner, 20);
+  }
+
+  /**
+   * Lays the invisible `<input>` over the box the scene drew for it.
+   *
+   * It has to be there rather than parked off-screen: a click on the field
+   * must land on it, and a browser puts the IME's candidate window and its
+   * own autofill wherever it thinks the text is.
+   */
+  private placeInviteField(x: number, y: number, w: number, h: number): void {
+    const ui = this.inviteUi;
+    const cam = this.uiCam;
+    if (!ui || !cam) return;
+    const canvas = this.game.canvas;
+    const box = canvas.getBoundingClientRect();
+    const k = box.width / Math.max(1, cam.width);
+    const sx = (ux: number) => box.left + (cam.width / 2 + (ux - UI_W / 2) * cam.zoom) * k;
+    const sy = (uy: number) => box.top + (cam.height / 2 + (uy - (UI_H + HUD_H) / 2) * cam.zoom) * k;
+    Object.assign(ui.field.style, {
+      left: `${Math.round(sx(x))}px`, top: `${Math.round(sy(y))}px`,
+      width: `${Math.max(1, Math.round(w * cam.zoom * k))}px`,
+      height: `${Math.max(1, Math.round(h * cam.zoom * k))}px`,
+    });
+  }
+
+  /** Leaves a settings page that was opened from the title, back to the title. */
+  private closePauseToTitle(): void {
+    this.pauseFromTitle = false;
+    this.controlsFromSettings = false;
+    this.hidePause();
+    this.showTitle();
+  }
+
+  private pauseRows(): {
+    label: string; value?: string; act: () => void;
+    adjust?: (dir: 1 | -1) => void; disabled?: boolean; heading?: string;
+  }[] {
     const ui = this.pauseUi!;
     const step = (key: string, now: number, dir: 1 | -1): number => {
       const i = MULT_STEPS.indexOf(now);
@@ -2015,39 +5197,53 @@ export class PlayScene extends Phaser.Scene {
       this.shakeSetting = SHAKE_SETTINGS[(i + dir + SHAKE_SETTINGS.length) % SHAKE_SETTINGS.length]!;
       try { localStorage.setItem(SHAKE_KEY, this.shakeSetting); } catch { /* still applies */ }
     };
+    /*
+     * Every row that can change shows `◂ ▸`, including the on/off ones: a
+     * toggle the arrows also work on had no arrows, so the page taught that
+     * some rows answer to A/D and left the player to find out which.
+     *
+     * `Invincible` is not here. It is a testing switch, and a menu the player
+     * opens mid-run should not offer to turn the run off; it lives on the
+     * debug panel with the rest of the development controls. The `Language`
+     * row is gone too — one language, nothing to choose, a dead row.
+     */
+    const setNumbers = () => {
+      this.damageNumbersOn = !this.damageNumbersOn;
+      if (!this.damageNumbersOn) this.damageNumbers = [];
+      try { localStorage.setItem(DAMAGE_NUMBERS_KEY, this.damageNumbersOn ? "1" : "0"); } catch { /* still toggles */ }
+    };
     if (ui.page === "settings") return [
-      { label: `◂ Damage dealt   x${this.dealtMult} ▸`, act: () => setDealt(this.dealtMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setDealt },
-      { label: `◂ Damage taken   x${this.takenMult} ▸`, act: () => setTaken(this.takenMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setTaken },
-      { label: `Invincible (testing)   ${this.invincible ? "on" : "off"}`, act: () => {
-        this.invincible = !this.invincible;
-        this.world.invincible = this.invincible;
-        try { localStorage.setItem(INVINCIBLE_KEY, this.invincible ? "1" : "0"); } catch { /* still toggles */ }
-      } },
-      { label: `Damage numbers   ${this.damageNumbersOn ? "on" : "off"}`, act: () => {
-        this.damageNumbersOn = !this.damageNumbersOn;
-        if (!this.damageNumbersOn) this.damageNumbers = [];
-        try { localStorage.setItem(DAMAGE_NUMBERS_KEY, this.damageNumbersOn ? "1" : "0"); } catch { /* still toggles */ }
-      } },
-      { label: `Room plan before each room   ${this.showRoomParams ? "on" : "off"}`, act: () => {
-        this.showRoomParams = !this.showRoomParams;
-        try { localStorage.setItem(ROOM_PARAMS_KEY, this.showRoomParams ? "1" : "0"); } catch { /* still toggles */ }
-      } },
-      { label: `◂ Screen shake   ${this.shakeSetting} ▸`, act: () => setShake(1), adjust: setShake },
-      { label: `Sound   ${this.sfx.isMuted() ? "off" : "on"}`, act: () => {
-        this.sfx.setMuted(!this.sfx.isMuted());
-        try { localStorage.setItem(MUTE_KEY, this.sfx.isMuted() ? "1" : "0"); } catch { /* still toggles */ }
-      } },
-      // One language for now; the row is here so the menu has its shape.
-      { label: "Language   English  (more to come)", act: () => undefined },
-      { label: "Back", act: () => { ui.page = "main"; ui.selected = 2; } },
+      { label: t("menu.damageDealt"), value: `x${this.dealtMult}`, act: () => setDealt(this.dealtMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setDealt },
+      { label: t("menu.damageTaken"), value: `x${this.takenMult}`, act: () => setTaken(this.takenMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setTaken },
+      { label: t("menu.damageNumbers"), value: t(this.damageNumbersOn ? "menu.on" : "menu.off"), act: setNumbers, adjust: setNumbers },
+      this.roomPlanRow(),
+      { label: t("menu.screenShake"), value: t(`shake.${this.shakeSetting}` as "shake.off"), act: () => setShake(1), adjust: setShake },
+      this.soundRow(),
+      ...this.volumeRows(),
+      this.languageRow(),
+      /*
+       * The Jev rows under their own heading: who plans the run is one
+       * subject, and mixed in among the damage multipliers it reads as one
+       * more unrelated switch.
+       */
+      ...this.jevRows(),
+      // The controls are reachable from here too: from the title menu there is no pause menu to find them in.
+      { label: t("menu.controls"), act: () => { ui.page = "controls"; ui.selected = 0; this.controlsFromSettings = true; } },
+      // Opened from the title menu there is no pause menu behind this page,
+      // so Back goes back to the title rather than to a menu that is not there.
+      { label: t("menu.back"), act: () => { if (this.pauseFromTitle) this.closePauseToTitle(); else { ui.page = "main"; ui.selected = 2; } } },
     ];
-    if (ui.page === "controls") return [{ label: "Back", act: () => { ui.page = "main"; ui.selected = 3; } }];
+    if (ui.page === "controls") return [{ label: t("menu.back"), act: () => {
+      if (this.controlsFromSettings) { this.controlsFromSettings = false; ui.page = "settings"; ui.selected = 0; }
+      else if (this.pauseFromTitle) this.closePauseToTitle();
+      else { ui.page = "main"; ui.selected = 3; }
+    } }];
     return [
-      { label: "Resume", act: () => this.hidePause() },
-      { label: "Character", act: () => { this.hidePause(); this.showStaff("view", null); this.staffFromPause = true; } },
-      { label: "Settings", act: () => { ui.page = "settings"; ui.selected = 0; } },
-      { label: "Controls", act: () => { ui.page = "controls"; ui.selected = 0; } },
-      { label: "Return to title", act: () => { this.hidePause(); this.pendingTitle = true; this.restartRun(); } },
+      { label: t("menu.resume"), act: () => this.hidePause() },
+      { label: t("menu.character"), act: () => { this.hidePause(); this.showStaff("view", null); this.staffFromPause = true; } },
+      { label: t("menu.settings"), act: () => { ui.page = "settings"; ui.selected = 0; } },
+      { label: t("menu.controls"), act: () => { ui.page = "controls"; ui.selected = 0; } },
+      { label: t("menu.returnToTitle"), act: () => { this.hidePause(); this.pendingTitle = true; this.restartRun(); } },
     ];
   }
 
@@ -2058,35 +5254,95 @@ export class PlayScene extends Phaser.Scene {
     ui.objects = [];
     // The room's own frame, not the camera's view: before the first render
     // the view is still empty, and the title is drawn before it.
-    const view = new Phaser.Geom.Rectangle(0, 0, VIEW_W, VIEW_H);
+    const view = new Phaser.Geom.Rectangle(0, 0, UI_W, UI_H);
     const cx = view.centerX;
     const cy = view.centerY;
-    ui.objects.push(this.add.rectangle(cx, cy, view.width, view.height, 0x0d0b1f, 0.8).setDepth(230));
-    const title = ui.page === "settings" ? "SETTINGS" : ui.page === "controls" ? "CONTROLS" : "PAUSED";
-    ui.objects.push(this.menuText(cx, cy - 78, `—  ${title}  —`, 13, "#ffe9a8"));
-    if (ui.page === "controls") {
-      const lines = [
-        ["W A S D / arrows", "move"], ["J", "attack"], ["U  I  O", "cast a spell (hold to repeat)"],
-        ["L", "spin attack (spends a charge)"], ["K", "dodge"], ["E", "use: rewards, portals, vendors, dropped spells"],
-        ["X", "dismantle a spell card for gold"], ["Tab", "character"], ["Esc", "pause"], ["M", "mute"],
-      ];
-      lines.forEach(([k, v], i) => {
-        // Each key as a keycap: "W A S D / arrows" becomes four caps and a word.
-        const caps = k!.split(/\s+/).map((t) => (t === "/" || t === "arrows" ? ` ${t} ` : `[${t}]`)).join("");
-        ui.objects.push(this.keys_(cx - 20, cy - 52 + i * 12, caps, 7, "#8792b5", 231, 1));
-        ui.objects.push(this.add.text(cx - 6, cy - 52 + i * 12, v!, { fontFamily: "monospace", fontSize: `${Math.round(8 * ZOOM)}px`, color: "#c9cfe8" }).setOrigin(0, 0.5).setScale(1 / ZOOM).setDepth(231));
-      });
-    }
     const rows = this.pauseRows();
-    const startY = ui.page === "controls" ? cy + 70 : cy - 40;
+    /*
+     * The panel is sized to its page, so the menu is an object on the screen
+     * rather than words floating over the room. The controls page is the tall
+     * one: a table of every bound key.
+     */
+    const controlRows = PlayScene.CONTROL_KEYS;
+    const pitch = 17 * linePitch();
+    // A heading needs half a row of air on each side, or it sits on the row
+    // under it — which is what "JEV" was doing to "Jev Director".
+    const headingH = pitch;
+    const headings = rows.filter((r) => r.heading).length * headingH;
+    const hintH = ui.page === "settings" && !jevAvailable() ? 14 : 0;
+    const bodyH = (ui.page === "controls" ? controlRows.length * 12 * linePitch() + 16 : 0)
+      + rows.length * pitch + headings + hintH;
+    const panelW = ui.page === "controls" ? 400 : ui.page === "settings" ? 340 : 190;
+    const panelH = bodyH + 62;
+    ui.objects.push(...this.modalPanel(panelW, panelH, { depth: 230, cy }));
+    const top = cy - panelH / 2;
+    const title = t(ui.page === "settings" ? "head.settings" : ui.page === "controls" ? "head.controls" : "head.paused");
+    ui.objects.push(this.menuText(cx, top + 16, `—  ${title}  —`, 13, "#ffe9a8"));
+    ui.objects.push(this.add.rectangle(cx, top + 28, panelW - 28, 1, 0x2a2750, 1).setDepth(230.5));
+    let y = top + 40;
+    if (ui.page === "controls") {
+      /*
+       * A two-column table: every cap right-aligned to one edge, every
+       * description left-aligned to another, so the eye runs down a straight
+       * line on both sides. The caps used to be centred as a group, which
+       * left `[W][A][S][D] / arrows` sticking out a long way past the single
+       * letters below it and nothing lining up with anything.
+       */
+      const capsX = cx - panelW / 2 + 150;
+      const descX = capsX + 10;
+      for (const [k, v] of controlRows) {
+        const caps = k.split(/\s+/).map((tk) => (/^[a-z]/.test(tk) ? ` ${tk} ` : `[${tk}]`)).join("");
+        ui.objects.push(this.keys_(capsX, y, caps, 7, "#8792b5", 231, 1));
+        ui.objects.push(this.uiText(descX, y, t(v), 7, "#c9cfe8").setOrigin(0, 0.5).setDepth(231));
+        y += 12 * linePitch();
+      }
+      y += 10;
+    }
+    // Every row through the one helper, so this menu and the title menu are
+    // laid out by the same rule rather than by two that happen to agree.
+    const labelX = cx - panelW / 2 + 28;
+    // A heading pushes its row and everything under it down, so the rows'
+    // own y is walked rather than computed from the index.
+    let rowY = y;
     rows.forEach((r, i) => {
-      const on = i === ui.selected;
-      ui.objects.push(this.menuText(cx, startY + i * 17, on && !r.adjust ? `▸ ${r.label} ◂` : r.label, 10, on ? "#ffe9a8" : "#8792b5"));
+      if (r.heading) {
+        rowY += headingH / 2;
+        ui.objects.push(this.uiText(labelX, rowY, r.heading.toUpperCase(), 6.5, "#8fdcff").setOrigin(0, 0.5).setDepth(231));
+        rowY += headingH / 2;
+      }
+      this.drawMenuRow(ui.objects, r, cx, rowY, panelW, i === ui.selected);
+      rowY += pitch;
     });
-    // Clear of the action bar along the bottom.
-    ui.objects.push(this.keys_(cx, view.bottom - 70, ui.page === "settings"
-      ? "[W][S] choose     [A][D] or [Enter] change     [Esc] back" : "[W][S] choose     [Enter] select     [Esc] back", 7, "#8792b5"));
+    // The same line the title menu carries, for the same reason.
+    if (ui.page === "settings" && !jevAvailable()) {
+      ui.objects.push(this.uiText(labelX, rowY - 6, t("menu.jevHint"), 6, "#5a5f7a",
+        { wordWrap: { width: (panelW - 40) * ZOOM } }).setOrigin(0, 0.5).setDepth(231));
+    }
+    ui.objects.push(this.fittedKeys(cx, cy + panelH / 2 - 14, ui.page === "settings"
+      ? `[W][S] ${t("hint.choose")}     [A][D] ${t("hint.change")}     [Esc] ${t("hint.back")}`
+      : `[W][S] ${t("hint.choose")}     [Enter] ${t("hint.select")}     [Esc] ${t("hint.back")}`, 7, "#8792b5", panelW - 24));
   }
+
+  /**
+   * Every key the game binds, for the controls page.
+   *
+   * The list used to stop at ten and leave out the keys a player is most
+   * likely to go looking for — the number keys on the card screen, the
+   * restart, the debug panel — so the one screen that answers "what does this
+   * key do" did not answer it.
+   */
+  private static readonly CONTROL_KEYS: readonly (readonly [string, StringKey])[] = [
+    ["W A S D", "keys.walk"],
+    ["J", "keys.attack"],
+    ["K", "keys.dodge"],
+    ["L", "keys.spin"],
+    ["U I O", "keys.cast"],
+    ["E", "keys.use"],
+    ["E", "keys.dismantle"],
+    ["Enter", "keys.confirm"],
+    ["Tab", "keys.characterScreen"],
+    ["Esc", "keys.pauseMenu"],
+  ];
 
   private readPauseKeys(): void {
     const ui = this.pauseUi;
@@ -2094,17 +5350,27 @@ export class PlayScene extends Phaser.Scene {
     const down = (k?: Phaser.Input.Keyboard.Key) => !!k && Phaser.Input.Keyboard.JustDown(k);
     const rows = this.pauseRows();
     if (down(this.keys.ESC)) {
-      if (ui.page === "main") this.hidePause();
+      this.sfx.play("ui_back");
+      // Controls opened from settings go back to settings, wherever settings was opened from.
+      if (ui.page === "controls" && this.controlsFromSettings) { this.controlsFromSettings = false; ui.page = "settings"; ui.selected = 0; this.renderPause(); }
+      else if (this.pauseFromTitle) this.closePauseToTitle();
+      else if (ui.page === "main") this.hidePause();
       else { ui.page = "main"; ui.selected = 0; this.renderPause(); }
       return;
     }
     let changed = false;
-    if (down(this.keys.W) || down(this.keys.UP)) { ui.selected = (ui.selected + rows.length - 1) % rows.length; changed = true; }
-    if (down(this.keys.S) || down(this.keys.DOWN)) { ui.selected = (ui.selected + 1) % rows.length; changed = true; }
+    if (down(this.keys.W) || down(this.keys.UP)) { ui.selected = (ui.selected + rows.length - 1) % rows.length; changed = true; this.sfx.play("ui_move"); }
+    if (down(this.keys.S) || down(this.keys.DOWN)) { ui.selected = (ui.selected + 1) % rows.length; changed = true; this.sfx.play("ui_move"); }
     const row = rows[ui.selected];
-    if (row?.adjust && (down(this.keys.A) || down(this.keys.LEFT))) { row.adjust(-1); changed = true; }
-    if (row?.adjust && (down(this.keys.D) || down(this.keys.RIGHT))) { row.adjust(1); changed = true; }
-    if (down(this.keys.ENTER) || down(this.keys.J) || down(this.keys.SPACE)) {
+    const nudge = (dir: 1 | -1) => {
+      if (!row?.adjust) { this.sfx.play("ui_deny"); return; }
+      row.adjust(dir);
+      this.sfx.play("ui_select");
+    };
+    if (down(this.keys.A) || down(this.keys.LEFT)) { nudge(-1); changed = true; }
+    if (down(this.keys.D) || down(this.keys.RIGHT)) { nudge(1); changed = true; }
+    if (down(this.keys.ENTER)) {
+      this.sfx.play(row?.disabled ? "ui_deny" : "ui_select");
       rows[ui.selected]?.act();
       changed = true;
     }
@@ -2117,9 +5383,23 @@ export class PlayScene extends Phaser.Scene {
     if (ev.kind === "damage" && n > 0) {
       const colour = damageColour(ev.what ?? "");
       const shatter = (ev.what ?? "").endsWith(":shatter") || (ev.what ?? "").endsWith(":sneak");
-      this.damageNumbers.push({ id: this.damageNumberId++, x: ev.x, y: ev.y, text: `${Math.floor(n)}${shatter ? "!" : ""}`, colour, ms: 0, drift: (Math.random() - 0.5) * 10 });
+      const mark = shatter ? "!" : "";
+      /*
+       * **Hits that land together are one number.** Five pellets of a
+       * scatter shot into one body drew five numbers on the same spot, a
+       * smudge nobody could read. A hit in the same colour, on the same spot,
+       * within `DAMAGE_MERGE_MS` of the last joins that number instead, and
+       * the number pops again as it grows.
+       *
+       * It counts rather than sums — `4×3`, not `12` — because a total reads
+       * as one hit that big. Hits of different sizes cannot be counted so,
+       * and show their total.
+       */
+      addDamageNumber(this.damageNumbers, ev.x, ev.y, n, colour, mark, () => this.damageNumberId++);
     } else if (ev.kind === "player_hit" && n > 0) {
-      this.damageNumbers.push({ id: this.damageNumberId++, x: this.world.player.x, y: this.world.player.y - 24, text: `-${Math.round(n * HP_PER_HEART)}`, colour: "#ff6a5a", ms: 0, drift: 0 });
+      // A burn and a poison tick each in their element's colour, a hit in red.
+      const colour = ev.what === "dot:burn" ? "#ffa04a" : ev.what === "dot:poison" ? "#9be36a" : "#ff6a5a";
+      this.damageNumbers.push({ id: this.damageNumberId++, x: this.world.player.x, y: this.world.player.y - 24, text: `-${Math.round(n * HP_PER_HEART)}`, colour, ms: 0, drift: 0 });
     }
     if (this.damageNumbers.length > 40) this.damageNumbers.splice(0, this.damageNumbers.length - 40);
   }
@@ -2147,6 +5427,7 @@ export class PlayScene extends Phaser.Scene {
     } else if (c.t.text !== text) c.t.setText(text);
     c.used = true;
     c.idle = 0;
+    this.keptDrawn.push(c.t);
     return c.t.setPosition(x, y).setVisible(true).setAlpha(1).setRotation(0);
   }
 
@@ -2163,20 +5444,12 @@ export class PlayScene extends Phaser.Scene {
     const w = this.world;
     const g = this.threatGfx;
     const half = (MUSKET_SPREAD_DEG / 2) * Math.PI / 180;
-    const angleOf = (aim: number, i: number, n: number) => aim - half + (2 * half * i) / (n - 1);
     for (const e of w.enemies) {
       if (e.archetype !== "warden" || e.pose !== "musket_windup" || e.hp <= 0) continue;
       const t = 1 - e.poseMs / MUSKET_WINDUP_MS;
       const m = muzzleOf(w, e, e.facing);
       const rays = flameRays(w, m.x, m.y, e.facing);
-      const pts = [{ x: m.x, y: m.y }, ...rays.map((r, i) => {
-        const a = angleOf(e.facing, i, rays.length);
-        return { x: m.x + Math.cos(a) * r, y: m.y + Math.sin(a) * r };
-      })];
-      g.fillStyle(0xff5544, 0.06 + 0.22 * t);
-      g.fillPoints(pts, true);
-      g.lineStyle(1.5, 0xff8877, 0.35 + 0.5 * t);
-      g.strokePoints(pts.slice(1), false);
+      drawFlameCone(g, m.x, m.y, e.facing, half, rays, t, w.tick, this.teleView());
     }
     const f = this.bladeGfx;
     for (const fl of w.flames) {
@@ -2227,7 +5500,7 @@ export class PlayScene extends Phaser.Scene {
         mask.fillPoints(pts, true);
         const o = this.fxSheets.get("blast")!.origins[fi]!;
         const im = this.add.image(fl.x, fl.y, FX_TEXTURE, `blast_${fi}`)
-          .setOrigin(o[0], o[1]).setRotation(fl.aim).setScale(0.5).setDepth(8.7);
+          .setOrigin(o[0], o[1]).setRotation(fl.aim).setScale(1 / FX_TEXEL).setDepth(8.7);
         im.setMask(mask.createGeometryMask());
         this.sprites.add(im);
       }
@@ -2238,7 +5511,7 @@ export class PlayScene extends Phaser.Scene {
     for (const m of this.muzzleFx) {
       m.ms += dt;
       if (m.ms < 80) continue;
-      const k = Math.min(1, (m.ms - 80) / 900);
+      const k = Math.min(1, (m.ms - 80) / MUSKET_SMOKE_MS);
       const ca = Math.cos(m.a);
       const sa = Math.sin(m.a);
       f.fillStyle(0x96929f, 0.45 * (1 - k));
@@ -2247,7 +5520,7 @@ export class PlayScene extends Phaser.Scene {
         f.fillCircle(m.x + ca * d, m.y + sa * d - k * (8 + i * 3), 2.5 + i * 0.8 + k * 4);
       }
     }
-    this.muzzleFx = this.muzzleFx.filter((m) => m.ms < 980);
+    this.muzzleFx = this.muzzleFx.filter((m) => m.ms < 80 + MUSKET_SMOKE_MS);
   }
 
   /**
@@ -2257,6 +5530,7 @@ export class PlayScene extends Phaser.Scene {
    */
   private castFlash(): void {
     const p = this.world.player;
+    this.castPoseMs = CAST_POSE_MS;
     let best: (typeof this.world.playerBullets)[number] | null = null;
     let bestD = Infinity;
     for (const b of this.world.playerBullets) {
@@ -2287,7 +5561,7 @@ export class PlayScene extends Phaser.Scene {
       if (i >= info.frames) continue;
       const o = info.origins[i]!;
       const im = this.add.image(a.x, a.y, FX_TEXTURE, `${a.sheet}_${i}`)
-        .setOrigin(o[0], o[1]).setRotation(a.rot).setScale(0.5).setDepth(a.depth);
+        .setOrigin(o[0], o[1]).setRotation(a.rot).setScale(1 / FX_TEXEL).setDepth(a.depth);
       if (a.tint !== undefined) im.setTint(a.tint);
       this.sprites.add(im);
     }
@@ -2309,14 +5583,15 @@ export class PlayScene extends Phaser.Scene {
       at.ms -= dtMs;
       if (at.ms <= 0) { this.teachAt.delete(key); this.taught.add(key); continue; }
       const a = Math.min(1, at.ms / 400, (TEACH_MS - at.ms) / 200 + 0.001);
-      this.ftext(`teach:${key}`, at.x, at.y, LESSONS[key] ?? key, {
-        fontFamily: "monospace", fontSize: `${Math.round(8 * ZOOM)}px`, color: "#fff6d8",
+      this.ftext(`teach:${key}`, at.x, at.y, LESSONS[key] ? t(LESSONS[key]!) : key, {
+        fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(8, ZOOM) * ZOOM)}px`, color: "#fff6d8",
         stroke: "#1a1422", strokeThickness: 2 * ZOOM,
       }).setScale(1 / ZOOM).setOrigin(0.5).setDepth(9.95).setAlpha(a);
     }
   }
 
   private sweepTexts(): void {
+    this.keptDrawn = [];
     for (const [key, c] of this.textCache) {
       if (c.used) { c.used = false; continue; }
       // A damage number is done for good; anything else unused for two seconds is let go.
@@ -2330,24 +5605,89 @@ export class PlayScene extends Phaser.Scene {
     const LIFE = 700;
     for (const d of this.damageNumbers) {
       d.ms += dtMs;
+      if (d.bumpMs !== undefined) d.bumpMs += dtMs;
       const t = d.ms / LIFE;
+      // The pop plays from the last time the number grew, not only from its birth.
+      const pop = ((d.bumpMs ?? d.ms) / LIFE);
       this.ftext(`dmg:${d.id}`, d.x + d.drift * t, d.y - 14 * Math.sqrt(t), d.text, {
-        fontFamily: "monospace", fontSize: `${Math.round(8 * ZOOM)}px`, color: d.colour,
+        fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(8, ZOOM) * ZOOM)}px`, color: d.colour,
         stroke: "#0d0b1f", strokeThickness: 2 * ZOOM,
-      }).setScale((1 / ZOOM) * (t < 0.12 ? 1.3 - t * 2.5 : 1)).setOrigin(0.5).setAlpha(t > 0.6 ? (1 - t) / 0.4 : 1).setDepth(9.9);
+      }).setScale((1 / ZOOM) * (pop < 0.12 ? 1.3 - pop * 2.5 : 1)).setOrigin(0.5).setAlpha(t > 0.6 ? (1 - t) / 0.4 : 1).setDepth(9.9);
     }
     this.damageNumbers = this.damageNumbers.filter((d) => d.ms < LIFE);
   }
 
+  /**
+   * **"Not enough mana", over the player's head.**
+   *
+   * A short label with the mana drop in front of it, in the bar's own blue so
+   * it reads as the same thing the HUD is saying. It rises a little and fades,
+   * like a damage number, and it is placed above the body rather than on it so
+   * it never covers what the player is aiming at.
+   *
+   * Drawn through `ftext`, so it is one cached object rather than a new one a
+   * frame, and it costs nothing at all while no cue is running.
+   */
+  private drawManaCue(dtMs: number): void {
+    this.manaCueGapMs = Math.min(MANA_CUE_EVERY_MS, this.manaCueGapMs + dtMs);
+    if (this.manaCueMs <= 0) return;
+    this.manaCueMs = Math.max(0, this.manaCueMs - dtMs);
+    const k = 1 - this.manaCueMs / MANA_CUE_MS;
+    const p = this.world.player;
+    this.ftext(
+      "mana-cue", p.x, p.y - 30 - 8 * Math.sqrt(k), `◆ ${t("cue.noMana")}`,
+      {
+        fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(7, ZOOM) * ZOOM)}px`,
+        color: "#6fb4ff", stroke: "#0d0b1f", strokeThickness: 2 * ZOOM,
+      },
+    ).setOrigin(0.5).setScale((1 / ZOOM) * (k < 0.12 ? 1.25 - k * 2 : 1))
+      .setAlpha(k > 0.6 ? (1 - k) / 0.4 : 1).setDepth(9.95);
+  }
+
+  /**
+   * **"Not yet", over the player's head**: the glossary's word for a
+   * cooldown and the seconds the refused key still has to wait ("Cooldown
+   * 1.2s", `cue.cooldown`), small, in the cooldown cue's pale gold, rising a
+   * little and fading. Smaller than the mana cue's label and never at the
+   * same time as it, so it is a glance rather than a notice.
+   */
+  private drawCooldownCue(dtMs: number): void {
+    this.cooldownCueGapMs = Math.min(COOLDOWN_CUE_EVERY_MS, this.cooldownCueGapMs + dtMs);
+    if (this.cooldownCueMs <= 0 || this.manaCueMs > 0) { this.cooldownCueMs = Math.max(0, this.cooldownCueMs - dtMs); return; }
+    this.cooldownCueMs = Math.max(0, this.cooldownCueMs - dtMs);
+    const k = 1 - this.cooldownCueMs / COOLDOWN_CUE_MS;
+    const p = this.world.player;
+    this.ftext(
+      "cooldown-cue", p.x, p.y - 28 - 5 * Math.sqrt(k), this.cooldownCueText,
+      {
+        fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(6, ZOOM) * ZOOM)}px`,
+        color: "#ffd98a", stroke: "#0d0b1f", strokeThickness: 2 * ZOOM,
+      },
+    ).setOrigin(0.5).setScale(1 / ZOOM).setAlpha(k > 0.55 ? (1 - k) / 0.45 : 1).setDepth(9.95);
+  }
+
   /** The floor cell nearest a point, in grid coordinates. */
-  /** Where the vendors stand: the pre-boss stop has both, a vendor's room mid-run one. */
-  private vendorSpots(): { kind: "merchant" | "smith"; gx: number; gy: number }[] {
-    const vendors = this.npcRoom
-      ? [[this.npcRoom, 0] as const]
-      : [["merchant", -3], ["smith", 3]] as const;
-    return vendors.map(([kind, dx]) => {
-      const gx = Math.floor(GRID_W / 2 + dx);
-      const gy = Math.floor(GRID_H / 2 - 1);
+  /**
+   * Where the things a room with no fight holds stand.
+   *
+   * The **pre-boss stop has all three**: the two vendors across the back of
+   * the room and the fountain in front of them, between the player and the
+   * shelves, because it is the one thing at that stop that costs nothing and
+   * should not be found after the gold is spent. The offsets keep four tiles
+   * between any two of them, which is more than twice the reach a prompt
+   * answers at, so each has its own spot and its own prompt.
+   *
+   * A room met mid-run holds one of them, in the middle: the first thing in
+   * view from the door the player came through.
+   */
+  private vendorSpots(): { kind: NpcKind; gx: number; gy: number }[] {
+    const vendors: readonly (readonly [NpcKind, number, number])[] = this.npcRoom
+      ? [[this.npcRoom, 0, 0]]
+      : [["merchant", -4, 0], ["smith", 4, 0], ["fountain", 0, 3]];
+    const ext = this.world.room.extent;
+    return vendors.map(([kind, dx, dy]) => {
+      const gx = Math.floor(ext.w / 2 + dx);
+      const gy = Math.floor(ext.h / 2 - 1 + dy);
       return { kind, gx, gy };
     });
   }
@@ -2407,9 +5747,9 @@ export class PlayScene extends Phaser.Scene {
     const glow = this.add.circle(x, y, 9, 0x8fdcff, 0.18).setDepth(4.2).setBlendMode(Phaser.BlendModes.ADD);
     const icon = `icon_${itemId}`;
     const img = this.atlas.has(icon)
-      ? this.add.image(x, y, this.crispTextureKey, icon).setOrigin(0.5).setScale(1).setDepth(4.4)
+      ? this.add.image(x, y, this.crispTextureKey, icon).setOrigin(0.5).setScale(1 / TUNED).setDepth(4.4)
       : null;
-    this.floorSpells.push({ x, y, itemId, level, affixes: [...affixes], label: titleOfId(itemId), value, img, glow });
+    this.floorSpells.push({ x, y, itemId, level, affixes: [...affixes], label: contentName(itemId, titleOfId(itemId)), value, img, glow });
   }
 
   private removeFloorSpell(f: FloorSpell): void {
@@ -2424,7 +5764,43 @@ export class PlayScene extends Phaser.Scene {
     const at = this.heldIndex(card.itemId);
     if (at < 0) return "";
     const level = this.spellLevels[at] ?? 1;
-    return level >= SPELL_LEVEL_MAX ? `held at Lv ${level}  ` : `upgrade Lv ${level} → ${Math.min(SPELL_LEVEL_MAX, level + (card.grade ?? 1))}  `;
+    return level >= SPELL_LEVEL_MAX
+      ? `${t("card.heldAtLv", { n: level })}  `
+      : `${t("card.upgradeLv", { from: level, to: Math.min(SPELL_LEVEL_MAX, level + (card.grade ?? 1)) })}  `;
+  }
+
+  /**
+   * A card's numbers. On an **upgrade** — a copy of a spell the player holds —
+   * they are the held spell's at the level taking it reaches, not the copy's
+   * own level-one figures, and every figure the level improves is lit in the
+   * upgrade's colour. Otherwise the card's own.
+   */
+  private cardStatParts(card: OfferCard): readonly (StatText & { readonly tone?: string })[] {
+    const own = card.statParts ?? [{ text: card.stats, tone: "mod" }];
+    if (card.kind !== "spell" || !card.itemId || !this.world) return own;
+    const at = this.heldIndex(card.itemId);
+    const def = ITEMS.get(card.itemId);
+    if (at < 0 || !def) return own;
+    const level = this.spellLevels[at] ?? 1;
+    if (level >= SPELL_LEVEL_MAX) return own;
+    const to = Math.min(SPELL_LEVEL_MAX, level + (card.grade ?? 1));
+    /*
+     * Priced on the **held slot**, so the affixes already on it are in the
+     * figure: an upgrade card for a spell carrying fork and chain was quoting
+     * the bare spell's mana, which is not what the key will cost after the
+     * card is taken.
+     */
+    const slot = this.world.spells[at] ?? null;
+    const costAt = (n: number): number =>
+      (slot ? slotCost(withLevel(slot, n), ITEMS, this.world.staff) : NaN);
+    const priced = (n: number): readonly (StatText & { readonly tone?: string })[] => {
+      const c = costAt(n);
+      return Number.isFinite(c) ? this.slotStatParts(def, n, c) : offerStatParts(def, n);
+    };
+    const before = priced(level);
+    // The mana rises with the level too, and is not the gain: it keeps its colour.
+    return priced(to).map((part, i) =>
+      (before[i]?.text === part.text || part.tone === "mana" ? part : { ...part, tone: "grade" }));
   }
 
   /** Which key holds this spell, or -1. */
@@ -2444,9 +5820,11 @@ export class PlayScene extends Phaser.Scene {
     const next = Math.min(SPELL_LEVEL_MAX, level + Math.max(1, by));
     this.spellLevels[i] = next;
     this.world.spells[i] = withLevel(slot, next);
-    this.tookLabel = `${titleOfId(slot.item.base)} to Lv ${next}`;
+    this.tookLabel = t("toast.toLv", { spell: contentName(slot.item.base, titleOfId(slot.item.base)), level: next });
     this.tookMs = 1800;
-    this.levelUpFx(`${titleOfId(slot.item.base)}  Lv ${level} → ${next}`, SPELL_KEYS[i] ?? "");
+    this.levelUpFx(t("fx.levelUpLine", {
+      spell: contentName(slot.item.base, titleOfId(slot.item.base)), from: level, to: next,
+    }), SPELL_KEYS[i] ?? "");
     return true;
   }
 
@@ -2465,20 +5843,120 @@ export class PlayScene extends Phaser.Scene {
     this.ring(p.x, p.y - BODY_LIFT, 6, 34, 0xffd45e, 420, 3);
     this.ring(p.x, p.y - BODY_LIFT, 3, 20, 0xffffff, 260, 2);
     this.burst(p.x, p.y - BODY_LIFT, 0xffd45e, 16, 200, -Math.PI / 2, Math.PI * 1.6, 1.2, -40);
-    const banner = this.add.text(VIEW_W / 2, VIEW_H * 0.3, `LEVEL UP   ${text}${key ? `   [${key}]` : ""}`, {
-      fontFamily: "monospace", fontSize: `${Math.round(11 * ZOOM)}px`, color: "#ffd45e",
+    const banner = this.add.text(UI_W / 2, UI_H * 0.3, `${t("fx.levelUp")}   ${text}${key ? `   [${key}]` : ""}`, {
+      fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(11, ZOOM) * ZOOM)}px`, color: "#ffd45e",
       backgroundColor: "#0d0b1fcc", padding: { x: 8 * ZOOM, y: 4 * ZOOM },
     }).setOrigin(0.5).setScale(1 / ZOOM).setDepth(215).setScrollFactor(0);
     this.tweens.add({
-      targets: banner, y: VIEW_H * 0.3 - 12, alpha: 0, delay: 1100, duration: 500,
+      targets: banner, y: UI_H * 0.3 - 12, alpha: 0, delay: 1100, duration: 500,
       onComplete: () => banner.destroy(),
     });
     this.sfx.play("pickup");
   }
 
+  /**
+   * **A level** (`run/levels.ts`): the body grew, on its own, from the kills.
+   *
+   * Three cues and no screen. It is not a choice, so nothing may stop the
+   * fight for it: a toast on the strip that already announces what was just
+   * gained, a burst on the player in the character screen's own green — the
+   * colour that means "this run improved you" everywhere else — and the one
+   * rising sound in the set. Green rather than the gold the *spell* level
+   * uses, because the two happen in the same run and must not read as the
+   * same event: gold is the staff, green is the body.
+   */
+  private onLevelUp(level: number): void {
+    const p = this.world.player;
+    this.ring(p.x, p.y - BODY_LIFT, 5, 38, 0xa8f0a0, 480, 3);
+    this.ring(p.x, p.y - BODY_LIFT, 3, 22, 0xffffff, 280, 2);
+    this.burst(p.x, p.y - BODY_LIFT, 0xa8f0a0, 18, 210, -Math.PI / 2, Math.PI * 1.7, 1.2, -50);
+    /*
+     * **The banner names the new figures, not percentages.** A level that said
+     * "sword +5%" was reported as doing nothing, because the damage numbers
+     * over a body are whole and 5% of 9 is not. "9 → 10" is checkable against
+     * the next swing, which is the only version of this the player can trust.
+     */
+    this.tookLabel = t("toast.levelUp", {
+      n: level,
+      hp: Math.round(LEVEL_HP),
+      from: swordAt(level - 1),
+      to: swordAt(level),
+    });
+    this.tookMs = 2000;
+    this.sfx.play("level_up");
+  }
+
+  /** The run's health cap: what a drink fills toward, and what it is a share of. */
+  private maxHealth(): number {
+    return MAX_HEARTS + this.liveMods().maxHearts;
+  }
+
+  private playerAtFullHealth(): boolean {
+    return !fountainWouldHeal(this.world.player.hearts, this.maxHealth());
+  }
+
+  /**
+   * One drink at the fountain: `FOUNTAIN_HEAL_FRACTION` of the bar, capped at
+   * full, and then it is dry.
+   *
+   * **A full bar refuses rather than drinks.** The fountain is one of two the
+   * run gets, and spending one on nothing because the player pressed E walking
+   * past is the kind of loss a player cannot see happen and cannot undo. The
+   * prompt says so before the press; this is the guard behind it.
+   */
+  private drinkFountain(x: number, y: number): void {
+    if (this.fountainDry) return;
+    const max = this.maxHealth();
+    const before = this.world.player.hearts;
+    if (!fountainWouldHeal(before, max)) {
+      this.tookLabel = t("toast.fountainFull");
+      this.tookMs = 1400;
+      return;
+    }
+    this.world.player.hearts = fountainDrink(before, max);
+    this.fountainDry = true;
+    /*
+     * The burst leaves the **fountain** and the ring closes on the **player**,
+     * so the two ends of the drink are both on screen: the water goes from the
+     * basin into the body, which is the one thing the numbers on the HUD do
+     * not say.
+     */
+    this.burst(x, y - TILE_PX * 0.6, 0x6fd8e8, 18, 150, -Math.PI / 2, Math.PI * 0.8, 1.1, -70);
+    const p = this.world.player;
+    this.ring(p.x, p.y - BODY_LIFT, 6, 30, 0x8ef0c8, 420, 3);
+    this.ring(p.x, p.y - BODY_LIFT, 3, 18, 0xffffff, 260, 2);
+    this.burst(p.x, p.y - BODY_LIFT, 0x8ef0c8, 12, 120, -Math.PI / 2, Math.PI * 1.2, 1, -60);
+    this.tookLabel = t("toast.fountainDrunk", {
+      percent: Math.round(FOUNTAIN_HEAL_FRACTION * 100),
+    });
+    this.tookMs = 1600;
+    this.sfx.play("pickup_heal");
+  }
+
+  /**
+   * **Development only**: puts these spells on the keys, in order, each as
+   * `id` or `id+affix+affix` (affixes at tier I). Reached from `?spells=` and
+   * from the console as `__scene.debugSpells([...])`, for looking at a spell
+   * without playing to it; it changes the run the way a pickup would.
+   */
+  debugSpells(list: readonly string[]): void {
+    // `+` arrives from a URL as a space, so either joins an affix on.
+    const wanted = list.slice(0, SPELL_KEYS.length).map((entry) => entry.split(/[+\s]+/).filter(Boolean));
+    wanted.forEach(([id], i) => { if (id && ITEMS.get(id)) this.equipAt(i, id, 1, []); });
+    // Affixes after every key is on, so each key's are attached to the slot it ends with.
+    wanted.forEach(([, ...affixes], i) => {
+      let slot = this.world.spells[i];
+      if (!slot) return;
+      for (const a of affixes) slot = attachAffix(slot, a, 1) ?? slot;
+      this.world.spells[i] = slot;
+      this.spellAffixes[i] = [...slot.affixes];
+    });
+  }
+
   /** Puts a spell on key `i` at a level, with affixes carried over. */
   private equipAt(i: number, itemId: string, level: number, affixes: readonly AttachedAffix[]): boolean {
-    const fitted = equipItem(this.world, itemId, `${itemId}-${this.roomIndex}-${this.world.tick}`, ITEMS, i);
+    // The other keys keep their slots whole: their affixes, levels, cooldowns and banks (`equip-keys.ts`).
+    const fitted = equipKeepingOthers(this.world, itemId, `${itemId}-${this.roomIndex}-${this.world.tick}`, ITEMS, i);
     if (!fitted) return false;
     this.slots = [...this.world.slots];
     let slot = this.world.spells[i];
@@ -2501,9 +5979,9 @@ export class PlayScene extends Phaser.Scene {
     const held = this.heldIndex(f.itemId);
     if (held >= 0) {
       if (!this.upgradeHeld(held, f.level)) {
-        this.tookLabel = `${f.label} is already Lv ${SPELL_LEVEL_MAX}: hold E to dismantle`;
+        this.tookLabel = t("toast.alreadyMax", { label: f.label, max: SPELL_LEVEL_MAX });
         this.tookMs = 1600;
-        this.sfx.play("hurt");
+        this.sfx.play("ui_deny");
         return;
       }
       this.removeFloorSpell(f);
@@ -2514,7 +5992,7 @@ export class PlayScene extends Phaser.Scene {
     if (free >= 0) {
       if (this.equipAt(free, f.itemId, f.level, f.affixes)) {
         this.removeFloorSpell(f);
-        this.tookLabel = `${f.label} on ${SPELL_KEYS[free]}`;
+        this.tookLabel = t("toast.onKey", { label: f.label, key: SPELL_KEYS[free] ?? "" });
         this.tookMs = 1600;
         this.sfx.play("pickup");
       }
@@ -2536,12 +6014,25 @@ export class PlayScene extends Phaser.Scene {
    * promises to the player and have to mean one thing everywhere.
    */
   private uiTextureKey = "sheet_plain";
+  /** The palette swaps that tell a subspecies from its base (doc 019). */
+  private subspecies?: SubspeciesVisuals;
 
   private applyMood(mood: Mood): void {
     this.ensurePlainSheet();
     this.ensureCrispSheet();
     const key = `sheet_${mood.temperature}_${mood.brightness}`;
     this.textureKey = key;
+    /*
+     * The swap matches exact colours, and the sheet it samples has been
+     * through this mood — so the table is built in the same light.
+     *
+     * **Before the cache check, not after.** A mood's sheet is built once and
+     * kept, so a room that reuses one returned here without ever telling the
+     * subspecies which light its bodies are now in: every swap after the
+     * second distinct room would have matched the wrong colours and quietly
+     * done nothing.
+     */
+    this.subspecies?.retint(mood);
     if (this.textures.exists(key)) return;
     const { data } = this.atlas.forMood(mood);
     const w = this.atlas.sheetWidth;
@@ -2610,12 +6101,48 @@ export class PlayScene extends Phaser.Scene {
     }
   }
 
+  /** The debug panel's floor-grain switch: kept per browser, and the room redrawn with it. */
+  private setFloorGrain(grain: FloorGrain): void {
+    floorGrain = grain;
+    try { localStorage.setItem(FLOOR_GRAIN_KEY, grain); } catch { /* not kept: the room still redraws */ }
+    this.drawTiles();
+  }
+
   private drawTiles(): void {
     this.tiles.clear(true, true);
     this.featureLights = [];
     this.pillarTops = [];
+    // The floor these were cut into is gone; they must not follow to the next room.
+    this.eruptCracks = [];
+    this.throneImg = null;
     const grid = this.world.room.grid;
-    const drains = drainCells(grid);
+    /*
+     * **The run's depth** (`biomeFor`, art order `docs/art-workorder-biomes.md`):
+     * the floor, the walls and the decals are its own where its sheet has
+     * them, and the common dungeon where it does not. The two halls are
+     * drawn as themselves.
+     */
+    const fixedHall = this.world.room.id === "fixed-boss" || this.world.room.id === "fixed-shop";
+    const biome = fixedHall ? null : biomeFor(this.roomIndex);
+    const biomeFloors = biome !== null && this.atlas.has(`tile_${biome}_floor_0`);
+    const inBiome = (name: string): string => {
+      if (!biome || !BIOME_WALLS) return name;
+      const own = name.replace(/^tile_/, `tile_${biome}_`);
+      return this.atlas.has(own) ? own : name;
+    };
+    // A depth's south faces — the wall the camera looks at — carry its niches and grates as variants, one cell in three.
+    const southFace = (name: string, x: number, y: number): string => {
+      if (!biome || !name.startsWith(`tile_${biome}_wall_s`) || name !== `tile_${biome}_wall_s`) return name;
+      const variants: string[] = [];
+      for (let i = 1; this.atlas.has(`${name}_${i}`); i++) variants.push(`${name}_${i}`);
+      const h = hash2(x, y);
+      return variants.length > 0 && h % 3 === 0 ? variants[Math.floor(h / 3) % variants.length]! : name;
+    };
+    // No drains in the two halls: they are dressed as themselves (`hall-art.ts`).
+    const hall = this.world.room.id === "fixed-boss" || this.world.room.id === "fixed-shop";
+    const drains = hall ? new Set<number>() : drainCells(grid);
+    // Where the room's water drips, for the ambience.
+    this.drainSpots = [...drains].map((i) => ({ x: ((i % GRID_W) + 0.5) * TILE_PX, y: (Math.floor(i / GRID_W) + 0.5) * TILE_PX }));
     for (let y = 0; y < GRID_H; y++)
       for (let x = 0; x < GRID_W; x++) {
         const t = grid[y * GRID_W + x];
@@ -2643,13 +6170,59 @@ export class PlayScene extends Phaser.Scene {
          * masonry, and read as it.
          */
         const lonePillar = t === Tile.Pillar && isolatedSolid(grid, x, y);
-        const name = t === Tile.Floor || t === Tile.Prop || lonePillar
+        // The throne's dais (`THRONE_CELLS`): floor under it, and the throne drawn standing on it.
+        const dais = this.world.room.room_type === "boss" && THRONE_CELLS.some(([cx, cy]) => cx === x && cy === y);
+        const base = t === Tile.Floor || t === Tile.Prop || lonePillar || dais
           ? floorFrame(x, y, drains)
           : wallFrame(grid, x, y);
+        if (dais && x === THRONE_CELLS[1]![0] && this.atlas.has("boss_throne_empty")) {
+          // Held, so the entrance can seat him on it and empty it when he stands (`tickKingIntro`).
+          this.throneImg = this.add.image((x + 0.5) * TILE_PX, (y + 1) * TILE_PX, this.textureKey,
+            this.kingIntro ? this.throneFrame(this.kingIntro.phase) : "boss_throne_empty")
+            .setOrigin(0.5, 0.86).setScale(1 / ART_SCALE).setDepth(bodyDepth((y + 1) * TILE_PX, 0));
+          this.tiles.add(this.throneImg);
+        }
+        // The floor's grain (`floorGrain`). A drain is an object and keeps its
+        // size: at a finer grain the floor is laid under it and its grate over.
+        const drain = base === "tile_floor_3" && floorGrain !== "coarse" && this.atlas.has("tile_floor_drain_grate");
+        const stone = base.startsWith("tile_floor_") && (base !== "tile_floor_3" || drain);
+        const common = floorGrain === "mid" && stone
+          ? `tile_floor_mid_${hash2(x >> 1, y >> 1) % MID_FLOOR_VARIANTS}_${(x & 1) + 2 * (y & 1)}`
+          : floorGrain !== "fine" ? base
+          : base === "tile_wall_solid" ? "tile_wall_solid_fine"
+          : stone ? (drain ? "tile_floor_fine_0" : base.replace("tile_floor_", "tile_floor_fine_"))
+          : base;
+        // A depth's own floor is laid in its own four slabs at one grain; its walls take its own frames name for name.
+        const name = biomeFloors && stone
+          ? `tile_${biome}_floor_${biomeFloorVariant(biome, hash2(x, y))}`
+          : common.startsWith("tile_wall_") ? southFace(inBiome(common), x, y) : common;
         this.tiles.add(
           this.add.image(x * TILE_PX, y * TILE_PX, this.textureKey, name)
             .setOrigin(0).setScale(1 / ART_SCALE).setDepth(0),
         );
+        if (drain)
+          this.tiles.add(
+            this.add.image(x * TILE_PX, y * TILE_PX, this.textureKey, "tile_floor_drain_grate")
+              .setOrigin(0).setScale(1 / ART_SCALE).setDepth(0.01),
+          );
+        if (common.startsWith("tile_wall_"))
+          for (const corner of innerCorners(grid, x, y)) {
+            /*
+             * The corner where two lit edges meet. The common set's
+             * `tile_wall_inner_*` is a 16 px square, wider than the side
+             * bands (13 px) and deeper than the top and bottom ones (14),
+             * so it stuck out past both edges' ink as a step. The piece is
+             * cut instead from the edge itself (`INNER_CAP`), exactly the
+             * one band's width by the other's depth, so the two run into
+             * each other. A depth's own set keeps its own corner.
+             */
+            const own = inBiome(`tile_wall_inner_${corner}`);
+            const cap = INNER_CAP[corner];
+            const img = own !== `tile_wall_inner_${corner}` || !cap
+              ? this.add.image(x * TILE_PX, y * TILE_PX, this.textureKey, safeFrame(this.atlas, own, name))
+              : this.add.image(x * TILE_PX, y * TILE_PX, this.textureKey, `tile_wall_${cap.from}`).setCrop(...cap.crop);
+            this.tiles.add(img.setOrigin(0).setScale(1 / ART_SCALE).setDepth(0.01));
+          }
         if (lonePillar) {
           const cx = x * TILE_PX + TILE_PX / 2;
           const cy = y * TILE_PX + TILE_PX / 2;
@@ -2672,24 +6245,11 @@ export class PlayScene extends Phaser.Scene {
           if (cut > 0) {
             base.setCrop(0, cut, base.frame.width, base.frame.height - cut);
             const top = this.add.image(cx, cy + TILE_PX / 2, this.textureKey, pillarFrame)
-              .setOrigin(0.5, 1).setScale(1 / ART_SCALE).setDepth(8.3);
+              .setOrigin(0.5, 1).setScale(1 / ART_SCALE).setDepth(this.playerDepth + PLAYER_TRAIL);
             top.setCrop(0, 0, top.frame.width, cut);
             this.tiles.add(top);
             this.pillarTops.push({ img: top, x: cx, y: cy - TILE_PX, h: cut / ART_SCALE });
           }
-        }
-        /*
-         * A wall open on two opposite sides is a **thin wall**, and the frame
-         * for it is a dark brick face between two light caps — which, drawn
-         * between two floors, reads as a passage in shadow rather than a wall.
-         * A pale additive wash over the face lifts it toward the caps, so the
-         * strip reads as a raised ridge the player cannot enter.
-         */
-        if (t !== Tile.Floor && t !== Tile.Prop && !lonePillar && thinWall(grid, x, y)) {
-          this.tiles.add(
-            this.add.rectangle(x * TILE_PX, y * TILE_PX, TILE_PX, TILE_PX, 0x6f86c8, 0.28)
-              .setOrigin(0).setDepth(0.5).setBlendMode(Phaser.BlendModes.ADD),
-          );
         }
         /*
          * A `Tile.Door` is drawn as plain wall and carries no badge.
@@ -2715,20 +6275,35 @@ export class PlayScene extends Phaser.Scene {
      * and the decoration does not consume the sequence the encounter depends
      * on — and sparsely, because a decal has to be ignorable at a glance.
      */
-    const DECO = [
+    const COMMON_DECO = [
       "deco_bones", "deco_crack_0", "deco_crack_1", "deco_moss_0", "deco_moss_1",
       "deco_rubble_0", "deco_rubble_1", "deco_stain_0", "deco_stain_1",
       "deco_drain_0", "deco_drain_1",
     ];
-    for (let y = 1; y < GRID_H - 1; y++)
+    // A depth's own decals, where it has them (`deco_<biome>_0` …), in place of the common ones.
+    const ownDeco = biome ? Array.from({ length: BIOME_DECO_VARIANTS }, (_, i) => `deco_${biome}_${i}`).filter((n) => this.atlas.has(n)) : [];
+    const DECO = ownDeco.length > 0 ? ownDeco : COMMON_DECO;
+    /*
+     * Never in the two halls, which are dressed as themselves (`hall-art.ts`);
+     * and never touching: a decal a cell from another read as a heap of them,
+     * and two grates side by side as one broken one, so drains keep three
+     * cells from anything and every other decal one.
+     */
+    const decoAt: { x: number; y: number; drain: boolean }[] = [];
+    for (let y = 1; y < GRID_H - 1 && !hall; y++)
       for (let x = 1; x < GRID_W - 1; x++) {
-        if (grid[y * GRID_W + x] !== Tile.Floor) continue;
+        if (grid[y * GRID_W + x] !== Tile.Floor || drains.has(y * GRID_W + x)) continue;
         const h = hash2(x, y);
         // About one floor tile in nine, so the floor reads as worn rather
         // than as patterned.
         if (h % 9 !== 0) continue;
         const name = DECO[(h >>> 4) % DECO.length]!;
         if (!this.atlas.has(name)) continue;
+        const drain = name.startsWith("deco_drain");
+        const crowded = decoAt.some((d) => Math.max(Math.abs(d.x - x), Math.abs(d.y - y)) <= (drain || d.drain ? 3 : 1))
+          || [...drains].some((i) => Math.max(Math.abs((i % GRID_W) - x), Math.abs(Math.floor(i / GRID_W) - y)) <= (drain ? 3 : 1));
+        if (crowded) continue;
+        decoAt.push({ x, y, drain });
         this.tiles.add(
           this.add.image(
             x * TILE_PX + TILE_PX / 2, y * TILE_PX + TILE_PX / 2, this.textureKey, name,
@@ -2737,8 +6312,76 @@ export class PlayScene extends Phaser.Scene {
         );
       }
 
+    /*
+     * **A depth's floor patches and wall lights** (art order
+     * `docs/art-workorder-biomes.md`), where its sheet has them. A patch is a
+     * 2 × 2 piece of floor with a story — a spread of bones, a pool, a scorch —
+     * laid flat on open floor, clear of the doors and of each other, two at
+     * most to a room, so the floor has places in it rather than a pattern.
+     * The lights hang on the north walls, every few cells, each throwing a
+     * warm pool on the floor below it.
+     */
+    if (biome) {
+      const patches = Array.from({ length: BIOME_PATCH_VARIANTS }, (_, i) => `patch_${biome}_${i}`).filter((n) => this.atlas.has(n));
+      const laid: { x: number; y: number }[] = [];
+      const open2 = (x: number, y: number) => [0, 1].every((dy) => [0, 1].every((dx) => grid[(y + dy) * GRID_W + x + dx] === Tile.Floor));
+      const ext = this.world.room.extent;
+      for (let k = 0; k < 400 && patches.length > 0 && laid.length < 2; k++) {
+        const x = 2 + (hash2(k, this.roomIndex) % Math.max(1, ext.w - 5));
+        const y = 2 + (hash2(this.roomIndex, k + 17) % Math.max(1, ext.h - 5));
+        if (!open2(x, y) || laid.some((q) => Math.abs(q.x - x) < 4 && Math.abs(q.y - y) < 4)) continue;
+        if (y >= ext.h - 4 && Math.abs(x - ext.w / 2) < 3) continue;
+        laid.push({ x, y });
+        this.tiles.add(this.add.image(x * TILE_PX, y * TILE_PX, this.textureKey, patches[hash2(x, y) % patches.length]!)
+          .setOrigin(0).setScale(1 / ART_SCALE).setAlpha(0.8).setDepth(0.25));
+      }
+      const sconce = `prop_${biome}_sconce`;
+      if (this.atlas.has(sconce))
+        for (let y = 0; y < GRID_H - 1; y++)
+          for (let x = 1; x < GRID_W - 1; x++) {
+            if (grid[y * GRID_W + x] !== Tile.Wall || grid[(y + 1) * GRID_W + x] !== Tile.Floor || x % 5 !== 2) continue;
+            this.tiles.add(this.add.image((x + 0.5) * TILE_PX, (y + 1) * TILE_PX, this.textureKey, sconce)
+              .setOrigin(0.5, 1).setScale(1 / ART_SCALE).setDepth(0.4));
+            this.tiles.add(this.add.ellipse((x + 0.5) * TILE_PX, (y + 1.5) * TILE_PX, 72, 30, 0xffb070, 0.1)
+              .setBlendMode(Phaser.BlendModes.ADD).setDepth(0.3));
+          }
+    }
+
+    this.lavaTiles = [];
+    this.grassTiles = new Map();
     for (const zone of this.world.room.zones) {
       if (zone.feature === "none") continue;
+      /*
+       * Lava and grass are floor drawn in code (`fx/sheets.ts`): lava a
+       * flowing four-frame loop along its one-tile line, grass a patch that
+       * turns to embers and then char as it burns (`updateGround`).
+       */
+      if (zone.feature === "lava_channel") {
+        const cells = featureCells(zone.feature, zone.cells);
+        this.groundEdges(cells, "lava");
+        // The sheet flows along x; a channel running north–south turns it.
+        const upright = cells.length > 1 && cells[0]![0] === cells[1]![0];
+        for (const [cx, cy] of cells) {
+          // The field is two tiles long: alternate cells take its two halves.
+          const sheet = ((upright ? cy : cx) & 1) === 0 ? "lava" : "lavab";
+          const img = this.add.image((cx + 0.5) * TILE_PX, (cy + 0.5) * TILE_PX, FX_TEXTURE, `${sheet}_0`)
+            .setOrigin(0.5).setScale(1 / FX_TEXEL).setDepth(1).setAngle(upright ? 90 : 0);
+          this.tiles.add(img);
+          this.lavaTiles.push({ img, sheet });
+        }
+        continue;
+      }
+      if (zone.feature === "grass_patch") {
+        this.groundEdges(zone.cells, "grass");
+        for (const [cx, cy] of zone.cells) {
+          const v = (cx * 7 + cy * 11) & 1;
+          const img = this.add.image(cx * TILE_PX, cy * TILE_PX, FX_TEXTURE, `grass_${v}`)
+            .setOrigin(0).setScale(1 / FX_TEXEL).setDepth(1);
+          this.tiles.add(img);
+          this.grassTiles.set(cy * GRID_W + cx, { img, v });
+        }
+        continue;
+      }
       const art = featureArt(zone.feature);
       // Mirror pillars and braziers are props now — solid, in `world.props`,
       // drawn by `drawProps` — so the zone draws nothing for them.
@@ -2786,13 +6429,15 @@ export class PlayScene extends Phaser.Scene {
           }
         } else {
           const img = this.add.image(cx * TILE_PX, cy * TILE_PX, this.textureKey,
-            safeFrame(this.atlas, art.frame, "hazard_crumble_0"))
+            safeFrame(this.atlas, art.frame, "hazard_spike_0"))
             .setOrigin(0).setScale(1 / ART_SCALE).setDepth(1).setAlpha(0.9);
           this.tiles.add(img);
           if (art.pair) this.featureLights.push({ img, a: art.frame, b: art.pair, cycles: art.cycles === true });
         }
       }
     }
+    if (this.world.room.id === "fixed-boss") drawHallArt(this, this.tiles, "boss", grid);
+    else if (this.world.room.id === "fixed-shop") drawHallArt(this, this.tiles, "shop", grid);
   }
 
   /**
@@ -2860,30 +6505,681 @@ export class PlayScene extends Phaser.Scene {
   }
 
   /**
-   * A vortex: three additive arcs turning inward, and motes falling to the
-   * centre. The turn is the tell — a still spiral is a decal.
+   * **The three shapes that run on the caster** (doc 006), each drawn on the
+   * body for as long as it runs, and each saying so as it runs out: over
+   * its last stretch the light thins and blinks, so a renewal can be timed.
+   *
+   * - **A trail** (`p.trail`): embers kicked up behind each step, and the
+   *   burning patches it drops (drawn by `FireFx`). Never
+   *   flames on the body: that is how a *burning* player is drawn, and this
+   *   is the player's own fire, which does not hurt them.
+   * - **An enchant** (`p.enchant`): two motes of the wave's light turning
+   *   round the staff's crystal, and motes shed off it — no glow disc over
+   *   the delivered staff.
+   *   Subtle on purpose: the sword already has a magic blade, and the waves
+   *   are what the enchant is.
+   * - **A stance** (`p.stance`): the staff held forward across the body (the
+   *   posture, in `draw`), its shaft lit along its length in the guard's
+   *   light, and the answer gathering — motes drawn in to the shaft, faster
+   *   as the guard runs down to the expiry answer. No ring on the floor:
+   *   a ring round a body is how an enemy's attack is drawn.
    */
-  private drawVortices(): void {
+  private drawCasterStates(): void {
     const w = this.world;
-    const g = this.fxGfx;
-    for (const v of w.vortices) {
-      if (!v.alive) continue;
-      const life = Math.min(1, v.lifeMs / 400) * Math.min(1, (v.maxLifeMs - v.lifeMs) / 200);
-      const spin = w.tick / 9;
-      g.fillStyle(0x7a4fd6, 0.12 * life);
-      g.fillCircle(v.x, v.y, v.radius);
-      for (let k = 0; k < 3; k++) {
-        const a0 = spin + (k / 3) * Math.PI * 2;
-        for (let i = 0; i < 8; i++) {
-          const t = i / 8;
-          const r = v.radius * (1 - t * 0.85);
-          const a = a0 + t * 2.2;
-          g.fillStyle(i % 2 ? 0xd9c6ff : 0x9a7bff, (0.55 - t * 0.4) * life);
-          g.fillCircle(v.x + Math.cos(a) * r, v.y + Math.sin(a) * r, 2.6 - t * 1.6);
+    const p = w.player;
+    const g = this.fxTopGfx;
+    const tick = w.tick;
+    const ending = (ms: number, window: number) => ms < window && ((tick >> 2) & 1) === 0;
+    if (p.trail) {
+      const t = p.trail;
+      const k = ending(t.ms, 700) ? 0.4 : 1;
+      const moving = this.trailWasMoving(p.x, p.y);
+      if (moving && Math.random() < 0.7 * k)
+        this.shed({ x: p.x + (Math.random() - 0.5) * 8, y: p.y + 3, vx: (Math.random() - 0.5) * 18, vy: -20 - Math.random() * 25, ms: 0, life: 280 + Math.random() * 200, size: 0.9 + Math.random() * 0.5, colour: Math.random() < 0.5 ? 0xffc85a : 0xff8a3a, gravity: -30 });
+    }
+    if (p.enchant) {
+      const look = spellLookOf(w.spells[p.enchant.spellIndex]?.item.base ?? "crescent_edge", "none");
+      const at = this.frameCrystal ?? this.handAt;
+      if (at && swingPhase(p) === "none") {
+        const k = ending(p.enchant.ms, 1000) ? 0.35 : 1;
+        // Two motes of its light turning round the crystal, pixel-sized: no glow disc over the staff's own art.
+        for (let i = 0; i < 2; i++) {
+          const a = tick / 14 + i * Math.PI;
+          const cx = at.x + Math.cos(a) * 5, cy = at.y + Math.sin(a) * 2.5;
+          g.fillStyle(i === 0 ? look.core : look.glow, 0.9 * k);
+          g.fillRect(Math.round(cx) - 0.5, Math.round(cy) - 0.5, 1, 1);
+        }
+        if (Math.random() < 0.25 * k)
+          this.shed({ x: at.x + (Math.random() - 0.5) * 4, y: at.y, vx: (Math.random() - 0.5) * 8, vy: -14 - Math.random() * 10, ms: 0, life: 300 + Math.random() * 200, size: 0.8, colour: look.core, gravity: -10 });
+      }
+    }
+    if (p.stance) {
+      const s = p.stance;
+      const look = spellLookOf(w.spells[s.spellIndex]?.item.base ?? "counter_stance", "none");
+      const left = Math.max(0, s.ms / Math.max(1, s.maxMs));
+      const shaft = this.frameShaft;
+      const pulse = 0.85 + 0.15 * Math.sin(tick / 2);
+      if (shaft) {
+        // The shaft lit along its length: a filled band tapering to the grip, brightest at the crystal.
+        const dx = shaft.cx - shaft.gx, dy = shaft.cy - shaft.gy;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len, ny = dx / len;
+        const ex = shaft.cx + (dx / len) * 3, ey = shaft.cy + (dy / len) * 3;
+        const sx = shaft.gx - (dx / len) * 2, sy = shaft.gy - (dy / len) * 2;
+        // Two hard bands along the shaft, the light and its core: no soft outer layer.
+        for (const [wd, colour, alpha] of [[1.6, look.glow, 0.6], [0.6, look.core, 0.95]] as const) {
+          g.fillStyle(colour, alpha * pulse);
+          g.beginPath();
+          g.moveTo(sx, sy);
+          g.lineTo(ex + nx * wd, ey + ny * wd);
+          g.lineTo(ex - nx * wd, ey - ny * wd);
+          g.closePath();
+          g.fillPath();
+        }
+        // The answer gathering: motes drawn in to the shaft from round the body, quicker as the guard runs down.
+        const n = 5;
+        for (let k = 0; k < n; k++) {
+          const u = ((tick * (1 + 2 * (1 - left))) / 36 + k / n) % 1;
+          const a = k * 1.256 + tick / 30;
+          const d = (1 - u) * 16;
+          const tx = shaft.gx + dx * 0.6, ty = shaft.gy + dy * 0.6;
+          g.fillStyle(look.core, 0.8 * u);
+          g.fillRect(Math.round(tx + Math.cos(a) * d) - 0.5, Math.round(ty + Math.sin(a) * d * 0.7) - 0.5, 1, 1);
         }
       }
-      g.fillStyle(0xffffff, 0.8 * life);
-      g.fillCircle(v.x, v.y, 3 + Math.sin(w.tick / 4) * 0.8);
+      // Planted: the feet's shadow a little darker and wider while the guard holds.
+      this.projGfx.fillStyle(SHADOW_INK, 0.18);
+      this.projGfx.fillEllipse(p.x, p.y + 4, 18, 6);
+    }
+  }
+
+  /** Whether the caster moved in the last few frames, so a trail's embers follow steps and not a stand. */
+  private trailWasMoving(x: number, y: number): boolean {
+    const past = this.trail[this.trail.length - 4];
+    return !!past && Math.hypot(past.x - x, past.y - y) > 0.5;
+  }
+
+  /**
+   * A vortex: three arms of hard-edged motes turning inward over a dark hole
+   * in the floor, and motes falling to the centre. The turn is the tell — a
+   * still spiral is a decal. No glow disc: a drawn gather is on the art work
+   * order (`docs/art-workorder-spells.md`).
+   *
+   * **A pull that will implode says so before it does** (`collapse`, doc
+   * 006). Over its last few hundred milliseconds it draws itself in — the
+   * arms tighten toward the middle and turn faster, and the heart swells and
+   * brightens — so the implosion arrives as
+   * the end of a motion the player watched start, and a body at the rim can
+   * be seen to be about to be caught.
+   */
+  private drawVortices(): void {
+    for (const v of this.world.vortices) {
+      if (!v.alive) continue;
+      const gathering = v.collapseDamage > 0 && v.lifeMs <= COLLAPSE_GATHER_MS;
+      const frame = gathering
+        ? Math.min(3, Math.floor((1 - v.lifeMs / COLLAPSE_GATHER_MS) * 4))
+        : Math.floor(this.world.tick / 6) % 4;
+      this.spellSprite(gathering ? `vfx_vortex_gather_${frame}` : `vfx_vortex_${frame}`,
+        v.x, v.y, 5.6);
+    }
+  }
+
+  /**
+   * **The option effects of doc 006, per simulation step**: what the step's
+   * events and state edges set going. Each is an event in the sim with no
+   * picture of its own — a poison jumping, a mark bursting, a pull imploding,
+   * an orb's ring of shards, a leap landing, a dash cut cast free, a rock
+   * landing on its mark — and each gets one here, where it happened.
+   */
+  private noteSpellOptions(): void {
+    const w = this.world;
+    const p = w.player;
+    /*
+     * A leap leaving the floor. Where it will come down is where the dash
+     * will have carried the player by the time the strike runs out, which the
+     * sim fixes at the cast; a wall can still stop it short, and the ring
+     * then goes off where the player really is.
+     */
+    if (p.landing && p.strikeMs > 0 && !this.leap) {
+      const speed = DASH_SPEED * p.mods.dashRange;
+      const left = (speed * p.strikeMs) / 1000;
+      const l = p.landing;
+      this.leap = {
+        x0: p.x, y0: p.y, x1: p.x + p.dashX * left, y1: p.y + p.dashY * left, totalMs: p.strikeMs,
+        ring: l.first + l.step * Math.max(0, l.rings - 1) + l.radius,
+      };
+    }
+    if (this.leap && !p.landing) this.leap = null;
+
+    // The bodies a poison jumped to this step; the jump's own event follows them.
+    const caught: { x: number; y: number }[] = [];
+    for (const ev of w.events) {
+      if (ev.kind === "hazard_tick" && ev.what === "contagion") { caught.push({ x: ev.x, y: ev.y }); continue; }
+      if (ev.kind === "shot" && ev.what === "contagion") { this.contagionFrom(ev.x, ev.y, caught); caught.length = 0; continue; }
+      if (ev.kind === "spell") { this.noteShapeEvent(ev); continue; }
+      if (ev.kind === "shot" && ev.what === "free_strike") this.freeCutAt(ev.x, ev.y);
+      else if (ev.kind === "shot" && ev.what === "land") this.landingAt(ev.x, ev.y);
+      else if (ev.kind === "shot" && ev.what === "emit_burst") this.frostRingAt(ev.x, ev.y);
+      else if (ev.kind === "eruption" && ev.what === "doom") this.doomBurstAt(ev.x, ev.y);
+      else if (ev.kind === "eruption" && ev.what === "collapse") this.collapseAt(ev.x, ev.y);
+      else if (ev.kind === "eruption" && ev.what === "fire") {
+        const c = w.eruptions.find((c) => c.alive && c.fired && c.telegraphMs > 0 && Math.abs(c.x - ev.x) < 0.5 && Math.abs(c.y - ev.y) < 0.5);
+        if (c) this.meteorImpactAt(c.x, c.y, c.radius);
+      } else if (ev.kind === "hazard_tick" && ev.what === "doom_mark") {
+        // The mark taking: violet motes drawn into the body.
+        this.burst(ev.x, ev.y - 6, 0xc69cff, 8, 90, undefined, Math.PI * 2, 0.7);
+      }
+    }
+
+    /*
+     * **Rings of broken ground** (`ring` pattern, and a leap's landing). The
+     * cells are spikes like any earth cell; what makes it a ring is the
+     * ground between them breaking too, so each ring, as it goes off, leaves
+     * a crack round the whole circle and throws a skirt of dust off it.
+     * Every cell of a cast is placed at once, so the ring's centre is the
+     * middle of the cells first seen for it.
+     */
+    for (const c of w.eruptions) {
+      if (!c.alive || c.kind !== "earth" || c.castId <= 0 || !this.isRingCast(c.spellIndex)) continue;
+      let cast = this.ringCasts.get(c.castId);
+      if (!cast) {
+        const mates = w.eruptions.filter((o) => o.alive && o.castId === c.castId);
+        cast = {
+          x: mates.reduce((a, o) => a + o.x, 0) / mates.length,
+          y: mates.reduce((a, o) => a + o.y, 0) / mates.length,
+          rings: new Set(),
+        };
+        this.ringCasts.set(c.castId, cast);
+      }
+      if (!c.fired || this.firedCells.get(c) === c.castId) continue;
+      this.firedCells.set(c, c.castId);
+      const r = Math.hypot(c.x - cast.x, c.y - cast.y);
+      const key = Math.round(r / 6);
+      if (cast.rings.has(key)) continue;
+      cast.rings.add(key);
+      // The ring's ground cells carry their own cracks; the painted dust
+      // reads as debris without placing an enemy-like outline on the floor.
+      this.playSpell("vfx_landing_dust", cast.x, cast.y, 4, 1000 / 16, 5.8, 0.5);
+    }
+    if (this.ringCasts.size > 16)
+      for (const id of this.ringCasts.keys())
+        if (!w.eruptions.some((o) => o.alive && o.castId === id)) this.ringCasts.delete(id);
+  }
+
+  /** The first key holding a spell of this shape, or -1. */
+  private keyOfShape(shape: string): number {
+    return this.world.spells.findIndex((s) => !!s && String(ITEMS.get(s.item.base)?.params.shape ?? "") === shape);
+  }
+
+  /** The light of the spell on the first key of this shape, or its fallback's. */
+  private shapeLook(shape: string, fallback: string): SpellLook {
+    const i = this.keyOfShape(shape);
+    const slot = i >= 0 ? this.world.spells[i] : null;
+    return spellLookOf(slot?.item.base ?? fallback, "none");
+  }
+
+  /**
+   * **A shape doing something that is not a hit** (the world's `"spell"`
+   * events, doc 006), drawn where it happened. None of these has a line
+   * round it or a glow disc under it: a delivered impact frame, motes and cuts.
+   */
+  private noteShapeEvent(ev: WorldEvent): void {
+    const w = this.world;
+    const p = w.player;
+    switch (ev.what) {
+      case "orb_strike": {
+        // The blow landing on the body: the delivered impact frames along the bolt, and the storm's sparks off it.
+        const e = w.enemies.find((o) => o.id === ev.amount);
+        const look = this.shapeLook("orb", "ball_lightning");
+        const x = e?.x ?? ev.x, y = (e?.y ?? ev.y) - 4;
+        this.impacts.push({ x, y, ms: IMPACT_MS, scale: 0.9, slashAngle: ev.facing ?? 0, color: look.core });
+        this.burst(x, y, look.core, 4, 170, ev.facing, 2.2, 0.6);
+        break;
+      }
+      case "boomerang_turn": {
+        // The blade hanging at the far end: its light gathered, and motes thrown on as it turns.
+        const look = this.shapeLook("boomerang", "returning_edge");
+        this.burst(ev.x, ev.y - 5, look.core, 7, 90, undefined, Math.PI * 2, 0.8, -30);
+        break;
+      }
+      case "boomerang_caught": {
+        // Back in the hand: a glint where it went in, and its light shed off the body.
+        const look = this.shapeLook("boomerang", "returning_edge");
+        // At the staff, the hand that swings: the off hand holds the flame.
+        const hand = this.frameCrystal ?? { x: p.x, y: p.y - BODY_LIFT };
+        this.burst(hand.x, hand.y, look.core, 6, 70, -Math.PI / 2, 2.4, 0.7, -50);
+        break;
+      }
+      // The release draws nothing at the blade: the crescent itself flies out of the swing's end (`drawWaves`).
+      case "wave": break;
+      case "trail": {
+        // The ground under the caster catching: embers thrown up round the feet.
+        this.burst(p.x, p.y + 2, 0xffc85a, 10, 90, -Math.PI / 2, 2.6, 0.8, -60);
+        break;
+      }
+      case "enchant": {
+        // The sword taking the enchant: its light pulled up into the crystal.
+        const look = this.shapeLook("enchant", "crescent_edge");
+        const at = this.frameCrystal ?? this.handAt ?? { x: p.x, y: p.y - BODY_LIFT };
+        this.burst(at.x, at.y, look.core, 9, 110, undefined, Math.PI * 2, 0.8, -40);
+        break;
+      }
+      case "stance": {
+        // The guard going up: the body's light drawn in, and a little dust as the feet plant.
+        const look = this.shapeLook("stance", "counter_stance");
+        this.burst(p.x, p.y + 3, 0x9a8a78, 5, 60, Math.PI, Math.PI * 2, 1, 80);
+        this.burst(p.x, p.y - BODY_LIFT, look.glow, 6, 70, -Math.PI / 2, 2, 0.7, -30);
+        break;
+      }
+      case "stance_guard": {
+        /*
+         * **The hit that did not land.** At the guard, between the caster and
+         * what struck: a white clash, two short cuts crossing, and sparks
+         * thrown back the way the blow came — the blow stopped, the guard's
+         * light where it stopped. No red and no ring: nothing was lost.
+         */
+        const look = this.shapeLook("stance", "counter_stance");
+        const a = Math.atan2(ev.y - p.y, ev.x - p.x);
+        const cx = p.x + Math.cos(a) * 9, cy = p.y - BODY_LIFT + Math.sin(a) * 7;
+        // The clash: the delivered impact frames, thrown back the way the blow came.
+        this.impacts.push({ x: cx, y: cy, ms: IMPACT_MS * 1.2, scale: 1.2, slashAngle: a + Math.PI, color: 0xffffff });
+        this.fxSlashes.push({ x: cx, y: cy, angle: a + Math.PI / 2 + 0.5, ms: 0, colour: 0xffffff, len: 18 });
+        this.fxSlashes.push({ x: cx, y: cy, angle: a + Math.PI / 2 - 0.5, ms: 0, colour: look.core, len: 15 });
+        this.burst(cx, cy, 0xffffff, 8, 260, a, 1.1, 0.8);
+        this.burst(cx, cy, look.glow, 8, 180, a, 1.6, 0.9);
+        break;
+      }
+      case "stance_answer": {
+        const i = this.keyOfShape("stance");
+        const slot = i >= 0 ? w.spells[i] : null;
+        const r = Number((slot ? ITEMS.get(slot.item.base)?.params.answer_radius : undefined) ?? 56);
+        const share = ev.amount ?? 1;
+        this.answers.push({ x: ev.x, y: ev.y, r, share, ms: 0, turn: p.facing });
+        break;
+      }
+      default: break;
+    }
+  }
+
+  /**
+   * **A stance's answer** (doc 006): a spin slash round the caster, out to
+   * the answer's reach — a band of the guard's light following the cut
+   * round, bright at its head and gone at its tail, and sparks off the rim
+   * as it closes. The full answer to a taken hit sweeps the whole circle,
+   * thick and white-hot; the weak answer of a guard that ran out (or was
+   * dashed out of) is a thinner, dimmer band that sweeps three quarters of
+   * the way and throws a few motes, so the two are told apart at a glance.
+   */
+  private drawAnswers(dt: number): void {
+    for (const an of this.answers) {
+      an.ms += dt;
+      const full = an.share >= 1;
+      const frame = Math.min(full ? 4 : 3, Math.floor(an.ms / 50));
+      this.spellSprite(`vfx_guard_answer_${frame}`, an.x, an.y - BODY_LIFT * 0.5, 9.2)
+        ?.setRotation(an.turn).setTint(full ? 0xffffff : 0x82b2ab).setAlpha(full ? 1 : 0.8);
+    }
+    this.answers = this.answers.filter((an) => an.ms < (an.share >= 1 ? ANSWER_MS : ANSWER_WEAK_MS));
+  }
+
+  /** Whether the spell on key `i` erupts in rings: the `ring` pattern, or a leap's landing. */
+  private isRingCast(i: number): boolean {
+    const slot = i >= 0 ? this.world.spells[i] : null;
+    const params = slot ? ITEMS.get(slot.item.base)?.params : undefined;
+    return !!params && (params.pattern === "ring" || Number(params.land ?? 0) > 0);
+  }
+
+  /**
+   * **A carrier died and its poison jumped.** A burst of spores off the body,
+   * and one glob lobbed on a low arc to each body it jumped to, landing on it
+   * with a splash: the player sees the poison travel, and which bodies carry
+   * it now.
+   */
+  private contagionFrom(x: number, y: number, caught: readonly { x: number; y: number }[]): void {
+    this.burst(x, y - 4, 0x6fdc5a, 12, 120, undefined, Math.PI * 2, 1.1, 80);
+    this.burst(x, y - 6, 0x2f7a22, 6, 70, -Math.PI / 2, 1.6, 1.3, 120);
+    for (const t of caught) {
+      const to = this.world.enemies.find((e) => e.hp > 0 && Math.hypot(e.x - t.x, e.y - t.y) < 1);
+      const d = Math.hypot(t.x - x, t.y - y);
+      this.spores.push({ x0: x, y0: y, x1: t.x, y1: t.y, to: to?.id ?? -1, ms: 0, life: 220 + d * 1.6 });
+    }
+  }
+
+  /**
+   * **A dash spell cast free** (`FreeStrike`): the cut, at the body it was
+   * aimed at, with nobody moving.
+   *
+   * It is cast by the sword's own hit (`resonance`) or by being hurt
+   * (`retort`), so it lands on a body that is flashing white under a sword
+   * cut at that moment, and drawn then it was buried in it. So it arrives a
+   * beat later (`FREE_CUT_DELAY_MS`), after the sword's flash has gone, in
+   * the school's own light rather than white, and across the sword's line:
+   * a phantom of the dash passing through the body — a filled streak, no
+   * outline — and a cut across it.
+   */
+  private freeCutAt(x: number, y: number): void {
+    const f = this.freeBefore.find((s) => Math.abs(s.x - x) < 0.5 && Math.abs(s.y - y) < 0.5);
+    const radius = f?.radius ?? 20;
+    const slot = f && f.spellIndex >= 0 ? this.world.spells[f.spellIndex] : null;
+    const look = spellLookOf(slot?.item.base ?? "blink_strike", f?.element ?? "none");
+    const a = Math.atan2(y - this.world.player.y, x - this.world.player.x);
+    // Longer than the body is wide, so the cut is seen past it.
+    const len = Math.max(44, radius * 2.6);
+    this.freeCuts.push({ x, y, angle: a + Math.PI / 2 - 0.35, len, core: look.core, glow: look.glow, ms: -FREE_CUT_DELAY_MS });
+  }
+
+  /** The free cuts in flight: a phantom streak through the body, a cut across it, and the school's motes. */
+  private drawFreeCuts(dt: number): void {
+    const g = this.fxTopGfx;
+    for (const c of this.freeCuts) {
+      const was = c.ms;
+      c.ms += dt;
+      if (c.ms < 0) continue;
+      const ux = Math.cos(c.angle), uy = Math.sin(c.angle);
+      const nx = -uy, ny = ux;
+      if (was < 0) {
+        this.burst(c.x, c.y, c.glow, 10, 230, c.angle, 0.7, 0.9);
+        this.burst(c.x, c.y, c.core, 5, 150, c.angle + Math.PI, 0.9, 0.7);
+        this.fxSlashes.push({ x: c.x, y: c.y, angle: c.angle - 1.2, ms: 0, colour: c.core, len: c.len * 0.7 });
+      }
+      const t = Math.min(1, c.ms / FREE_CUT_MS);
+      // The phantom: a tapered streak of the school's light passing through, its head leading on.
+      const head = -0.5 + 1.2 * Math.min(1, t * 2.2);
+      const tail = head - 0.9 * (1 - t);
+      const hx = c.x + ux * c.len * head, hy = c.y + uy * c.len * head;
+      const tx = c.x + ux * c.len * tail, ty = c.y + uy * c.len * tail;
+      const w = 4.5 * (1 - t) + 0.5;
+      const k = 1 - t;
+      for (const [width, colour, alpha] of [[w * 1.8, c.glow, 0.22 * k], [w, c.glow, 0.6 * k], [w * 0.35, c.core, 0.9 * k]] as const) {
+        g.fillStyle(colour, alpha);
+        g.beginPath();
+        // Widest a third of the way back from the head, pinched at the tail.
+        const mx = hx + (tx - hx) * 0.35, my = hy + (ty - hy) * 0.35;
+        g.moveTo(hx, hy);
+        g.lineTo(mx + nx * width, my + ny * width);
+        g.lineTo(tx + nx * width * 0.2, ty + ny * width * 0.2);
+        g.lineTo(tx - nx * width * 0.2, ty - ny * width * 0.2);
+        g.lineTo(mx - nx * width, my - ny * width);
+        g.closePath();
+        g.fillPath();
+      }
+    }
+    this.freeCuts = this.freeCuts.filter((c) => c.ms < FREE_CUT_MS);
+  }
+
+  /**
+   * **A leap coming down**: the landing's weight at the player's feet — a
+   * skirt of dust thrown all round, grit and stone chips; the rings of
+   * broken ground are the spikes' own. No flash disc and no ring line.
+   */
+  private spellSprite(name: string, x: number, y: number, depth: number, scale = 1, rotation = 0): Phaser.GameObjects.Image | null {
+    if (!this.atlas.has(name)) return null;
+    const image = this.add.image(x, y, this.uiTextureKey, name)
+      .setScale(scale / ART_SCALE).setRotation(rotation).setDepth(depth);
+    this.sprites.add(image);
+    return image;
+  }
+
+  private spellArc(x0: number, y0: number, x1: number, y1: number, frame: number): void {
+    const dx = x1 - x0, dy = y1 - y0;
+    const len = Math.hypot(dx, dy);
+    if (len < 3) return;
+    const angle = Math.atan2(dy, dx), ux = dx / len, uy = dy / len;
+    this.spellSprite("vfx_arc_cap_0", x0, y0, 9.15, 1, angle);
+    for (let d = 8; d < len - 3; d += 16)
+      this.spellSprite(`vfx_arc_seg_${(frame + Math.floor(d / 16)) % 4}`,
+        x0 + ux * d, y0 + uy * d, 9.15, 1, angle);
+    this.spellSprite("vfx_arc_cap_1", x1, y1, 9.15, 1, angle);
+  }
+
+  private playSpell(prefix: string, x: number, y: number, frames: number, frameMs: number, depth: number, scale = 1): void {
+    this.spellAnims.push({ prefix, x, y, frames, frameMs, depth, scale, ms: 0 });
+  }
+
+  private drawSpellAnims(dt: number): void {
+    for (const a of this.spellAnims) {
+      const frame = Math.min(a.frames - 1, Math.floor(a.ms / a.frameMs));
+      this.spellSprite(`${a.prefix}_${frame}`, a.x, a.y, a.depth, a.scale);
+      a.ms += dt;
+    }
+    this.spellAnims = this.spellAnims.filter((a) => a.ms < a.frames * a.frameMs);
+  }
+
+  private landingAt(x: number, y: number): void {
+    this.playSpell("vfx_landing_dust", x, y, 4, 1000 / 16, 5.8);
+  }
+
+  /** An orb's end: the ring of shards leaving it, and a spray of frost; the shards are the sim's own. */
+  private frostRingAt(x: number, y: number): void {
+    this.burst(x, y, 0xe8f8ff, 12, 200, undefined, Math.PI * 2, 0.9);
+    this.burst(x, y, 0x8fdcff, 6, 90, undefined, Math.PI * 2, 1.4, 40);
+  }
+
+  /**
+   * **A doom mark going off**: motes of the void's light flung out to the
+   * mark's own radius, so the ground it takes is seen as it is taken, and
+   * the diamond over the head shattering into four shards.
+   */
+  private doomBurstAt(x: number, y: number): void {
+    this.playSpell("vfx_doom_burst", x, y, 4, 1000 / 16, 8.8);
+  }
+
+  /** A pull imploding: what it held thrown back out as light. */
+  private collapseAt(x: number, y: number): void {
+    const v = this.world.vortices.find((o) => Math.abs(o.x - x) < 0.5 && Math.abs(o.y - y) < 0.5);
+    const r = v?.radius ?? 70;
+    this.burst(x, y, 0x9a7bff, 22, 250, undefined, Math.PI * 2, 1.2);
+    this.burst(x, y, 0xffffff, 8, 300, undefined, Math.PI * 2, 0.8);
+  }
+
+  /**
+   * **The rock landing.** The one spell in the pool that asked the player to
+   * wait for it, so the frame it lands on is paid for in full: fire thrown
+   * up out of the whole circle (the fire cell's own flame pillar with it), a
+   * skirt of dust, and the rock breaking into chips. No flash disc and no
+   * ring line: a drawn impact is on the art work order. The ground it leaves
+   * burning is the sim's (`burn_ms`), drawn by `FireFx`. No camera shake:
+   * doc 008 keeps shake for the player being hurt, and the sim's hit stop
+   * already holds the flash.
+   */
+  private meteorImpactAt(x: number, y: number, r: number): void {
+    void r;
+    this.playSpell("vfx_meteor_impact", x, y, 5, 1000 / 16, 8.7);
+  }
+
+  /** The full length of the `doom` mark a key's spell leaves, for its countdown. */
+  private doomTotalMs(i: number): number {
+    const slot = i >= 0 ? this.world.spells[i] : null;
+    return Math.max(1, Number((slot ? ITEMS.get(slot.item.base)?.params.doom : undefined) ?? 2200));
+  }
+
+  /**
+   * **Doc 006's option effects, per frame.** The floor marks — the meteor's
+   * landing, a doom mark's burst ring, where a leap comes down, the rings of
+   * broken ground — go on the floor layer in the game's pixels
+   * (`spell-marks.ts`); what is in the air over the room — the rock coming
+   * down, a mark's diamond over a head, a poison in flight, what gathers in a
+   * charging hand — goes over the bodies.
+   */
+  private drawSpellOptions(): void {
+    const w = this.world;
+    const floor = this.spellFloorGfx;
+    const air = this.airGfx;
+    const top = this.fxTopGfx;
+    floor.clear();
+    air.clear();
+    const view = this.teleView();
+    const tick = w.tick;
+    const dt = this.game.loop.delta;
+
+    /*
+     * Ball lightning (doc 006's `orb`): the orb as the delivered spark sprite
+     * with its current crackling off it, and for a moment after each strike
+     * a jagged arc to the body it struck — its core only, no soft glow line. Fades
+     * over its last half second, as it runs out.
+     */
+    for (const o of w.orbs) {
+      if (!o.alive) continue;
+      if (o.lifeMs > 500 || ((tick >> 2) & 1) === 0) {
+        this.spellSprite(`vfx_ball_lightning_${Math.floor(tick / 5) % 4}`, o.x, o.y, 9.1);
+      }
+      const struck = o.lastTargetId >= 0 && o.zapClockMs > o.zapMs - 90 ? w.enemies.find((e) => e.id === o.lastTargetId && e.hp > 0) : undefined;
+      if (struck) this.spellArc(o.x, o.y, struck.x, struck.y - 4, Math.floor(tick / 5) % 4);
+    }
+
+    // The meteor: its mark, and the rock coming down on it.
+    for (const c of w.eruptions) {
+      if (!c.alive || c.fired || c.telegraphMs <= 0) continue;
+      const t = 1 - Math.max(0, c.delayMs) / c.telegraphMs;
+      drawMeteorShadow(floor, c.x, c.y, c.radius, t, view);
+      this.drawFallingRock(c.x, c.y, c.radius, t);
+    }
+
+    /*
+     * Doom: the diamond over the head, and nothing on the floor. A ring round
+     * the body read as an enemy's attack; the countdown is the rune's.
+     */
+    for (const e of w.enemies) {
+      if (e.hp <= 0 || e.doomMs <= 0) continue;
+      const left = e.doomMs / this.doomTotalMs(e.doomSpell);
+      this.drawDoomRune(e.x, e.y - e.radius - 16, left);
+    }
+    for (const d of w.dooms) {
+      const left = d.ms / this.doomTotalMs(d.spellIndex);
+      this.drawDoomRune(d.x, d.y - 12, left);
+    }
+
+    // A contagion carrier: spores circling it, so the body that will pass it on is known.
+    for (const e of w.enemies) {
+      if (e.hp <= 0 || e.contagion <= 0) continue;
+      for (let k = 0; k < 3; k++) {
+        const a = tick / 18 + (k / 3) * Math.PI * 2 + e.id;
+        const bob = Math.sin(tick / 7 + k * 2) * 1.5;
+        const sx = e.x + Math.cos(a) * (e.radius + 4);
+        const sy = e.y - 6 + Math.sin(a) * (e.radius + 4) * 0.45 + bob;
+        this.spellSprite(`vfx_contagion_glob_${(tick >> 3) & 1}`, sx, sy, 9.15);
+      }
+    }
+
+    // A poison in flight between two bodies: a glob on a low arc, landing with a splash.
+    for (const sp of this.spores) {
+      sp.ms += dt;
+      const target = sp.to >= 0 ? w.enemies.find((e) => e.id === sp.to && e.hp > 0) : undefined;
+      const x1 = target?.x ?? sp.x1, y1 = target?.y ?? sp.y1;
+      const t = Math.min(1, sp.ms / sp.life);
+      const lift = Math.sin(t * Math.PI) * (10 + Math.hypot(x1 - sp.x0, y1 - sp.y0) * 0.18);
+      const x = sp.x0 + (x1 - sp.x0) * t, y = sp.y0 + (y1 - sp.y0) * t - 6 - lift;
+      if (t >= 1) {
+        this.burst(x1, y1 - 4, 0x6fdc5a, 10, 110, undefined, Math.PI * 2, 1, 60);
+        continue;
+      }
+      this.spellSprite(`vfx_contagion_glob_${(tick >> 2) & 1}`, x, y, 9.3);
+      if (Math.random() < 0.5)
+        this.shed({ x, y, vx: (Math.random() - 0.5) * 20, vy: 20 + Math.random() * 20, ms: 0, life: 240, size: 1, colour: 0x6fdc5a, gravity: 160 });
+    }
+    this.spores = this.spores.filter((sp) => sp.ms < sp.life);
+
+    // A leap in the air: its shadow waiting where it comes down.
+    if (this.leap && w.player.landing) {
+      const t = 1 - Math.max(0, w.player.strikeMs) / this.leap.totalMs;
+      drawLeapShadow(floor, this.leap.x1, this.leap.y1, t, view);
+    }
+
+    this.drawFreeCuts(dt);
+    this.drawAnswers(dt);
+
+    this.drawChargeGather();
+    this.drawBankedDarts();
+    this.drawSpellAnims(dt);
+  }
+
+  /**
+   * **The rock coming down on its mark.** It falls from high over the room
+   * on a slant, faster as it comes, a burning rock trailing fire back up its
+   * path; its shadow on the floor darkens and gathers under it. Matter, so
+   * normal-blended; only the glow round it is light.
+   */
+  private drawFallingRock(x: number, y: number, r: number, t: number): void {
+    void r;
+    const k = Math.max(0, Math.min(1, t));
+    if (k < 0.08) return;
+    const h = METEOR_FALL_PX * (1 - k) * (1 - k);
+    this.spellSprite(`vfx_meteor_rock_${Math.floor(this.world.tick / 7) % 4}`,
+      x - h * 0.45, y - h - 6, 9.1);
+  }
+
+  /**
+   * **A doom mark over a head**: the diamond the bolt carried, standing over
+   * the body, and the countdown inside it — a solid diamond of the void's
+   * dark whose light drains from the top down as the mark runs out, like
+   * sand. No ring and no outline: in its last quarter the whole diamond
+   * blinks white, which is the moment to be clear of it.
+   */
+  private drawDoomRune(x: number, y: number, left: number): void {
+    const k = Math.max(0, Math.min(1, left));
+    const frame = Math.min(4, Math.floor((1 - k) * 5));
+    const rune = this.spellSprite(`vfx_doom_rune_${frame}`, x, y, 9.2);
+    if (k < 0.25 && ((this.world.tick >> 2) & 1) === 0) rune?.setTintFill(0xffffff);
+  }
+
+  /**
+   * **A charge gathering in the off hand** (doc 006's `charge`). The hand's
+   * own flame swells (`flare`) and motes of the spell's light are drawn into
+   * it faster as it fills; full, the delivered four-pointed glint flickers
+   * white on the hand — the look of "let go now", repeated in the key's own
+   * charge bar on the HUD. No glow disc.
+   */
+  private drawChargeGather(): void {
+    const w = this.world;
+    const p = w.player;
+    const hand = this.handAt;
+    if (p.chargeKey < 0 || !hand) { this.chargeFull = false; return; }
+    const slot = w.spells[p.chargeKey];
+    if (!slot) return;
+    const look = spellLookOf(slot.item.base, "none");
+    const s = chargeShare(w, ITEMS);
+    const g = this.fxTopGfx;
+    const full = s >= 1;
+    if (full && !this.chargeFull) this.burst(hand.x, hand.y, 0xffffff, 8, 130, undefined, Math.PI * 2, 0.7);
+    this.chargeFull = full;
+    // The off-hand flame swells with it (`flare`); round it, motes drawn in, pixel-sized, quicker as it fills.
+    for (let k = 0; k < 6; k++) {
+      const u = ((w.tick * (1 + 1.5 * s)) / 48 + k / 6) % 1;
+      const d = (1 - u) * (13 + 6 * s);
+      const a = k * 1.047 + w.tick / 24;
+      const size = u > 0.6 ? 1 : 0.5;
+      g.fillStyle(look.core, 0.85 * u);
+      g.fillRect(Math.round(hand.x + Math.cos(a) * d) - size / 2, Math.round(hand.y + Math.sin(a) * d * 0.85) - size / 2, size, size);
+    }
+    // Full: the delivered four-pointed glint on the hand, white, flickering between its two frames.
+    if (full && this.atlas.has("bullet_player_c_0"))
+      this.sprites.add(this.add.image(hand.x, hand.y, this.textureKey, `bullet_player_c_${(w.tick >> 2) & 1}`)
+        .setScale(1 / ART_SCALE).setTintFill(0xffffff).setBlendMode(Phaser.BlendModes.ADD).setDepth(9.62));
+  }
+
+  /**
+   * **A bank of darts**, held in the off hand (doc 006's `charges`): one mote
+   * per banked dart turning round it, so the player sees the key filling
+   * while they do other things, as the key's pips on the HUD say too.
+   */
+  private drawBankedDarts(): void {
+    const w = this.world;
+    const hand = this.handAt;
+    if (!hand || w.player.chargeKey >= 0) return;
+    let n = 0, look: SpellLook | null = null;
+    for (const slot of w.spells) {
+      if (!slot || chargesOf(ITEMS, slot.item.base) <= 0) continue;
+      n = Math.max(n, bankOf(slot, ITEMS));
+      look = spellLookOf(slot.item.base, "none");
+    }
+    if (!look || n <= 0) return;
+    const g = this.fxTopGfx;
+    for (let k = 0; k < n; k++) {
+      const a = w.tick / 20 + (k / n) * Math.PI * 2;
+      const x = hand.x + Math.cos(a) * 6.5, y = hand.y + Math.sin(a) * 3.5;
+      g.fillStyle(look.glow, 0.35);
+      g.fillCircle(x, y, 2);
+      g.fillStyle(look.core, 0.95);
+      g.fillCircle(x, y, 0.9);
     }
   }
 
@@ -2909,7 +7205,8 @@ export class PlayScene extends Phaser.Scene {
   private drawDashStrike(): void {
     const w = this.world;
     const p = w.player;
-    if (p.strikeMs <= 0) return;
+    // A leap cuts nothing on the way (doc 006), so it draws no cut along the floor.
+    if (p.strikeMs <= 0 || p.landing) return;
     const g = this.fxTopGfx;
     const len = 34;
     g.lineStyle(6, 0xffe9a8, 0.35);
@@ -2920,15 +7217,16 @@ export class PlayScene extends Phaser.Scene {
 
   /** How much the off-hand flame is enlarged this frame: 1 at rest, up to 1.7 on a cast. */
   private flare(): number {
-    return 1 + 0.7 * Math.max(0, this.flareMs / CAST_MS);
+    // Gathering a spell, the flame in the off hand swells until it leaves.
+    const gathering = this.world.player.castPending >= 0 || this.world.player.chargeKey >= 0 ? 1.55 + 0.1 * Math.sin(this.world.tick / 2) : 0;
+    return Math.max(gathering, 1 + 0.7 * Math.max(0, this.flareMs / CAST_MS));
   }
 
   /**
    * Reads births and deaths off the player bullet pool, once per sim step.
    *
    * A shot that was dead or unknown last step and is alive now was cast this
-   * step, at the point it now stands: the hand for a spell, the carrier's
-   * stopping point for a payload. A shot that was alive and is dead now
+   * step, at the point it now stands. A shot that was alive and is dead now
    * stopped this step, at the point it was last seen. Neither is an event in
    * the simulation, and both are the moments a spell needs to be visible at.
    */
@@ -2941,31 +7239,46 @@ export class PlayScene extends Phaser.Scene {
         if (!m || !m.alive) born.push(b);
         if (m && m.alive) {
           m.x = b.x; m.y = b.y;
-          m.payload = b.payloadUnit !== null; m.element = b.element;
+          m.element = b.element;
           m.trail.push({ x: b.x, y: b.y });
           if (m.trail.length > TRAIL_POINTS) m.trail.shift();
         } else if (m) {
           // A recycled slot: a new shot, a new path.
           m.x = b.x; m.y = b.y; m.alive = true;
-          m.payload = b.payloadUnit !== null; m.element = b.element;
+          m.element = b.element;
+          m.impact = this.spellImpactOf(b);
           m.trail = [{ x: b.originX, y: b.originY }, { x: b.x, y: b.y }];
+          m.charge = this.chargeAtBirth(b);
         } else {
           this.bulletMemory.set(b, {
-            x: b.x, y: b.y, alive: true, payload: b.payloadUnit !== null, element: b.element,
+            x: b.x, y: b.y, alive: true, element: b.element,
+            impact: this.spellImpactOf(b),
             trail: [{ x: b.originX, y: b.originY }, { x: b.x, y: b.y }],
+            charge: this.chargeAtBirth(b),
           });
         }
       } else if (m?.alive) {
         m.alive = false;
-        // A carrier bursting is the spell going off; a plain shot running out
-        // is a fizzle, sized to the shot.
+        /*
+         * A thrown blade caught is not a spell running out (its glint is
+         * `noteShapeEvent`'s), and a wave at the end of its reach has already
+         * faded in its own shape: neither fizzles.
+         */
+        if (b.delivery === "boomerang") continue;
+        if (b.delivery === "wave") continue;
+        // A shard an orb threw is a splinter going out: a glint, not a spell's fizzle.
+        if (this.isEmittedShard(b)) {
+          this.burst(m.x, m.y, 0xcfefff, 2, 50, undefined, Math.PI * 2, 0.6);
+          continue;
+        }
+        // A shot running out is a fizzle, sized to the shot.
         this.puffs.push({
           x: m.x, y: m.y, ms: PUFF_MS, element: m.element,
-          scale: m.payload ? 1.8 : 0.6 + b.radius / 10,
+          scale: 0.6 + b.radius / 10,
         });
         // Running out is a scatter of motes drifting up, not a stop.
         const tint = ELEMENT_TINT[m.element] ?? ELEMENT_TINT.none;
-        this.burst(m.x, m.y, tint.glow, m.payload ? 10 : 4, m.payload ? 160 : 60, undefined, Math.PI * 2, 0.8, -60);
+        this.burst(m.x, m.y, tint.glow, 4, 60, undefined, Math.PI * 2, 0.8, -60);
       }
     }
     if (this.bulletMemory.size > w.playerBullets.length)
@@ -2974,6 +7287,10 @@ export class PlayScene extends Phaser.Scene {
     // A spray is one cast, not five: births within a few pixels of a flash
     // already started this step feed it instead of stacking.
     for (const b of born) {
+      // An orb's shard leaves the orb, not the hand: no cast flash, no flare.
+      if (this.isEmittedShard(b)) continue;
+      // A wave is thrown by the swing, not cast: its leaving is the swing's (`noteShapeEvent`).
+      if (b.delivery === "wave") continue;
       // Ahead of the birth point along the shot, so a spell leaves the hand
       // rather than ringing the body: a ring centred on the caster reads as
       // a shield, and a shield is the opposite of what just happened.
@@ -2982,15 +7299,80 @@ export class PlayScene extends Phaser.Scene {
       const y = b.y + (b.vy / speed) * 7;
       const near = this.casts.find((c) => c.ms === CAST_MS && Math.hypot(c.x - x, c.y - y) < 12);
       if (near) { near.scale = Math.min(1.8, near.scale + 0.2); continue; }
-      this.casts.push({ x, y, ms: CAST_MS, element: b.element, scale: 1 });
+      // A charged shot leaves with a flash sized by its charge; a full one throws sparks off the hand.
+      const slot = b.spellIndex >= 0 ? this.world.spells[b.spellIndex] : null;
+      const charged = slot && chargeMsOf(ITEMS, slot.item.base) > 0 ? this.bulletMemory.get(b)?.charge ?? 1 : -1;
+      this.casts.push({
+        x, y, ms: CAST_MS, element: b.element, scale: charged >= 0 ? 0.8 + 1.1 * charged : 1,
+        // A charged shot's flash is in its own light: at that size the element's cyan read as another spell.
+        ...(charged >= 0 ? { light: lookOf(b, this.world.spells) } : {}),
+      });
+      if (charged >= 1) this.burst(x, y, lookOf(b, this.world.spells).core, 10, 220, Math.atan2(b.vy, b.vx), 1.4, 1);
       // A spray of the element's light thrown forward with the shot.
       const tint = ELEMENT_TINT[b.element] ?? ELEMENT_TINT.none;
       this.burst(x, y, tint.glow, 5, 170, Math.atan2(b.vy, b.vx), 0.9, 0.8);
     }
-    if (born.some((b) => b.spellIndex >= 0)) this.flareMs = CAST_MS;
+    if (born.some((b) => b.spellIndex >= 0 && !this.isEmittedShard(b) && b.delivery !== "wave")) this.flareMs = CAST_MS;
+  }
+
+  /**
+   * Whether this shot is a shard an `emit` shot threw (doc 006) rather than a
+   * cast: the same spell's bullet, carrying no emitter of its own.
+   */
+  private isEmittedShard(b: Bullet): boolean {
+    if (b.emitMs > 0 || b.spellIndex < 0) return false;
+    const slot = this.world.spells[b.spellIndex];
+    return !!slot && Number(ITEMS.get(slot.item.base)?.params.emit ?? 0) > 0;
+  }
+
+  /**
+   * How far a `charge` spell was held when this shot left it: the share the
+   * key was at on the step before it came up, if this is that key's shot; the
+   * share it was last let go at otherwise (an echo of the same press). Any
+   * other shot is a full one.
+   */
+  private chargeAtBirth(b: Bullet): number {
+    const slot = b.spellIndex >= 0 ? this.world.spells[b.spellIndex] : null;
+    if (!slot || chargeMsOf(ITEMS, slot.item.base) <= 0) return 1;
+    if (this.chargeBefore.key === b.spellIndex && this.world.player.chargeKey !== b.spellIndex) {
+      this.releasedShare.set(b.spellIndex, this.chargeBefore.share);
+      return this.chargeBefore.share;
+    }
+    return this.releasedShare.get(b.spellIndex) ?? 1;
   }
 
   /** The element of the spell that most plausibly just landed at (x, y), if one did. */
+  /**
+   * Which sound the spell that fired this shot makes where it lands.
+   *
+   * `spellIndex` is the slot that cast it, so the item — and with it the
+   * form, not merely the element — is one lookup away. A shot with no slot
+   * behind it (a summoned ally's volley) falls back to its
+   * element, which is the most that can honestly be said about it.
+   */
+  private spellImpactOf(b: Bullet): { name: SfxName; pitch: number } | null {
+    const slot = b.spellIndex >= 0 ? this.world.spells[b.spellIndex] : null;
+    if (slot) {
+      const s = spellSound(slot.item.base);
+      return s.impact ? { name: s.impact, pitch: s.impactPitch ?? 1 } : null;
+    }
+    if (b.element === "fire") return { name: "impact_flame", pitch: 1 };
+    if (b.element === "ice") return { name: "impact_frost", pitch: 1 };
+    if (b.element === "poison") return { name: "impact_venom", pitch: 1 };
+    return null;
+  }
+
+  /** The landing sound of whatever shot was last at this point, if any. */
+  private spellImpactNear(x: number, y: number): { name: SfxName; pitch: number } | null {
+    let best: { name: SfxName; pitch: number } | null = null;
+    let bestD = 12;
+    for (const m of this.bulletMemory.values()) {
+      const d = Math.hypot(m.x - x, m.y - y);
+      if (d < bestD) { bestD = d; best = m.impact; }
+    }
+    return best;
+  }
+
   private spellElementNear(x: number, y: number): Element | null {
     let best: Element | null = null;
     let bestD = 12;
@@ -3011,35 +7393,460 @@ export class PlayScene extends Phaser.Scene {
    * reason as the impact ring: neither has a direction to be wrong about.
    */
   private drawSpellLight(): void {
+    // A cast and a fizzle leave only hard texel sparks. The painted spell
+    // frames own their silhouettes; no soft disc or outline ring sits on them.
     const g = this.fxTopGfx;
     for (const c of this.casts) {
-      const t = 1 - c.ms / CAST_MS;
-      const tint = ELEMENT_TINT[c.element] ?? ELEMENT_TINT.none;
-      // A soft bloom behind the flash, so the cast lights the ground round the hand.
-      g.fillStyle(tint.glow, (1 - t) * 0.18);
-      g.fillCircle(c.x, c.y, c.scale * (8 + 6 * t));
-      g.fillStyle(tint.core, (1 - t) * 0.85);
-      g.fillCircle(c.x, c.y, c.scale * 3.5 * (1 - t * 0.6));
-      g.lineStyle(Math.max(0.6, 1.8 * (1 - t)), tint.glow, (1 - t) * 0.9);
-      g.strokeCircle(c.x, c.y, c.scale * (1.5 + 7.5 * Math.sqrt(t)));
-      const rays = 5;
-      const reach = c.scale * (4 + 8 * t);
-      for (let i = 0; i < rays; i++) {
-        const a = (i / rays) * Math.PI * 2 + c.x * 0.37 + c.y * 0.53;
-        g.lineBetween(
-          c.x + Math.cos(a) * reach * 0.55, c.y + Math.sin(a) * reach * 0.55,
-          c.x + Math.cos(a) * reach, c.y + Math.sin(a) * reach,
-        );
+      const tint = c.light ?? ELEMENT_TINT[c.element] ?? ELEMENT_TINT.none;
+      const age = 1 - c.ms / CAST_MS;
+      const n = age < 0.4 ? 5 : age < 0.75 ? 3 : 1;
+      for (let i = 0; i < n; i++) {
+        const a = i * Math.PI * 2 / 5 + c.x * 0.37 + c.y * 0.53;
+        const r = Math.round((2 + 6 * age) * c.scale);
+        g.fillStyle(i === 0 ? tint.core : tint.glow, 1);
+        g.fillRect(Math.round(c.x + Math.cos(a) * r), Math.round(c.y + Math.sin(a) * r), 1, 1);
       }
     }
     for (const q of this.puffs) {
-      const t = 1 - q.ms / PUFF_MS;
       const tint = ELEMENT_TINT[q.element] ?? ELEMENT_TINT.none;
-      g.fillStyle(tint.glow, (1 - t) * 0.45);
-      g.fillCircle(q.x, q.y, q.scale * 5 * (1 - t));
-      g.lineStyle(Math.max(0.5, 1.6 * (1 - t)), tint.glow, (1 - t) * 0.8);
-      g.strokeCircle(q.x, q.y, q.scale * (2 + 11 * t));
+      const age = 1 - q.ms / PUFF_MS;
+      if (age < 0.8) {
+        g.fillStyle(tint.glow, 1);
+        for (let i = 0; i < 3; i++) {
+          const a = i * Math.PI * 2 / 3 + q.x;
+          const r = Math.round(age * 6 * q.scale);
+          g.fillRect(Math.round(q.x + Math.cos(a) * r), Math.round(q.y + Math.sin(a) * r), 1, 1);
+        }
+      }
     }
+  }
+
+  /**
+   * Every sound of one simulation step, in one place.
+   *
+   * It is one method on purpose. Sound used to be a `play` call scattered
+   * beside whichever particle burst happened to be nearby, which made two
+   * things impossible: seeing what the fight actually sounds like, and
+   * changing it without reading the renderer. A hit's weight, a spell's
+   * school and a telegraph's family are decisions about the *mix*, and they
+   * belong next to each other.
+   *
+   * Three sources feed it. The step's `WorldEvent`s, which cover everything
+   * the simulation announces; the rising edges of the player states that have
+   * no event — the swing, the dash strike, the cast windup and the cast
+   * itself; and the set of bodies that have just entered a windup, because a
+   * telegraph is a state and cueing it every step would smear it into noise.
+   */
+  private playWorldSounds(): void {
+    const w = this.world;
+    const p = w.player;
+    const sfx = this.sfx;
+    // Keys whose cast a shape's own event already sounded this step.
+    const castHeard = new Set<number>();
+
+    for (const ev of w.events) {
+      switch (ev.kind) {
+        case "enemy_hit": {
+          const what = ev.what ?? "";
+          // A body braking into a wall, and a shot stopped by a ward, are not
+          // blows landed: they get the world's chip rather than the sword's.
+          if (what.startsWith("brake:") || what.startsWith("wall:") || what === "ward") { sfx.play("wall_hit"); break; }
+          if (what.startsWith("armour_break:")) { sfx.play("armour_break"); break; }
+          if (what.startsWith("prop:")) { sfx.play("hit_light", 0.9); break; }
+          if (what === "tether_cut") { sfx.play("hit_light", 1.35); break; }
+          const target = w.enemies.find((e) => Math.hypot(e.x - ev.x, e.y - ev.y) < e.radius + 8);
+          // Armour first: steel eating a blow is its own answer, and the
+          // player needs to hear that the damage did not land where they aimed.
+          if (target && target.armour > 0) { sfx.play("hit_armour", 1, target.id); break; }
+          sfx.play(this.hitWeight(ev.amount ?? 0), 1, target?.id);
+          // A spell's landing is the weight hit plus its own tail, so what
+          // was cast is heard on the body it hits rather than only as it
+          // leaves the hand. The tail is the *spell's*, not the element's: a
+          // stone shard lands like a rock and a void orb like a collapse,
+          // where both used to land like nothing at all.
+          if (what === "arc") { sfx.play("impact_storm"); break; }
+          const tail = swingPhase(p) === "none" ? this.spellImpactNear(ev.x, ev.y) : null;
+          if (tail) sfx.play(tail.name, tail.pitch);
+          break;
+        }
+        case "enemy_killed": {
+          const what = ev.what ?? "";
+          if (what.startsWith("prop:")) { sfx.play("prop_break"); break; }
+          sfx.play(what === "boss" || what === "tank" || what === "warden" ? "kill_heavy" : "kill");
+          break;
+        }
+        case "player_hit": {
+          const what = ev.what ?? "";
+          // A graze costs nothing and a tick of poison is already a hazard
+          // sound; neither is the moment a heart was lost.
+          if ((ev.amount ?? 0) === 0 || what.startsWith("dot:") || what.startsWith("status:") || what.startsWith("graze:")) break;
+          sfx.play(p.hearts <= 0 ? "player_down" : "hurt");
+          break;
+        }
+        case "shot": {
+          const what = ev.what ?? "";
+          if (what === "musket") sfx.play("shoot_heavy");
+          else if (what === "arc" || what === "split") sfx.play("impact_storm", 1.2);
+          /*
+           * Doc 006's options report what they did as shots — a free dash's
+           * cut, a leap's landing, an orb's ring of shards, a poison jumping.
+           * None of them is an enemy's shot, and each is its own event: the
+           * cut is the blink's cut, heard where it lands; the landing a thud
+           * with grit under the ring's own bursts; the ring of shards the
+           * nova's many-at-once, a little smaller; the jump a spit of venom
+           * off the body that died.
+           */
+          else if (what === "free_strike") sfx.play("dash_strike", 1.1);
+          else if (what === "land") sfx.play("impact_stone", 0.72);
+          else if (what === "emit_burst") sfx.play("cast_nova", 1.2);
+          else if (what === "contagion") sfx.play("cast_venom", 1.3);
+          else if (PLAYER_SHOT_EVENTS.has(what)) break;
+          else sfx.play("shoot_enemy");
+          break;
+        }
+        case "telegraph": {
+          if (ev.what?.startsWith("boss_phase:")) {
+            const next = Number(ev.what.slice("boss_phase:".length));
+            const king = this.world.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
+            if (king && (next === 2 || next === 3)) {
+              this.bossUnbind.set(king.id, { frame: `boss_unbind_${next - 1}`, until: this.time.now + 520 });
+              this.throwBossArmour(ev.x, ev.y, next);
+            }
+          }
+          const cue = this.telegraphFor(ev.what ?? "");
+          if (cue) sfx.play(cue[0], cue[1]);
+          break;
+        }
+        case "hazard_tick": {
+          const what = ev.what ?? "";
+          if (what === "shatter") sfx.play("impact_frost");
+          else if (what === "lightning" || what === "peal") sfx.play("impact_storm");
+          else if (what === "heavy_hit") sfx.play("hit_heavy");
+          // The boss's ground strikes have their own voice: played as a low heavy hit they lost it to the player's hits.
+          else if (what === "boss_land") sfx.play("boss_impact", 0.9);
+          else if (what.startsWith("boss_")) sfx.play("boss_impact");
+          else if (what.startsWith("ram:")) sfx.play("hit_heavy", 0.78);
+          // The boss's arms reaching the floor after their windup.
+          else if (what === "arm") sfx.play("boss_sweep");
+          else if (what === "mine" || what === "flare" || what.startsWith("lob:")) sfx.play("impact_flame");
+          else if (what === "fire" || what === "lava") sfx.play("hazard_fire");
+          else if (what === "ice") sfx.play("hazard_ice");
+          else if (what === "poison") sfx.play("impact_venom", 0.85);
+          else if (what === "rift" || what === "burst") sfx.play("eruption_stone");
+          // The band setting off, and the bell landing.
+          else if (what === "shockwave") sfx.play("eruption_stone", 0.9);
+          else if (what === "toll") sfx.play("impact_storm", 0.8);
+          break;
+        }
+        case "eruption": {
+          /*
+           * A doom mark bursting is the void's tail, dropped; a pull imploding
+           * is the void's cast — the one sound whose air sweeps inward —
+           * dropped further. The meteor landing is a fire burst with a rock's
+           * thud under it, since it is both.
+           */
+          if (ev.what === "doom") { sfx.play("impact_void", 0.72); break; }
+          if (ev.what === "collapse") { sfx.play("cast_void", 0.7); break; }
+          if (ev.what === "fire" && w.eruptions.some((c) => c.alive && c.fired && c.telegraphMs > 0
+            && Math.abs(c.x - ev.x) < 0.5 && Math.abs(c.y - ev.y) < 0.5)) {
+            sfx.play("eruption_fire", 0.75);
+            sfx.play("impact_stone", 0.7);
+            break;
+          }
+          sfx.play(ev.what === "fire" ? "eruption_fire" : "eruption_stone");
+          break;
+        }
+        /*
+         * The refusal, heard. `ui_deny` is the game's "no" everywhere else —
+         * not enough gold, no free key — and pitched up it is the same word
+         * said quietly; its own 140 ms retrigger keeps a held key from
+         * turning it into a tone. A cooldown's tick is `noteRefusal`'s, on a
+         * fresh press only. Busy and empty say nothing.
+         */
+        case "cast_refused":
+          if (ev.what === "mana") sfx.play("ui_deny", 1.3);
+          break;
+        case "bullet_wall": sfx.play("wall_hit"); break;
+        case "bullet_spent": sfx.play("fizzle"); break;
+        case "pickup": {
+          const what = ev.what ?? "";
+          if (what === "coin") sfx.play("pickup_coin");
+          else if (what === "heart") sfx.play("pickup_heal");
+          else sfx.play("pickup");
+          break;
+        }
+        case "dash": sfx.play("dash"); break;
+        case "wave_spawned": sfx.play("enemy_wake", 0.9); break;
+        case "room_cleared": sfx.play("clear"); break;
+        case "portals_open": sfx.play("portal_open"); break;
+        case "portal_entered": sfx.play("portal_enter"); break;
+        case "reward_shown": sfx.play("reward_reveal"); break;
+        /*
+         * A shape doing something that is not a hit (doc 006): an orb's
+         * strike, a blade turning and caught, a wave off a swing, a guard
+         * taking a blow and answering it (`shapeEventSound`). A shape started
+         * on the caster is its spell's own cast, played here so a free cast
+         * is heard too, and once: the key's cooldown edge below skips it.
+         */
+        case "spell": {
+          const heard = shapeEventSound(ev.what ?? "", ev.amount ?? 1);
+          if (heard === "cast") {
+            const i = this.shapeCastKey(ev.what ?? "");
+            const slot = i >= 0 ? w.spells[i] : null;
+            const s = slot ? spellSound(slot.item.base) : null;
+            if (s?.cast) sfx.play(s.cast, s.castPitch ?? 1);
+            if (i >= 0) castHeard.add(i);
+          } else if (heard) sfx.play(heard.name, heard.pitch);
+          break;
+        }
+        default: break;
+      }
+    }
+
+    /* The player's own actions, which are states rather than events. */
+    const a = this.audio;
+    // `swingMs` counts down, so a value that went *up* is a swing that has
+    // just begun. Testing for a rise from zero would have missed every
+    // chained blow, which is exactly the blow that starts before the last
+    // one has finished.
+    if (p.swingMs > a.swingMs) {
+      // The spin is its own long whoosh; every other swing is the same swing.
+      // `chained` only says the conjured blade is already out — there is no
+      // combo whose last blow is heavier — so it must not pick the sound: a
+      // player swinging steadily is chained on every swing after the first.
+      sfx.play(p.swingStretch > 1 ? "swing_spin" : "swing_light");
+    }
+    // A leap is not a cut: its take-off is the spell's cast, and its landing is heard above.
+    if (p.strikeMs > a.strikeMs && !p.landing) sfx.play("dash_strike");
+    if (a.castPending < 0 && p.castPending >= 0) sfx.play("cast_windup");
+    /*
+     * A `charge` key going down gathers, and the charge filling is cued once,
+     * with the arcane chime high: "full" has to be heard by a player whose
+     * eyes are on the room, not on their hand.
+     */
+    if (a.chargeKey < 0 && p.chargeKey >= 0) sfx.play("cast_windup", 0.9);
+    const full = p.chargeKey >= 0 && chargeShare(w, ITEMS) >= 1;
+    if (full && !a.chargeFull) sfx.play("cast_arcane", 1.5);
+    a.chargeFull = full;
+    a.chargeKey = p.chargeKey;
+    for (let i = 0; i < w.spells.length; i++) {
+      const slot = w.spells[i];
+      if (!slot) continue;
+      // A cooldown that has just started is a spell that has just left: the
+      // one edge that is true for a bolt, an eruption and a summon alike.
+      if ((a.cooldowns[i] ?? 0) <= 0 && slot.cooldownMs > 0 && !castHeard.has(i)) {
+        // A null cast is a spell whose own effects are the sound: the
+        // eruptions announce themselves one column at a time, and a cast in
+        // front of that is a sound competing with its consequence.
+        const s = spellSound(slot.item.base);
+        // A charged shot lower the longer it was held: the same release, heavier.
+        const held = chargeMsOf(ITEMS, slot.item.base) > 0 ? 1.25 - 0.4 * (this.releasedShare.get(i) ?? 1) : 1;
+        if (s.cast) sfx.play(s.cast, (s.castPitch ?? 1) * held);
+      }
+    }
+    a.swingMs = p.swingMs;
+    a.strikeMs = p.strikeMs;
+    a.castPending = p.castPending;
+    a.cooldowns = w.spells.map((s) => s?.cooldownMs ?? 0);
+
+    /* Telegraphs: cued once per body, on the step the windup starts. */
+    const winding = new Set<number>();
+    for (const e of w.enemies) {
+      if (e.attack !== "windup") continue;
+      winding.add(e.id);
+      if (a.winding.has(e.id)) continue;
+      sfx.play(e.meleeKind && SLAM_KINDS.has(e.meleeKind) ? "tele_slam" : "tele_charge",
+        e.meleeKind === "slash" || e.meleeKind === "claw" ? 1.2 : 1);
+    }
+    a.winding = winding;
+    /*
+     * The blow itself, on the step the windup commits. Without it a dodged
+     * attack made no sound at all — the only sound an enemy's blow ever made
+     * was the player's hurt, the one outcome the telegraph exists to prevent.
+     */
+    const lunging = new Set<number>();
+    for (const e of w.enemies) {
+      if (e.attack !== "lunge") continue;
+      lunging.add(e.id);
+      if (a.lunging.has(e.id) || !e.meleeKind) continue;
+      const k = e.meleeKind;
+      // The king's greatsword has the boss's own weight (doc 020).
+      if (k === "greatsweep") sfx.play("boss_sweep");
+      else if (k === "greatslash") sfx.play("boss_sweep", 1.25);
+      else if (k === "dashcut") { sfx.play("enemy_lunge", 0.8); sfx.play("boss_sweep", 0.9); }
+      else if (k === "greatcleave") sfx.play("boss_impact", 1.1);
+      else if (k === "bristle") sfx.play("enemy_spikes");
+      else if (k === "charge" || k === "thrust" || k === "lance" || k === "bash") sfx.play("enemy_lunge", k === "bash" ? 0.85 : 1);
+      else sfx.play("enemy_swipe", SLAM_KINDS.has(k) ? 0.8 : 1.05);
+    }
+    a.lunging = lunging;
+    /*
+     * The king walks on the beat: a footfall every two beats of his theme,
+     * left and right, each a thud and a little dust under the foot. A body
+     * this size that glides is a body that weighs nothing (doc 020).
+     */
+    const king = w.enemies.find((e) => e.archetype === "boss" && e.hp > 0 && e.awake);
+    if (king && !king.airborne && king.bossCast === "none" && king.attack === "approach" && Math.hypot(king.velX, king.velY) > 12) {
+      const stepNo = Math.floor(king.bossFightMs / (BEAT_MS * 2));
+      if (stepNo !== this.kingStep) {
+        this.kingStep = stepNo;
+        sfx.play("boss_step");
+        const side = stepNo % 2 === 0 ? -9 : 9;
+        this.burst(king.x + side, king.y + BOSS_FOOT_PX, 0x9a8a78, 3, 55, -Math.PI / 2, 2.6, 0.8, 220);
+      }
+    }
+    // Noticing is its own beat, so it gets its own cue.
+    const noticing = w.enemies.some((e) => e.alertMs > 0);
+    if (noticing && !this.wasNoticing) sfx.play("enemy_wake");
+    this.wasNoticing = noticing;
+
+    /* And what the music should be doing, which is free to re-assert. */
+    sfx.setAmbience(this.ambienceLevels());
+    // The room's mood remixes the score; in the boss room, the boss's phase picks how much of it plays.
+    // The boss's beat clock too, so the boss theme is played to the fight rather than beside it (doc 020).
+    const boss = w.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
+    // Off 1× in the boss lab the fight's clock is not the music's, so it is not passed on.
+    const introClock = this.kingIntro && (this.kingIntro.phase === "throw" || this.kingIntro.phase === "rise") ? this.kingIntro.clock : undefined;
+    sfx.setMusic(this.musicStateNow(), w.room.params.mood, boss?.phase ?? 1, this.labSpeed === 1 ? boss?.bossFightMs ?? introClock : undefined);
+  }
+
+  /** The key whose shape a cast event started on the caster, or the newest orb's; -1 when none is known. */
+  private shapeCastKey(what: string): number {
+    const p = this.world.player;
+    if (what === "trail") return p.trail?.spellIndex ?? -1;
+    if (what === "enchant") return p.enchant?.spellIndex ?? -1;
+    if (what === "stance") return p.stance?.spellIndex ?? -1;
+    if (what === "orb") {
+      let best: { spellIndex: number; born: number } | null = null;
+      for (const o of this.world.orbs) if (o.alive && (!best || o.born > best.born)) best = o;
+      return best?.spellIndex ?? -1;
+    }
+    return -1;
+  }
+
+  /**
+   * Which of the three weights a blow landed at.
+   *
+   * By damage rather than by what threw it, because that is what the player
+   * is being told: a rune-stacked bolt should land like a hammer and a bare
+   * one should not, and neither is a fact about the sword.
+   */
+  private hitWeight(amount: number): "hit_light" | "hit_enemy" | "hit_heavy" {
+    if (amount >= 18) return "hit_heavy";
+    if (amount >= 6) return "hit_enemy";
+    return "hit_light";
+  }
+
+  /** A telegraph event's sound and pitch, by what the body is about to do. */
+  private throwBossArmour(x: number, y: number, nextPhase: number): void {
+    const pieces = nextPhase === 2
+      ? ["pauldron_l", "pauldron_r", "helm"]
+      : ["breastplate_l", "breastplate_r", "cape"];
+    for (let i = 0; i < pieces.length; i++) {
+      const frame = `boss_debris_${pieces[i]}`;
+      if (!this.atlas.has(frame)) continue;
+      const side = i === 0 ? -1 : i === 1 ? 1 : 0;
+      const fragment = this.add.image(x + side * 18, y - BOSS_DRAW_RISE_PX - (i === 2 ? 42 : 16), this.textureKey, frame)
+        .setScale(1 / ART_SCALE).setDepth(y + 80);
+      this.tweens.add({
+        targets: fragment,
+        x: fragment.x + side * 65 + (i === 2 ? 16 : 0),
+        y: fragment.y - 45 - i * 11,
+        angle: side * 140 + (i === 2 ? 90 : 0),
+        alpha: 0,
+        duration: 660,
+        ease: "Cubic.easeOut",
+        onComplete: () => fragment.destroy(),
+      });
+    }
+  }
+
+  /**
+   * The king's chain: iron links tiled from his chain hand to its end. The
+   * link sheet is drawn large; at `BOSS_CHAIN_LINK_SCALE` a link is about
+   * nine world px, a touch heavier than the chains drawn on his body so a
+   * thrown one reads, and far from the cable it was at full size.
+   */
+  private drawBossChainArt(owner: Enemy, x1: number, y1: number, hook: boolean, depth = 8.55, alpha = 1): void {
+    const frame = `boss_p${Math.min(3, Math.max(1, owner.phase))}_hook`;
+    const joint = this.atlas.bossAnchor(frame)?.chain ?? [128, 110];
+    const left = this.world.player.x < owner.x;
+    const x0 = owner.x + (left ? 128 - joint[0] : joint[0] - 128) / ART_SCALE + bossBodyShift(this.atlas, frame, left);
+    const y0 = owner.y - BOSS_DRAW_RISE_PX + (joint[1] - 128) / ART_SCALE;
+    const dx = x1 - x0, dy = y1 - y0;
+    const length = Math.hypot(dx, dy);
+    if (length < 2) return;
+    const angle = Math.atan2(dy, dx);
+    const links = Math.max(1, Math.floor(length / BOSS_CHAIN_LINK_PITCH_PX));
+    for (let i = 0; i < links; i++) {
+      const name = `boss_chain_link_${i % 2 ? "edge" : "face"}`;
+      if (!this.atlas.has(name)) break;
+      const t = (i + .5) / links;
+      const sprite = this.add.image(x0 + dx * t, y0 + dy * t, this.textureKey, name)
+        .setScale(BOSS_CHAIN_LINK_SCALE / ART_SCALE).setRotation(angle).setDepth(depth).setAlpha(alpha);
+      this.sprites.add(sprite);
+    }
+    if (hook && this.atlas.has("boss_chain_hook_head")) {
+      const head = this.add.image(x1, y1, this.textureKey, "boss_chain_hook_head")
+        .setScale(BOSS_CHAIN_LINK_SCALE / ART_SCALE).setRotation(angle).setDepth(depth + .01).setAlpha(alpha);
+      this.sprites.add(head);
+    }
+  }
+
+  private telegraphFor(what: string): [SfxName, number] | null {
+    /*
+     * A phase change is a blow of the king's, pitched down,
+     * not `boss_phase`: that is a second of low tone falling from 300 to
+     * 100 Hz, which under the boss theme read as a hum rather than an event.
+     */
+    if (what.startsWith("boss_phase:")) return ["boss_impact", 0.8];
+    if (what.startsWith("boss_")) return ["tele_slam", 0.85];
+    if (what.startsWith("stir:")) return ["enemy_wake", 1.15];
+    // A sidestep and a blink are movement, not a promise of damage;
+    // cueing them would make the three telegraph families mean nothing.
+    if (what.startsWith("juke:") || what.startsWith("blink")) return null;
+    // The arms coming out: the slam's own weight, pitched up, because a limb
+    // is a lighter thing than the floor breaking but it is the same kind of
+    // promise — something physical is about to be somewhere.
+    if (what === "arm") return ["tele_slam", 1.25];
+    if (what === "rift" || what === "burst") return ["tele_slam", 1.1];
+    // A storm bolt's mark: the aim cue, lower, as the turret's strike marks are.
+    if (what === "bolt") return ["tele_aim", 0.8];
+    if (what === "mine_primed" || what === "hook") return ["tele_aim", 0.9];
+    return ["tele_aim", 1];
+  }
+
+  /** Whether the music is on a menu, in a room, in a fight, or on the boss. */
+  /**
+   * How near the player is to each kind of sound the room makes: a brazier
+   * still standing, a drain grate, a fountain not yet drunk dry. Full within
+   * a tile and a half, nothing beyond seven.
+   */
+  private ambienceLevels(): { fire: number; drip: number; fountain: number } {
+    const p = this.world.player;
+    const near = (spots: readonly { x: number; y: number }[]): number => {
+      let best = 0;
+      for (const s of spots) {
+        const tiles = Math.hypot(s.x - p.x, s.y - p.y) / TILE_PX;
+        best = Math.max(best, Math.min(1, Math.max(0, (7 - tiles) / 5.5)));
+      }
+      return best;
+    };
+    const fires = this.world.props.filter((d) => d.kind === "brazier" && d.hp > 0);
+    const fountains = this.shopping && !this.fountainDry
+      ? this.vendorSpots().filter((v) => v.kind === "fountain").map((v) => ({ x: (v.gx + 0.5) * TILE_PX, y: (v.gy + 0.5) * TILE_PX }))
+      : [];
+    return { fire: near(fires), drip: near(this.drainSpots), fountain: near(fountains) };
+  }
+
+  private musicStateNow(): MusicState {
+    if (this.titleUi || this.intentUi || this.gameOverUi || this.victoryUi || this.pauseUi) return "title";
+    if (this.world.enemies.some((e) => e.hp > 0 && e.archetype === "boss")) return "boss";
+    // The theme comes in with the goblet, before he is on his feet.
+    if (this.kingIntro && (this.kingIntro.phase === "throw" || this.kingIntro.phase === "rise")) return "boss";
+    // Awake, not merely present: a room of sleepers is the quiet before the
+    // fight, and it is the beat the explore layer exists for.
+    return this.world.enemies.some((e) => e.hp > 0 && e.awake) ? "fight" : "explore";
   }
 
   override update(_time: number, delta: number): void {
@@ -3073,18 +7880,30 @@ export class PlayScene extends Phaser.Scene {
      */
     if (this.keys.E && Phaser.Input.Keyboard.JustDown(this.keys.E)) this.interactPressed = true;
     if (this.keys.L && Phaser.Input.Keyboard.JustDown(this.keys.L)) this.spinPressed = true;
-    this.accumulator += Math.min(delta, 100);
+    this.accumulator += Math.min(delta, 100) * this.labSpeed;
+    if (this.labSteps > 0) { this.accumulator += STEP_MS * this.labSteps; this.labSteps = 0; }
+    if (this.labOn) this.labTick();
+    this.tickKingIntro(Math.min(delta, 100) * this.labSpeed);
+    this.tickBossCine(Math.min(delta, 100) * this.labSpeed);
+    if (this.debug.bossLabShown()) this.debug.bossFrame(this.bossLabFrame());
+    if (this.spellLab) { this.spellLab.frame(); this.debug.spellFrame(); }
     let stepped = false;
     // Tab or Escape: the menu. Escape also closes it (see `readStaffKeys`).
     // The title, the transition and the pause menu own the keys while they are up.
-    if (this.transitionUi?.phase === "ready") this.readTransitionKeys();
+    // The invitation dialog's own `<input>` has the keyboard while it is up,
+    // and the game's is switched off; nothing here may read a key behind it.
+    if (this.inviteUi) { /* see `showInvite` */ }
+    else if (this.transitionUi?.phase === "ready") this.readTransitionKeys();
     else if (this.intentUi) { this.readIntentKeys(); this.drawIntentDemo(); }
     else if (this.titleUi) this.readTitleKeys();
     else if (this.pauseUi) this.readPauseKeys();
-    else if (this.gameOverUi) { /* the card's own key listeners answer; see showGameOver */ }
+    else if (this.gameOverUi || this.victoryUi) { /* the cards' own key listeners answer; see showGameOver, showVictory */ }
     else if (!this.staffUi && !this.offerUi && !this.transitionUi && this.keys.ESC && Phaser.Input.Keyboard.JustDown(this.keys.ESC)) this.showPause();
     // Tab: the character screen, directly.
-    if (!this.titleUi && !this.intentUi && !this.pauseUi && !this.offerUi && this.keys.TAB && Phaser.Input.Keyboard.JustDown(this.keys.TAB)) {
+    // Not over a card that has ended the run: the run is over, and the
+    // character screen is a thing to read while there is still a run.
+    if (!this.titleUi && !this.intentUi && !this.pauseUi && !this.offerUi && !this.gameOverUi && !this.victoryUi
+      && this.keys.TAB && Phaser.Input.Keyboard.JustDown(this.keys.TAB)) {
       if (this.staffUi) this.hideStaff();
       else this.showStaff("view", null);
     }
@@ -3101,21 +7920,30 @@ export class PlayScene extends Phaser.Scene {
     // first room replaces it, which put the card straight back up.
     const dead = this.world.player.hearts <= 0 && !this.won && !this.entering;
     if (dead && !this.gameOverUi) this.showGameOver();
-    if (this.staffUi || this.offerUi || this.pauseUi || this.titleUi || this.transitionUi || this.intentUi || dead) this.accumulator = 0;
+    if (this.modalOpen || dead) this.accumulator = 0;
     while (this.accumulator >= STEP_MS) {
       stepped = true;
-      const wasCleared = worldCleared(this.world);
-      const dashBefore = this.world.player.dashMs;
       const shotsBefore = this.world.stats.shotsFired;
-      const enemyBulletsBefore = this.enemyBulletCount();
 
-      step(this.world, this.readInput(), STEP_MS, ITEMS);
+      // What the step is about to spend, read first: the charge a key is
+      // holding (its shot is born on release) and the dash cuts cast free.
+      this.chargeBefore.key = this.world.player.chargeKey;
+      this.chargeBefore.share = this.world.player.chargeKey >= 0 ? chargeShare(this.world, ITEMS) : 0;
+      this.freeBefore = this.world.freeStrikes.map((f) => ({ x: f.x, y: f.y, radius: f.radius, element: f.element, spellIndex: f.spellIndex }));
+      // The spell lab's auto-caster and bodies (`spell-lab.ts`), on its arena only.
+      step(this.world, this.spellLab ? this.spellLab.input(this.world, this.readInput()) : this.readInput(), STEP_MS, ITEMS);
+      this.spellLab?.afterStep(this.world, STEP_MS);
+      // The playtest log's only hook in the fight loop: one step's worth of
+      // record, read off the world the step just produced. See `debug-panel.ts`.
+      playtestLog.sample(this.world, STEP_MS);
       this.trackSpellBullets();
+      this.noteSpellOptions();
 
       // A body that simply stops existing reads as a bug. The pop outlives
       // it by a fifth of a second so the kill has a moment of its own.
       for (const ev of this.world.events) {
         if (this.damageNumbersOn) this.noteDamage(ev);
+        if (ev.kind === "cast_refused") this.noteRefusal(ev.what ?? "", ev.amount ?? -1);
         // A heavy shot's landing: a larger burst than a hit's.
         if (ev.kind === "hazard_tick" && ev.what?.startsWith("ram:")) {
           /*
@@ -3133,7 +7961,105 @@ export class PlayScene extends Phaser.Scene {
           this.fxSlashes.push({ x: ev.x, y: ev.y, angle: dir, ms: 0, colour: 0xffe0c0, len: 22 });
           this.ramSkidMs = 260;
           this.ramSkidDir = dir;
-          this.sfx.play("hurt");
+        }
+        // A cell of ground going off: grit and stone chips, or embers.
+        if (ev.kind === "eruption") {
+          if (ev.what === "fire") {
+            this.burst(ev.x, ev.y - 6, 0xffb040, 7, 110, -Math.PI / 2, 1.2, 0.8, -60);
+            this.burst(ev.x, ev.y, 0xff6a2a, 4, 70, undefined, Math.PI * 2, 0.6);
+          } else {
+            this.burst(ev.x, ev.y, 0xb8a78a, 8, 120, undefined, Math.PI * 2, 0.7, 120);
+            this.burst(ev.x, ev.y - 4, 0x6f6252, 4, 150, -Math.PI / 2, 1.4, 0.9, 260);
+          }
+        }
+        /*
+         * **The boss landing.** The one impact in the fight that has to be
+         * felt before it is read: the body comes out of the air onto a mark
+         * the player has had a second to leave, so the frame it arrives on is
+         * paid for with everything — a white flash, two rings, a skirt of
+         * dust thrown outward all round, and stone chips. The shockwave is
+         * already on its way out underneath it (`bossShock`).
+         */
+        if (ev.kind === "hazard_tick" && ev.what === "boss_land") {
+          this.impacts.push({ x: ev.x, y: ev.y, ms: IMPACT_MS * 1.8, scale: 3.2 });
+          this.ring(ev.x, ev.y, 5, 58, 0xffffff, 220, 4);
+          this.ring(ev.x, ev.y, 4, 40, 0xffc890, 420, 6);
+          // Dust, thrown outward on eight bearings so it reads as a skirt
+          // leaving the impact rather than a puff sitting on it.
+          for (let k = 0; k < 8; k++) {
+            const a = (k / 8) * Math.PI * 2;
+            this.burst(ev.x + Math.cos(a) * 14, ev.y + Math.sin(a) * 14, 0x9a8a78, 4, 130, a, 0.7, 2.2, 140);
+          }
+          this.burst(ev.x, ev.y, 0xb8a78a, 12, 170, undefined, Math.PI * 2, 1.1, 160);
+          this.burst(ev.x, ev.y - 6, 0x6f6252, 8, 210, -Math.PI / 2, 1.5, 1.2, 280);
+          for (let k = 0; k < 6; k++)
+            this.shards.push({ x: ev.x, y: ev.y, a: (k / 6) * Math.PI * 2 + 0.3, ms: 0 });
+          this.eruptCracks.push({ x: ev.x, y: ev.y, ms: 0, variant: 0 });
+          this.eruptCracks.push({ x: ev.x + 16, y: ev.y + 3, ms: 0, variant: 1 });
+        }
+        /*
+         * The standing slam and the quake: the greatsword into stone. Nearly
+         * the landing's weight — a flash, two rings, dust thrown all round and
+         * chips — because the sword arriving is the whole of the move, and a
+         * puff beside a body that barely moved was what made it read as soft.
+         */
+        if (ev.kind === "hazard_tick" && (ev.what === "boss_slam" || ev.what === "boss_quake")) {
+          const y = ev.y + BOSS_FOOT_PX;
+          this.impacts.push({ x: ev.x, y, ms: IMPACT_MS * 1.6, scale: 2.9 });
+          this.ring(ev.x, y, 5, 52, 0xffffff, 220, 4);
+          this.ring(ev.x, y, 4, 34, 0xffc890, 380, 5);
+          for (let k = 0; k < 8; k++) {
+            const a = (k / 8) * Math.PI * 2;
+            this.burst(ev.x + Math.cos(a) * 12, y + Math.sin(a) * 12, 0x9a8a78, 3, 120, a, 0.7, 2, 130);
+          }
+          this.burst(ev.x, y - 6, 0x6f6252, 7, 200, -Math.PI / 2, 1.4, 1.1, 260);
+          this.burst(ev.x, y - 4, 0xffd9a0, 10, 240, -Math.PI / 2, 1.8, 0.6, 120);
+          for (let k = 0; k < 5; k++) this.shards.push({ x: ev.x, y, a: (k / 5) * Math.PI * 2 + 0.5, ms: 0 });
+          // The floor where the sword went in stays broken for a moment.
+          this.eruptCracks.push({ x: ev.x, y, ms: 0, variant: 0 });
+          this.eruptCracks.push({ x: ev.x - 14, y: y + 4, ms: 0, variant: 1 });
+        }
+        /*
+         * The greatsword's cuts (doc 020). The cleave is driven into the floor
+         * at its tip: a flash and a ring there, chips, and dust thrown along
+         * the line it cut. The sweep throws dust off the arc's edge where it
+         * passes. A cut that lands on nothing still hits the ground.
+         */
+        if (ev.kind === "hazard_tick" && ev.what === "boss_cleave") {
+          /*
+           * The cleave into stone, at the landing's weight: a white flash and
+           * two rings where the tip went in, sparks off the steel, chips, the
+           * floor cracked along the cut and left cracked for a moment, and dust
+           * thrown off both sides of the line — so the ground remembers it.
+           */
+          const boss = this.world.enemies.find((b) => b.archetype === "boss" && b.hp > 0);
+          this.impacts.push({ x: ev.x, y: ev.y, ms: IMPACT_MS * 1.8, scale: 3 });
+          this.ring(ev.x, ev.y, 5, 46, 0xffffff, 200, 4);
+          this.ring(ev.x, ev.y, 4, 32, 0xffc890, 380, 5);
+          this.burst(ev.x, ev.y - 4, 0xffd9a0, 10, 240, -Math.PI / 2, 1.6, 0.6, 120);
+          for (let k = 0; k < 6; k++) this.shards.push({ x: ev.x, y: ev.y, a: (k / 6) * Math.PI * 2 + 0.3, ms: 0 });
+          this.eruptCracks.push({ x: ev.x, y: ev.y, ms: 0, variant: 0 });
+          if (boss) {
+            const a = Math.atan2(ev.y - boss.y, ev.x - boss.x);
+            for (let k = 1; k <= 5; k++) {
+              const f = k / 6;
+              const x = boss.x + (ev.x - boss.x) * f, y = boss.y + (ev.y - boss.y) * f;
+              this.burst(x, y, 0x9a8a78, 3, 110, a + Math.PI / 2 * (k % 2 ? 1 : -1), 0.6, 1.6, 170);
+              if (k % 2 === 0) this.eruptCracks.push({ x, y, ms: 0, variant: 1 });
+            }
+          }
+          this.burst(ev.x, ev.y - 4, 0x6f6252, 8, 200, -Math.PI / 2, 1.3, 1.1, 260);
+        }
+        if (ev.kind === "hazard_tick" && ev.what === "boss_sweep_cut") {
+          const boss = this.world.enemies.find((b) => b.archetype === "boss" && b.hp > 0);
+          if (boss) {
+            const reach = boss.swing.reach;
+            const half = (boss.swing.sweepDeg / 2) * Math.PI / 180;
+            for (let k = 0; k <= 6; k++) {
+              const a = boss.swing.facing - half + (k / 6) * 2 * half;
+              this.burst(boss.x + Math.cos(a) * reach * 0.9, boss.y + Math.sin(a) * reach * 0.9, 0x9a8a78, 2, 110, a, 0.5, 1.2, 150);
+            }
+          }
         }
         if (ev.kind === "hazard_tick" && ev.what === "heavy_hit") {
           this.impacts.push({ x: ev.x, y: ev.y, ms: IMPACT_MS, scale: 1.9 });
@@ -3146,7 +8072,6 @@ export class PlayScene extends Phaser.Scene {
           this.ring(ev.x, ev.y, 6, 34, 0xcfefff, 320, 2.5);
           this.burst(ev.x, ev.y, 0xe8f8ff, 14, 220, undefined, Math.PI * 2, 0.9);
           for (let k = 0; k < 8; k++) this.shards.push({ x: ev.x, y: ev.y, a: (k / 8) * Math.PI * 2 + Math.random() * 0.4, ms: 0 });
-          this.sfx.play("kill");
         }
         /*
          * A broken prop is not a dead body.
@@ -3162,20 +8087,39 @@ export class PlayScene extends Phaser.Scene {
           this.impacts.push({ x: ev.x, y: ev.y, ms: IMPACT_MS, scale: 1 });
           // Splinters: dull, heavy, falling.
           this.burst(ev.x, ev.y, 0x9a8fb8, 9, 150, undefined, Math.PI * 2, 0.8, 260);
-          this.sfx.play("kill");
         } else if (ev.kind === "enemy_killed" && ev.what) {
+          // The run's tally, for the game-over card; props are not bodies, so
+          // it is counted on this branch rather than above it.
+          this.runKills++;
           // `enemy_rusher_idle0` is not a frame — the sheet names them
           // `enemy_rusher_s_idle0` — so this asked for a name that never
           // existed and every directional body died with no pop at all. Which
           // meant the killing blow had no feedback of its own: a rusher dies
           // in two swings, so half of all hits on one showed nothing.
-          const pose = popFrame(ev.what as EnemyId, ev.facing ?? 0, (n) => this.atlas.has(n));
-          this.pops.push({
-            x: ev.x, y: ev.y, flipX: pose.flipX, ms: 200,
-            frame: safeFrame(this.atlas, pose.name, `${ENEMY_FRAME[ev.what as EnemyId]}_idle0`),
-          });
-          this.sfx.play("kill");
+          this.pops.push(this.killPop(ev));
         }
+        /*
+         * **Experience, and the level it reaches.**
+         *
+         * No floating "+7 XP" at the corpse. A kill already puts a damage
+         * number there, a burst, a hitstop and a sound, and a second number
+         * over the same body at the same instant competes with the one that
+         * says whether the swing was enough — at six bodies on the floor it
+         * is six more strings in the busiest half-second of the room. The
+         * gain goes to the **bar** instead, which lurches by what it was
+         * paid: several kills in one beat merge into one lurch for free,
+         * nothing is drawn over the fight, and the feedback lands where the
+         * player will look for the level rather than where the body fell.
+         */
+        if (ev.kind === "xp") {
+          this.xpFlash += ev.amount ?? 0;
+          this.xpFlashMs = XP_FLASH_MS;
+          // Kept in step with the world rather than only at the portal, so
+          // everything that reads the run's total — the Director's context,
+          // the results card — sees this room's kills too.
+          this.runXp = this.world.xp;
+        }
+        if (ev.kind === "level_up") this.onLevelUp(ev.amount ?? 1);
         if (ev.kind === "shot" && ev.what && ev.what !== "musket" && ev.what !== "disc" && ev.facing !== undefined) {
           /*
            * Every enemy shot is an event: a flash at the muzzle, sized by
@@ -3188,14 +8132,10 @@ export class PlayScene extends Phaser.Scene {
             const size = MUZZLE_WEIGHT[ev.what] ?? "s";
             const r = def.radius + 2;
             this.playFx(`muzzle_${size}`, ev.x + Math.cos(ev.facing) * r, ev.y - 3 + Math.sin(ev.facing) * r, ev.facing, 40, 8.9);
-            // A heavy gun has a low layer under its report.
-            if (size === "l") this.sfx.play("hit_enemy", 0.55);
           }
         }
         if (ev.kind === "shot" && ev.what === "musket") {
-          // The blunderbuss: a boom, the flame out of the muzzle, then smoke.
-          this.sfx.play("shoot_enemy", 0.45);
-          this.sfx.play("kill", 0.6);
+          // The blunderbuss: the flame out of the muzzle, then smoke.
           this.muzzleFx.push({ x: ev.x, y: ev.y, a: ev.facing ?? 0, ms: 0 });
         } else if (ev.kind === "bullet_wall") {
           // Shot meeting stone: sparks thrown back off the face, then grit.
@@ -3205,12 +8145,10 @@ export class PlayScene extends Phaser.Scene {
           this.playFx("fizzle", ev.x, ev.y, 0, 50, 7.1);
         } else if (ev.kind === "enemy_hit" && ev.what === "tether_cut") {
           // The cut: the line breaks into sparks along its length.
-          this.sfx.play("hit_enemy", 1.5);
           this.burst(ev.x, ev.y, 0xd8f4ff, 14, 260, undefined, Math.PI * 2, 0.7);
           this.ring(ev.x, ev.y, 4, 34, 0xd8f4ff, 240, 2);
           this.taught.add("ward");
         } else if (ev.kind === "enemy_hit") {
-          this.sfx.play("hit_enemy");
           if (!ev.what?.startsWith("brake:")) {
             const swinging = swingPhase(this.world.player) !== "none";
             if (swinging) {
@@ -3250,56 +8188,27 @@ export class PlayScene extends Phaser.Scene {
           if (!ev.what?.startsWith("dot:")) this.playFx("hit_player", this.world.player.x, this.world.player.y - BODY_LIFT, 0, 45, 9.6);
           if (!ev.what?.startsWith("dot:")) this.burst(ev.x, ev.y - BODY_LIFT, 0xff6a5a, 9, 190, undefined, Math.PI * 2, 0.8);
         }
-        if (ev.kind === "pickup") this.sfx.play("pickup");
         // The summoner's blink: a puff where it left and where it arrived.
         if (ev.kind === "telegraph" && ev.what?.startsWith("blink"))
           this.puffs.push({ x: ev.x, y: ev.y, ms: PUFF_MS, element: "none", scale: 1.7 });
-        if (ev.kind === "player_hit" && !ev.what?.startsWith("dot:") && !ev.what?.startsWith("status:"))
-          this.sfx.play("hurt");
         if (ev.kind === "reward_shown") this.buildRewardDrop();
       }
-      // Shots and dashes are state changes rather than events, so they are
-      // read as edges off the sim instead of being plumbed through it.
-      if (this.world.stats.shotsFired > shotsBefore) {
-        this.sfx.play("shoot_player");
-        this.castFlash();
-      }
-      if (this.enemyBulletCount() > enemyBulletsBefore) this.sfx.play("shoot_enemy");
-      if (dashBefore <= 0 && this.world.player.dashMs > 0) this.sfx.play("dash");
-      // The spin: one cue as the charge gathers, one as the ring lets go.
-      const spinPhase = this.world.player.swingStretch > 1 ? swingPhase(this.world.player) : "none";
-      if (spinPhase === "windup" && this.lastSpinPhase !== "windup") this.sfx.play("telegraph");
-      if (spinPhase === "recover" && this.lastSpinPhase === "active") this.sfx.play("kill");
-      this.lastSpinPhase = spinPhase;
-      /*
-       * On the edge, not every step.
-       *
-       * This played once per simulation step for as long as any body was
-       * winding up — seventeen times for one 280 ms windup. The retrigger
-       * guard in `Sfx` hid the worst of it and the result was still a sound
-       * that smeared instead of a cue that arrived, which is the opposite of
-       * what a telegraph is for.
-       */
-      const committing = this.world.enemies.some((e) => e.attack === "windup");
-      if (committing && !this.wasCommitting) this.sfx.play("telegraph");
-      this.wasCommitting = committing;
-      // Noticing is its own beat, so it gets its own cue.
-      const noticing = this.world.enemies.some((e) => e.alertMs > 0);
-      if (noticing && !this.wasNoticing) this.sfx.play("telegraph");
-      this.wasNoticing = noticing;
-      if (!wasCleared && worldCleared(this.world)) this.sfx.play("clear");
+      if (this.world.stats.shotsFired > shotsBefore) this.castFlash();
+      // Every sound of this step, in one place: see `playWorldSounds`.
+      this.playWorldSounds();
 
       this.accumulator -= STEP_MS;
     }
     /*
      * Braziers gutter and spikes cycle: two frames on a slow clock.
      *
-     * Not the ice, the poison or the crumbling floor. Their second frame is a
+     * Not the ice or the poison. Their second frame is a
      * **variant**, not a state — the same surface drawn again — so alternating
      * them made the floor itself twitch twice a second, over the whole area of
      * the zone. The spike strip keeps its pair because there the two frames
      * are retracted and out, which is a threat the player is meant to time.
      */
+    this.updateGround();
     for (const f of this.featureLights) {
       if (!f.cycles) continue;
       // Spikes on the simulation's own clock, so what is drawn out is what
@@ -3317,15 +8226,34 @@ export class PlayScene extends Phaser.Scene {
     for (const q of this.puffs) q.ms -= delta;
     this.puffs = this.puffs.filter((q) => q.ms > 0);
     if (this.flareMs > 0) this.flareMs -= delta;
-    for (const pop of this.pops) pop.ms -= delta;
-    this.pops = this.pops.filter((pop) => pop.ms > 0);
+    this.pops = this.agePops(this.pops, delta);
     if (this.tookMs > 0) this.tookMs -= delta;
+    /*
+     * The way in was refused — expired, revoked, or never good.
+     *
+     * The stored code is dropped and the switch goes off, so the game stops
+     * asking with something that does not work and the menu stops claiming
+     * an arm it cannot run. The toast says what happened in the player's
+     * terms and **does not mention the invite**: a player who has one knows
+     * what they were given, and a player who does not should not learn from
+     * an error message that such a thing exists. The run itself carries on:
+     * the Director's fallback has already kept it playable on the rule table.
+     */
+    if (this.jevKeyRejected && !this.jevKeySaid) {
+      this.jevKeySaid = true;
+      setStoredInvite("");
+      setDirectorArm("rule");
+      this.director = this.buildDirector();
+      this.tookLabel = t("toast.jevUnavailable");
+      this.tookMs = 3200;
+    }
 
     if (this.intentUi && this.demo) this.renderDemo();
     else {
       this.draw();
       this.drawHazards();
       this.drawExpansion();
+      this.drawEruptions();
       this.drawAffixMarks();
       this.drawSwing();
       this.drawEnemyBlades();
@@ -3340,11 +8268,6 @@ export class PlayScene extends Phaser.Scene {
     // The press has now been offered to the simulation and to the reward; a
     // frame with no step keeps it for the next one.
     if (stepped) { this.interactPressed = false; this.spinPressed = false; }
-
-    if (this.keys.M && Phaser.Input.Keyboard.JustDown(this.keys.M)) {
-      this.sfx.setMuted(!this.sfx.isMuted());
-      try { localStorage.setItem(MUTE_KEY, this.sfx.isMuted() ? "1" : "0"); } catch { /* still toggles */ }
-    }
 
     /*
      * Walking into an open portal is how a room ends. `R` no longer skips.
@@ -3361,21 +8284,29 @@ export class PlayScene extends Phaser.Scene {
      * last, so beating it spawned another boss, forever. A terminal room is
      * the one place the portal loop must not close.
      */
-    if (stageFor(this.roomIndex) === "boss" && worldCleared(this.world) && !this.won) {
+    // Not while the king is still on his throne (`kingIntro`): the hall is empty of bodies until he stands.
+    if (stageFor(this.roomIndex) === "boss" && worldCleared(this.world) && !this.won && !this.kingIntro) {
       this.won = true;
-      this.tookLabel = `RUN COMPLETE  ${this.roomIndex} rooms, ${this.runGold} gold`;
-      this.tookMs = 1e9;
+      // What the last room cost, banked before the results card reads it back.
+      this.bossMs = this.world.stats.elapsedMs;
+      this.tookLabel = t("toast.runComplete", { rooms: this.roomIndex, gold: this.runGold + this.world.gold });
+      this.tookMs = WIN_BEAT_MS;
       this.sfx.play("clear");
+      /*
+       * A beat to watch the last body fall, then the run is read back. The
+       * card used to be a HUD line that never cleared and a key that was
+       * never bound; it is the game-over card's twin now, listeners and all.
+       */
+      this.time.delayedCall(WIN_BEAT_MS, () => { if (this.won && !this.victoryUi) this.showVictory(); });
     }
     if (this.world.exited && !this.won && !this.entering) void this.leaveThrough(this.world.exited);
-    if (this.won
-      && Phaser.Input.Keyboard.JustDown(this.keys.R!)) {
-      this.restartRun();
-    }
   }
 
   /** Forgets the last room's Director requests: the next room's are about to be made. */
   private clearDirectorLog(): void {
+    this.requestStats = new Map();
+    this.roomUsedJev = false;
+    this.roomFellBack = null;
     this.directorLog = [];
     this.planRecords = new Map();
   }
@@ -3383,6 +8314,7 @@ export class PlayScene extends Phaser.Scene {
   /** A new run from room one: everything the run carried is dropped. */
   private restartRun(): void {
     this.hideGameOver();
+    this.hideVictory();
     this.clearDirectorLog();
     {
       this.history = emptyHistory();
@@ -3391,29 +8323,47 @@ export class PlayScene extends Phaser.Scene {
       this.spellAffixes = [];
       this.spellLevels = [];
       this.statsTaken = [];
+      this.pickTags = [];
       this.runGold = 0;
+      this.runKills = 0;
+      this.runMs = 0;
       this.mods = noMods();
+      this.runXp = 0;
+      this.xpFlash = 0;
+      this.xpFlashMs = 0;
       this.won = false;
+      this.bossMs = 0;
+      this.bossTries = 1;
       this.tension = "build";
       this.doorPlan = null;
       this.portalPlan = null;
       this.cardPlan = null;
       this.npcRoom = null;
       this.npcRooms = 0;
+      this.npcOffers = 0;
+      this.fountains = 0;
+      this.fountainOffers = 0;
+      this.eliteRooms = 0;
+      this.fightsSinceElite = undefined;
       this.lastWasNpc = false;
       this.offersMade = 0;
       this.needMisses = 0;
       this.elite = false;
       this.lastClearMs = 30_000;
+      this.clearedMs = [];
+      this.lastNearShare = 0;
+      this.measures = [];
       this.heartsLostRecent = 0;
       // A new run is a new seed, unless the URL pinned one.
       this.runSeed = freshSeed();
       const cam = this.cameras.main;
       cam.setZoom(ZOOM);
       // Zoom is applied about the centre, so the origin has to be re-anchored.
-      cam.centerOn(VIEW_W / 2, (VIEW_H + HUD_H) / 2);
+      cam.centerOn(UI_W / 2, (UI_H + HUD_H) / 2);
 
       if (!this.pendingTitle) this.showTransition();
+      // Back to the title, the room is its backdrop, which Jev does not plan.
+      if (this.pendingTitle) this.director = this.buildDirector(true);
       void this.enterRoom(1, MAX_HEARTS).then(() => {
         if (!this.transitionUi) return;
         if (this.showRoomParams) this.showRoomPlan();
@@ -3440,6 +8390,47 @@ export class PlayScene extends Phaser.Scene {
    * immediately after an elite. Both need the room being entered, recorded
    * once, at the moment of the choice.
    */
+  /**
+   * **The room just played, written down** for the Director's briefing.
+   *
+   * Built here because this is the one moment everything about the room is
+   * known at once: the fight is over, so the world can be asked what was on
+   * the floor and how low the bar went, and the player has chosen a door, so
+   * the offer's outcome is settled.
+   */
+  private journalEntry(portal: Portal): RunJournalEntry {
+    const w = this.world;
+    const stats = w.stats;
+    const hurtMost = Object.entries(stats.hurtByEnemy).sort((a, b) => b[1] - a[1])[0]?.[0];
+    const worst = ([["shots", stats.hurtByRanged], ["blades", stats.hurtByMelee], ["hazards", stats.hurtByHazard]] as const)
+      .reduce((a, b) => (b[1] > a[1] ? b : a));
+    const bodies = [...new Set((this.planned?.plan.encounter?.waves ?? [])
+      .flatMap((x) => x.spawns.map((sp) => sp.archetype)))];
+    const offered = (this.offer?.cards ?? []).map((c) => c.itemId || c.kind);
+    return {
+      index: this.roomIndex,
+      type: portal.npc ?? w.room.room_type,
+      tension: this.tension,
+      space: w.room.params.space,
+      symmetry: w.room.params.symmetry,
+      mood: w.room.params.mood,
+      health_lost: stats.heartsLost * HP_PER_HEART,
+      health_low: stats.heartsLow * HP_PER_HEART,
+      ...(stats.elapsedMs > 0 ? {
+        seconds: stats.elapsedMs / 1000,
+        expected_seconds: expectedClearMsFor(this.roomIndex, this.clearedMs) / 1000,
+      } : {}),
+      hurt_by: worst[1] > 0 ? worst[0] : "nothing",
+      ...(hurtMost ? { hurt_most_by: hurtMost } : {}),
+      ...(bodies.length ? { enemies: bodies } : {}),
+      doors_offered: (this.offer?.doors ?? []).flatMap((d) => (d.onward ? [] : [d.npc ?? d.reward])),
+      ...(portal.onward ? {} : { door_taken: portal.npc ?? portal.reward }),
+      ...(this.pickedThisRoom ? { picked: [this.pickedThisRoom] } : {}),
+      passed_over: offered.filter((id) => id !== this.pickedThisRoom),
+      ...(this.pickedThisRoom === "gold" ? { took_gold_instead: true } : {}),
+    };
+  }
+
   private async leaveThrough(portal: Portal): Promise<void> {
     this.entering = true;
     const plan = this.planned;
@@ -3447,14 +8438,48 @@ export class PlayScene extends Phaser.Scene {
       ...this.history,
       rooms: [...this.history.rooms, portal.type],
       tensions: [...this.history.tensions, this.tension],
+      // The damage series `damage_trend` reads (doc 002); the room being left
+      // is the one whose cost is now known.
+      hearts_lost: [...(this.history.hearts_lost ?? []), this.world.stats.heartsLost],
       spaces: [this.world.room.params.space, ...this.history.spaces],
       skeletons: this.world.room.skeleton ? [this.world.room.skeleton, ...(this.history.skeletons ?? [])] : this.history.skeletons ?? [],
       profiles: plan?.profile ? [...this.history.profiles, plan.profile] : this.history.profiles,
+      /*
+       * **What the offer has been doing**, which is the history the player
+       * feels: the badges this room ended with, and the badge they chose. The
+       * Director answers each room from that room's labels, so without this it
+       * could not see that it had shown the same badge six rooms running —
+       * reported from play as "you just close your eyes and pick affix".
+       * A door the run's shape fixed (`onward`) is not a badge anyone chose.
+       */
+      doors_offered: [...(this.history.doors_offered ?? []),
+        (this.offer?.doors ?? []).flatMap((d) => (d.npc || d.onward ? [] : [d.reward]))],
+      doors_taken: portal.npc || portal.onward
+        ? this.history.doors_taken ?? []
+        : [...(this.history.doors_taken ?? []), portal.reward],
+      // And what the rooms looked like, so the look-only questions alternate.
+      moods: [this.world.room.params.mood, ...(this.history.moods ?? [])],
+      symmetries: [this.world.room.params.symmetry, ...(this.history.symmetries ?? [])],
+      /*
+       * **The room, written down**, for the Director's briefing: the arrays
+       * above are one fact a room each, and the briefing needs them back
+       * together. Half of it only the finished world knows — which bodies
+       * were on the floor, how low the bar went, which body took the most.
+       */
+      journal: [...(this.history.journal ?? []), this.journalEntry(portal)],
       shop_entered: this.history.shop_entered || (portal.type === "shop" && !portal.npc),
       elite_last_room: portal.elite,
     };
-    this.runGold += this.world.gold;
+    // What the fight paid in experience goes through the portal too; the
+    // level is derived from it when the next world is built.
+    this.runXp = this.world.xp;
+    // Coins still in the air when the player steps through are theirs too.
+    this.runGold += this.world.gold
+      + this.world.pickups.reduce((s, c) => s + (c.alive && c.kind === "coin" ? c.value : 0), 0);
     this.lastClearMs = this.world.stats.elapsedMs;
+    if (portal.type !== "shop" || portal.npc) this.clearedMs.push(this.world.stats.elapsedMs);
+    if (this.world.stats.elapsedMs > 0) this.measures.push(measureOf(this.world.stats));
+    this.lastNearShare = playtestLog.nearShare();
     this.heartsLostRecent = this.world.stats.heartsLost;
     /*
      * The Director sets the next room's tension from the run so far — the
@@ -3484,26 +8509,36 @@ export class PlayScene extends Phaser.Scene {
   private showTransition(): void {
     this.hideTransition();
     const o: Phaser.GameObjects.GameObject[] = [];
-    o.push(this.add.rectangle(VIEW_W / 2, VIEW_H / 2, VIEW_W, VIEW_H, 0x0d0b1f, 1).setDepth(240));
-    const dots = this.menuText(VIEW_W / 2, VIEW_H / 2, "generating the next room", 10, "#c9cfe8").setDepth(241);
+    o.push(this.add.rectangle(UI_W / 2, UI_H / 2, UI_W * 3, UI_H * 3, 0x0d0b1f, 1).setDepth(240));
+    const dots = this.menuText(UI_W / 2, UI_H / 2, t("plan.generating"), 10, "#c9cfe8").setDepth(241);
     o.push(dots);
     this.transitionUi = { phase: "generating", startedMs: 0, ms: 0, objects: o, dots, page: 0, scroll: 0, maxScroll: 0 };
   }
 
   private tickTransition(delta: number): void {
-    const t = this.transitionUi;
-    if (!t) return;
-    t.ms += delta;
-    if (t.phase === "generating" && t.dots) {
-      const n = Math.floor(t.ms / 300) % 4;
+    const tu = this.transitionUi;
+    if (!tu) return;
+    tu.ms += delta;
+    if (tu.phase === "generating" && tu.dots) {
+      const n = Math.floor(tu.ms / 300) % 4;
       // After a second, say how long: a Director waiting on Jev is slow, not stuck.
-      t.dots.setText(`generating the next room${".".repeat(n)}${" ".repeat(3 - n)}${t.ms > 1000 ? `   ${(t.ms / 1000).toFixed(1)} s` : ""}`);
+      tu.dots.setText(`${t("plan.generating")}${".".repeat(n)}${" ".repeat(3 - n)}${tu.ms > 1000 ? `   ${t("plan.seconds", { n: (tu.ms / 1000).toFixed(1) })}` : ""}`);
     }
   }
 
   private hideTransition(): void {
     for (const g of this.transitionUi?.objects ?? []) g.destroy();
     this.transitionUi = null;
+    /*
+     * The key guide waits for the room plan to be dismissed: with the plan
+     * page on, the first thing a first run shows is the plan, and stacking
+     * the guide behind it would have it appear over a screen the player is
+     * already reading.
+     */
+    if (this.pendingHints && this.roomIndex === 1) {
+      this.pendingHints = false;
+      this.showFirstLaunchHints();
+    }
   }
 
   /**
@@ -3512,17 +8547,17 @@ export class PlayScene extends Phaser.Scene {
    * rule arm — which is the project's thesis made visible.
    */
   private showRoomPlan(): void {
-    const t = this.transitionUi;
-    if (!t) return;
-    t.dots = null;
-    t.phase = "ready";
-    t.page = 0;
-    t.scroll = 0;
+    const tu = this.transitionUi;
+    if (!tu) return;
+    tu.dots = null;
+    tu.phase = "ready";
+    tu.page = 0;
+    tu.scroll = 0;
     this.renderRoomPlan();
   }
 
   /** The tabs of the plan page. */
-  private static readonly PLAN_PAGES = ["ROOM", "DIRECTOR INPUTS", "DIRECTOR QUESTIONS"] as const;
+  private static readonly PLAN_PAGES = ["plan.tabRoom", "plan.tabInputs", "plan.tabQuestions"] as const;
 
   /**
    * The plan page, one tab at a time: the room as built; every state field
@@ -3531,80 +8566,251 @@ export class PlayScene extends Phaser.Scene {
    * scrolls. Left and right change tab, up and down scroll.
    */
   private renderRoomPlan(): void {
-    const t = this.transitionUi;
-    if (!t) return;
+    const tu = this.transitionUi;
+    if (!tu) return;
     const took = this.lastPlanMs;
-    for (const g of t.objects) if (g !== t.objects[0]) g.destroy();
-    t.objects = t.objects.slice(0, 1);
+    for (const g of tu.objects) if (g !== tu.objects[0]) g.destroy();
+    tu.objects = tu.objects.slice(0, 1);
     const snap = this.debugSnapshot();
     const r = snap.room;
     const e = snap.encounter;
-    const cx = VIEW_W / 2;
+    const cx = UI_W / 2;
+    /*
+     * **Every line on this page is read, so none of it goes below the body
+     * floor.**
+     *
+     * This is the densest page in the game, and the density was bought by
+     * setting it small against a system font that stayed legible there. A
+     * pixel face does not: at the sizes this page was authored at it came out
+     * around nine CSS pixels of ink and could not be read at all. The type
+     * holds at the floor and the page scrolls further instead — it already
+     * scrolls a line at a time and to the wheel, so there is somewhere for
+     * the extra lines to go.
+     */
     const add = (x: number, y: number, str: string, px: number, color: string, origin = 0.5) => {
-      const txt = this.add.text(x, y, str, { fontFamily: "monospace", fontSize: `${Math.round(px * ZOOM)}px`, color })
-        .setOrigin(origin, 0.5).setScale(1 / ZOOM).setDepth(241);
-      t.objects.push(txt);
+      const txt = this.add.text(x, y, str, {
+        fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(px, ZOOM) * ZOOM)}px`, color,
+        letterSpacing: letterSpacing() * ZOOM,
+      }).setOrigin(origin, 0.5).setScale(1 / ZOOM).setDepth(241);
+      tu.objects.push(txt);
     };
-    const title = this.npcRoom ? (this.npcRoom === "merchant" ? "THE MERCHANT" : "THE BLACKSMITH") : r.type.toUpperCase();
-    add(cx, 34, `ROOM ${r.index}  ·  ${title}${r.elite ? "  ·  ELITE" : ""}`, 14, r.elite ? "#ff9a8a" : "#ffe9a8");
-    add(cx, 49, `planned in ${took < 1000 ? `${Math.round(took)} ms` : `${(took / 1000).toFixed(1)} s`}  ·  ${snap.director.length} Director requests`, 7, "#5a5f7a");
+    const title = roomTypeName(this.npcRoom ? NPC_ROOM_ID[this.npcRoom] : r.type);
+    add(cx, 34, `${t("plan.title", { room: r.index, type: title })}${r.elite ? `  ·  ${t("plan.elite")}` : ""}`, 14, r.elite ? "#ff9a8a" : "#ffe9a8");
+    add(cx, 49, t("plan.planned", {
+      took: took < 1000 ? t("plan.ms", { n: Math.round(took) }) : t("plan.seconds", { n: (took / 1000).toFixed(1) }),
+      count: snap.director.length,
+    }), 7, "#5a5f7a");
+    /*
+     * Who planned it, on the page that explains the plan: the same badge the
+     * HUD carries, so the two cannot disagree about a room.
+     */
+    {
+      const fell = !!this.roomFellBack;
+      const jev = this.roomUsedJev;
+      // Left of the tabs, which own the centre of this line: the kind of
+      // fallback and how many questions it covered, never the raw list of
+      // names — "declined: symmetry, mood temperature, …" ran under the tabs.
+      // The questions themselves are on the decisions page.
+      const raw = this.roomFellBack ?? "";
+      const [kind, names] = raw.split(":");
+      const count = names ? names.split(",").filter((n) => n.trim()).length : 0;
+      add(40, 62, fell ? `${t("hud.jevFallback")} · ${term((kind ?? "").trim())}${count ? ` ×${count}` : ""}` : t(jev ? "hud.jev" : "hud.rule"),
+        6.5, fell ? "#ffb080" : jev ? "#8fdcff" : "#6f7ba3", 0);
+    }
     // The tabs.
     const pages = PlayScene.PLAN_PAGES;
     const tabW = 150;
     pages.forEach((name, i) => {
       const x = cx + (i - (pages.length - 1) / 2) * tabW;
-      add(x, 62, i === t.page ? `[ ${name} ]` : name, 7, i === t.page ? "#ffe9a8" : "#5a5f7a");
+      const label = t(name);
+      add(x, TAB_Y, i === tu.page ? `[ ${label} ]` : label, 7, i === tu.page ? "#ffe9a8" : "#5a5f7a");
     });
-    t.objects.push(this.keys_(cx, VIEW_H - 58, "[Enter] begin", 10, "#ffe9a8", 241));
-    t.objects.push(this.keys_(cx, VIEW_H - 44, "[◂][▸] tab    [▴][▾] scroll    this page can be turned off in Settings", 7, "#6a7396", 241));
-    if (t.page === 1) { this.renderPlanLines(this.inputLines(snap.director), add); return; }
-    if (t.page === 2) { this.renderPlanLines(this.questionLines(snap.director), add); return; }
-    t.maxScroll = 0;
+    /*
+     * **The Begin plate's rectangle is reserved before anything is laid into
+     * the page.**
+     *
+     * It sits bottom right at a fixed place, and the column ran the full
+     * width down to a bottom measured against nothing in particular — so the
+     * last lines, the "more" indicator and the scroll bar all ended up under
+     * a plate drawn on top of them. Measuring it first and handing the column
+     * a floor above it is the only way the two cannot collide, whatever the
+     * language does to the plate's width.
+     */
+    const begin = this.keys_(UI_W - 28, UI_H - 34, `[Enter] ${t("hint.begin")}`, 15, "#ffe9a8", 242, 1);
+    const bb = begin.getBounds();
+    const plate = new Phaser.Geom.Rectangle(
+      bb.centerX - (bb.width + 22) / 2, bb.centerY - (bb.height + 14) / 2, bb.width + 22, bb.height + 14,
+    );
+    tu.objects.push(this.add.rectangle(plate.centerX, plate.centerY, plate.width, plate.height, 0x2a2350, 0.95)
+      .setStrokeStyle(1.5, 0xffe9a8, 0.9).setDepth(241.5));
+    tu.objects.push(begin);
+    /*
+     * The hints get the width the plate does not want. `开始` is wider than
+     * `Begin`, so a row measured against the English plate ran under the
+     * Chinese one.
+     */
+    const hint = this.fittedKeys(
+      (UI_W - plate.width) / 2, UI_H - 44,
+      `[◂][▸] ${t("hint.tab")}    [▴][▾] ${t("hint.scrollWheel")}    ·    ${t("hint.planOff")}`,
+      7, "#6a7396", UI_W - plate.width - 48, 241,
+    );
+    tu.objects.push(hint);
+    // Everything the page lays out stops above both of them.
+    tu.floor = Math.min(plate.top, hint.getBounds().top) - 8;
+    tu.plate = plate;
+    if (tu.page === 1) { this.renderPlanLines(this.inputLines(snap.director), add); return; }
+    if (tu.page === 2) { this.renderPlanLines(this.questionLines(snap.director), add); return; }
     const promise = this.roomPromise;
-    const reward = `${this.roomReward}${promise.school ? ` (${promise.school})` : promise.family ? ` (${promise.family})` : ""}${promise.grade > 1 ? `  grade ${promise.grade}` : ""}`;
+    /*
+     * **Every word in this column is an id somewhere else.** `open_arena`,
+     * `pre_boss`, `melee_heavy` — the shapes core names and the Director
+     * answers in. `term` is the one place they become words, and the request
+     * that goes to Jev is untouched by it (doc 002).
+     */
+    const grade = (n: number) => (n > 1 ? `  ${t("plan.grade", { n })}` : "");
+    const reward = (promise.school ?? promise.family)
+      ? t("plan.rewardPromise", {
+        kind: term(this.roomReward, "reward_kind"),
+        promise: promise.school ? term(promise.school, "spell_school") : term(promise.family ?? "", "stat_family"),
+      }) + grade(promise.grade)
+      : term(this.roomReward, "reward_kind") + grade(promise.grade);
     const m = r.measured;
     const fmt = (v: number) => (Number.isInteger(v) ? `${v}` : v.toFixed(2));
-    // Left: what the room is.
-    const left: [string, string][] = [
-      ["space", `${r.space} · ${r.symmetry}`],
-      ["mood", r.mood],
-      ["tension", r.tension],
-      ["stage", r.stage],
-      ["measured", Object.entries(m).map(([k, v]) => `${k.replace(/_/g, " ")} ${fmt(v as number)}`).slice(0, 3).join(" · ")],
-      ["", Object.entries(m).map(([k, v]) => `${k.replace(/_/g, " ")} ${fmt(v as number)}`).slice(3).join(" · ")],
-      ...r.zones.map((z, i) => [i === 0 ? "zones" : "", `${z.id}: ${z.feature}`] as [string, string]),
-      ...(e ? [
-        ["encounter", `${e.profile.composition} · ${e.profile.density}`] as [string, string],
-        ["", `${e.profile.wave_structure} · anchor ${e.profile.anchor} · entry ${e.profile.entry}`] as [string, string],
-        ["pressure", `${e.pressure.toFixed(2)} in ${e.band[0]}..${e.band[1]}  ·  ${e.roster} bodies`] as [string, string],
-        ...e.waves.map((wv, i) => [i === 0 ? "waves" : "", `t+${(wv.atMs / 1000).toFixed(1)}s  ${wv.spawns}`] as [string, string]),
-        ["elite affixes", e.affixes.length ? e.affixes.join(", ") : "none"] as [string, string],
-      ] : []),
-      ["reward", reward],
-      ...(this.cardPlan && this.offer
-        ? [["cards", this.offer.cards.map((c, i) => `${c.label} (${this.cardPlan!.origins[i] ?? "?"})`).join(", ")] as [string, string]]
-        : []),
-      ...(this.offer?.doors ?? []).map((d, i) => [i === 0 ? "portals" : "",
-        d.npc ? `${d.npc === "smith" ? "blacksmith" : "merchant"}'s room`
-          : `${d.elite ? "ELITE " : ""}${d.reward}${d.school ? ` ${d.school}` : d.family ? ` ${d.family}` : ""}${(d.grade ?? 1) > 1 ? ` grade ${d.grade}` : ""}`,
-      ] as [string, string]),
-      ["trimmed", r.trimmed ? "yes, the commit check cut the plan" : "no"],
-    ].filter(([k, v]) => k !== "" || v !== "") as [string, string][];
+    // Left: what the room is, laid out as the debug sidebar is — sections,
+    // small headers, aligned keys, lists as bullets, long values wrapped
+    // rather than cut off, "none" dimmed.
+    type Row = { kind: "title" | "sub" | "kv" | "item"; key?: string; text: string; color?: string };
+    const out: Row[] = [];
+    const quiet = t("term.none");
+    const dim = (v: string) => (v === quiet || v === t("plan.trimmedNo") ? "#5a5f7a" : undefined);
+    const kv = (key: string, value: unknown, color?: string) => { const text = String(value ?? quiet); out.push({ kind: "kv", key, text, color: color ?? dim(text) }); };
+    const list = (head: string, items: readonly string[]) => {
+      out.push({ kind: "sub", text: t("plan.listHead", { head, count: items.length }) });
+      if (items.length === 0) out.push({ kind: "item", text: quiet, color: "#5a5f7a" });
+      for (const it of items) out.push({ kind: "item", text: it, color: dim(it.split(": ").pop() ?? it) });
+    };
+    out.push({ kind: "title", text: term("room") });
+    kv(term("space"), term(r.space, "space"));
+    kv(term("symmetry"), term(r.symmetry, "symmetry"));
+    kv(term("mood"), String(r.mood).split(/[\s,/]+/).filter(Boolean).map((w) => term(w, "mood")).join(t("list.sep")));
+    kv(term("tension"), term(r.tension, "tension"));
+    kv(term("stage"), term(r.stage, "room_type"));
+    kv(term("trimmed"), t(r.trimmed ? "plan.trimmedYes" : "plan.trimmedNo"));
+    out.push({ kind: "sub", text: t("char.measured") });
+    for (const [k, v] of Object.entries(m)) kv(term(k), fmt(v as number));
+    list(term("zones"), r.zones.map((z) => `${term(z.id)}: ${term(z.feature, "feature")}`));
+    if (e) {
+      out.push({ kind: "title", text: term("encounter") });
+      const prof = (k: string) => term(String(e.profile[k] ?? "none"), k);
+      kv(term("composition"), prof("composition"));
+      kv(term("density"), prof("density"));
+      kv(term("wave_structure"), prof("wave_structure"));
+      kv(term("anchor"), prof("anchor"));
+      kv(term("entry"), prof("entry"));
+      kv(term("pressure"), t("plan.pressureValue", { value: e.pressure.toFixed(2), low: e.band[0], high: e.band[1] }));
+      kv(term("roster"), t("plan.rosterValue", { n: e.roster }));
+      kv(t("char.eliteAffixes"), e.affixes.length ? e.affixes.map((a) => term(a)).join(t("list.sep")) : quiet);
+      const chosen = this.planned?.decisions.find((d) => d.question === "composition")?.choice;
+      // When the assembler could not fit the chosen profile into the band a
+      // preset stood in, so say so rather than leave the two disagreeing.
+      if (chosen && chosen !== e.profile.composition)
+        kv(term("note"), t("plan.compositionNote", { choice: term(chosen, "composition") }), "#ffb080");
+      list(term("waves"), e.waves.map((wv) => t("plan.waveAt", {
+        s: (wv.atMs / 1000).toFixed(1),
+        n: wv.parts.map((x) => t("plan.spawn", {
+          count: x.count, enemy: term(x.archetype, "enemy"), group: term(x.group),
+        })).join(t("list.sep")),
+      })));
+    }
+    out.push({ kind: "title", text: term("reward") });
+    kv(term("reward"), reward);
+    if (this.cardPlan && this.offer)
+      list(term("cards"), this.offer.cards.map((c, i) => t("plan.cardOrigin", {
+        card: contentName(c.itemId ?? "", c.label),
+        origin: term(this.cardPlan!.origins[i] ?? "", "origin"),
+      })));
+    list(term("portals"), (this.offer?.doors ?? []).map((d) => {
+      if (d.npc) return d.npc === "fountain" ? term("fountain") : t("plan.npcRoom", { npc: term(NPC_ROOM_ID[d.npc]) });
+      const named = d.school ? term(d.school, "spell_school")
+        : d.family ? term(d.family, "stat_family")
+          : term(d.reward ?? "", "reward_kind");
+      return (d.elite ? t("plan.elitePortal", { reward: named }) : named) + grade(d.grade ?? 1);
+    }));
+
+    // Wrapped into lines, then drawn in a window that scrolls with ▴▾.
     /*
-     * When the assembler could not fit the chosen profile into the band it
-     * stands a preset in, so the encounter shown differs from the answer in
-     * the decision list; say so rather than leave the two disagreeing.
+     * Measured from the size this column is actually drawn at, which the body
+     * floor decides. Hard-coded 3.9 px characters and 10 px rows were right
+     * for a system font at 6.5; against the pixel face at its floor they
+     * wrapped one line and spaced another.
      */
-    const chosen = this.planned?.decisions.find((d) => d.question === "composition")?.choice;
-    if (e && chosen && chosen !== e.profile.composition)
-      left.push(["note", `chose ${chosen}; it could not fit the band, a preset stood in`]);
-    const lx = 118;
-    const clip = (v: string) => (v.length > 46 ? `${v.slice(0, 45)}…` : v);
-    const leftH = Math.max(9, Math.min(12, Math.floor((VIEW_H - 160) / Math.max(1, left.length))));
-    left.forEach(([k, v], i) => {
-      add(lx, 82 + i * leftH, k, leftH < 12 ? 6 : 7, "#8792b5", 1);
-      add(lx + 8, 82 + i * leftH, clip(v), leftH < 12 ? 6 : 7, k === "note" ? "#ffb080" : "#e8e3d8", 0);
-    });
+    const rowPx = bodyPx(6.5, ZOOM);
+    const rowStep = Math.ceil(rowPx * 1.5);
+    const keyW = Math.ceil(rowPx * 12);
+    const lx = 40, width = UI_W / 2 - lx - 20;
+    /*
+     * Wrapped to the **measured** width, not to a character count: a han
+     * character is twice a Latin one in these faces, and a column budgeted in
+     * characters fits English and overruns Chinese by half its width.
+     */
+    const wrap = (text: string, room: number) => {
+      const chars = [...text];
+      const budget = Math.max(8, Math.floor(room / (measureText(text, rowPx) / Math.max(1, chars.length))));
+      const lines: string[] = [];
+      let rest = chars;
+      while (rest.length > budget) {
+        const at = rest.slice(0, budget).lastIndexOf(" ");
+        const cut = at < budget * 0.5 ? budget : at;
+        lines.push(rest.slice(0, cut).join(""));
+        rest = rest.slice(cut);
+        while (rest[0] === " ") rest = rest.slice(1);
+      }
+      lines.push(rest.join(""));
+      return lines;
+    };
+    type Line = { y: number; draw: (y: number) => void };
+    const lines: Line[] = [];
+    let y = 0;
+    for (const row of out) {
+      /*
+       * **One heading style.** The page had three — a lowercase gold word
+       * for a section, small caps in blue for a sub-section, and uppercase
+       * blue again on the right-hand column — which made a reader work out
+       * which of three things each heading was before reading it. Every
+       * heading on this page is now the same mark; what nests under what is
+       * said by the order and the space above, which is enough.
+       */
+      if (row.kind === "title" || row.kind === "sub") {
+        y += lines.length ? Math.round(rowStep * (row.kind === "title" ? 0.7 : 0.4)) : 0;
+        lines.push({ y, draw: (yy) => add(lx, yy, row.text.toUpperCase(), 6.5, "#8fdcff", 0) });
+        y += rowStep;
+      } else if (row.kind === "kv") {
+        wrap(row.text, width - keyW).forEach((part, i) => {
+          const key = i === 0 ? row.key! : "";
+          lines.push({ y, draw: (yy) => { if (key) add(lx, yy, key, 6.5, "#8792b5", 0); add(lx + keyW, yy, part, 6.5, row.color ?? "#e8e3d8", 0); } });
+          y += rowStep;
+        });
+      } else {
+        wrap(row.text, width - 10).forEach((part, i) => {
+          lines.push({ y, draw: (yy) => add(lx + (i === 0 ? 0 : 8), yy, i === 0 ? `· ${part}` : part, 6.5, row.color ?? "#c9cfe8", 0) });
+          y += rowStep;
+        });
+      }
+    }
+    // The same row kept clear at the foot for "▾ more" / "▴ top".
+    const top = 82, bottom = (tu.floor ?? UI_H - 76) - HINT_ROW_PX;
+    // Scrolled a line at a time, as the other pages are: `tu.scroll` counts
+    // lines, and the window starts at one. It counted pixels, a pixel a press.
+    const windowH = bottom - top;
+    const lastStart = lines.findIndex((l) => y - l.y <= windowH);
+    tu.maxScroll = Math.max(0, lastStart);
+    const scroll = lines[Math.min(tu.scroll, tu.maxScroll)]?.y ?? 0;
+    for (const l of lines) {
+      const yy = top + l.y - scroll;
+      if (yy < top - 2 || yy > bottom) continue;
+      l.draw(yy);
+    }
+    if (tu.maxScroll > 0) add(lx, bottom + HINT_ROW_PX / 2, t(tu.scroll < tu.maxScroll ? "plan.more" : "plan.top"), 6, "#6a7396", 0);
     /*
      * Right: **every decision the Director made**, by question — the answer,
      * how sure the distribution was of it, the runners-up, and whether Jev or
@@ -3623,25 +8829,115 @@ export class PlayScene extends Phaser.Scene {
       if (i === 0 || decisions[i - 1]!.c !== x.c) rows.push({ head: x.c });
       rows.push({ d: x.d });
     }
-    const rx = VIEW_W / 2 + 40;
-    add(rx, 80, "DIRECTOR DECISIONS", 8, "#8fdcff", 0);
-    // Room for every decision: the rows close up, and drop their runners-up,
-    // when a planned room and its portals ask more than fit at full height.
-    const rowH = Math.max(8, Math.min(12, Math.floor((VIEW_H - 175) / Math.max(1, rows.length))));
-    const compact = rowH < 12;
-    rows.slice(0, Math.floor((VIEW_H - 175) / rowH)).forEach((row, i) => {
-      const y = 94 + i * rowH;
-      if ("head" in row) { add(rx, y, row.head.toUpperCase(), 6, "#8fdcff", 0); return; }
+    this.renderDecisions(rows, add);
+  }
+
+  /**
+   * **Every decision the Director made**, as a table.
+   *
+   * It was a list of sentences — question, answer, percentage, runners-up and
+   * the source, all run together at whatever x each row happened to reach —
+   * set at a pitch chosen against Latin. In Chinese that is unreadable twice
+   * over: consecutive rows of full-height glyphs touch, so 地形 / 对称 / 大小
+   * fuse into a block, and with nothing aligned there is no column for the
+   * eye to run down. So:
+   *
+   * - **the pitch follows the script.** CJK glyphs fill their em box top to
+   *   bottom and need half a line again between rows; Latin has ascenders and
+   *   descenders doing some of that work.
+   * - **a section heading gets air above it** and a little below, so each
+   *   subject reads as a group rather than as another row.
+   * - **four columns**: the question, the answer with how sure it was, the
+   *   runners-up, and — right-aligned in a column of its own — who answered.
+   *   A page of "rule" turning into a page of "Jev" is the project's whole
+   *   thesis, and it has to be scannable down one edge.
+   * - **nothing is clipped.** A row that cannot hold its runners-up drops
+   *   them to a second, indented, dimmer line; a page that cannot hold those
+   *   drops the runners-up entirely, which is what the Director Questions tab
+   *   is for and what the link at the bottom says.
+   */
+  private renderDecisions(
+    rows: readonly ({ head: string } | { d: Decision })[],
+    add: (x: number, y: number, str: string, px: number, color: string, origin?: number) => void,
+  ): void {
+    const tu = this.transitionUi!;
+    const rx = UI_W / 2 + 40;
+    /** The right edge of the table: the source column ends here. */
+    const rightEdge = UI_W - 30;
+    add(rx, 80, t("head.directorDecisions"), 8, "#8fdcff", 0);
+    if (rows.length === 0) { add(rx, 94, t("plan.notPlanned"), 7, "#6a7396", 0); return; }
+
+    /*
+     * The table runs down to the same floor the left column keeps clear of
+     * the Begin plate and the hint row, less the two lines that sit under it:
+     * how many decisions did not fit, and where to read them all.
+     */
+    const linkY = (tu.floor ?? UI_H - 76) - 4;
+    const topY = 96;
+    const roomFor = linkY - 22 - topY;
+    const spacing = letterSpacing();
+    const cjk = getLang() !== "en";
+    /*
+     * The rows, said: the question, the answer with how sure the
+     * distribution was of it, the two runners-up — every option of every
+     * question is a tab away — and who answered.
+     */
+    const table: TableRow[] = rows.map((row) => {
+      if ("head" in row) return { head: term(row.head) };
       const d = row.d;
-      const probs = Object.entries(d.probabilities).sort((a, b) => b[1] - a[1]);
+      const named = (option: string) => optionName(option, d.question ?? "");
       const p = d.probabilities[d.choice] ?? 0;
-      const others = probs.filter(([k]) => k !== d.choice).slice(0, 2).map(([k, v]) => `${k} ${Math.round(v * 100)}%`).join(", ");
-      add(rx, y, `${(d.question ?? "?").replace(/_/g, " ")}: ${d.choice} ${Math.round(p * 100)}%${compact && others ? `   (${others})` : ""}`, compact ? 6 : 7, d.source === "jev" ? "#ffe9a8" : "#c9cfe8", 0);
-      if (others && !compact) add(rx + 6, y + 6, others, 5, "#6a7396", 0);
-      add(VIEW_W - 12, y, d.source, 6, d.source === "jev" ? "#8fdcff" : "#6a7396", 1);
+      const others = Object.entries(d.probabilities)
+        .sort((a, b) => b[1] - a[1])
+        .filter(([k]) => k !== d.choice)
+        .slice(0, 2)
+        .map(([k, v]) => `${named(k)} ${Math.round(v * 100)}%`)
+        .join(t("list.sep"));
+      return {
+        key: questionName(d.question ?? ""),
+        answer: `${named(d.choice)} ${Math.round(p * 100)}%`,
+        others,
+        source: term(d.source),
+        jev: d.source === "jev",
+      };
     });
-    if (decisions.length === 0) add(rx, 94, "none: this room is placed, not planned", 7, "#6a7396", 0);
-    else add(rx, VIEW_H - 72, "every option of every question: ▸ DIRECTOR QUESTIONS", 6, "#6a7396", 0);
+    const style = {
+      x: rx, rightEdge, top: topY, floor: topY + roomFor,
+      px: bodyPx(7, ZOOM), smallPx: bodyPx(6, ZOOM), spacing, cjk,
+    };
+    /*
+     * **The type never shrinks below what can be read**, so when the column
+     * cannot hold every decision something has to give. The runners-up go
+     * first — they are the one thing here the Director Questions tab repeats
+     * in full — and only then are rows left off the end, counted so the page
+     * says what it is not showing rather than ending mid-list.
+     */
+    /*
+     * **And it scrolls.** The table is taller than the column on a planned
+     * room — a room and its portals ask more than twenty questions — and the
+     * page's own ▴▾ move it, the same keys and the same step the left column
+     * takes. `maxScroll` is the largest start that still shows everything
+     * left, so the last press lands on the last row rather than past it.
+     */
+    const max = maxScrollFor(table, style);
+    tu.maxScroll = Math.max(tu.maxScroll, max);
+    const start = Math.min(tu.scroll, max);
+    const visible = table.slice(start);
+    const full = layoutDecisionTable(visible, style);
+    const laid = full.shown === visible.length ? full : layoutDecisionTable(visible, style, false);
+    for (const c of laid.cells) {
+      const txt = this.add.text(c.x, c.y, c.text, {
+        fontFamily: fontFamily(), fontSize: `${Math.round(c.px * ZOOM)}px`, color: c.color,
+        fontStyle: c.bold ? "bold" : "normal", letterSpacing: spacing * ZOOM,
+      }).setOrigin(c.origin, 0.5).setScale(1 / ZOOM).setDepth(241);
+      tu.objects.push(txt);
+    }
+    // Beside the heading rather than under it: the row under the heading is
+    // the table's first row, and there is nowhere between them to stand.
+    if (start > 0) add(rightEdge, 80, t("plan.moreAbove", { count: start }), 5.5, "#4f5570", 1);
+    if (start + laid.shown < table.length)
+      add(rx, linkY - 10, t("plan.moreLines", { count: table.length - start - laid.shown }), 5.5, "#4f5570", 0);
+    add(rx, linkY, t("plan.everyOption", { tab: t("plan.tabQuestions") }), 6, "#6a7396", 0);
   }
 
   /**
@@ -3650,113 +8946,361 @@ export class PlayScene extends Phaser.Scene {
    * round's tension and last spaces, a card offer's facts, the portal count.
    */
   private inputLines(reqs: readonly ReadoutRequest[]): PlanLine[] {
-    if (reqs.length === 0) return [{ text: "no requests: this room was placed, not planned", color: "#6a7396" }];
+    if (reqs.length === 0) return [{ text: t("plan.noRequests"), color: "#6a7396" }];
     const same = (k: string, v: string) => reqs.every((r) => r.state.some(([k2, v2]) => k2 === k && v2 === v));
     const shared = reqs[0]!.state.filter(([k, v]) => reqs.length > 1 && same(k, v));
     const sharedKeys = new Set(shared.map(([k]) => k));
     const out: PlanLine[] = [];
+    /*
+     * A state line is `field  value`, and both halves are ids: `run_progress`
+     * and `pre_boss`, `mana_refused` and `often`. `stateLine` names
+     * both, and knows the two shapes the flattening leaves behind — a list
+     * (`dominant_tags` carries several) and a per-card fact keyed by the
+     * card's own id (`card_facts.ember_dart`).
+     */
     if (shared.length) {
-      out.push({ text: `every request (${reqs.length}) carried`, color: "#8fdcff" });
-      for (const [k, v] of shared) out.push({ text: `${k}  ${v}`, color: "#e8e3d8", indent: 12 });
+      out.push({ text: t("plan.everyRequest", { count: reqs.length }), color: "#8fdcff" });
+      out.push(...this.stateBlock(shared));
     }
     for (const r of reqs) {
       const own = r.state.filter(([k]) => !sharedKeys.has(k));
-      out.push({ text: `${r.title}  ·  ${r.source}${r.fallback ? `  (fell back: ${r.fallback})` : ""}`, color: "#8fdcff", gap: true });
-      if (own.length === 0) out.push({ text: "nothing of its own", color: "#6a7396", indent: 12 });
-      for (const [k, v] of own) out.push({ text: `${k}  ${v}`, color: "#e8e3d8", indent: 12 });
+      const fell = r.fallback ? `  (${t("plan.ruleFallback")}: ${fallbackReason(r.fallback)})` : "";
+      out.push({ text: `${requestTitle(r.purpose, r.round)}  ·  ${term(r.source)}${fell}`, color: "#8fdcff", gap: true });
+      if (own.length === 0) out.push({ text: t("plan.nothingOfItsOwn"), color: "#6a7396", indent: 12 });
+      out.push(...this.stateBlock(own));
+    }
+    return out;
+  }
+
+  /**
+   * One request's state, in order, with a heading over the run of lines that
+   * are **quotations rather than fields**.
+   *
+   * `held_spells` flattens to one key per staff key, and its values are
+   * English sentences written for Jev (`core/run/build-facts.ts`) — the same
+   * kind of thing as the briefing. Printed as plain state lines they read as
+   * whole English sentences dropped into the middle of a Chinese or Japanese
+   * page with nothing saying why. They get what the briefing gets: a
+   * translated heading saying this is the text the Director was sent word for
+   * word, and the quotation's own dimmer, smaller, indented type.
+   */
+  private stateBlock(state: readonly (readonly [string, string])[]): PlanLine[] {
+    const out: PlanLine[] = [];
+    let quoted = false;
+    for (const line of state) {
+      if (line[0].startsWith("held_spells.") && !quoted) {
+        quoted = true;
+        out.push({ text: t("plan.heldSpellsSent"), color: "#8fdcff", indent: 8, gap: true });
+      }
+      out.push(...this.statePlanLines(line));
+    }
+    return out;
+  }
+
+  /**
+   * One state field as page lines — **and the whole briefing, where that is
+   * what the field is.**
+   *
+   * The two arms send two different shapes of state, and this page only knew
+   * the older one. A label state flattens to `field  value`, both halves ids,
+   * and `stateLine` names both. A **briefing** state is one field called
+   * `briefing` whose value is the run written out over a hundred lines of
+   * English — and it went through the same path, so the page looked up
+   * `term("briefing")` for a heading and then split the entire document on
+   * commas and looked up every piece. What the player saw was the state they
+   * most wanted to read, shredded.
+   *
+   * It is printed as itself: its own lines, its section headings picked out,
+   * and the page's scroll already carries it. It is the one thing on the plan
+   * pages that stays in English, because it is a quotation — this is what Jev
+   * was sent, and a translation of it would be a different document.
+   */
+  private statePlanLines([key, value]: readonly [string, string]): PlanLine[] {
+    // A staff key's line is the second quotation on this page; `stateBlock`
+    // has already put the heading over the run of them.
+    if (key.startsWith("held_spells."))
+      return [{ text: stateLine([key, value]), color: "#9aa2c0", px: 6, indent: 18 }];
+    if (key !== "briefing") return [{ text: stateLine([key, value]), color: "#e8e3d8", indent: 12 }];
+    const out: PlanLine[] = [{ text: t("plan.briefingSent"), color: "#8fdcff", indent: 8, gap: true }];
+    for (const line of value.split("\n")) {
+      if (!line.trim()) continue;
+      // A section heading is the one line of the briefing with no leading "-".
+      const heading = !line.startsWith("-") && !line.startsWith(" ");
+      out.push({
+        text: line, px: 6, indent: heading ? 12 : line.startsWith("  ") ? 26 : 18,
+        color: heading ? "#8792b5" : "#9aa2c0",
+      });
     }
     return out;
   }
 
   /** Every question, its answer, and every option with its probability. */
   private questionLines(reqs: readonly ReadoutRequest[]): PlanLine[] {
-    if (reqs.length === 0) return [{ text: "no requests: this room was placed, not planned", color: "#6a7396" }];
+    if (reqs.length === 0) return [{ text: t("plan.noRequests"), color: "#6a7396" }];
     const out: PlanLine[] = [];
-    // By subject — pacing, room, mood, layout, enemies, portals, cards — not
-    // by the request that carried them; the request is named on each line.
-    for (const group of groupByCategory(reqs)) {
-      out.push({ text: group.category, color: "#8fdcff", gap: out.length > 0 });
-      for (const q of group.questions) {
-        const pct = (p: number) => `${(p * 100).toFixed(p < 0.1 ? 1 : 0)}%`;
-        out.push({
-          text: `${q.name}${q.choice ? `  →  ${q.choice}` : ""}   ${q.source}${q.note ? `  (${q.note})` : ""}   · ${q.request}`,
-          color: q.source === "jev" ? "#ffe9a8" : "#e8e3d8", indent: 8,
-        });
-        out.push({ text: q.probs.map(([k, p]) => `${k} ${pct(p)}`).join("  ·  ") || "no options", color: "#8792b5", indent: 20, px: 6 });
+    const pct = (p: number) => `${(p * 100).toFixed(p < 0.1 ? 1 : 0)}%`;
+    /*
+     * **By request, then by subject.**
+     *
+     * The page used to group by subject alone, which hid the thing it exists
+     * to show: a combat room is planned in *two* requests, and the second is
+     * asked of the room the first produced — because Jev answers each
+     * question on its own, and round 2's options (which zones fit, which
+     * bodies fit) do not exist until round 1's room has been generated. That
+     * structure is the project's argument, and it was invisible.
+     *
+     * Each request states who answered it, what it cost and why it fell back
+     * if it did; round 2 also states what it was shown. The subjects stay as
+     * sub-groups inside, because that is how the questions read.
+     */
+    reqs.forEach((req, i) => {
+      const jev = req.source === "jev";
+      const status = req.fallback
+        ? `${t("plan.ruleFallback")} · ${fallbackReason(req.error ?? req.fallback)}`
+        : t(jev ? "hud.jev" : "hud.rule");
+      const cost = [
+        req.ms === undefined ? "" : t("plan.ms", { n: req.ms }),
+        req.tokens ? t("plan.tokensIn", { n: req.tokens }) : "",
+        req.retries ? t("plan.retried", { n: req.retries }) : "",
+      ].filter(Boolean).join(" · ");
+      const head: PlanSpan[] = [
+        { text: t("plan.request", { n: i + 1 }), color: "#8fdcff", bold: true },
+        { text: ` · ${t("plan.round", { n: req.round })} ${requestTitle(req.purpose, req.round)}`, color: "#8792b5" },
+        { text: `   ${status}`, color: req.fallback ? "#ffb080" : jev ? "#ffe9a8" : "#6a7396", bold: true },
+        ...(cost ? [{ text: `   ${cost}`, color: "#4f5570" }] : []),
+      ];
+      out.push({ text: head.map((x) => x.text).join(""), color: "#8fdcff", gap: i > 0, spans: head });
+      if (req.askedOf) out.push({ text: t("plan.askedOf", { of: req.askedOf }), color: "#6a7396", indent: 8, px: 6 });
+
+      for (const group of groupRequest(req)) {
+        out.push({ text: term(group.category), color: "#5f86a8", indent: 8, px: 6 });
+        for (const q of group.questions) {
+          // The question bold, the answer gold, the rest quiet.
+          const line: PlanSpan[] = [
+            { text: questionName(q.name), color: "#e8e3d8", bold: true },
+            { text: ` ${term(q.source)}`, color: q.source === "jev" ? "#8fdcff" : "#6a7396" },
+            ...(q.choice ? [{ text: " →", color: "#6a7396" }, { text: ` ${optionName(q.choice, q.name)}`, color: "#ffe9a8", bold: true }] : []),
+            ...(q.noteKey ? [{ text: ` (${planNote(q.noteKey)})`, color: "#6a7396" }] : []),
+            /*
+             * A room is drawn from the answer, not given its top option: the
+             * temperature, and the code terms that weigh a repeat down, can
+             * land on something the distribution ranked lower. Said so, or the
+             * page reads as the Director choosing its least likely answer.
+             */
+            ...(q.choice && drawnBelowTop(q.choice, q.probs) ? [{ text: ` ↺ ${t("plan.drawn")}`, color: "#c7a0ff" }] : []),
+          ];
+          out.push({ text: line.map((x) => x.text).join(""), color: "#e8e3d8", indent: 16, spans: line });
+          /*
+           * What the question asked, in the player's language. The request
+           * itself still carries the English instructions Jev is written for;
+           * this is the display of that question, not a second version of it.
+           */
+          const asked = questionAsked(q.name);
+          if (asked) out.push({ text: asked, color: "#5a5f7a", indent: 24, px: 6 });
+          const opts: PlanSpan[] = q.probs.flatMap(([k, p], j) => [
+            ...(j > 0 ? [{ text: " ·", color: "#4f5570" }] : []),
+            k === q.choice
+              ? { text: ` ${optionName(k, q.name)} ${pct(p)}`, color: "#ffe9a8", bold: true }
+              : { text: ` ${optionName(k, q.name)} ${pct(p)}`, color: "#8792b5" },
+          ]);
+          out.push(opts.length > 0
+            ? { text: opts.map((x) => x.text).join(""), color: "#8792b5", indent: 28, px: 6, spans: opts }
+            : { text: t("plan.noOptions"), color: "#8792b5", indent: 28, px: 6 });
+        }
       }
-    }
+    });
     return out;
   }
 
-  /** Lays out wrapped lines under the tabs, from the scroll offset, as many as fit. */
+  /**
+   * Lays out wrapped lines under the tabs, from the scroll offset, as many as
+   * fit — **in one wide column**.
+   *
+   * Two columns were tried and reverted. Snaked text that scrolls as one body
+   * is unreadable: a single step moves both columns, so the line you were
+   * reading in the left column is replaced while the right column shifts to
+   * match, and there is nowhere for the eye to hold its place. The density
+   * problem the columns were for is answered instead by making the one column
+   * nearly the full width, which is what the long option lists
+   * (`open_arena 8.3% · scattered_arena 8.3% · …`) actually needed: they wrap
+   * two or three times less, so the page is shorter without being split.
+   */
   private renderPlanLines(
     lines: readonly PlanLine[],
     add: (x: number, y: number, str: string, px: number, color: string, origin?: number) => void,
   ): void {
-    const t = this.transitionUi!;
+    const tu = this.transitionUi!;
     const left = 40;
-    const rows: { text: string; color: string; px: number; indent: number; gap: boolean }[] = [];
+    // Room for the scroll bar on the right, and nothing else.
+    const colW = UI_W - left * 2 - 12;
+    const rows: { text: string; color: string; px: number; indent: number; gap: boolean; spans?: PlanSpan[] }[] = [];
     for (const l of lines) {
-      const px = l.px ?? 7;
+      /*
+       * The size the page will actually be drawn at, not the one it asked
+       * for. Every line here is held at the body floor so the pixel font
+       * stays readable, which makes the rows taller and the lines shorter
+       * than the authored numbers say — and the wrap and the row pitch both
+       * have to follow, or the page wraps for one size and spaces for
+       * another.
+       */
+      const px = bodyPx(l.px ?? 7, ZOOM);
       const indent = l.indent ?? 0;
-      // Monospace: a character is about 0.6 of the font size wide.
-      const max = Math.max(20, Math.floor((VIEW_W - left * 2 - indent) / (px * 0.6)));
-      wrapWords(l.text, max).forEach((text, i) => rows.push({ text, color: l.color, px, indent: indent + (i > 0 ? 8 : 0), gap: i === 0 && !!l.gap }));
+      /*
+       * **Measured, not counted.** A han character is a full em against
+       * Latin's half, and every wrap on this page used to be a character
+       * count: in Chinese and Japanese the rows came out about twice the
+       * budget and ran past the column and under the scroll bar. `wrapSpans`
+       * measures, and splits a piece that is wider than the column on its
+       * own rather than letting it overflow.
+       */
+      const spacing = letterSpacing();
+      if (l.spans) {
+        // Coloured pieces wrap as pieces, each keeping its colour across a break.
+        wrapSpans(l.spans, colW, px, spacing, indent).forEach((row) => {
+          rows.push({
+            text: "", color: l.color, px, indent: row.indent,
+            gap: row.first && !!l.gap, spans: row.spans,
+          });
+        });
+        continue;
+      }
+      wrapSpans([{ text: l.text, color: l.color }], colW, px, spacing, indent).forEach((row, i) => {
+        rows.push({
+          text: row.spans.map((x) => x.text).join(""), color: l.color, px,
+          indent: row.indent, gap: i === 0 && !!l.gap,
+        });
+      });
     }
     const top = 82;
-    const bottom = VIEW_H - 76;
-    // How many rows fit from each start; the scroll stops where the last row shows.
-    const fits = (from: number) => {
+    /*
+     * A row is kept clear at the foot for "▾ N more lines", so the hint sits
+     * inside the column rather than under it, on top of the footer.
+     */
+    const bottom = (tu.floor ?? UI_H - 76) - HINT_ROW_PX;
+    /*
+     * One walk, used both to measure and to draw, so what the scroll thinks
+     * fits and what is drawn can never disagree. Returns how many rows were
+     * laid out and where the last one ended, which is where the "more" line
+     * goes — directly under the text rather than pinned to the panel's floor,
+     * which on a short page left it floating in the middle of nothing.
+     */
+    const flow = (from: number, draw: boolean): { n: number; endY: number } => {
       let y = top;
       let n = 0;
       for (let i = from; i < rows.length; i++) {
-        y += rows[i]!.px + 4 + (rows[i]!.gap && i > from ? 5 : 0);
-        if (y > bottom) break;
+        const row = rows[i]!;
+        const lead = row.gap && i > from && y > top ? 5 : 0;
+        if (y + lead + row.px > bottom) break;
+        y += lead;
+        if (draw) {
+          const x0 = left + row.indent;
+          if (row.spans) {
+            let x = x0;
+            for (const s of row.spans) {
+              const txt = this.add.text(x, y + row.px / 2, s.text, {
+                fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(row.px, ZOOM) * ZOOM)}px`,
+                color: s.color, fontStyle: s.bold ? "bold" : "normal",
+                letterSpacing: letterSpacing() * ZOOM,
+              }).setOrigin(0, 0.5).setScale(1 / ZOOM).setDepth(241);
+              tu.objects.push(txt);
+              x += txt.displayWidth;
+            }
+          } else add(x0, y + row.px / 2, row.text, row.px, row.color, 0);
+        }
+        y += row.px + 4;
         n++;
       }
-      return n;
+      return { n, endY: y };
     };
     let last = rows.length - 1;
-    while (last > 0 && fits(last - 1) >= rows.length - (last - 1)) last--;
-    t.maxScroll = Math.max(0, last);
-    t.scroll = Math.max(0, Math.min(t.scroll, t.maxScroll));
-    let y = top;
-    const n = fits(t.scroll);
-    for (let i = t.scroll; i < t.scroll + n; i++) {
-      const row = rows[i]!;
-      if (row.gap && i > t.scroll) y += 5;
-      add(left + row.indent, y + row.px / 2, row.text, row.px, row.color, 0);
-      y += row.px + 4;
+    while (last > 0 && flow(last - 1, false).n >= rows.length - (last - 1)) last--;
+    tu.maxScroll = Math.max(0, last);
+    tu.scroll = Math.max(0, Math.min(tu.scroll, tu.maxScroll));
+    const { n, endY } = flow(tu.scroll, true);
+    /*
+     * **The two hints get rows of their own.**
+     *
+     * "▴ N more above" used to sit nine pixels over the first line, which is
+     * inside the line above it once CJK takes the pitch it needs: it was
+     * drawn through the page's own title. It rides the tab row's right end
+     * instead, where nothing else is, and the one below is kept inside the
+     * floor the text already stops at rather than hung under it.
+     */
+    if (tu.scroll > 0)
+      add(left + colW, TAB_Y, t("plan.moreAbove", { count: tu.scroll }), 6, "#6a7396", 1);
+    /*
+     * The clamp lands the hint in the **reserved row**, not on the last line
+     * of text. `bottom` is already `HINT_ROW_PX` above the panel's floor, and
+     * a full column ends with its last row's centre only half a glyph over
+     * `bottom` — so clamping the hint's centre to `bottom` printed it through
+     * that row, which is what "已有系别 雷电、虚空" sitting inside
+     * "▾ 下面还有 48 行" was. Half the reserved row down is clear of both.
+     */
+    if (tu.scroll + n < rows.length)
+      add(left, Math.min(endY + 3, bottom + HINT_ROW_PX / 2),
+        t("plan.moreLines", { count: rows.length - tu.scroll - n }), 6, "#6a7396", 0);
+    /*
+     * A thin bar down the right edge: where in the page this screenful is.
+     * Scrolling a list with no sense of its length is the other half of why
+     * this page was hard to read.
+     */
+    if (rows.length > n) {
+      const barX = left + colW + 6;
+      const trackH = bottom - top;
+      const thumbH = Math.max(12, trackH * (n / rows.length));
+      const thumbY = top + (trackH - thumbH) * (tu.scroll / Math.max(1, tu.maxScroll));
+      tu.objects.push(this.add.rectangle(barX, top, 2, trackH, 0x2a2750, 1).setOrigin(0, 0).setDepth(241));
+      tu.objects.push(this.add.rectangle(barX, thumbY, 2, thumbH, 0x6a7396, 1).setOrigin(0, 0).setDepth(241.1));
     }
-    if (t.scroll > 0) add(VIEW_W - left, top - 4, "▴ more", 6, "#6a7396", 1);
-    if (t.scroll + n < rows.length) add(VIEW_W - left, bottom + 4, `▾ ${rows.length - t.scroll - n} more lines`, 6, "#6a7396", 1);
+  }
+
+  /** A dismantled spell's gold, as coins bursting from where it was, flying to the player. */
+  private payDismantle(x: number, y: number, gold: number): void {
+    burstCoins(this.world.pickups, x, y, gold, this.world.rng);
+  }
+
+  /** The room plan follows the mouse wheel too, a notch a step. */
+  private scrollPlan(dir: number): void {
+    const tu = this.transitionUi;
+    if (!tu || dir === 0) return;
+    const next = Math.max(0, Math.min(tu.maxScroll, tu.scroll + Math.sign(dir) * PLAN_SCROLL_STEP));
+    if (next === tu.scroll) return;
+    tu.scroll = next;
+    this.renderRoomPlan();
   }
 
   private readTransitionKeys(): void {
     const down = (k?: Phaser.Input.Keyboard.Key) => !!k && Phaser.Input.Keyboard.JustDown(k);
-    const t = this.transitionUi;
-    if (t) {
+    const tu = this.transitionUi;
+    if (tu) {
       const pages = PlayScene.PLAN_PAGES.length;
       let redraw = false;
-      if (down(this.keys.RIGHT) || down(this.keys.D) || down(this.keys.TAB)) { t.page = (t.page + 1) % pages; t.scroll = 0; redraw = true; }
-      if (down(this.keys.LEFT) || down(this.keys.A)) { t.page = (t.page + pages - 1) % pages; t.scroll = 0; redraw = true; }
-      // Held keys scroll on after a beat, a line every 45 ms.
+      if (down(this.keys.RIGHT) || down(this.keys.D) || down(this.keys.TAB)) { tu.page = (tu.page + 1) % pages; tu.scroll = 0; redraw = true; }
+      if (down(this.keys.LEFT) || down(this.keys.A)) { tu.page = (tu.page + pages - 1) % pages; tu.scroll = 0; redraw = true; }
+      /*
+       * A line a press; held, a line every `PLAN_REPEAT_MS` after a short
+       * beat — by the clock, not by the frame. It moved at most one line a
+       * frame, so a page that is slow to redraw (the questions page builds a
+       * text object per span) scrolled slower than a light one.
+       */
       const now = this.time.now;
-      const held = (k?: Phaser.Input.Keyboard.Key) => {
-        if (!k || !k.isDown || k.getDuration() < 260 || now < this.planScrollAt) return false;
-        this.planScrollAt = now + 45;
-        return true;
+      const held = (a?: Phaser.Input.Keyboard.Key, b?: Phaser.Input.Keyboard.Key): number => {
+        const k = a?.isDown ? a : b?.isDown ? b : undefined;
+        if (!k || k.getDuration() < PLAN_REPEAT_DELAY_MS) return 0;
+        if (this.planScrollAt === 0 || now - this.planScrollAt > 250) this.planScrollAt = now - PLAN_REPEAT_MS;
+        const lines = Math.floor((now - this.planScrollAt) / PLAN_REPEAT_MS);
+        this.planScrollAt += lines * PLAN_REPEAT_MS;
+        return lines;
       };
-      const step = this.keys.SHIFT?.isDown ? 8 : 1;
-      if (down(this.keys.DOWN) || down(this.keys.S) || held(this.keys.DOWN) || held(this.keys.S)) {
-        if (t.scroll < t.maxScroll) { t.scroll = Math.min(t.maxScroll, t.scroll + step); redraw = true; }
-      }
-      if (down(this.keys.UP) || down(this.keys.W) || held(this.keys.UP) || held(this.keys.W)) {
-        if (t.scroll > 0) { t.scroll = Math.max(0, t.scroll - step); redraw = true; }
-      }
+      const step = PLAN_SCROLL_STEP;
+      const downBy = (down(this.keys.DOWN) || down(this.keys.S) ? 1 : 0) + held(this.keys.DOWN, this.keys.S);
+      const upBy = (down(this.keys.UP) || down(this.keys.W) ? 1 : 0) + held(this.keys.UP, this.keys.W);
+      if (!this.keys.DOWN?.isDown && !this.keys.S?.isDown && !this.keys.UP?.isDown && !this.keys.W?.isDown) this.planScrollAt = 0;
+      if (downBy > 0 && tu.scroll < tu.maxScroll) { tu.scroll = Math.min(tu.maxScroll, tu.scroll + step * downBy); redraw = true; }
+      if (upBy > 0 && tu.scroll > 0) { tu.scroll = Math.max(0, tu.scroll - step * upBy); redraw = true; }
       if (redraw) this.renderRoomPlan();
     }
-    if (down(this.keys.ENTER) || down(this.keys.SPACE) || down(this.keys.J) || down(this.keys.E)) this.hideTransition();
+    if (down(this.keys.ENTER)) this.hideTransition();
   }
 
   /**
@@ -3810,10 +9354,10 @@ export class PlayScene extends Phaser.Scene {
       .setOrigin(0.5).setScale(1 / ART_SCALE).setDepth(4.5);
     const badgeName = `icon_reward_${drop.kind}`;
     const badge = this.atlas.has(badgeName) && !this.atlas.has(`prop_reward_${drop.kind}_0`)
-      ? this.add.image(drop.x, drop.y - 14, this.crispTextureKey, badgeName).setOrigin(0.5).setScale(1).setDepth(4.6)
+      ? this.add.image(drop.x, drop.y - 14, this.crispTextureKey, badgeName).setOrigin(0.5).setScale(1 / TUNED).setDepth(4.6)
       : null;
     this.rewardGfx = { body, glow, badge };
-    this.sfx.play("pickup");
+    this.sfx.play("reward_reveal");
   }
 
   /**
@@ -3887,28 +9431,24 @@ export class PlayScene extends Phaser.Scene {
     if (cards.length === 0) return;
 
     /*
-     * Positioned in **world** coordinates at the camera's centre, not pinned
-     * to the screen with `setScrollFactor(0)`.
-     *
-     * The first version did pin it and the panel never appeared. Phaser's
-     * scroll factor removes the camera's *scroll* from a position but not its
-     * **zoom**, and this camera runs at `ART_SCALE * DPR` — so a panel placed
-     * at `VIEW_W / 2` landed several screens off to the side. The camera here
-     * never moves during a room, so its own centre is a fixed world point and
-     * the simplest correct anchor.
+     * On the HUD's camera, in the room's own coordinates (`uiView`). It was
+     * placed at the world camera's centre, which was a fixed point while that
+     * camera held the whole room; once it followed the player, the panel was
+     * off to one side of the screen.
      */
-    const view = this.cameras.main.worldView;
+    const view = uiView();
     const cx = view.centerX;
     const cy = view.centerY;
-    const dim = this.add.rectangle(cx, cy, view.width, view.height, 0x0d0b1f, 0.78)
+    const dim = this.add.rectangle(cx, cy, view.width * 3, view.height * 3, 0x0d0b1f, 0.78)
       .setDepth(200);
-    const dismantle = !this.shopping && cards.some((c) => c.kind === "spell")
-      ? `     [X] dismantle a spell (+${dismantleValue(cards.find((c) => c.kind === "spell")?.grade ?? 1)} gold)` : "";
-    const hint = this.keys_(cx, 0, this.shopping
-      ? `[A][D] move     [Enter] or [J] buy     [Esc] leave     gold ${this.goldHeld()}`
-      : `[A][D] move     [Enter] or [J] take${dismantle}`, 8, "#8792b5", 201);
-    const heading = this.add.text(cx, cy - 104, this.shopping ? "THE MERCHANT" : "CHOOSE ONE", {
-      fontFamily: "monospace", fontSize: `${Math.round(14 * ZOOM)}px`, color: "#ffe9a8",
+    // Built from the selection, and rebuilt with it (`paintSelection`): the
+    // hold pays a different amount on a spell than on an affix, and it used
+    // to name the first spell card's value whichever card was under the
+    // highlight.
+    this.offerHintStr = this.offerHint(cards, 0);
+    const hint = this.keys_(cx, 0, this.offerHintStr, 8, "#8792b5", 201);
+    const heading = this.add.text(cx, cy - 104, t(this.shopping ? "head.merchant" : "head.chooseOne"), {
+      fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(14, ZOOM) * ZOOM)}px`, color: "#ffe9a8",
     }).setOrigin(0.5).setScale(1 / ZOOM).setDepth(201);
 
     /*
@@ -3927,6 +9467,8 @@ export class PlayScene extends Phaser.Scene {
      * it holds the longest description in the current pool at full size.
      */
     const CARD_H = 196;
+    /** The tallest a row of cards may grow to hold a long description (below). */
+    const CARD_H_MAX = 250;
     /** One line of the name font; a name that wraps to two is allowed to. */
     const NAME_H = 11;
     /** One line of the stat font, which is always one line by construction. */
@@ -3972,14 +9514,14 @@ export class PlayScene extends Phaser.Scene {
      * font down, and stop as soon as it fits.
      */
     const wrap = (CARD_W - PAD * 2) * ZOOM;
-    const texts = cards.map((card) => {
+    const build = (cardH: number) => cards.map((card) => {
       /*
        * **Left-aligned**, all three blocks. Centred, a wrapped line started
        * somewhere different every row and the eye had to hunt for each one;
        * a card is read, and reading wants one left edge.
        */
-      const name = this.add.text(0, 0, card.label, {
-        fontFamily: "monospace", fontSize: `${Math.round(9 * ZOOM)}px`, color: "#e8e3d8",
+      const name = this.add.text(0, 0, contentName(card.itemId ?? "", card.label), {
+        fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(9, ZOOM) * ZOOM)}px`, color: "#e8e3d8",
         align: "left", wordWrap: { width: wrap },
       }).setOrigin(0, 0).setScale(1 / ZOOM).setDepth(202);
 
@@ -4004,7 +9546,7 @@ export class PlayScene extends Phaser.Scene {
       const note = this.upgradeNote(card).trim();
       const row = this.statRow([
         ...(note ? [{ text: note, tone: "grade" }] : []),
-        ...(card.statParts ?? [{ text: card.stats, tone: "mod" }]),
+        ...this.cardStatParts(card),
       ], wrap / ZOOM, 8, 202);
       const stats = row.box;
       const statH = Math.max(STAT_H, Math.ceil(row.height));
@@ -4018,29 +9560,68 @@ export class PlayScene extends Phaser.Scene {
        * brackets are taller than the padding, so a long description fitted
        * the card by this arithmetic and still ran through the bracket art.
        */
-      const bodyRoom = CARD_H - bodyTop - CARD_FOOT;
+      const bodyRoom = cardH - bodyTop - CARD_FOOT;
 
       let body!: Phaser.GameObjects.Text;
-      for (const [px, lead] of BODY_FITS) {
+      /*
+       * **The player's description, not the Director's.**
+       *
+       * Core's text is what Jev is sent — it names bottlenecks and build
+       * archetypes, which is vocabulary for a planner and not for a player.
+       * `contentDescription` gives the written-for-reading version in every
+       * language, English included, and falls back to core only where one is
+       * still missing.
+       */
+      const prose = contentDescription(card.itemId ?? "", card.description);
+      for (const [mult, lead] of BODY_FITS) {
         body?.destroy();
-        body = this.add.text(0, 0, card.description, {
-          fontFamily: "monospace", fontSize: `${Math.round(px * ZOOM)}px`, color: "#8792b5",
-          align: "left", wordWrap: { width: wrap }, lineSpacing: lead * ZOOM,
+        const px = nativePx(mult);
+        // `lead` is a fraction of the glyph height, not a fixed gap: the
+        // fixed one was measured in Latin and left CJK lines touching.
+        body = this.add.text(0, 0, wrapText(prose, wrap / ZOOM, px, letterSpacing()), {
+          fontFamily: fontFamily(), fontSize: `${Math.round(px * ZOOM)}px`, color: "#8792b5",
+          align: "left", letterSpacing: letterSpacing() * ZOOM,
+          lineSpacing: Math.round(px * Math.max(lead, lineLead()) * ZOOM),
         }).setOrigin(0, 0).setScale(1 / ZOOM).setDepth(202);
         if (body.height / ZOOM <= bodyRoom) break;
       }
-      // Still too long at the smallest size: cut at a word and say so, rather
-      // than run the text through the corner art.
-      if (body.height / ZOOM > bodyRoom) {
-        const words = card.description.split(" ");
-        while (words.length > 4 && body.height / ZOOM > bodyRoom) {
-          words.pop();
-          body.setText(`${words.join(" ")}…`);
+      /*
+       * Still too long at the font's own size: **cut the copy, never the
+       * type**. Below 12 px the face resamples and the card becomes the one
+       * thing in the game that is blurry. Chinese and Japanese have no spaces
+       * to cut at, so the trim is per character there.
+       */
+      // The card height this text needs at the smallest fit, uncut (see `CARD_H_MAX`).
+      const needed = Math.ceil(bodyTop + body.height / ZOOM + CARD_FOOT);
+      const cut = body.height / ZOOM > bodyRoom;
+      if (cut) {
+        const spaced = prose.includes(" ");
+        const parts = spaced ? prose.split(" ") : [...prose];
+        const join = spaced ? " " : "";
+        while (parts.length > 4 && body.height / ZOOM > bodyRoom) {
+          parts.pop();
+          body.setText(wrapText(`${parts.join(join)}…`, wrap / ZOOM, nativePx(1), letterSpacing()));
         }
       }
-      return { name, stats, body, bodyTop, nameH };
+      return { name, stats, body, bodyTop, nameH, needed, cut };
     });
-    const cardH = CARD_H;
+    /*
+     * **The row grows before the copy is cut.** At the fixed height eight
+     * spells' descriptions were cut short with an ellipsis in English alone,
+     * and a card that ends mid-sentence tells the player less than a taller
+     * card does. So when any card of the row would be cut, the whole row —
+     * all three, one height, so none reads as worth more — is built again at
+     * the height the longest needs, up to `CARD_H_MAX`, which still leaves
+     * the heading above and the hint below on screen. Only past that is the
+     * copy cut, and those strings are for the copy review to trim.
+     */
+    let cardH = CARD_H;
+    let texts = build(cardH);
+    if (texts.some((x) => x.cut)) {
+      for (const x of texts) { x.name.destroy(); x.stats.destroy(); x.body.destroy(); }
+      cardH = Math.min(CARD_H_MAX, Math.max(...texts.map((x) => x.needed)));
+      texts = build(cardH);
+    }
     const top = cy - cardH / 2;
 
     const built = cards.map((card, i) => {
@@ -4105,12 +9686,12 @@ export class PlayScene extends Phaser.Scene {
       const deco = this.add.graphics().setDepth(201);
       const decoRect = { x: x - CARD_W / 2, y: top, w: CARD_W, h: cardH };
 
-      // A 16 px icon at exactly 2x; the kind art is 64 px smooth and scales as before.
+      // A 16 px icon at twice its tuned size; the kind art is smooth and scales as before.
       const crisp = iconFrame.startsWith("icon_");
       const icon = this.add.image(
         x, top + PAD + ICON_PX / 2, crisp ? this.crispTextureKey : this.uiTextureKey, iconFrame,
       ).setOrigin(0.5).setDepth(202);
-      if (crisp) icon.setScale(2);
+      if (crisp) icon.setScale(2 / TUNED);
       else icon.setDisplaySize(ICON_PX, ICON_PX);
       const left = x - CARD_W / 2 + PAD;
       name.setPosition(left, top + PAD + ICON_PX + 6);
@@ -4124,16 +9705,19 @@ export class PlayScene extends Phaser.Scene {
        */
       const extras: Phaser.GameObjects.GameObject[] = [];
       if (this.shopping) {
-        const price = SHOP_PRICE[card.kind] ?? 0;
+        const price = MERCHANT_PRICE[card.kind] ?? 0;
         const afford = this.goldHeld() >= price;
         // Inside the corner tick, clear of it.
         const px = x + CARD_W / 2 - 11;
         const py = top + cardH - 13;
         const label = this.add.text(px, py, String(price), {
-          fontFamily: "monospace", fontSize: `${Math.round(9 * ZOOM)}px`, color: afford ? "#ffd45e" : "#ff6a5a",
+          fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(9, ZOOM) * ZOOM)}px`, color: afford ? "#ffd45e" : "#ff6a5a",
         }).setOrigin(1, 0.5).setScale(1 / ZOOM).setDepth(203);
-        const chipW = label.width / ZOOM + 16;
-        extras.push(this.add.rectangle(px + 3, py, chipW + 4, 13, 0x0d0b1f, 0.95).setOrigin(1, 0.5)
+        // The chip holds the coin and the number with the same inset on both
+        // sides; it used to end three pixels past the number and one more
+        // than that before the coin.
+        const chipW = label.width / ZOOM + 12 + PAD_S * 2;
+        extras.push(this.add.rectangle(px + PAD_S, py, chipW, 13, 0x0d0b1f, 0.95).setOrigin(1, 0.5)
           .setStrokeStyle(1, afford ? 0x8a6a28 : 0x7a2a2a, 1).setDepth(202.6));
         extras.push(this.add.image(px - label.width / ZOOM - 7, py, this.uiTextureKey, "pickup_coin_0")
           .setOrigin(0.5).setDisplaySize(10, 10).setDepth(203));
@@ -4153,7 +9737,7 @@ export class PlayScene extends Phaser.Scene {
        * Kept as an object so the layout code has one shape; it draws nothing.
        */
       const key = this.add.text(x, top - 13, "", {
-        fontFamily: "monospace", fontSize: `${Math.round(11 * ZOOM)}px`, color: "#ffe9a8",
+        fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(11, ZOOM) * ZOOM)}px`, color: "#ffe9a8",
       }).setOrigin(0.5).setScale(1 / ZOOM).setDepth(202).setVisible(false);
       /*
        * A click target as well as a key, because a card screen that can only
@@ -4196,12 +9780,12 @@ export class PlayScene extends Phaser.Scene {
       // Both tags sit inside the top corners, just past the corner ticks and
       // either side of the icon: the border is thin enough to leave room.
       const tagY = top + 10;
-      const rarityLabel = this.add.text(x + CARD_W / 2 - 8, tagY, rarity.label, {
-        fontFamily: "monospace", fontSize: `${Math.round(6 * ZOOM)}px`, color: rarity.text,
+      const rarityLabel = this.add.text(x + CARD_W / 2 - 8, tagY, t(rarity.label), {
+        fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(6, ZOOM) * ZOOM)}px`, color: rarity.text,
       }).setOrigin(1, 0.5).setScale(1 / ZOOM).setDepth(202.6);
       // The kind top-left, the rarity top-right: one corner each.
-      const kindTag = this.add.text(x - CARD_W / 2 + 8, tagY, upgrade ? "UPGRADE" : KIND_TAG[card.kind].label, {
-        fontFamily: "monospace", fontSize: `${Math.round(7 * ZOOM)}px`, color: upgrade ? "#ffd45e" : KIND_TAG[card.kind].color,
+      const kindTag = this.add.text(x - CARD_W / 2 + 8, tagY, upgrade ? t("card.upgrade") : t(KIND_TAG[card.kind].label), {
+        fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(7, ZOOM) * ZOOM)}px`, color: upgrade ? "#ffd45e" : KIND_TAG[card.kind].color,
       }).setOrigin(0, 0.5).setScale(1 / ZOOM).setDepth(202.5);
       extras.push(rarityLabel);
       return { card, panel, deco, decoRect, icon, name, stats, body, key, zone, kindTag, extras };
@@ -4214,7 +9798,7 @@ export class PlayScene extends Phaser.Scene {
 
     this.offerUi = { dim, heading, hint, cards: built, selected: 0 };
     this.paintSelection();
-    this.sfx.play("clear");
+    this.sfx.play("ui_select");
   }
 
   private hideRewards(): void {
@@ -4283,7 +9867,7 @@ export class PlayScene extends Phaser.Scene {
     // projectile to jump from, a shatter needs one that meets a wall. A full
     // spell can still take it, by giving one up.
     const def = spellAffixById(affixId);
-    return !(def && !affixFits(def, itemShape(ITEMS.get(slot.item.base))));
+    return !(def && !affixFitsSpell(def, ITEMS.get(slot.item.base), slot.affixes.map((a) => a.id)));
   }
 
   private firstEligibleSpell(card: OfferCard | null): number {
@@ -4298,13 +9882,11 @@ export class PlayScene extends Phaser.Scene {
     for (const o of ui.objects) o.destroy();
     ui.objects = [];
     const add = <T extends Phaser.GameObjects.GameObject>(o: T): T => { ui.objects.push(o); return o; };
-    const view = this.cameras.main.worldView;
+    const view = uiView();
     const cx = view.centerX;
     const cy = view.centerY;
     const text = (x: number, y: number, str: string, px: number, color: string, extra: Partial<Phaser.Types.GameObjects.Text.TextStyle> = {}) =>
-      add(this.add.text(x, y, str, {
-        fontFamily: "monospace", fontSize: `${Math.round(px * ZOOM)}px`, color, ...extra,
-      }).setScale(1 / ZOOM).setDepth(211));
+      add(this.uiText(x, y, str, px, color, extra).setDepth(211));
 
     /*
      * Full screen. The panel is the run's whole account of the player — the
@@ -4312,17 +9894,22 @@ export class PlayScene extends Phaser.Scene {
      * the run itself — and it opens on the menu key, so it fills the view
      * rather than floating over a fight it has paused.
      */
-    add(this.add.rectangle(cx, cy, view.width, view.height, 0x0d0b1f, 0.94).setDepth(210));
+    for (const g of this.modalPanel(null, null, { depth: 210, dim: 0.94 })) add(g);
     const affix = ui.card?.itemId ? spellAffixById(ui.card.itemId) : null;
     const heading = ui.mode === "attach"
-      ? `ATTACH ${(affix?.name ?? ui.card?.label ?? "").toUpperCase()} TO WHICH SPELL?`
-      : ui.mode === "replace" ? `REPLACE WHICH SPELL WITH ${(ui.card?.label ?? "").toUpperCase()}?`
-      : ui.mode === "smith" ? "THE BLACKSMITH: RAISE WHICH SPELL?"
-      : ui.swapFrom !== null ? "SWAP WITH WHICH SPELL?" : "CHARACTER";
+      ? t("head.attachTo", { affix: contentName(ui.card?.itemId ?? "", affix?.name ?? ui.card?.label ?? "").toUpperCase() })
+      : ui.mode === "replace" ? t("head.replaceWith", { card: contentName(ui.card?.itemId ?? "", ui.card?.label ?? "").toUpperCase() })
+      : ui.mode === "smith" ? t("head.blacksmith")
+      : ui.swapFrom !== null ? t("head.swapWith") : t("head.character");
     const top = view.top + 14;
     text(cx, top, heading, 13, "#ffe9a8").setOrigin(0.5, 0);
-    if (ui.mode === "attach" && affix) text(cx, top + 30, affixFitsLine(affix), 7, "#d9a5ff").setOrigin(0.5, 0);
-    const runLine = `room ${this.roomIndex} · ${stageFor(this.roomIndex)}${this.elite ? " · elite" : ""}    gold ${this.runGold + this.world.gold}    seed ${this.runSeed}`;
+    if (ui.mode === "attach" && affix) text(cx, top + 30, localizeStat(affixFitsPart(affix)), 7, "#d9a5ff").setOrigin(0.5, 0);
+    // The seed is a developer's handle on a run, not something the player
+    // chose or can use, so it only shows with the debug panel open.
+    const runLine = `${t("char.run", { room: this.roomIndex, type: roomTypeName(stageFor(this.roomIndex)) })}`
+      + `${this.elite ? ` · ${t("roomType.elite")}` : ""}`
+      + `    ${t("char.gold", { gold: this.runGold + this.world.gold })}`
+      + `${this.debug.isOpen() ? `    seed ${this.runSeed}` : ""}`;
     text(cx, top + 18, runLine, 7, "#8792b5").setOrigin(0.5, 0);
     add(this.add.rectangle(cx, top + 32, view.width - 40, 1, 0x2a2750, 1).setDepth(210.5));
 
@@ -4340,14 +9927,24 @@ export class PlayScene extends Phaser.Scene {
       if (slot) {
         const icon = `icon_${slot.item.base}`;
         if (this.atlas.has(icon))
-          add(this.add.image(leftX - 44, rowY(i), this.crispTextureKey, icon).setOrigin(0.5).setScale(1).setDepth(211));
-        text(leftX - 30, rowY(i) - 7, titleOfId(slot.item.base), 8, eligible ? "#e8e3d8" : "#6b6480").setOrigin(0, 0);
-        const lv = this.spellLevels[i] ?? 1;
-        text(leftX + 70, rowY(i) - 7, `Lv ${lv}`, 7, lv > 1 ? "#ffd45e" : "#6a7396").setOrigin(1, 0);
-        const pips = `${"◆".repeat(slot.affixes.length)}${"◇".repeat(Math.max(0, AFFIX_SLOTS - slot.affixes.length))}`;
-        text(leftX - 30, rowY(i) + 3, pips, 7, "#d9a5ff").setOrigin(0, 0);
+          add(this.add.image(leftX - 44, rowY(i), this.crispTextureKey, icon).setOrigin(0.5).setScale(1 / TUNED).setDepth(211));
+        text(leftX - 30, rowY(i) - 7, contentName(slot.item.base, titleOfId(slot.item.base)), 8, eligible ? "#e8e3d8" : "#6b6480").setOrigin(0, 0);
+        /*
+         * The level pips are on the card to the right and nowhere else. They
+         * were drawn here too, so the same fact was on the screen twice in
+         * two different places and a player had to work out that the two
+         * widgets were one number.
+         *
+         * What the row carries instead is the one thing the card does not
+         * say at a glance: how many affixes are on this spell — and it says
+         * so in words, because three small diamonds with no label were a
+         * decoration nobody could read.
+         */
+        const filled = slot.affixes.length;
+        const diamonds = `${"◆".repeat(filled)}${"◇".repeat(Math.max(0, AFFIX_SLOTS - filled))}`;
+        text(leftX - 30, rowY(i) + 4, `${diamonds}  ${t("char.affixesOf", { held: filled, max: AFFIX_SLOTS })}`, 6, filled > 0 ? "#d9a5ff" : "#6a7396").setOrigin(0, 0);
       } else {
-        text(leftX - 30, rowY(i), "empty", 8, "#5a5f7a").setOrigin(0, 0.5);
+        text(leftX - 30, rowY(i), t("char.emptyKey"), 8, "#5a5f7a").setOrigin(0, 0.5);
       }
     });
 
@@ -4360,118 +9957,276 @@ export class PlayScene extends Phaser.Scene {
     const m = this.world.player.mods;
     const pct = (v: number) => `${v >= 1 ? "+" : ""}${Math.round((v - 1) * 100)}%`;
     const p = this.world.player;
-    const attrs: [string, string][] = [
-      ["health", `${Math.round(p.hearts * HP_PER_HEART)}/${(MAX_HEARTS + m.maxHearts) * HP_PER_HEART}`],
-      ["mana", `${Math.floor(p.mana)}/${this.world.staff.mana_max}${m.manaMax !== 1 ? `  (${pct(m.manaMax)})` : ""}`],
-      ["rage", `${Math.floor(p.rage)}/${m.rageMax} segments`],
-      ["gold", `${this.runGold + this.world.gold}`],
-      ["speed", pct(m.speed)], ["dash", `${pct(m.dashRange)} range, ${pct(m.dashCooldown)} cooldown`],
-      ["sword", `${pct(m.swordDamage)} damage, ${pct(m.swordReach)} reach`],
-      ["mercy frames", pct(m.invuln)], ["mana regen", pct(m.manaRegen)], ["mana per hit", pct(m.manaPerHit)],
+    /*
+     * `changed` is what the run has actually altered. Early on nearly every
+     * modifier is at 1, and the screen printed ten rows of `+0%` — a wall of
+     * zeros that buried the four numbers that did say something. Untouched
+     * rows are still listed, so the player learns what can be improved, but
+     * they are dimmed to the background and the changed ones are called out
+     * in green, so "what has this run done to me" is answered by scanning
+     * for colour rather than by reading every line.
+     */
+    // `live` is the run's own state rather than a modifier, and it is marked
+    // on the row rather than recognised from the label, which stopped being
+    // possible the moment the label was translated.
+    const attrs: { k: string; v: string; changed: boolean; live?: true }[] = [
+      { k: t("attr.health"), v: `${Math.round(p.hearts * HP_PER_HEART)}/${(MAX_HEARTS + m.maxHearts) * HP_PER_HEART}`, changed: m.maxHearts !== 0, live: true },
+      { k: t("attr.mana"), v: `${Math.floor(p.mana)}/${this.world.staff.mana_max}${m.manaMax !== 1 ? `  (${pct(m.manaMax)})` : ""}`, changed: m.manaMax !== 1, live: true },
+      { k: t("attr.rage"), v: t("attr.segments", { now: Math.floor(p.rage), max: m.rageMax }), changed: false, live: true },
+      /*
+       * **The level and what it has given** (`run/levels.ts`), as two rows.
+       *
+       * The first is where the run stands — the level and the experience into
+       * the next one, which is the only place the raw numbers appear. The
+       * second is the level's own contribution to the three stats it touches,
+       * separately from the cards, because "what has this run done to me" has
+       * two answers now and a screen that added them together would make the
+       * stat cards look twice as good as they are.
+       */
+      { k: t("attr.level"), v: t("attr.levelValue", { n: this.world.level, into: Math.round(levelAt(this.world.xp).into), toNext: levelAt(this.world.xp).toNext }), changed: this.world.level > 1, live: true },
+      { k: t("attr.fromLevels"), v: t("attr.fromLevelsValue", {
+        hp: Math.round(levelBonus(this.world.level).hp),
+        sword: levelBonus(this.world.level).swordPoints,
+        mana: pct(1 + levelBonus(this.world.level).mana),
+      }), changed: this.world.level > 1 },
+      { k: t("attr.gold"), v: `${this.runGold + this.world.gold}`, changed: false, live: true },
+      { k: t("attr.speed"), v: pct(m.speed), changed: m.speed !== 1 },
+      { k: t("attr.dash"), v: t("attr.dashValue", { range: pct(m.dashRange), cooldown: pct(m.dashCooldown) }), changed: m.dashRange !== 1 || m.dashCooldown !== 1 },
+      { k: t("attr.sword"), v: t("attr.swordValue", { dmg: pct(m.swordDamage), reach: pct(m.swordReach) }), changed: m.swordDamage !== 1 || m.swordReach !== 1 },
+      { k: t("attr.mercyFrames"), v: pct(m.invuln), changed: m.invuln !== 1 },
+      { k: t("attr.manaRegen"), v: pct(m.manaRegen), changed: m.manaRegen !== 1 },
+      { k: t("attr.manaPerHit"), v: pct(m.manaPerHit), changed: m.manaPerHit !== 1 },
     ];
     // The body, across the bottom: three columns of attribute lines.
     const bandY = cy + 56;
+    // Where the band's objects start, so a spell card that needs the room can push the band down (below).
+    const bandFrom = ui.objects.length;
     add(this.add.rectangle(cx, bandY - 8, view.width - 40, 1, 0x2a2750, 1).setDepth(210.5));
-    text(view.left + 20, bandY, "ATTRIBUTES", 8, "#8792b5").setOrigin(0, 0);
+    text(view.left + 20, bandY, t("head.attributes"), 8, "#8792b5").setOrigin(0, 0);
     const colW = (view.width - 40) / 3;
-    attrs.forEach(([k, v], i) => {
+    attrs.forEach(({ k, v, changed, live }, i) => {
       const col = i % 3;
       const row = Math.floor(i / 3);
-      text(view.left + 20 + col * colW, bandY + 14 + row * 11, k, 7, "#8792b5").setOrigin(0, 0);
-      text(view.left + 20 + col * colW + 78, bandY + 14 + row * 11, v, 7, "#e8e3d8").setOrigin(0, 0);
+      text(view.left + 20 + col * colW, bandY + 14 + row * 11, k, 7, changed || live ? "#8792b5" : "#4f5570").setOrigin(0, 0);
+      text(view.left + 20 + col * colW + 78, bandY + 14 + row * 11, v, 7,
+        changed ? "#a8f0a0" : live ? "#e8e3d8" : "#4f5570").setOrigin(0, 0);
     });
     const takenY = bandY + 14 + Math.ceil(attrs.length / 3) * 11 + 4;
 
-    text(view.left + 20, takenY, "UPGRADES TAKEN", 8, "#8792b5").setOrigin(0, 0);
+    text(view.left + 20, takenY, t("head.upgradesTaken"), 8, "#8792b5").setOrigin(0, 0);
     text(view.left + 20, takenY + 12,
-      this.statsTaken.length > 0 ? this.statsTaken.map(titleOfId).join("  ·  ") : "none yet",
+      this.statsTaken.length > 0 ? this.statsTaken.map((id) => contentName(id, titleOfId(id))).join("  ·  ") : t("char.noneYet"),
       7, this.statsTaken.length > 0 ? "#a8f0a0" : "#5a5f7a", { wordWrap: { width: (view.width - 40) * ZOOM } },
     ).setOrigin(0, 0);
+
+    const bandTo = ui.objects.length;
 
     // Right panel: the selected spell's card.
     const rightX = cx + 70;
     const panelW = 250;
     // Top at cy - 128, bottom at cy + 44: above the attributes rule at cy + 48.
-    add(this.add.rectangle(rightX, cy - 42, panelW, 172, 0x161334, 0.96)
+    const panelRect = add(this.add.rectangle(rightX, cy - 42, panelW, 172, 0x161334, 0.96)
       .setStrokeStyle(1, 0x4a5480, 0.9).setDepth(210.5));
+    /*
+     * **The card grows to hold its text; the text is never cut.** A long
+     * description (Crescent Edge's runs four lines) ran down over the first
+     * affix row, because the rows sat at fixed heights. The description's
+     * measured bottom now pushes the rows, the footer and the panel's lower
+     * edge down by whatever it needs (`shift`), and the attributes band
+     * under the panel moves down with it so the two never meet.
+     */
+    let shift = 0;
     const slot = this.world.spells[ui.selected] ?? null;
     if (slot) {
       const def = ITEMS.get(slot.item.base);
-      text(rightX, cy - 108, titleOfId(slot.item.base).toUpperCase(), 11, "#ffe9a8").setOrigin(0.5, 0);
+      text(rightX, cy - 108, contentName(slot.item.base, titleOfId(slot.item.base)).toUpperCase(), 11, "#ffe9a8").setOrigin(0.5, 0);
       // The same numbers line the card showed: mana, damage per cast, what the shape does.
       const lvl = this.spellLevels[ui.selected] ?? 1;
+      /*
+       * The school, **named as a school**. It was a bare `VOID` in the
+       * corner, which reads as a category of the panel rather than as a
+       * property of the spell — and since a school is the spell's identity
+       * rather than its element (`schools.ts`), Magic Bolt being "void" is
+       * only comprehensible once the word `school` is next to it.
+       */
       const school = schoolOf(slot.item.base);
-      if (school)
-        text(rightX - panelW / 2 + 10, cy - 117, school.toUpperCase(), 6, (SCHOOL_COLOUR as Record<string, string>)[school] ?? "#c9cfe8").setOrigin(0, 0.5);
-      text(rightX + panelW / 2 - 10, cy - 117, `Lv ${lvl}${lvl > 1 ? `  +${Math.round((levelDamageMult(lvl) - 1) * 100)}% damage` : ""}`, 6, lvl > 1 ? "#ffd45e" : "#6a7396").setOrigin(1, 0.5);
+      if (school) {
+        const tag = text(rightX - panelW / 2 + 10, cy - 117, t("char.school"), 6, "#5a5f7a").setOrigin(0, 0.5);
+        text(rightX - panelW / 2 + 10 + tag.width / ZOOM + 5, cy - 117,
+          term(school, "spell_school").toUpperCase(), 6,
+          (SCHOOL_COLOUR as Record<string, string>)[school] ?? "#c9cfe8").setOrigin(0, 0.5);
+      }
+      // Pips and the number both: the pips say how far along five this is,
+      // and "Lv 3" is the word every other screen uses for the same thing.
+      add(this.keys_(rightX + panelW / 2 - 10, cy - 117, `${t("grade.lv", { n: lvl })} {pips:${lvl}/${SPELL_LEVEL_MAX}}${lvl > 1 ? `  ${t("char.lvDamage", { pct: Math.round((levelDamageMult(lvl) - 1) * 100) })}` : ""}`, 6, lvl > 1 ? "#ffd45e" : "#6a7396", 211, 1));
       const leftX = rightX - panelW / 2 + 12;
-      const row = this.statRow(def ? offerStatParts(def, lvl) : [{ text: `${slotCost(slot, ITEMS, this.world.staff)} mana`, tone: "mana" }], panelW - 24, 8, 211);
+      const cost = slotCost(slot, ITEMS, this.world.staff);
+      const row = this.statRow(
+        def ? this.slotStatParts(def, lvl, cost) : [{ text: `${cost} mana`, tone: "mana", key: "stat.mana", args: { n: cost } }],
+        panelW - 24, 8, 211);
       row.box.setPosition(leftX, cy - 92);
       add(row.box);
-      text(leftX, cy - 92 + row.height + 5, (def ? spellDetail(def) : ""), 7, "#c9cfe8", {
+      const desc = text(leftX, cy - 92 + row.height + 5,
+        def ? contentDescription(slot.item.base, spellDetail(def)) : "", 7, "#c9cfe8", {
         align: "left", wordWrap: { width: (panelW - 24) * ZOOM },
       }).setOrigin(0, 0);
       // Three affix slots, as Astral Ascent lists gambits: filled, empty, or
       // — in attach mode — the one this card would fill.
+      // The slot's own left edge, and the inset every row inside it takes
+      // from that edge rather than from the panel's.
+      const slotL = rightX - (panelW - 20) / 2;
+      const slotIn = slotL + PAD_M;
+      /*
+       * **The affix rows give the smith its footer back.**
+       *
+       * Everywhere else on this screen the three rows are what the player is
+       * acting on — attaching, swapping, giving one up — and they are sized
+       * to be pressed. At the smith they are context: the affixes survive a
+       * level and there is nothing to do to them here. The smith's own two
+       * rows are what the screen is for, and at the panel's fixed height the
+       * two claims did not both fit: the price row was drawn nine pixels
+       * under the raise row, a row of body text is at least twelve tall
+       * (`bodyPx`, `MIN_BODY_PX`), and a real screenshot had the price, the
+       * purse and the row above them printed over one another.
+       */
+      const smith = ui.mode === "smith";
+      const AFFIX_ROW_H = smith ? 15 : 19;
+      const rowsTop = (smith ? cy - 34 : cy - 30) - AFFIX_ROW_H / 2;
+      shift = Math.max(0, Math.ceil(desc.y + desc.displayHeight + PAD_S - rowsTop));
       for (let k = 0; k < AFFIX_SLOTS; k++) {
-        const y = cy - 30 + k * 22;
+        const y = (smith ? cy - 34 : cy - 30) + shift + (AFFIX_ROW_H + PAD_S - 1) * k;
         const held = slot.affixes[k];
         const swapping = ui.mode === "attach" && ui.swapAffix === k;
-        add(this.add.rectangle(rightX, y, panelW - 20, 19, swapping ? 0x3a1a22 : 0x0d0b1f, 0.9)
+        add(this.add.rectangle(rightX, y, panelW - 20, AFFIX_ROW_H, swapping ? 0x3a1a22 : 0x0d0b1f, 0.9)
           .setStrokeStyle(swapping ? 2 : 1, swapping ? 0xff8877 : held ? 0x7a4fd6 : 0x2a2750, 1).setDepth(210.6));
         if (held) {
           const def2 = spellAffixById(held.id);
           const tier = def2?.tiers[held.tier - 1];
           const icon = `icon_affix_${held.id}`;
           if (this.atlas.has(icon))
-            add(this.add.image(rightX - panelW / 2 + 20, y, this.crispTextureKey, icon).setOrigin(0.5).setScale(1).setDepth(211));
+            add(this.add.image(slotIn + 8, y, this.crispTextureKey, icon).setOrigin(0.5).setScale(1 / TUNED).setDepth(211));
           // One line, centred in the row: the name, then what it does.
           // Named in its rarity's colour, as its card was.
-          const nameT = text(rightX - panelW / 2 + 32, y, def2?.name ?? held.id, 7, RARITY_STYLE[rarityOf(held.tier)].text).setOrigin(0, 0.5);
-          text(nameT.x + nameT.width / ZOOM + 6, y, tier?.text ?? "", 6, "#8792b5").setOrigin(0, 0.5);
-        } else if (ui.mode === "attach" && affix && k === slot.affixes.length && !slot.affixes.some((a) => a.id === affix.id) && affixFits(affix, itemShape(ITEMS.get(slot.item.base)))) {
-          text(rightX - panelW / 2 + 12, y, `▸ ${affix.name}: ${affix.tiers[0].text}`, 7, "#ffe9a8").setOrigin(0, 0.5);
+          const nameT = text(slotIn + 22, y, contentName(held.id, def2?.name ?? held.id), 7, RARITY_STYLE[rarityOf(held.tier)].text).setOrigin(0, 0.5);
+          text(nameT.x + nameT.width / ZOOM + 6, y,
+            tier ? localizeStat({ text: tier.text, key: affixTierKey(held.id, held.tier) }) : "", 6, "#8792b5").setOrigin(0, 0.5);
+        } else if (ui.mode === "attach" && affix && k === slot.affixes.length && !slot.affixes.some((a) => a.id === affix.id) && affixFitsSpell(affix, ITEMS.get(slot.item.base), slot.affixes.map((a) => a.id))) {
+          {
+            /*
+             * The row the card would fill, and **what the key will cost once
+             * it does**. An affix that multiplies the hits charges for them
+             * (`affixCostMult`), and the one place the player can see which
+             * spell it is being charged on is here, next to the spell.
+             */
+            const row = text(slotIn, y, `▸ ${contentName(affix.id, affix.name)}: ${localizeStat({ text: affix.tiers[0].text, key: affixTierKey(affix.id, 1) })}`, 7, "#ffe9a8").setOrigin(0, 0.5);
+            const withIt = attachAffix(slot, affix.id, 1);
+            const after = withIt ? slotCost(withIt, ITEMS, this.world.staff) : cost;
+            if (after > cost) {
+              const n = Math.round(after * 10) / 10;
+              text(row.x + row.width / ZOOM + 6, y, t("affix.costsOn", { n }), 6, "#8fdcff").setOrigin(0, 0.5);
+            }
+          }
         } else {
-          text(rightX - panelW / 2 + 12, y, "empty", 7, "#3f4460").setOrigin(0, 0.5);
+          // Named rather than blank: three grey "empty"s said nothing about
+          // what the slots were for.
+          text(slotIn, y, t("char.affixSlot", { n: k + 1 }), 7, "#3f4460").setOrigin(0, 0.5);
         }
       }
+      /*
+       * The panel's footer — the price, the warning, the trade — wrapped to
+       * the panel's own width and split across two lines where it needs
+       * them. It was one long centred line, so the blacksmith's price row
+       * ran out past both edges of the panel it belonged to and sat across
+       * the border.
+       */
+      const footW = panelW - 24;
+      const footer = (str: string, colour: string, line = 0) =>
+        text(rightX, cy + 30 + shift + line * 9, str, 6.5, colour, {
+          align: "center", wordWrap: { width: footW * ZOOM },
+        }).setOrigin(0.5, 0.5);
       if (ui.mode === "smith") {
         const price = SMITH_PRICE[lvl] ?? 0;
-        text(rightX, cy + 36, lvl >= SPELL_LEVEL_MAX
-          ? "at the highest level"
-          : `Enter: raise to Lv ${lvl + 1} (+${Math.round((levelDamageMult(lvl + 1) - 1) * 100)}% damage) for ${price} gold · you have ${this.goldHeld()}`,
-        7, lvl >= SPELL_LEVEL_MAX ? "#6a7396" : "#ffe9a8").setOrigin(0.5);
+        if (lvl >= SPELL_LEVEL_MAX) footer(t("char.atHighestLevel"), "#6a7396");
+        else {
+          /*
+           * **The smith's two rows, measured rather than stepped.**
+           *
+           * They were drawn at `cy + 28` and `cy + 37` — nine authored pixels
+           * apart — with `keys_`, which neither fits a row to the panel nor
+           * knows how tall it came out. A row of body text is snapped to the
+           * pixel font's own multiple (`bodyPx`, `MIN_BODY_PX`), so how tall
+           * these two actually are depends on the display's pixel ratio and
+           * on the language; at the sizes a real screenshot showed, the price
+           * row was taller than its nine pixels and sat across the raise row,
+           * with the price and the purse running together.
+           *
+           * So: the price is anchored inside the panel's lower edge, the
+           * raise row is stacked on top of it by the height it actually
+           * measured, and both are fitted to the panel's width the way every
+           * other hint row in the game is (`fittedKeys`).
+           */
+          const priceRow = add(this.fittedKeys(
+            rightX, 0, t("char.price", { coin: "{coin}", price, held: this.goldHeld() }),
+            6.5, this.goldHeld() >= price ? "#ffd45e" : "#ff8877", footW, 211,
+          ));
+          // "Lv 4" and the pips, in that order, as the panel's own header
+          // says it: a row of five squares alone is not a number.
+          const raiseRow = add(this.fittedKeys(rightX, 0, t("char.raiseTo", {
+            lv: t("grade.lv", { n: lvl + 1 }),
+            pips: `{pips:${lvl + 1}/${SPELL_LEVEL_MAX}}`,
+            pct: Math.round((levelDamageMult(lvl + 1) - 1) * 100),
+          }), 6.5, "#ffe9a8", footW, 211));
+          // The panel is 172 tall about `cy - 42`, so its lower edge is at
+          // `cy + 44`; `PAD_S` inside that is the same inset the rest of it
+          // keeps. Both rows are containers centred on their own line.
+          const priceH = Math.max(8, priceRow.getBounds().height);
+          const raiseH = Math.max(8, raiseRow.getBounds().height);
+          const bottom = cy + 44 + shift - PAD_S;
+          priceRow.setY(bottom - priceH / 2);
+          raiseRow.setY(bottom - priceH - PAD_S + 1 - raiseH / 2);
+        }
       }
       if (ui.mode === "replace" && ui.card) {
         const lost = slot.affixes.length
-          ? `${slot.affixes.map((a) => spellAffixById(a.id)?.name ?? a.id).join(", ")} lost with it`
-          : "no affixes to lose";
-        ui.objects.push(this.keys_(rightX, cy + 36, `[Enter] ${ui.card.label} takes this key · ${lost}`, 7, "#ffe9a8", 211));
+          ? t("char.lostWithIt", { names: slot.affixes.map((a) => contentName(a.id, spellAffixById(a.id)?.name ?? a.id)).join(t("list.sep")) })
+          : t("char.noAffixesToLose");
+        add(this.keys_(rightX, cy + 30 + shift, t("char.takesThisKey", { card: contentName(ui.card.itemId ?? "", ui.card.label) }), 6.5, "#ffe9a8", 211, 0.5));
+        footer(lost, "#8792b5", 1);
       }
       if (ui.mode === "attach" && affix) {
         const heldAlready = slot.affixes.find((a) => a.id === affix.id);
         const shape = itemShape(ITEMS.get(slot.item.base));
         if (!affixFits(affix, shape))
-          text(rightX, cy + 36, `does not fit: needs a ${affix.shapes.join(" or ")} spell, this one is a ${shape}`, 7, "#ff8877").setOrigin(0.5);
+          footer(t("char.doesNotFitShape", {
+            shapes: affix.shapes.map((sh) => t(`shape.${sh}` as StringKey)).join(` ${t("hint.or")} `),
+            shape: t(`shape.${shape}` as StringKey),
+          }), "#ff8877");
+        else if (!affixFitsSpell(affix, ITEMS.get(slot.item.base), slot.affixes.map((a) => a.id)))
+          footer(t("char.doesNotFitSeek"), "#ff8877");
         else if (heldAlready)
-          text(rightX, cy + 36, `already held: raises to tier ${Math.min(3, heldAlready.tier + 1)}`, 7, "#ffe9a8").setOrigin(0.5);
+          footer(t("char.alreadyHeld", { tier: Math.min(3, heldAlready.tier + 1) }), "#ffe9a8");
         else if (slot.affixes.length >= AFFIX_SLOTS)
-          text(rightX, cy + 36, ui.swapAffix !== null && ui.swapAffix !== undefined
-            ? `choose the affix to give up · it is lost`
-            : "full: choose which affix it replaces", 7, "#ffb080").setOrigin(0.5);
+          footer(ui.swapAffix !== null && ui.swapAffix !== undefined
+            ? t("char.chooseGiveUp")
+            : t("char.affixFull"), "#ffb080");
       }
     } else {
-      text(rightX, cy - 32, "an empty key", 8, "#5a5f7a").setOrigin(0.5);
+      text(rightX, cy - 32, t("char.anEmptyKey"), 8, "#5a5f7a").setOrigin(0.5);
+    }
+    if (shift > 0) {
+      panelRect.setSize(panelW, 172 + shift).setY(cy - 42 + shift / 2);
+      for (const o of ui.objects.slice(bandFrom, bandTo))
+        (o as unknown as { y: number }).y += shift;
     }
 
     const hint = ui.mode === "attach"
-      ? "[W][S] choose     [Enter] attach     [Esc] back to the cards"
+      ? `[W][S] ${t("hint.choose")}     [Enter] ${t("hint.attach")}     [Esc] ${t("hint.backToCards")}`
       : ui.mode === "replace"
-        ? `[W][S] choose     [Enter] replace (the old spell drops)     [X] dismantle this one (+${this.floorPending?.value ?? dismantleValue(ui.card?.grade ?? 1)} gold)     [Esc] back`
+        ? `[W][S] ${t("hint.choose")}     [Enter] ${t("hint.replace")}     ${t("hint.holdE")} ${t("hint.dismantleThis", { gold: this.floorPending?.value ?? dismantleValue(ui.card?.grade ?? 1), coin: "{coin}" })}     [Esc] ${t("hint.back")}`
         : ui.mode === "smith"
-          ? "[W][S] choose     [Enter] raise the level     [Esc] close"
-          : "[W][S] choose     [Enter] pick up / swap order     [Tab] or [Esc] close";
-    ui.objects.push(this.keys_(cx, view.bottom - 16, hint, 8, "#8792b5", 211));
+          ? `[W][S] ${t("hint.choose")}     [Enter] ${t("hint.raiseLevel")}     [Esc] ${t("hint.close")}`
+          : `[W][S] ${t("hint.choose")}     [Enter] ${t("hint.pickUpSwap")}     [Tab] / [Esc] ${t("hint.close")}`;
+    ui.objects.push(this.fittedKeys(cx, view.bottom - 16, hint, 8, "#8792b5", view.width - 40, 211));
   }
 
   private readStaffKeys(): void {
@@ -4510,27 +10265,33 @@ export class PlayScene extends Phaser.Scene {
       return;
     }
     // The spell in hand may be taken apart instead of put on a key.
-    if (ui.mode === "replace" && ui.card && this.floorPending && down(this.keys.X)) {
+    const replacing = ui.mode === "replace" && !!ui.card && (!!this.floorPending || !this.shopping);
+    const heldE = replacing ? this.holdingE() : 0;
+    if (replacing) this.drawHoldBar(uiView().centerX, uiView().bottom - 26);
+    else this.modalHoldGfx.clear();
+    if (ui.mode === "replace" && ui.card && this.floorPending && heldE >= 1) {
       const f = this.floorPending;
       this.floorPending = null;
-      this.runGold += f.value;
-      this.tookLabel = `${f.label} dismantled  +${f.value} gold`;
+      this.payDismantle(f.x, f.y, f.value);
+      this.tookLabel = t("toast.dismantled", { label: f.label, gold: f.value, coin: "{coin}" });
       this.tookMs = 1600;
       this.removeFloorSpell(f);
+      this.modalHoldGfx.clear();
       this.hideStaff();
       this.sfx.play("pickup");
       return;
     }
-    if (ui.mode === "replace" && ui.card && !this.shopping && down(this.keys.X)) {
+    if (ui.mode === "replace" && ui.card && !this.shopping && heldE >= 1) {
       const value = dismantleValue(ui.card.grade ?? 1);
-      this.runGold += value;
-      this.tookLabel = `${ui.card.label} dismantled  +${value} gold`;
+      this.payDismantle(this.world.player.x, this.world.player.y, value);
+      this.tookLabel = t("toast.dismantled", { label: contentName(ui.card.itemId ?? "", ui.card.label), gold: value, coin: "{coin}" });
       this.tookMs = 1800;
+      this.modalHoldGfx.clear();
       this.finishTake();
       return;
     }
 
-    if (down(this.keys.ENTER) || down(this.keys.J) || down(this.keys.SPACE)) {
+    if (down(this.keys.ENTER)) {
       if (ui.mode === "replace" && ui.card) {
         this.replaceSpell(ui.selected, ui.card);
         return;
@@ -4541,21 +10302,21 @@ export class PlayScene extends Phaser.Scene {
         const slot = this.world.spells[i] ?? null;
         const level = this.spellLevels[i] ?? 1;
         const price = SMITH_PRICE[level] ?? 0;
-        if (!slot || level >= SPELL_LEVEL_MAX) { this.sfx.play("hurt"); return; }
-        if (this.goldHeld() < price) { this.tookLabel = `need ${price} gold`; this.tookMs = 1400; this.sfx.play("hurt"); return; }
+        if (!slot || level >= SPELL_LEVEL_MAX) { this.sfx.play("ui_deny"); return; }
+        if (this.goldHeld() < price) { this.tookLabel = t("toast.need", { price, coin: "{coin}" }); this.tookMs = 1400; this.sfx.play("ui_deny"); return; }
         this.runGold -= price;
         this.spellLevels[i] = level + 1;
         this.world.spells[i] = withLevel(slot, level + 1);
-        this.tookLabel = `${titleOfId(slot.item.base)} to Lv ${level + 1}`;
+        this.tookLabel = t("toast.toLv", { spell: contentName(slot.item.base, titleOfId(slot.item.base)), level: level + 1 });
         this.tookMs = 1600;
-        this.sfx.play("pickup");
+        this.sfx.play("smith_upgrade");
         this.renderStaff();
         return;
       }
       if (ui.mode === "attach" && ui.card) {
         const at = ui.selected;
         const slot = this.world.spells[at] ?? null;
-        if (!this.canTakeAffix(slot, ui.card.itemId) || !slot || !ui.card.itemId) { this.sfx.play("hurt"); return; }
+        if (!this.canTakeAffix(slot, ui.card.itemId) || !slot || !ui.card.itemId) { this.sfx.play("ui_deny"); return; }
         const full = !slot.affixes.some((a) => a.id === ui.card!.itemId) && slot.affixes.length >= AFFIX_SLOTS;
         // A full spell: first choose which affix goes (it is lost, not sold).
         if (full && (ui.swapAffix === null || ui.swapAffix === undefined)) { ui.swapAffix = 0; this.renderStaff(); return; }
@@ -4567,7 +10328,8 @@ export class PlayScene extends Phaser.Scene {
         this.spellAffixes[at] = next.affixes;
         this.owned.push(ui.card.itemId);
         const tier = next.affixes.find((a) => a.id === ui.card!.itemId)?.tier ?? 1;
-        this.tookLabel = `${ui.card.label} on ${titleOfId(next.item.base)}${tier > 1 ? ` (tier ${tier})` : ""}`;
+        this.tookLabel = t("toast.affixOn", { affix: contentName(ui.card.itemId ?? "", ui.card.label), spell: contentName(next.item.base, titleOfId(next.item.base)) })
+          + (tier > 1 ? t("toast.atTier", { tier }) : "");
         this.tookMs = 1800;
         this.finishTake();
         return;
@@ -4593,17 +10355,17 @@ export class PlayScene extends Phaser.Scene {
     // A floor spell keeps what it had; a card's spell starts bare, at the card's level.
     const floor = this.floorPending;
     const fitted = this.equipAt(i, card.itemId, floor ? floor.level : card.grade ?? 1, floor ? floor.affixes : []);
-    if (!fitted) { this.sfx.play("hurt"); return; }
+    if (!fitted) { this.sfx.play("ui_deny"); return; }
     // The spell that came off the key lies on the floor, as it was.
     if (old) this.dropFloorSpell(old.item.base, oldValue, oldLevel, oldAffixes);
-    this.tookLabel = `${card.label} on ${SPELL_KEYS[i]}`;
+    this.tookLabel = t("toast.onKey", { label: contentName(card.itemId ?? "", card.label), key: SPELL_KEYS[i] ?? "" });
     this.tookMs = 1800;
     if (floor) {
       // Picked up off the floor: no reward was being answered.
       this.floorPending = null;
       this.removeFloorSpell(floor);
       this.hideStaff();
-      this.sfx.play("pickup");
+      this.sfx.play("card_pick");
       return;
     }
     this.finishTake();
@@ -4629,16 +10391,20 @@ export class PlayScene extends Phaser.Scene {
      * on the staff screen, and cancelling that must not cost anything.
      */
     if (this.shopping) {
-      const price = SHOP_PRICE[card.kind] ?? 0;
+      const price = MERCHANT_PRICE[card.kind] ?? 0;
       if (this.goldHeld() < price) {
-        this.tookLabel = `need ${price} gold`;
+        this.tookLabel = t("toast.need", { price, coin: "{coin}" });
         this.tookMs = 1400;
         return;
       }
       this.shopPending = card;
     }
-    this.tookLabel = card.label;
+    this.tookLabel = contentName(card.itemId ?? "", card.label);
     this.tookMs = 1800;
+    // Revealed preference (doc 007): what this pick says about the build the
+    // player is actually making, as against the one they asked for.
+    this.pickTags.push([...cardStyleTags(ITEMS, card.kind, card.itemId)]);
+    this.pickedThisRoom = card.itemId || card.kind;
 
     if (card.kind === "gold") {
       this.runGold += GOLD_CARD_VALUE * (card.grade ?? 1);
@@ -4664,19 +10430,24 @@ export class PlayScene extends Phaser.Scene {
         this.statsTaken.push(card.itemId);
         if (card.itemId === "vigour") this.world.player.hearts += 1;
       }
-      this.world.player.mods = { ...this.mods };
+      /*
+       * The cards **and** the level: `baseMods` is the card half the world
+       * rebuilds the body from on every level, so both have to move or the
+       * next level-up would throw this card away (`run/levels.ts`).
+       */
+      this.world.baseMods = { ...this.mods };
+      this.world.player.mods = this.liveMods();
       // The run's new modifiers reach this room's live numbers too.
       if (card.itemId === "deep_well") {
-        const base = runStaff().mana_max;
-        this.world.staff = { ...this.world.staff, mana_max: Math.round(base * this.mods.manaMax) };
+        this.world.staff = { ...this.world.staff, mana_max: Math.round(this.world.staffManaBase * this.world.player.mods.manaMax) };
       }
     } else if (card.itemId && this.heldIndex(card.itemId) >= 0) {
       // A copy of a held spell raises it; at the cap it is paid out instead.
       const at = this.heldIndex(card.itemId);
       if (!this.upgradeHeld(at, card.grade ?? 1)) {
         const value = dismantleValue(card.grade ?? 1);
-        this.runGold += value;
-        this.tookLabel = `${card.label} is at Lv ${SPELL_LEVEL_MAX}: +${value} gold`;
+        this.payDismantle(this.world.player.x, this.world.player.y, value);
+        this.tookLabel = t("toast.atTopLevel", { label: contentName(card.itemId ?? "", card.label), gold: value, coin: "{coin}" });
         this.tookMs = 1800;
       }
     } else if (card.itemId) {
@@ -4692,10 +10463,10 @@ export class PlayScene extends Phaser.Scene {
       }
       this.owned.push(card.itemId);
       const free = this.world.slots.findIndex((x) => x === null);
-      const fitted = equipItem(
+      const fitted = equipKeepingOthers(
         this.world, card.itemId, `${card.itemId}-${this.roomIndex}`, ITEMS,
       );
-      // `equipItem` builds a new slot list on the world; the run has to take a
+      // Equipping builds a new slot list on the world; the run has to take a
       // copy or the pickup is lost at the next portal.
       if (fitted) {
         this.slots = [...this.world.slots];
@@ -4712,7 +10483,7 @@ export class PlayScene extends Phaser.Scene {
     const bought = this.shopPending;
     this.shopPending = null;
     if (bought && this.shopping) {
-      this.runGold -= SHOP_PRICE[bought.kind] ?? 0;
+      this.runGold -= MERCHANT_PRICE[bought.kind] ?? 0;
       this.shopStock = this.shopStock.filter((c) => c !== bought);
     }
     this.hideRewards();
@@ -4721,7 +10492,7 @@ export class PlayScene extends Phaser.Scene {
       this.destroyRewardDrop();
       answerOffer(this.world);
     }
-    this.sfx.play("pickup");
+    this.sfx.play("card_pick");
   }
 
   /**
@@ -4734,16 +10505,8 @@ export class PlayScene extends Phaser.Scene {
    * decided the next room.
    */
   private updateExits(): void {
+    if (this.portalGfx.length !== this.world.portals.length) this.buildPortalGfx();
     for (const { portal, body, badge, plate, tag } of this.portalGfx) {
-      /*
-       * A shut portal is not drawn at all.
-       *
-       * It was drawn dimmed, so the player could read the exits during the
-       * fight. That put three badges over the arena while it mattered least
-       * and made the raise a brightening rather than an arrival — and the
-       * thing the raise has to say is *now there is a way out*, which is a
-       * change of state and reads best against nothing.
-       */
       const eliteMark = this.eliteMarks.find((m) => m.portal === portal)?.mark;
       if (!portal.open) {
         body.setVisible(false);
@@ -4822,15 +10585,34 @@ export class PlayScene extends Phaser.Scene {
      * offer being answered, and answering it removes the reward — so there is
      * no case where both want the prompt.
      */
+    /*
+     * Nothing in the world prompts while a screen is up. A modal states its
+     * own keys, and a world prompt left showing behind one both contradicts
+     * it — `[E] open` under a card screen where E does nothing — and shows
+     * through the panel that is meant to have replaced it.
+     */
+    if (this.modalOpen) {
+      this.prompt.setVisible(false);
+      this.hintStrip?.setVisible(false);
+      this.holdGfx.clear();
+      return;
+    }
+    this.hintStrip?.setVisible(true);
     const near = portalInReach(this.world.portals, this.world.player);
     const pl = this.world.player;
     const spellNear = this.floorSpells.find((f) => Math.hypot(f.x - pl.x, f.y - pl.y) <= 22);
     const npcNear = this.npcs.find((n) => Math.hypot(n.x - pl.x, n.y - pl.y) <= 34);
     for (const f of this.floorSpells) f.glow.setAlpha(0.14 + 0.1 * Math.sin(this.world.tick / 12));
     for (const n of this.npcs) {
-      n.img.setFrame(safeFrame(this.atlas, `${n.kind === "merchant" ? "prop_merchant" : "prop_blacksmith"}_${(this.world.tick >> 5) & 1}`, "prop_shop_0"));
+      const frame = n.kind === "fountain"
+        ? fountainFrame(this.fountainDry, this.world.tick)
+        : `${n.kind === "merchant" ? "prop_merchant" : "prop_blacksmith"}_${(this.world.tick >> 5) & 1}`;
+      n.img.setFrame(safeFrame(this.atlas, frame, "prop_shop_0"));
       n.badge?.setY(n.y - 44 + Math.sin(this.world.tick / 18) * 2);
-      n.glow.setAlpha(0.22 + 0.08 * Math.sin(this.world.tick / 24));
+      // A dry fountain stops drawing the eye: the pool under it goes out.
+      n.glow.setAlpha(n.kind === "fountain" && this.fountainDry
+        ? 0.06
+        : 0.22 + 0.08 * Math.sin(this.world.tick / 24));
     }
     if (spellNear && !this.offerUi && !this.staffUi) {
       /*
@@ -4853,8 +10635,8 @@ export class PlayScene extends Phaser.Scene {
         if (this.floorPressMs > FLOOR_TAP_MS) this.floorHoldMs += dt;
         if (this.floorHoldMs >= FLOOR_HOLD_MS) {
           this.floorHoldSpent = true;
-          this.runGold += spellNear.value;
-          this.tookLabel = `${spellNear.label} dismantled  +${spellNear.value} gold`;
+          this.payDismantle(spellNear.x, spellNear.y, spellNear.value);
+          this.tookLabel = t("toast.dismantled", { label: spellNear.label, gold: spellNear.value, coin: "{coin}" });
           this.tookMs = 1600;
           this.burst(spellNear.x, spellNear.y, 0xffd45e, 12, 160, undefined, Math.PI * 2, 1, -40);
           this.removeFloorSpell(spellNear);
@@ -4870,9 +10652,11 @@ export class PlayScene extends Phaser.Scene {
         this.floorHoldMs = Math.max(0, this.floorHoldMs - dt * 1.5);
       }
       const held = this.heldIndex(spellNear.itemId);
-      const tap = held >= 0 ? `level up your ${spellNear.label}` : `pick up ${spellNear.label}${spellNear.level > 1 ? ` Lv ${spellNear.level}` : ""}`;
+      const tap = held >= 0 ? t("prompt.levelUp", { spell: spellNear.label })
+        : spellNear.level > 1 ? t("prompt.pickUpLv", { spell: spellNear.label, level: spellNear.level })
+        : t("prompt.pickUp", { spell: spellNear.label });
       this.prompt.setVisible(true);
-      this.prompt.setText(`[E] ${tap}    hold [E] dismantle +${spellNear.value} gold`);
+      this.prompt.setText(t("prompt.floorSpell", { tap, gold: spellNear.value, coin: "{coin}" }));
       // The hold's bar, under the prompt: fills while held, drains when let go.
       this.holdGfx.clear();
       if (this.floorHoldMs > 0) {
@@ -4885,7 +10669,9 @@ export class PlayScene extends Phaser.Scene {
         this.holdGfx.fillStyle(e?.isDown ? 0xffd45e : 0x9a7a3a, 1);
         this.holdGfx.fillRect(bx, by, W * k, 3);
       }
-      this.prompt.setPosition(spellNear.x, spellNear.y - TILE_PX);
+      // Clear of the hold bar drawn just under it, which the prompt's own
+      // panel was covering the top of.
+      this.promptAbove(spellNear.x, spellNear.y - TILE_PX + 8);
       return;
     }
     // Away from any floor spell: the bar drains and the press is forgotten.
@@ -4895,26 +10681,70 @@ export class PlayScene extends Phaser.Scene {
     if (npcNear && !this.offerUi && !this.staffUi) {
       this.prompt.setVisible(true);
       this.prompt.setText(npcNear.kind === "merchant"
-        ? (this.shopStock.length > 0 ? "[E] merchant" : "sold out")
-        : "[E] blacksmith: raise a spell's level");
-      this.prompt.setPosition(npcNear.x, npcNear.y - TILE_PX * 1.3);
+        ? (this.shopStock.length > 0 ? t("prompt.merchant") : t("prompt.soldOut"))
+        /*
+         * The fountain says which of three things it is before the player
+         * presses anything: a drink to take, a bar already full, or a
+         * fountain already drunk. A prompt that offered the drink and then
+         * refused it would be the refusal arriving one press too late.
+         */
+        : npcNear.kind === "fountain"
+        ? (this.fountainDry ? t("prompt.fountainDry")
+          : this.playerAtFullHealth() ? t("prompt.fountainFull")
+          : t("prompt.fountain"))
+        : t("prompt.blacksmith"));
+      // Above the trade badge — the coin purse, the anvil, the basin — which
+      // bobs, so its top is read off the sprite rather than guessed at.
+      this.promptAbove(npcNear.x, this.topOf(npcNear.badge, npcNear.y - 54));
       if (this.interactPressed) {
         this.interactPressed = false;
         if (npcNear.kind === "merchant") { if (this.shopStock.length > 0) this.showRewards(); }
+        else if (npcNear.kind === "fountain") this.drinkFountain(npcNear.x, npcNear.y);
         else this.showStaff("smith", null);
       }
       return;
     }
     if (drop && rewardInReach(drop, this.world.player)) {
       this.prompt.setVisible(true);
-      this.prompt.setText("[E] open");
-      this.prompt.setPosition(drop.x, drop.y - TILE_PX * 2.1);
+      this.prompt.setText(t("prompt.open"));
+      this.promptAbove(drop.x, this.topOf(this.rewardGfx?.badge ?? null, drop.y - TILE_PX * 2.1 + 10));
     } else if (near) {
       this.prompt.setVisible(true);
-      const what = near.npc ? (near.npc === "merchant" ? "the merchant" : "the blacksmith")
-        : near.school ? `${near.school} spell` : near.family ? `${near.family} stat` : near.reward;
-      this.prompt.setText(`[E] ${near.elite ? "ELITE " : ""}${what}${(near.grade ?? 1) > 1 ? ` ${"★".repeat((near.grade ?? 1) - 1)}` : ""}`);
-      this.prompt.setPosition(near.x, near.y - TILE_PX * 1.75);
+      // Names in Title Case, as they are everywhere else: `titleOfId` is the
+      // one place an id becomes something the player reads.
+      /*
+       * **A door the run's shape fixed names the room ahead, not a reward.**
+       *
+       * The badge over the shop door and the boss door already did this
+       * (`portal.onward`, `badgeFrame`); the prompt under the player's hand
+       * did not, and fell through to `term(portal.reward)` — which for both
+       * of them is `gold`, because `shopExit`/`bossExit` have to put *some*
+       * reward kind in the spec. So the last door of the run read "[E] gold"
+       * over a room that pays nothing. Reported from play.
+       *
+       * `onward` also takes the elite mark and the grade pips away: neither
+       * is a thing a fixed exit can be.
+       */
+      const what = near.onward ? roomTypeName(near.type)
+        : near.npc
+        ? t(near.npc === "merchant" ? "prompt.theMerchant"
+          : near.npc === "fountain" ? "prompt.theFountain"
+          : "prompt.theBlacksmith")
+        : near.school ? t("prompt.schoolSpell", { school: term(near.school, "spell_school") })
+          : near.family ? t("prompt.familyStat", { family: term(near.family, "stat_family") })
+            : term(near.reward ?? "", "reward_kind");
+      const mark = near.onward || !near.elite ? "" : `${t("roomType.elite")} `;
+      const pips = near.onward || (near.grade ?? 1) <= 1 ? "" : ` ${"★".repeat((near.grade ?? 1) - 1)}`;
+      this.prompt.setText(t("prompt.portal", { what: `${mark}${what}${pips}` }));
+      /*
+       * Above the door's own badges — the reward or vendor icon, and the
+       * elite mark over it — measured rather than stepped down from the
+       * tile size. A merchant door's coin purse sits a little over a pixel
+       * under the prompt's panel at 1.75 tiles, which is no clearance at
+       * all: it takes one taller glyph, or the badge art growing by two
+       * pixels, for the purse to be drawn across the name it belongs to.
+       */
+      this.promptAbove(near.x, this.portalTop(near));
     } else {
       this.prompt.setVisible(false);
     }
@@ -4925,6 +10755,40 @@ export class PlayScene extends Phaser.Scene {
       // Consumed here, so the same press cannot also walk into a portal.
       this.interactPressed = false;
     }
+  }
+
+  /**
+   * The top edge of a badge, in room coordinates, or `fallback` when the
+   * thing has none. Read off the object because the badges bob.
+   */
+  private topOf(badge: Phaser.GameObjects.Image | Phaser.GameObjects.Text | null, fallback: number): number {
+    return badge ? badge.y - badge.displayHeight / 2 : fallback;
+  }
+
+  /** The highest thing drawn over a door: its reward badge, and an elite mark. */
+  private portalTop(portal: Portal): number {
+    const g = this.portalGfx.find((x) => x.portal === portal);
+    const mark = this.eliteMarks.find((m) => m.portal === portal)?.mark ?? null;
+    return Math.min(
+      this.topOf(g?.badge ?? null, portal.y - TILE_PX * 1.4),
+      this.topOf(mark, Number.POSITIVE_INFINITY),
+    );
+  }
+
+  /**
+   * Puts the world prompt clear above `topY`.
+   *
+   * **One rule for every interactable**, because the old one was five magic
+   * multiples of the tile size — 2.2 for a vendor, 1.75 for a door, 2.45 for
+   * an elite one — each guessed against the art as it stood when it was
+   * written. A door to the merchant left the purse a pixel under the prompt's
+   * panel, so the badge and the name it belongs to were one glyph away from
+   * being drawn on top of each other; the prompt also sits above everything
+   * in the world layer by depth, but a layering that only works because of
+   * the z order still reads as two things fighting for one spot.
+   */
+  private promptAbove(x: number, topY: number): void {
+    this.prompt.setPosition(x, topY - PROMPT_CLEAR - PROMPT_PANEL_H / 2);
   }
 
   /**
@@ -4943,6 +10807,86 @@ export class PlayScene extends Phaser.Scene {
    * iteration — a real crash, reachable by pressing two number keys on the
    * same frame.
    */
+  /**
+   * How far a held E has got on a card screen, and `1` on the one frame it
+   * completes. Let go and it drains back, as the floor's does, so a hold
+   * abandoned halfway is seen to be abandoned.
+   */
+  private holdingE(): number {
+    const dt = this.game.loop.delta;
+    if (!this.keys.E?.isDown) {
+      this.modalHoldSpent = false;
+      this.modalHoldMs = Math.max(0, this.modalHoldMs - dt * 1.5);
+      return 0;
+    }
+    if (this.modalHoldSpent) return 0;
+    this.modalHoldMs += dt;
+    if (this.modalHoldMs >= FLOOR_HOLD_MS) { this.modalHoldSpent = true; this.modalHoldMs = 0; return 1; }
+    return this.modalHoldMs / FLOOR_HOLD_MS;
+  }
+
+  /** The hold's bar, centred under a card screen's hint row. */
+  private drawHoldBar(x: number, y: number): void {
+    this.modalHoldGfx.clear();
+    if (this.modalHoldMs <= 0) return;
+    const W = 60;
+    const k = Math.min(1, this.modalHoldMs / FLOOR_HOLD_MS);
+    this.modalHoldGfx.fillStyle(0x0d0b1f, 0.9);
+    this.modalHoldGfx.fillRect(x - W / 2 - 1, y - 1, W + 2, 5);
+    this.modalHoldGfx.fillStyle(this.keys.E?.isDown ? 0xffd45e : 0x9a7a3a, 1);
+    this.modalHoldGfx.fillRect(x - W / 2, y, W * k, 3);
+  }
+
+  /**
+   * What a card is worth in gold, on the one basis the game values anything
+   * on: `dismantleValue`, which reads a level and the affix tiers invested in
+   * a spell. A spell card is valued at the level it arrives at; an affix card
+   * at the tier it would attach at, which is the same investment seen from
+   * the other side.
+   */
+  private cardValue(card: OfferCard): number {
+    return card.kind === "affix" ? dismantleValue(1, [card.grade ?? 1]) : dismantleValue(card.grade ?? 1);
+  }
+
+  /**
+   * What holding E on the offer screen pays, and whether it gives up the
+   * whole offer — or `null` when there is nothing to hold for.
+   *
+   * A **spell** card is an object: holding E takes *that spell* apart, and it
+   * is worth what that spell is worth.
+   *
+   * An **affix** card is not an object yet — it is a tier waiting for a spell
+   * to be attached to — so there is nothing to take apart, and what the hold
+   * actually does is decline the reward. Declining costs all three cards, not
+   * the highlighted one, so it pays the **average** of the three: a player who
+   * gives up an offer of three tier-3 affixes has given up more than one who
+   * gives up three tier-1s, and neither is paid for the single card their
+   * cursor happened to be resting on.
+   */
+  private offerDismantle(): { value: number; whole: boolean } | null {
+    const ui = this.offerUi;
+    if (!ui || this.shopping) return null;
+    const card = ui.cards[ui.selected]?.card;
+    if (!card) return null;
+    if (card.kind === "spell") return { value: this.cardValue(card), whole: false };
+    if (card.kind !== "affix") return null;
+    const values = ui.cards.map((c) => this.cardValue(c.card));
+    return { value: Math.round(values.reduce((a, b) => a + b, 0) / values.length), whole: true };
+  }
+
+  /** The offer screen's hint row, which names what the hold is currently worth. */
+  private offerHint(cards: readonly OfferCard[], selected: number): string {
+    if (this.shopping)
+      return `[A][D] ${t("hint.move")}     [Enter] ${t("hint.buy")}     [Esc] ${t("hint.leave")}     ${t("hint.gold", { gold: this.goldHeld() })}`;
+    const card = cards[selected];
+    const value = card && card.kind === "affix"
+      ? Math.round(cards.reduce((n, c) => n + this.cardValue(c), 0) / Math.max(1, cards.length))
+      : card && card.kind === "spell" ? this.cardValue(card) : null;
+    const hold = value === null || !card ? "" : `     ${t("hint.holdE")} ${
+      t(card.kind === "affix" ? "hint.dismantleAffix" : "hint.dismantleSpell", { gold: value, coin: "{coin}" })}`;
+    return `[A][D] ${t("hint.move")}     [Enter] ${t("hint.take")}${hold}`;
+  }
+
   private readOfferKeys(): void {
     const ui = this.offerUi;
     if (!ui) return;
@@ -4955,44 +10899,68 @@ export class PlayScene extends Phaser.Scene {
     /*
      * Dismantling: a spell card may be taken apart for gold instead of taken,
      * so a room whose three spells are all wrong for the build is not a room
-     * that forces one onto a key.
+     * that forces one onto a key. An affix offer is the same bind and gets
+     * the same way out; see `offerDismantle` for what it is worth.
      */
-    if (!this.shopping && down(k.X)) {
-      const c = ui.cards[ui.selected]?.card;
-      if (c?.kind === "spell") {
-        const value = dismantleValue(c.grade ?? 1);
-        this.runGold += value;
-        this.tookLabel = `${c.label} dismantled  +${value} gold`;
-        this.tookMs = 1800;
-        this.finishTake();
-        return;
-      }
+    const deal = this.offerDismantle();
+    if (deal && this.holdingE() >= 1) {
+      const c = ui.cards[ui.selected]!.card;
+      this.payDismantle(this.world.player.x, this.world.player.y, deal.value);
+      this.tookLabel = deal.whole
+        ? t("toast.gaveUpReward", { gold: deal.value, coin: "{coin}" })
+        : t("toast.dismantled", { label: contentName(c.itemId ?? "", c.label), gold: deal.value, coin: "{coin}" });
+      this.tookMs = 1800;
+      this.modalHoldGfx.clear();
+      this.finishTake();
+      return;
     }
+    this.drawHoldBar(uiView().centerX, uiView().centerY + 116);
     if (down(k.A) || down(k.LEFT)) ui.selected = (ui.selected + count - 1) % count;
     if (down(k.D) || down(k.RIGHT)) ui.selected = (ui.selected + 1) % count;
 
     // One decision per frame: the index is read before anything can invalidate
     // the screen it indexes into.
     let pick = -1;
-    for (let i = 0; i < count; i++)
-      if (down(k[["ONE", "TWO", "THREE"][i] ?? ""])) { pick = i; break; }
-    if (pick < 0 && (down(k.ENTER) || down(k.J) || down(k.SPACE))) pick = ui.selected;
+    if (down(k.ENTER)) pick = ui.selected;
 
     this.paintSelection();
     if (pick >= 0) this.chooseReward(pick);
   }
 
-  /** The highlight, which is the only thing that says what Enter will take. */
+  /**
+   * The highlight, which is the only thing that says what Enter will take.
+   *
+   * It used to be a slightly lighter fill and slightly brighter corner
+   * ticks — a difference you had to look for on a screen where the whole
+   * point is knowing at a glance which of three you are about to take. The
+   * unchosen cards are now pushed *back* as well: dimmed and desaturated, so
+   * the chosen one is the only card at full strength. A contrast made on two
+   * sides is one a player reads without hunting for it.
+   */
   private paintSelection(): void {
     const ui = this.offerUi;
     if (!ui) return;
+    /*
+     * The hint row names what the hold is worth, and that is a property of
+     * the highlighted card, so it is rebuilt with the highlight — but only
+     * when it would say something different, because this runs every frame
+     * and a key line is a dozen fresh `Text` objects.
+     */
+    const hint = this.offerHint(ui.cards.map((c) => c.card), ui.selected);
+    if (hint !== this.offerHintStr) {
+      this.offerHintStr = hint;
+      fillKeyLine(this, ui.hint, hint, { px: 8, colour: "#8792b5", zoom: ZOOM, depth: 201 });
+    }
     ui.cards.forEach((c, i) => {
       const on = i === ui.selected;
       // The frame and the ground are the card's rarity; selection brightens them.
       const r = RARITY_STYLE[rarityOf(c.card.grade)];
-      c.panel.setStrokeStyle(on ? 2 : 1, on ? r.strokeOn : r.stroke, 1);
+      c.panel.setStrokeStyle(on ? 2.5 : 1, on ? r.strokeOn : r.stroke, 1);
       c.panel.setFillStyle(on ? r.fillOn : r.fill, 0.97);
       drawCardDeco(c.deco, c.decoRect, on ? r.strokeOn : r.corner);
+      for (const o of [c.panel, c.deco, c.icon, c.name, c.stats, c.body, c.key, c.zone, c.kindTag, ...c.extras])
+        (o as Partial<Phaser.GameObjects.Components.Alpha> & { setAlpha?: (a: number) => unknown })
+          .setAlpha?.(on ? 1 : 0.58);
     });
   }
 
@@ -5050,6 +11018,93 @@ export class PlayScene extends Phaser.Scene {
    * job from showing that something moved.
    */
   /** Throws `n` sparks from a point: along `dir` within `spread`, or all round. */
+  /** A kill, as the pop that shows it: the body's death frame, facing the way it fell. */
+  private killPop(ev: { x: number; y: number; what?: string; facing?: number }): KillPop {
+    const id = ev.what as EnemyId;
+    const pose = popFrame(id, ev.facing ?? 0, (n) => this.atlas.has(n));
+    return {
+      x: ev.x, y: ev.y, flipX: pose.flipX, ms: POP_MS,
+      frame: safeFrame(this.atlas, pose.name, `${ENEMY_FRAME[id]}_idle0`),
+    };
+  }
+
+  /**
+   * **The kill: a white flash, the drawn death, then it bursts.**
+   *
+   * Every body has a death frame, and the pop only ever showed it as a
+   * white silhouette, so the art was never seen — and a squash on top made
+   * it read as a blob warping. Now the blow is confirmed by a flash of the
+   * body, the death frame shows in colour for a beat, and the body comes
+   * apart (`agePops`) rather than lying there fading.
+   */
+  private drawPops(pops: readonly KillPop[]): void {
+    for (const pop of pops) {
+      const t = 1 - pop.ms / POP_MS;
+      const flash = t < POP_FLASH_SHARE;
+      const u = flash ? t / POP_FLASH_SHARE : (t - POP_FLASH_SHARE) / (1 - POP_FLASH_SHARE);
+      const img = this.add.image(pop.x, pop.y, this.textureKey, pop.frame)
+        .setOrigin(0.5)
+        .setFlipX(pop.flipX)
+        // Swells through the flash and holds, as though about to give.
+        .setScale((1 / ART_SCALE) * (flash ? 1 + 0.12 * u : 1.12 + 0.04 * u))
+        .setDepth(7);
+      if (flash) img.setTintFill(0xffffff);
+      this.sprites.add(img);
+      /*
+       * The death frame under a filter: a hot glow laid over it additively,
+       * cooling from white-gold to ember red as it goes. The frame alone is a
+       * dark shape on a dark floor, and at the preview's zoom it vanished
+       * between the flash and the burst.
+       */
+      if (!flash) {
+        const glow = this.add.image(pop.x, pop.y, this.textureKey, pop.frame)
+          .setOrigin(0.5)
+          .setFlipX(pop.flipX)
+          .setScale(img.scaleX, img.scaleY)
+          .setTintFill(lerpColour(POP_GLOW_HOT, POP_GLOW_COOL, u))
+          .setBlendMode(Phaser.BlendModes.ADD)
+          .setAlpha(0.75 * (1 - 0.6 * u))
+          .setDepth(7.01);
+        this.sprites.add(glow);
+      }
+    }
+  }
+
+  /** Counts the pops down; one that runs out bursts into the colours it was drawn in. */
+  private agePops(pops: readonly KillPop[], delta: number): KillPop[] {
+    const kept: KillPop[] = [];
+    for (const pop of pops) {
+      pop.ms -= delta;
+      if (pop.ms > 0) { kept.push(pop); continue; }
+      for (const colour of this.popColours(pop.frame))
+        this.burst(pop.x, pop.y - 2, colour, 7, 110, undefined, Math.PI * 2, 1.1, 120);
+      this.burst(pop.x, pop.y - 2, 0xf4efe4, 5, 150, undefined, Math.PI * 2, 0.8);
+    }
+    return kept;
+  }
+
+  /** A few of the colours a frame is drawn in, read off the sheet and kept, so a body bursts into itself. */
+  private popColours(frame: string): number[] {
+    const known = this.popPalette.get(frame);
+    if (known) return known;
+    const out: number[] = [];
+    const f = this.textures.getFrame(this.textureKey, frame);
+    if (f) {
+      for (let i = 0; i < 40 && out.length < 3; i++) {
+        const x = Math.floor(f.cutWidth * (0.25 + 0.5 * ((i * 0.618) % 1)));
+        const y = Math.floor(f.cutHeight * (0.3 + 0.5 * ((i * 0.382) % 1)));
+        const c = this.textures.getPixel(x, y, this.textureKey, frame);
+        // Skip the ink and the empty cells: the burst is the body's colours.
+        if (!c || c.alpha < 200 || c.red + c.green + c.blue < 90) continue;
+        const rgb = (c.red << 16) | (c.green << 8) | c.blue;
+        if (!out.includes(rgb)) out.push(rgb);
+      }
+    }
+    if (out.length === 0) out.push(0x8a86b8);
+    this.popPalette.set(frame, out);
+    return out;
+  }
+
   private burst(
     x: number, y: number, colour: number, n: number, speed: number,
     dir?: number, spread = Math.PI * 2, size = 1, gravity = 0,
@@ -5152,7 +11207,7 @@ export class PlayScene extends Phaser.Scene {
    * and than an upward one. Kept as a hook for any later offset.
    */
   private slashFrame(): { dx: number; dy: number; lift: number; squash: number } {
-    return { dx: 0, dy: 0, lift: 0, squash: 1 };
+    return FOCUS ? { dx: 0, dy: 0, lift: SLASH_LIFT, squash: SLASH_SQUASH } : { dx: 0, dy: 0, lift: 0, squash: 1 };
   }
 
   /**
@@ -5162,24 +11217,502 @@ export class PlayScene extends Phaser.Scene {
    * hitbox ends — the crescent's outer edge — so the range the player gets is
    * the blade they see, and a reach upgrade lengthens it.
    *
-   * It gathers in the windup (short and faint, a shimmer along the steel),
-   * is at full length and brightness through the active frames, and in the
+   * It gathers in a swing's windup (short and faint, a shimmer along the
+   * steel; a spin's charge shows only the raised steel), is at full length
+   * and brightness through the active frames, and in the
    * recovery dissolves from the tip inward, shedding motes. Drawn additively
    * in three layers — a wide soft glow, a translucent body, a white core —
    * over a leaf-shaped outline that swells a third of the way up and draws to
    * a needle point.
    */
+  /**
+   * The conjured swing's pose, **keyed, not tweened** — after the 2D Zeldas.
+   *
+   * A blade drawn at a new angle every frame shows every in-between of a
+   * 133 ms cut, and that is a windscreen wiper: an even rotation about a
+   * pivot. A Link to the Past draws its slash as a handful of held poses with
+   * the sword at a few angles. So the blade has a few places, not a path:
+   * wound back past the start of the arc through the windup, then
+   * `CUT_KEYS` angles across the arc a `KEY_MS` apiece, the last — the end,
+   * whipped past the hand — **held** through the rest of the active frames
+   * and the recovery. The blade is seen at each, so the eye has the thing
+   * that moves; the trail it leaves joins them (`drawConjuredSwing`).
+   *
+   * The hitbox still sweeps the arc as it always has; only the picture is
+   * keyed, and it leads the hitbox by a frame, which reads as speed.
+   */
+  private conjuredPose(): { angle: number; u: number; stage: "wound" | "cut" | "held"; key: number } {
+    const w = this.world;
+    const box = w.swing;
+    const p = w.player;
+    const half = ((Math.abs(box.sweepDeg) / 2) * Math.PI) / 180;
+    const phase = swingPhase(p);
+    if (phase === "windup") return { angle: box.facing - box.sweep * (half + WOUND_EXTRA), u: 0, stage: "wound", key: -1 };
+    const key = phase === "active" ? Math.min(CUT_KEYS - 1, Math.floor((swingElapsed(p) - SWING_WINDUP_MS) / KEY_MS)) : CUT_KEYS - 1;
+    const t = (key + 1) / CUT_KEYS;
+    return { angle: box.facing - box.sweep * half + box.sweep * 2 * half * t, u: t, stage: key < CUT_KEYS - 1 ? "cut" : "held", key };
+  }
+
+
+  /** Where the focus is now in the conjured swing (`conjuredPose`). */
+  private focusRoot(): { x: number; y: number; angle: number; tipX: number; tipY: number; pointX: number; pointY: number } {
+    const box = this.world.swing;
+    const pose = this.conjuredPose();
+    const reach = Math.max(box.reach, box.bladeReach);
+    const at = this.bladeAt(pose.angle, pose.u, reach);
+    /*
+     * **Through a cut the staff is a sprite, not a pose** (`blade.ts`).
+     *
+     * It is turned to the angle the simulation is cutting at, gripped a
+     * little out from the swing's centre, crystal always outward; the blade
+     * is the same line continued, ending on the hit arc. Every earlier
+     * version tried to make five drawn keys serve a continuous aim, and each
+     * failed differently: the blade six pixels off the staff, then the blade
+     * at an angle the staff was not pointing, then the staff itself held
+     * upside down with its crystal at the floor.
+     *
+     * `drawHeldStaff` paints the staff on the same numbers, so the two
+     * cannot drift apart.
+     */
+    const st = this.swingStaffAt(pose.angle, reach);
+    return {
+      ...at,
+      x: st.gripX, y: st.gripY,
+      tipX: st.crystalX, tipY: st.crystalY,
+      angle: st.angle,
+      pointX: st.tipX, pointY: st.tipY,
+    };
+  }
+
+  /** Grip to crystal in the staff sprite as it was cut, in world px. */
+  private spriteGripToCrystal(): number {
+    const crystal = this.atlas.playerAnchor("weapon_player_staff")?.crystal;
+    // Frame px to world px; the sprite's grip is its own frame's centre, and
+    // that frame is larger than a body's because a staff held near its butt
+    // reaches most of its length past the hand.
+    const box = this.atlas.has("weapon_player_staff") ? this.atlas.frame("weapon_player_staff") : null;
+    return crystal && box
+      ? Math.hypot(crystal[0] - box.w / 2, crystal[1] - box.h / 2) / ART_SCALE
+      : STAFF_LEN_PX;
+  }
+
+  /** The staff and its blade for a cut angle, in world px (`blade.ts`). */
+  private swingStaffAt(angle: number, reach: number): ReturnType<typeof swingStaff> {
+    const box = this.world.swing;
+    const f = this.slashFrame();
+    // The drawn fist, already carried through the body's own squash, lean and
+    // kick (`attachToBody`); the swing's centre only when no frame says.
+    const h = this.frameHand;
+    return swingStaff({
+      centre: [box.x + f.dx, box.y - f.lift + f.dy],
+      grip: h ? [h.x, h.y] : [box.x + f.dx + Math.cos(angle) * FOCUS_HAND_R, box.y - f.lift + f.dy + Math.sin(angle) * FOCUS_HAND_R],
+      angle,
+      reach,
+      gripToCrystal: this.frameStaff.gripToCrystal,
+    });
+  }
+
+  /**
+   * **One staff, in every state.**
+   *
+   * The idle, the walk, the cast, the dash and the hurt used to draw a staff
+   * baked into the body's own frames, and only a cut turned a sprite. Two
+   * staffs is two things to keep agreeing: the moment a swing began, the
+   * staff jumped from the arm's drawn joint to a grip the renderer worked out
+   * for itself, and from behind the robe to in front of it.
+   *
+   * So the model draws none and this draws all of them. The grip is the
+   * frame's own `hand` anchor carried through the body's transform; the angle
+   * is the frame's `staffAngleDeg` — the way the drawing held it — except
+   * through a cut, where it is the cut's own (`swingStaff`). Depth is the
+   * frame's `staffDepth`: the back view holds it in front, where a robe would
+   * otherwise swallow the shaft. The fist is painted over the grip at every
+   * angle, so the hand visibly wraps the shaft instead of the shaft crossing
+   * an open palm.
+   */
+  private drawHeldStaff(st: HeldStaff | null): void {
+    if (FOCUS !== "staff" || !st || !this.atlas.has("weapon_player_staff")) return;
+    const w = this.world;
+    const staff = this.add.image(st.spriteX, st.spriteY, this.textureKey, "weapon_player_staff")
+      .setOrigin(0.5)
+      .setScale(1 / ART_SCALE)
+      // The sprite is drawn pointing up, so its own zero is a quarter turn on.
+      .setRotation(st.angle + Math.PI / 2)
+      .setDepth(this.playerDepth + (this.frameStaff.depth >= 0 ? PLAYER_CONJURE : -PLAYER_HELD));
+    if (dashInvulnerable(w.player)) staff.setAlpha(0.55);
+    else if (w.player.invulnMs > 0) staff.setAlpha((w.tick >> 2) & 1 ? 0.35 : 1);
+    this.sprites.add(staff);
+    if (this.atlas.has("weapon_player_fist")) {
+      const fist = this.add.image(st.gripX, st.gripY, this.textureKey, "weapon_player_fist")
+        .setOrigin(0.5)
+        .setScale(1 / ART_SCALE)
+        // Always above the shaft, whichever side of the body the staff is on.
+        .setDepth(this.playerDepth + PLAYER_GRIP);
+      if (dashInvulnerable(w.player)) fist.setAlpha(0.55);
+      else if (w.player.invulnMs > 0) fist.setAlpha((w.tick >> 2) & 1 ? 0.35 : 1);
+      this.sprites.add(fist);
+    }
+  }
+
+  /**
+   * Where the staff is this frame: from the cut while one is running, from
+   * the pose otherwise. Both end at the same grip, so entering a swing moves
+   * nothing but the angle.
+   */
+  private heldStaffNow(): HeldStaff | null {
+    const h = this.frameHand;
+    if (!h) return null;
+    const sprite = this.spriteGripToCrystal();
+    const w = this.world;
+    if (swingPhase(w.player) !== "none") {
+      const box = w.swing;
+      const cut = this.swingStaffAt(this.conjuredPose().angle, Math.max(box.reach, box.bladeReach));
+      const at = staffSpriteCentre(cut, this.frameStaff.gripToCrystal, sprite);
+      return {
+        gripX: cut.gripX, gripY: cut.gripY, angle: cut.angle,
+        crystalX: cut.crystalX, crystalY: cut.crystalY,
+        spriteX: at.x, spriteY: at.y,
+      };
+    }
+    return heldStaff({
+      grip: [h.x, h.y],
+      angleDeg: this.frameStaff.angleDeg,
+      flipX: this.frameStaff.flipX,
+      gripToCrystal: this.frameStaff.gripToCrystal,
+      spriteGripToCrystal: sprite,
+    });
+  }
+
+  /** The hand, the focus's point and the blade's point for a blade angle, progress through the cut and reach. */
+  private bladeAt(angle: number, u: number, reach: number): { x: number; y: number; angle: number; tipX: number; tipY: number; pointX: number; pointY: number } {
+    const box = this.world.swing;
+    const f = this.slashFrame();
+    const lead = box.sweep * ((WRIST_LEAD_DEG * (1 - u) * (1 - u) - WRIST_WHIP_DEG * u * u) * Math.PI) / 180;
+    const handAngle = angle + lead;
+    const reachOut = FOCUS_HAND_R + FOCUS_HAND_PUSH * Math.sin(Math.PI * u);
+    const ox = box.x + f.dx;
+    const oy = box.y - f.lift + f.dy;
+    const x = ox + Math.cos(handAngle) * reachOut;
+    const y = oy + Math.sin(handAngle) * f.squash * reachOut;
+    // The point is on the hitbox's edge, which grows through the sweep: the
+    // blade is as long as the cut reaches, and a slim blade can be.
+    const pointX = ox + Math.cos(angle) * reach;
+    const pointY = oy + Math.sin(angle) * f.squash * reach;
+    const a = Math.atan2(pointY - y, pointX - x);
+    const tip = FOCUS_TIP_PX[FOCUS ?? "staff"];
+    return { x, y, angle: a, tipX: x + Math.cos(a) * tip, tipY: y + Math.sin(a) * tip, pointX, pointY };
+  }
+
+  /**
+   * The swing with a conjured blade: Carian Slicer's blade, keyed as a 2D
+   * Zelda slash (`conjuredPose`). Light gathers at the focus in the windup —
+   * brighter on the first swing of a chain, which is the one that summons.
+   * Then the blade steps across the arc, white on its first key on a
+   * summoning swing, its trail growing behind it; it lands with a glint and
+   * a few streaks off its point, holds while the trail is eaten from the
+   * tail, and breaks up from the point in the recovery.
+   * Between the swings of a chain the focus stays lit.
+   */
+  private drawConjuredSwing(): void {
+    const w = this.world;
+    const p = w.player;
+    const box = w.swing;
+    const g = this.magicGfx;
+    const phase = swingPhase(p);
+    if (phase === "none") {
+      if (p.chainMs > 0 && this.focusPoint) {
+        g.fillStyle(0x8fd0ff, 0.35 * (p.chainMs / SWING_CHAIN_MS));
+        g.fillCircle(this.focusPoint.x, this.focusPoint.y, 2.5);
+      }
+      return;
+    }
+    const pose = this.conjuredPose();
+    const r = this.focusRoot();
+    const elapsed = swingElapsed(p);
+    if (pose.stage === "wound") {
+      const t = Math.min(1, elapsed / SWING_WINDUP_MS);
+      const strength = box.chained ? 0.5 : 1;
+      for (let i = 0; i < 5; i++) {
+        const a = i * 1.26 + w.tick * 0.3;
+        const d = (1 - t) * 7 + 1;
+        g.fillStyle(0xcfeeff, 0.8 * strength);
+        g.fillRect(r.tipX + Math.cos(a) * d - 0.5, r.tipY + Math.sin(a) * d - 0.5, 1, 1);
+      }
+      g.fillStyle(0x5aa0ff, 0.35 * t * strength);
+      g.fillCircle(r.tipX, r.tipY, 2 + 3 * t * strength);
+      return;
+    }
+    const reach = Math.max(box.reach, box.bladeReach);
+    const half = ((Math.abs(box.sweepDeg) / 2) * Math.PI) / 180;
+    const since = elapsed - SWING_WINDUP_MS;
+    const angleAt = (t: number) => box.facing - box.sweep * half + box.sweep * 2 * half * t;
+    /*
+     * **The trail, not a fan.** A sheet from the hand to the point, all at
+     * once, read as an area going off — "a fan attack", not a sword. The
+     * trail is what the blade leaves: it grows behind the blade as the blade
+     * steps forward, spans the blade's length at the head and only its outer
+     * edge at the tail, is bright at the head and faint at the tail, and once
+     * the blade has landed it is eaten from the tail forward, as the crescent
+     * was.
+     */
+    const headT = pose.u;
+    const retract = pose.stage === "held" ? Math.min(1, Math.max(0, since - (CUT_KEYS - 1) * KEY_MS) / TRAIL_RETRACT_MS) : 0;
+    const tailT = headT * retract;
+    if (headT - tailT > 0.02) {
+      /*
+       * **The trail is what the blade swept, sampled from the blade.**
+       *
+       * Its inner edge is the path the blade's root took and its outer edge
+       * the path its point took, both from the same staff-and-blade geometry
+       * the blade itself is drawn from (`swingStaff`), at each angle the cut
+       * has passed through. So the leading edge *is* the blade, by
+       * construction, and there is nothing for the two to disagree about.
+       *
+       * Every earlier version sampled the hitbox instead and then tried to
+       * reconcile: a sheet swept about the swing box while the blade grew
+       * from the drawn staff, which is an arc of a different radius sitting
+       * beside the blade — a bright crescent to one side of the cut, with a
+       * straight chord across its mouth where the two were forced to meet.
+       */
+      const steps = 40;
+      const pts: { root: readonly [number, number]; point: readonly [number, number]; rel: number }[] = [];
+      for (let i = 0; i <= steps; i++) {
+        const t = tailT + (headT - tailT) * (i / steps);
+        const st = this.swingStaffAt(angleAt(t), reach);
+        pts.push({ root: [st.crystalX, st.crystalY], point: [st.tipX, st.tipY], rel: i / steps });
+      }
+      const at = (q: (typeof pts)[number], k: number) => [
+        q.root[0] + (q.point[0] - q.root[0]) * k,
+        q.root[1] + (q.point[1] - q.root[1]) * k,
+      ] as const;
+      const inner = (rel: number) => 0.7 * (1 - rel ** 1.1);
+      const fade = 1 - retract * 0.5;
+      for (let i = 0; i < steps; i++) {
+        const a0 = pts[i]!, a1 = pts[i + 1]!;
+        const rel = a1.rel;
+        const [ix0, iy0] = at(a0, inner(a0.rel));
+        const [ix1, iy1] = at(a1, inner(a1.rel));
+        const [ox0, oy0] = at(a0, 1);
+        const [ox1, oy1] = at(a1, 1);
+        g.fillStyle(rel > 0.8 ? 0xcfeeff : 0x6fb8ff, (0.06 + 0.5 * rel ** 1.5) * fade);
+        g.beginPath();
+        g.moveTo(ix0, iy0); g.lineTo(ox0, oy0); g.lineTo(ox1, oy1); g.lineTo(ix1, iy1);
+        g.closePath();
+        g.fillPath();
+        // The white edge along the point's path, heavy at the head.
+        g.lineStyle(rel > 0.7 ? 1.6 : 1, 0xffffff, rel ** 1.2 * fade);
+        g.lineBetween(ox0, oy0, ox1, oy1);
+        /*
+         * **No dark line outside the trail.** There was one, to make the
+         * bright edge read on a floor of its own hue; over forty segments it
+         * stacked into a muddy grey half-disc lifting off the body, and
+         * thinning it only made a fainter half-disc. The trail's own white
+         * edge is already the brightest thing on the screen and needs no
+         * help; what it was guarding against is better handled by the edge
+         * being white rather than by drawing shadow under a cut.
+         */
+      }
+      // Speed lines just outside the head while the blade is still moving.
+      if (pose.stage === "cut" || since < CUT_KEYS * KEY_MS + 20) {
+        for (const [k, len] of [[1.1, 0.12], [1.17, 0.08], [1.24, 0.05]] as const) {
+          const from = Math.max(tailT, headT - len), to = headT;
+          let prev: readonly [number, number] | null = null;
+          for (let i = 0; i <= 6; i++) {
+            const t = from + (to - from) * (i / 6);
+            const st = this.swingStaffAt(angleAt(t), reach);
+            const pt = at({ root: [st.crystalX, st.crystalY], point: [st.tipX, st.tipY], rel: 1 }, k);
+            if (prev) { g.lineStyle(1, 0xe6f8ff, 0.55 * (i / 6)); g.lineBetween(prev[0], prev[1], pt[0], pt[1]); }
+            prev = pt;
+          }
+        }
+      }
+    }
+
+    /*
+     * The landing: a four-pointed glint at the point and three short streaks
+     * thrown off it along the cut, for the first moment the blade is still,
+     * and nothing else. Particles sprayed off the point at every step, slow
+     * and round and long-lived, read as a sprinkler, not a cut: a cut's light
+     * is few, fast and brief, and belongs to the instant it lands.
+     */
+    const landMs = pose.stage === "held" && phase === "active" ? since - (CUT_KEYS - 1) * KEY_MS : Infinity;
+    if (landMs < LAND_FLASH_MS) {
+      const k = landMs / LAND_FLASH_MS;
+      const ahead = this.bladeAt(pose.angle + box.sweep * 0.08, pose.u, reach);
+      const tx = ahead.pointX - r.pointX, ty = ahead.pointY - r.pointY;
+      const tl = Math.hypot(tx, ty) || 1;
+      const dx = tx / tl, dy = ty / tl;
+      for (const [turn, len] of [[0, 11], [-0.45, 7], [0.4, 6]] as const) {
+        const cx = dx * Math.cos(turn) - dy * Math.sin(turn), cy = dy * Math.cos(turn) + dx * Math.sin(turn);
+        const from = 2 + k * len * 0.9, to = 2 + (0.35 + k * 0.65) * len * 1.4;
+        g.lineStyle(1, 0xffffff, 1 - k);
+        g.lineBetween(r.pointX + cx * from, r.pointY + cy * from, r.pointX + cx * to, r.pointY + cy * to);
+      }
+      const size = 5 * (1 - k);
+      g.fillStyle(0xffffff, 1 - k * 0.6);
+      g.fillTriangle(r.pointX - size, r.pointY, r.pointX + size, r.pointY, r.pointX, r.pointY - 1);
+      g.fillTriangle(r.pointX - size, r.pointY, r.pointX + size, r.pointY, r.pointX, r.pointY + 1);
+      g.fillTriangle(r.pointX, r.pointY - size, r.pointX, r.pointY + size, r.pointX - 1, r.pointY);
+      g.fillTriangle(r.pointX, r.pointY - size, r.pointX, r.pointY + size, r.pointX + 1, r.pointY);
+    }
+
+    let len = Math.hypot(r.pointX - r.tipX, r.pointY - r.tipY);
+    const ux = (r.pointX - r.tipX) / (len || 1);
+    const uy = (r.pointY - r.tipY) / (len || 1);
+    let alpha = 1;
+    if (phase === "recover") {
+      const k = Math.max(0, p.swingMs / SWING_RECOVER_MS);
+      len *= 0.3 + 0.7 * k;
+      alpha = 0.35 + 0.65 * k;
+    }
+    const pointX = r.tipX + ux * len, pointY = r.tipY + uy * len;
+    // White on its first frame on a summoning swing: the blade forming.
+    const forming = !box.chained && pose.key === 0;
+    for (let i = 0; i <= 6; i++) {
+      const u = i / 6;
+      g.fillStyle(0x2f63c8, 0.14 * alpha);
+      g.fillCircle(r.tipX + ux * len * u, r.tipY + uy * len * u, 3.2 * (1 - u * 0.6));
+    }
+    this.drawConjured(r.tipX, r.tipY, ux, uy, len, alpha, box.sweep, forming);
+    if (phase === "active") {
+      g.fillStyle(0xffffff, 0.9);
+      g.fillCircle(pointX, pointY, 1.3);
+      g.fillStyle(0x8fd0ff, 0.35);
+      g.fillCircle(pointX, pointY, 3.5);
+    }
+    // Breaking up in the recovery: a mote or two off the blade, not a shower.
+    if (phase === "recover" && (w.tick & 1) === 0) {
+      const u = Math.random();
+      this.fxSparks.push({
+        x: r.tipX + ux * len * u, y: r.tipY + uy * len * u,
+        vx: -uy * (Math.random() - 0.5) * 30, vy: ux * (Math.random() - 0.5) * 30 - 14,
+        ms: 0, life: 160 + Math.random() * 120, size: 0.8 + Math.random() * 0.5,
+        colour: Math.random() < 0.5 ? 0xcfeeff : 0x7fb8ff, gravity: -20,
+      });
+    }
+  }
+
+
+
+  /**
+   * The focus, drawn on the art's pixel grid at an angle — each pixel set by
+   * where it falls along and across the shaft, the way a line is drawn in
+   * pixel art, never a sprite turned — with a one-pixel outline round it.
+   */
+  private drawFocus(x: number, y: number, angle: number, depth: number, charged: boolean): void {
+    const g = this.focusGfx;
+    g.clear().setDepth(depth);
+    const px = new Map<string, number>();
+    const dx = Math.cos(angle), dy = Math.sin(angle), nx = -dy, ny = dx;
+    const ax = x * ART_SCALE, ay = y * ART_SCALE;
+    // Lengths and widths in pixels at the tuned scale.
+    const stroke = (from: number, to: number, width: (t: number) => number, colour: (side: number, t: number) => number) => {
+      from *= TUNED; to *= TUNED;
+      for (let t = from; t <= to; t += 0.35) {
+        const u = (t - from) / Math.max(1, to - from);
+        const wd = width(u) * TUNED;
+        for (let s = -wd / 2; s <= wd / 2; s += 0.35)
+          px.set(`${Math.round(ax + dx * t + nx * s)},${Math.round(ay + dy * t + ny * s)}`, colour(s / Math.max(0.5, wd / 2), u));
+      }
+    };
+    if (FOCUS === "staff") {
+      stroke(-8, 13, () => 2, (s) => (s < 0 ? 0x83604a : 0x3a2a22));
+      stroke(13, 17, (u) => 3.6 - Math.abs(u - 0.4) * 4, (s) => (s < 0 ? 0x08acd1 : 0x1278a3));
+    } else {
+      stroke(-3, 2, () => 2, (s) => (s < 0 ? 0x65584b : 0x2e2620));
+      stroke(2.5, 3.2, () => 6, (s) => (s < 0 ? 0xf7ddbc : 0xc4b098));
+      stroke(3.5, 12, (u) => 2.6 - u * 1.6, (s, u) => (u > 0.85 || s < 0 ? 0xeef2ff : 0x7d849e));
+      stroke(4.5, 5.5, () => 1, () => 0x08acd1);
+    }
+    const ink = new Set<string>();
+    for (const k of px.keys()) {
+      const [kx, ky] = k.split(",").map(Number) as [number, number];
+      for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+        const n = `${kx + ox},${ky + oy}`;
+        if (!px.has(n)) ink.add(n);
+      }
+    }
+    const cell = 1 / ART_SCALE;
+    const flash = charged && (this.world.tick >> 1) & 1;
+    const p = this.world.player;
+    g.setAlpha(dashInvulnerable(p) ? 0.55 : p.invulnMs > 0 && (this.world.tick >> 2) & 1 ? 0.35 : 1);
+    g.fillStyle(0x040407, 1);
+    for (const k of ink) { const [kx, ky] = k.split(",").map(Number) as [number, number]; g.fillRect(kx * cell - cell / 2, ky * cell - cell / 2, cell, cell); }
+    for (const [k, c] of px) {
+      const [kx, ky] = k.split(",").map(Number) as [number, number];
+      g.fillStyle(flash ? 0xffffff : c, 1);
+      g.fillRect(kx * cell - cell / 2, ky * cell - cell / 2, cell, cell);
+    }
+  }
+
+  /**
+   * The conjured blade itself, after Carian Slicer: **a sword of light with
+   * edges**, not a streak. Drawn solid on the art's pixel grid from the
+   * focus's point — a flare where it leaves the crystal, a broad blade
+   * narrowing to a point, a white edge on the side it is cutting toward, a
+   * pale core, a darker back edge and a dark rim — so that what the eye
+   * follows through the swing is the blade, and the trail is only its wake.
+   */
+  private drawConjured(bx: number, by: number, dx: number, dy: number, len: number, alpha: number, lead: number, white: boolean): void {
+    const g = this.conjureGfx;
+    const px = new Map<string, number>();
+    const nx = -dy * lead, ny = dx * lead;
+    const L = len * ART_SCALE;
+    const ax = bx * ART_SCALE, ay = by * ART_SCALE;
+    // A longsword of light, as Carian Slicer's is: a crossguard where it
+    // leaves the staff, which is its grip; a straight blade with parallel
+    // edges; a point only at the end. A leaf read as a cleaver, a long
+    // taper as a needle.
+    const halfAt = (t: number) => {
+      const u = t / L;
+      if (t < 1.6 * TUNED) return 4.2 * TUNED;
+      if (u < 0.86) return 1.7 * TUNED;
+      return Math.max(0.4, 1.7 * TUNED * (1 - (u - 0.86) / 0.14));
+    };
+    for (let t = 0; t <= L; t += 0.35) {
+      const h = halfAt(t);
+      for (let sAc = -h; sAc <= h; sAc += 0.35) {
+        const k = sAc / h;
+        const c = t < 1.6 * TUNED ? 0xcfeeff : k > 0.45 ? 0xffffff : k < -0.6 ? 0x6fb8ff : Math.abs(k) < 0.25 ? 0xf2fdff : 0xa9e2ff;
+        px.set(`${Math.round(ax + dx * t + nx * sAc)},${Math.round(ay + dy * t + ny * sAc)}`, c);
+      }
+    }
+    const cell = 1 / ART_SCALE;
+    const rim = new Set<string>();
+    for (const key of px.keys()) {
+      const [kx, ky] = key.split(",").map(Number) as [number, number];
+      for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) if (!px.has(`${kx + ox},${ky + oy}`)) rim.add(`${kx + ox},${ky + oy}`);
+    }
+    g.fillStyle(0x16266a, alpha);
+    for (const key of rim) { const [kx, ky] = key.split(",").map(Number) as [number, number]; g.fillRect(kx * cell - cell / 2, ky * cell - cell / 2, cell, cell); }
+    for (const [key, c] of px) {
+      const [kx, ky] = key.split(",").map(Number) as [number, number];
+      g.fillStyle(white ? 0xffffff : c, alpha);
+      g.fillRect(kx * cell - cell / 2, ky * cell - cell / 2, cell, cell);
+    }
+  }
+
   private drawMagicBlade(): void {
     const g = this.magicGfx;
     g.clear();
+    this.conjureGfx.clear();
     const w = this.world;
     const p = w.player;
     const phase = swingPhase(p);
+    if (FOCUS && p.swingStretch === 1) { this.drawConjuredSwing(); return; }
     if (phase === "none") return;
     const box = w.swing;
+    const spinning = p.swingStretch > 1;
+    /*
+     * Not while a spin charges. The steel is raised overhead then, and the
+     * blade was drawn from the swing box — another place, turning as the box
+     * did — growing as it went: a blade of light twitching round the body
+     * before the spin. The raised sword is the charge; the blade arrives
+     * whole when the spin does.
+     */
+    if (spinning && phase === "windup") return;
     const angle = drawnBladeAngle(box, p, this.swordRestAngle);
     const f = this.slashFrame();
-    const spinning = p.swingStretch > 1;
     // In the swing's drawn plane: raised and flattened like the crescent.
     const dirX = Math.cos(angle);
     const dirY = Math.sin(angle) * (spinning ? 1 : f.squash);
@@ -5268,8 +11801,109 @@ export class PlayScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * **Returning Edge** (doc 006's boomerang): the player's own sword, thrown.
+   *
+   * The delivered `weapon_player_sword`, at its native scale and turned
+   * about the middle of its blade — the same art the floating sword is drawn
+   * with, so what flies out is recognisably the weapon. It spins with its
+   * speed: fast out of the hand, slowing into the turn, quick again home
+   * (the scene keeps the turn per blade, so a change of rate never jumps).
+   * The spirit school's light is the sword itself: a few copies of it at
+   * the angles it has just turned through, filled with the light and fading,
+   * which is the smear of a spin — as many as the spin is fast, none as it
+   * hangs at the turn. No glow disc and no outline round it.
+   */
+  private drawThrownSword(b: Bullet, look: SpellLook, turn: number, rate: number): void {
+    if (!this.atlas.has("weapon_player_sword")) return;
+    // About the middle of the blade, so it turns end over end rather than round its hilt.
+    const pivot = ((SWORD_GRIP_X + SWORD_TIP_X) / 2) / 64;
+    const fast = Math.max(0, Math.min(1, (rate - 6) / 18));
+    const lift = 5;
+    const copies = Math.round(3 * fast);
+    // Each copy a fixed step back round the turn: at this rate, where the blade was a frame or two ago.
+    for (let k = copies; k >= 1; k--) {
+      this.sprites.add(this.add.image(b.x, b.y - lift, this.textureKey, "weapon_player_sword")
+        .setOrigin(pivot, 0.5).setScale(1 / ART_SCALE).setRotation(turn - k * 0.5)
+        .setTintFill(look.glow).setBlendMode(Phaser.BlendModes.ADD)
+        .setAlpha((0.42 / k) * (0.5 + 0.5 * fast)).setDepth(9.5));
+    }
+    const sword = this.add.image(b.x, b.y - lift, this.textureKey, "weapon_player_sword")
+      .setOrigin(pivot, 0.5).setScale(1 / ART_SCALE).setRotation(turn).setDepth(9.52);
+    // Coming home it carries the light: the steel washed a little toward it.
+    if (b.returning) sword.setTint(0xffffff, look.core, 0xffffff, look.core);
+    this.sprites.add(sword);
+    // Its shadow on the floor under it, so it reads as flying and not as lying there.
+    this.projGfx.fillStyle(SHADOW_INK, 0.22);
+    this.projGfx.fillEllipse(b.x, b.y + 3, 12, 4);
+    // Motes of the light off it: a few on the way out, more as it hangs and comes back.
+    const out = b.returning ? 0 : Math.max(0, Math.min(1, b.outLeftPx / Math.max(1, b.outPx)));
+    const slow = !b.returning && out < 0.3 ? 1 - out / 0.3 : 0;
+    if (b.returning ? Math.random() < 0.5 : Math.random() < 0.1 + 0.4 * slow)
+      this.shed({ x: b.x + (Math.random() - 0.5) * 6, y: b.y - lift + (Math.random() - 0.5) * 6, vx: -b.vx * 0.15 + (Math.random() - 0.5) * 20, vy: -b.vy * 0.15 + (Math.random() - 0.5) * 20, ms: 0, life: 200 + Math.random() * 140, size: 0.8 + Math.random() * 0.5, colour: Math.random() < 0.5 ? look.core : look.glow, gravity: -10 });
+  }
+
+  /** The renderer's memory of one enchant wave, made the first time it is seen (`waveEdges`). */
+  private waveMemo(b: Bullet): { ox: number; oy: number; seed: number } {
+    let m = this.waveEdges.get(b);
+    if (!m || m.ox !== b.originX || m.oy !== b.originY) {
+      m = { ox: b.originX, oy: b.originY, seed: (this.world.tick * 7 + Math.round(b.originX)) % 97 };
+      this.waveEdges.set(b, m);
+    }
+    return m;
+  }
+
+  /** How far through its dissolve a wave is, 1 while it flies to 0 at its reach: its last half, eased. */
+  private waveLife(b: Bullet): number {
+    const k = Math.max(0, Math.min(1, (b.outPx - b.outLeftPx) / Math.max(1, b.outPx)));
+    return k < 0.5 ? 1 : 0.5 * (1 + Math.cos((Math.PI * (k - 0.5)) / 0.5));
+  }
+
+  /**
+   * **An enchant's waves** (doc 006): a crescent of the enchant's energy,
+   * after Getsuga Tenshō, thrown off the blade as the cut ends
+   * (`drawCrescentWave`). It is the swing's own edge — the swing's reach, the
+   * middle of its arc — and it flies forward at that size, exactly the arc
+   * the simulation hits with (`waveHits`). The crescent itself is white-hot
+   * for its first frames, sheds wisps of its light behind it as it goes, flickers along
+   * its edge, and over the second half of its reach dissolves from the tips
+   * inward and fades, so there is no frame where it simply stops. The room's
+   * geometry never cuts it. Nothing is drawn at the blade as it leaves, and
+   * a body it crosses takes an ordinary hit's feedback, nothing of its own.
+   */
+  private drawWaves(): void {
+    const w = this.world;
+    this.waveGfx.clear();
+    for (const b of this.waveEdges.keys()) if (!b.alive || b.delivery !== "wave") this.waveEdges.delete(b);
+    for (const b of w.playerBullets) {
+      if (!b.alive || b.delivery !== "wave") continue;
+      const m = this.waveMemo(b);
+      const c = waveCentre(b);
+      const life = this.waveLife(b);
+      const look = lookOf(b, w.spells);
+      const wave = {
+        x: c.x, y: c.y, radius: waveRadius(b), facing: Math.atan2(b.vy, b.vx), half: waveHalfSpan(),
+        thick: WAVE_BODY_PX, life, flash: b.outPx - b.outLeftPx < WAVE_FLASH_PX, tick: w.tick, seed: m.seed,
+        palette: wavePalette(look.glow, look.core),
+      };
+      /*
+       * Drawn in code, not from the `vfx_crescent_wave_*` sheet: the user
+       * compared the two and kept this one. Its hard bands sit on the texel
+       * grid, so it reads as the game's pixels rather than as a vector shape.
+       */
+      drawCrescentWave(this.waveGfx, wave, Math.min(1, 0.25 + life));
+      // Wisps of its light torn off the trailing side, left drifting behind it.
+      const n = Math.random() < 0.5 + life ? (life > 0.5 ? 2 : 1) : 0;
+      const back = { x: -Math.cos(wave.facing), y: -Math.sin(wave.facing) };
+      for (const q of waveTrailPoints(wave, n))
+        this.shed({ x: q.x, y: q.y, vx: back.x * (25 + Math.random() * 30) + (Math.random() - 0.5) * 24, vy: back.y * (25 + Math.random() * 30) + (Math.random() - 0.5) * 24 - 6, ms: 0, life: 180 + Math.random() * 160, size: 1, colour: Math.random() < 0.4 ? look.core : look.glow, gravity: -8 });
+    }
+  }
+
   private drawSwing(): void {
+    // The staff is drawn with the body now, in every state (`drawHeldStaff`).
     this.drawMagicBlade();
+    this.drawWaves();
     this.swingGfx.clear();
     const box = this.world.swing;
     const phase = swingPhase(this.world.player);
@@ -5296,6 +11930,8 @@ export class PlayScene extends Phaser.Scene {
      */
     const tailCut = phase === "recover" ? 1 - fade : 0;
 
+    // With a conjured blade the swept fan is the blade's own (`drawConjuredSwing`).
+    if (FOCUS) return;
     drawCrescent(this.swingGfx, box, { ...CRESCENT, width, fade, tailCut, ...this.slashFrame() });
   }
 
@@ -5386,7 +12022,7 @@ export class PlayScene extends Phaser.Scene {
   /** A frame's delivered pixel height, for scaling geometry against art. */
   private frameHeight(name: string): number {
     const f = this.textures.getFrame(this.textureKey, name);
-    return f && f.height > 0 ? f.height : 64;
+    return f && f.height > 0 ? f.height : FRAME_PX;
   }
 
   /** An annular slice between two radii, from `a0` to `a1`. */
@@ -5437,8 +12073,9 @@ export class PlayScene extends Phaser.Scene {
    * is now committed *there*".
    */
   private drawEnemyBlades(): void {
-    this.threatGfx.clear();
     this.bladeGfx.clear();
+    const view = this.teleView();
+    const tick = this.world.tick;
     this.drawMuzzles();
     /*
      * A death that bursts (`DeathBurst`): the spikes grow out of where the body
@@ -5451,10 +12088,9 @@ export class PlayScene extends Phaser.Scene {
       const grow = d.totalMs * d.growShare;
       const out = grow > 0 ? Math.min(1, elapsed / grow) : 1;
       const near = 1 - d.ms / d.totalMs;
-      this.threatGfx.lineStyle(1.5, 0xff8877, 0.3 + 0.6 * near);
-      this.threatGfx.strokeCircle(d.x, d.y, d.reach + 4 + 6 * (1 - near));
+      drawRingTell(this.threatGfx, d.x, d.y, d.reach + 4 + 6 * (1 - near), TELE_RIM, near, tick, view);
       const spike = d.kind === "lance" ? "vfx_spike_gold" : "vfx_spike_bone";
-      const len = (16 / ART_SCALE) * 1.2;
+      const len = (16 / TUNED_SCALE) * 1.2;
       const r0 = 4;
       const quiver = out >= 1 ? 0.03 * Math.sin(this.world.tick * 1.3) : 0;
       for (let k = 0; k < 8; k++) {
@@ -5463,10 +12099,10 @@ export class PlayScene extends Phaser.Scene {
         const tip = Math.max(r0 + len * 0.5, r1);
         if (this.atlas.has(spike)) {
           const im = this.add.image(d.x + Math.cos(a) * (tip - len / 2), d.y - 2 + Math.sin(a) * (tip - len / 2), this.textureKey, spike)
-            .setOrigin(0.5).setRotation(a).setScale(1.2 / ART_SCALE).setDepth(8);
+            .setOrigin(0.5).setRotation(a).setScale(1.2 / ART_SCALE, SPIKE_FAT / ART_SCALE).setDepth(8);
           this.hazardMarks.push(im);
         } else {
-          this.bladeGfx.lineStyle(1.6, d.kind === "lance" ? 0xffd24a : 0xf0ead8, 0.95);
+          this.bladeGfx.lineStyle(SPIKE_BODY_PX, d.kind === "lance" ? 0xffd24a : 0xf0ead8, 0.95);
           this.bladeGfx.lineBetween(d.x + Math.cos(a) * r0, d.y - 2 + Math.sin(a) * r0, d.x + Math.cos(a) * r1, d.y - 2 + Math.sin(a) * r1);
         }
       }
@@ -5477,27 +12113,47 @@ export class PlayScene extends Phaser.Scene {
       if (e.hp <= 0 || e.spawnFadeMs > 0) continue;
       if (e.archetype === "boss" && e.bossCast === "slam" && e.bossCastMs > 0) {
         /*
-         * The slam's tell: a red ring growing out to where the shockwave
-         * will pass, and the **safe circle** at its feet drawn in white —
-         * the one attack whose answer is to come closer.
+         * The slam's tell: the ground the sword strikes, filled to his feet —
+         * there is no safe circle any more (`BOSS_SLAM_IMPACT_PX`) — growing
+         * out past where the shockwave is born.
          */
         const t = 1 - e.bossCastMs / BOSS_SLAM_MS;
-        this.threatGfx.lineStyle(2, 0xff5a4a, 0.4 + 0.5 * t);
-        this.threatGfx.strokeCircle(e.x, e.y, BOSS_SLAM_SAFE_PX + 60 * t);
-        this.threatGfx.fillStyle(0xff5a4a, 0.08 + 0.12 * t);
-        this.threatGfx.fillCircle(e.x, e.y, BOSS_SLAM_SAFE_PX + 60 * t);
-        this.threatGfx.lineStyle(1.5, 0xffffff, 0.8);
-        this.threatGfx.strokeCircle(e.x, e.y, BOSS_SLAM_SAFE_PX);
+        drawSlamTell(this.threatGfx, e.x, e.y, 0, BOSS_SLAM_IMPACT_PX + 60 * t, t, tick, view);
       }
       if (e.archetype === "boss" && e.bossCast === "leap" && e.bossCastMs > 0) {
-        // Where it comes down: a mark that fills, and a shadow that grows.
+        /*
+         * **Where it comes down.** The mark is at full size from the first
+         * frame — a mark that grows tells the player where the danger will be
+         * *later*, which is the one thing a landing marker must not do — and
+         * what fills is the disc inside it, which is the clock.
+         *
+         * Four ticks round the rim, closing on it, are the second reading of
+         * the same clock, for a player who is watching the floor and not the
+         * body. And the shockwave the landing throws is drawn as a thin ring
+         * at the radius the band is born on, so "get in close" is a decision
+         * that can be made before the boss is down rather than after.
+         */
         const t = 1 - e.bossCastMs / BOSS_LEAP_MS;
-        this.threatGfx.fillStyle(0x0d0b1f, 0.25 + 0.35 * t);
-        this.threatGfx.fillEllipse(e.bossTargetX, e.bossTargetY + 6, BOSS_LEAP_RADIUS * 1.6 * t, BOSS_LEAP_RADIUS * 0.7 * t);
-        this.threatGfx.lineStyle(2, 0xff5a4a, 0.5 + 0.5 * t);
-        this.threatGfx.strokeCircle(e.bossTargetX, e.bossTargetY, BOSS_LEAP_RADIUS);
-        this.threatGfx.fillStyle(0xff5a4a, 0.1 + 0.25 * t);
-        this.threatGfx.fillCircle(e.bossTargetX, e.bossTargetY, BOSS_LEAP_RADIUS * t);
+        drawLeapMark(this.threatGfx, e.bossTargetX, e.bossTargetY, BOSS_LEAP_RADIUS, 0, t, tick, view);
+        // The landing's band is born at the mark's own edge, so the mark is all there is to read.
+      }
+      /*
+       * No overstay ring (`BOSS_OVERSTAY_MS`): a thin ring tightening round his
+       * feet after every blow was read as part of the blow and never as a
+       * clock. The backhand it warned of has its own 560 ms windup, drawn as
+       * any blade's is, and that is the tell.
+       */
+      if (e.archetype === "boss" && e.bossCast === "quake" && e.bossCastMs > 0) {
+        /*
+         * The quake's tell is the **opposite** of the slam's: a ring that
+         * closes in on the boss rather than growing out of it, so the two
+         * moves are told apart at a glance before either resolves. It is
+         * gathering, not throwing — and what follows is the cracks, which
+         * carry their own growth (doc 005, Boss).
+         */
+        const t = 1 - e.bossCastMs / BOSS_QUAKE_MS;
+        const r = 92 - 60 * t;
+        drawQuakeTell(this.threatGfx, e.x, e.y, r, Math.atan2(w.player.y - e.y, w.player.x - e.x), t, tick, view);
       }
       /*
        * The sentinel's tell is a **sight line**. It wears the turret's sheet
@@ -5513,35 +12169,54 @@ export class PlayScene extends Phaser.Scene {
         const ux = (aim.x - e.x) / d;
         const uy = (aim.y - e.y) / d;
         const t = 1 - Math.min(1, e.telegraphMs / 700);
-        this.threatGfx.lineStyle(1, 0xff6a5a, 0.25 + 0.5 * t);
-        this.threatGfx.lineBetween(e.x, e.y, e.x + ux * 420, e.y + uy * 420);
-        this.threatGfx.fillStyle(0xff6a5a, 0.6 + 0.4 * t);
-        this.threatGfx.fillCircle(aim.x, aim.y, 1.5 + t);
+        drawAimLine(this.threatGfx, e.x, e.y, ux, uy, 420, aim.x, aim.y, t, tick, view);
       }
+      /*
+       * **The dashcut's line** (doc 020): where he will run, drawn for the
+       * whole crouch as a sight line, because the answer is to leave the line,
+       * and a blade drawn round the body said nothing about the run.
+       */
+      if (e.archetype === "boss" && e.meleeKind === "dashcut" && e.attack === "windup") {
+        const spec = MELEE_ATTACKS.dashcut;
+        const ux = Math.cos(e.swing.facing), uy = Math.sin(e.swing.facing);
+        const travel = e.speed * spec.commitSpeed * (spec.lungeMs / 1000);
+        const t = 1 - e.attackMs / Math.max(1, e.windupMs);
+        drawAimLine(this.threatGfx, e.x, e.y, ux, uy, travel, e.x + ux * travel, e.y + uy * travel, t, tick, view);
+      }
+      if (e.archetype === "boss") this.drawBossCrescent(e);
       const box = e.swing;
       if (box.reach <= 0) continue;
       const sweep = (box.sweepDeg * Math.PI) / 180;
 
-      if (e.attack === "windup" && (e.meleeKind === "bristle" || e.meleeKind === "lance")) {
+      if (e.attack === "windup" && (e.meleeKind === "bristle" || e.meleeKind === "lance" || e.meleeKind === "slam")) {
         /*
-         * A spike drive's tell is a **ring closing on the body**, not an area:
-         * the spikes go everywhere, so a filled disc says nothing the shape
-         * of the body does not, and it was reported as noise. The ring
-         * contracts from beyond the reach to the body's edge over the windup,
-         * so its size is the clock; its colour is the body's spikes.
+         * An all-round tell is a **ring on the body**, not an area: the steel
+         * goes everywhere, so a filled disc says nothing the shape of the
+         * body does not, and it was reported as noise.
+         *
+         * The two rings run opposite ways, which is what tells them apart
+         * before either lands. A spike drive's **contracts** from beyond the
+         * reach onto the body — it is gathering in. The tank's slam
+         * **grows** out to the shockwave's edge — it is about to reach past
+         * itself — and it is drawn twice, the blade's own reach in the body's
+         * colour and the wave's in a dimmer one, so the heart-and-a-half and
+         * the half-heart are separate places on the floor.
          */
-        const t = 1 - Math.max(0, e.attackMs) / (e.meleeKind === "lance" ? 400 : 320);
-        const r = box.reach * 1.6 * (1 - t) + e.radius * 0.9 * t;
-        this.threatGfx.lineStyle(1.5 + t, spikeColour(e), 0.35 + 0.6 * t);
-        this.threatGfx.strokeCircle(e.x, e.y - 2, r);
-      } else if (e.attack === "windup") {
+        const slam = e.meleeKind === "slam";
+        const t = 1 - Math.max(0, e.attackMs) / Math.max(1, e.windupMs);
+        if (slam) {
+          drawRingTell(this.threatGfx, e.x, e.y - 2, SLAM_SHOCK_RADIUS * (0.35 + 0.65 * t),
+            TELE_HOT, t, tick, view, { dim: true });
+        }
+        const r = slam ? box.reach * (0.3 + 0.7 * t) : box.reach * 1.6 * (1 - t) + e.radius * 0.9 * t;
+        drawRingTell(this.threatGfx, e.x, e.y - 2, r, spikeColour(e), t, tick, view);
+      } else if (e.attack === "windup" && e.meleeKind !== "dashcut") {
         // Brightening as the commit approaches, so the tell has a clock in it
-        // as well as a place.
-        const t = 1 - e.attackMs / MELEE_WINDUP_MS;
+        // as well as a place. Measured against the windup this body is
+        // actually running, which its tempo and jitter move (doc 005).
+        const t = 1 - e.attackMs / Math.max(1, e.windupMs);
         // A spin's threat is the whole ring; past a full turn the sector is a disc.
         const half = Math.min(Math.PI, Math.abs(sweep) / 2 + box.halfArc);
-        const from = box.facing - half;
-        const to = box.facing + half;
         /*
          * The threatened area is **drawn, not stamped**.
          *
@@ -5561,22 +12236,19 @@ export class PlayScene extends Phaser.Scene {
          * A filled sector is generated, but it is generated *correctly*, and
          * it has a clock in it.
          */
-        this.threatGfx.fillStyle(0xff5544, 0.14 + 0.28 * t);
-        this.threatGfx.slice(e.x, e.y, box.reach, from, to, false);
-        this.threatGfx.fillPath();
         /*
-         * The outer edge, as a line.
+         * The outer edge is **the outermost cell**, not a stroke over the
+         * fill.
          *
-         * The fill alone was not readable: what the player needs from a
-         * telegraph is not "danger is roughly here" but **where the edge is**,
-         * because the decision is whether one step backwards is enough. A
-         * gradient cannot answer that and a stroked boundary can, and it costs
-         * one more path.
+         * What the player needs from a telegraph is not "danger is roughly
+         * here" but *where the edge is*, because the decision is whether one
+         * step backwards is enough — a gradient cannot answer that. So the
+         * last cell of the sector is the brightest thing in it and the cell
+         * behind it is near-black, and the pair holds its edge on any floor
+         * the room's mood hands it. The two radial sides are dashed for the
+         * same reason: an open sector reads as a smear.
          */
-        this.threatGfx.lineStyle(1.5, 0xff8877, 0.5 + 0.4 * t);
-        this.threatGfx.beginPath();
-        this.threatGfx.arc(e.x, e.y, box.reach, from, to, false);
-        this.threatGfx.strokePath();
+        drawSectorTell(this.threatGfx, e.x, e.y, box.reach, box.facing, half, t, tick, view);
         // The tank's greatsword, raised: the tell for the chop is the blade
         // going up, and it comes down along the wedge below it.
         if (e.meleeKind === "cleave") this.drawGreatsword(e, box.facing, -Math.PI / 2 + Math.cos(box.facing) * 0.35, 0.8 + 0.2 * t);
@@ -5599,21 +12271,44 @@ export class PlayScene extends Phaser.Scene {
          * lancer is visibly the one that was driven out.
          */
         const spike = e.archetype === "lancer" ? "vfx_spike_gold" : "vfx_spike_bone";
-        const len = (16 / ART_SCALE) * 1.2;
+        const len = (16 / TUNED_SCALE) * 1.2;
         for (let k = 0; k < 8; k++) {
           const a = (k / 8) * Math.PI * 2;
           const r0 = e.radius * 0.7;
           const r1 = r0 + (box.reach - r0) * out;
           const tip = Math.max(r0 + len * 0.5, r1);
+          /*
+           * **Thick spikes.** They were a thin stroke and read as scratches;
+           * what the player has to see is a solid, heavy spine, because the
+           * spike is the whole of what a rusher and a lancer do. Drawn in
+           * three passes in pixel steps — a dark outline, the body, and a lit
+           * edge along the top — with the sprite scaled across its axis only,
+           * so a spike gets fatter without getting longer.
+           */
+          const x0 = e.x + Math.cos(a) * r0;
+          const y0 = e.y - 2 + Math.sin(a) * r0;
+          const x1 = e.x + Math.cos(a) * r1;
+          const y1 = e.y - 2 + Math.sin(a) * r1;
+          g.lineStyle(SPIKE_OUTLINE_PX, 0x120e1a, 0.9);
+          g.lineBetween(x0, y0, x1, y1);
           if (this.atlas.has(spike)) {
             const im = this.add.image(e.x + Math.cos(a) * (tip - len / 2), e.y - 2 + Math.sin(a) * (tip - len / 2), this.textureKey, spike)
-              .setOrigin(0.5).setRotation(a).setScale(1.2 / ART_SCALE).setDepth(8);
+              .setOrigin(0.5).setRotation(a).setScale(1.2 / ART_SCALE, SPIKE_FAT / ART_SCALE).setDepth(8);
             this.hazardMarks.push(im);
           } else {
-            g.lineStyle(1.6, spikeColour(e), 0.95);
-            g.lineBetween(e.x + Math.cos(a) * r0, e.y - 2 + Math.sin(a) * r0, e.x + Math.cos(a) * r1, e.y - 2 + Math.sin(a) * r1);
+            g.lineStyle(SPIKE_BODY_PX, spikeColour(e), 0.95);
+            g.lineBetween(x0, y0, x1, y1);
           }
+          // The lit edge: a hair off the axis, so the spike has a top.
+          g.lineStyle(1, 0xfff4d8, 0.75);
+          g.lineBetween(x0 - Math.sin(a), y0 + Math.cos(a) - 1, x1 - Math.sin(a), y1 + Math.cos(a) - 1);
         }
+      } else if (box.active && e.meleeKind === "greatcleave") {
+        // The king's cleave: his own sword is the blade, so only the ground it cut is lit, for the first frames.
+        const k = Math.max(0, e.attackMs / Math.max(1, 160));
+        this.bladeGfx.fillStyle(0xffffff, 0.3 * k);
+        this.bladeGfx.slice(e.x, e.y, box.reach, box.facing - box.halfArc, box.facing + box.halfArc, false);
+        this.bladeGfx.fillPath();
       } else if (box.active && e.meleeKind === "cleave") {
         // The chop landing: the blade along the facing, and a flash of ground
         // at its tip for the first frames.
@@ -5654,6 +12349,7 @@ export class PlayScene extends Phaser.Scene {
             .setScale((1 / ART_SCALE) * (e.archetype === "lancer" ? 1.7 : 1), 1 / ART_SCALE)
             .setDepth(8.8);
           if (e.archetype === "lancer") weapon.setTint(0xffd24a);
+          if (e.hitFlashMs > 0) weapon.setTintFill(0xffffff);
           this.hazardMarks.push(weapon);
         }
         /*
@@ -5668,18 +12364,22 @@ export class PlayScene extends Phaser.Scene {
          * player learns one shape and it means *an arc is being swung here*,
          * whoever is swinging it, with colour carrying whose it is.
          */
-        this.bladeGfx.fillStyle(0xffffff, 1);
-        drawCrescent(this.bladeGfx, box, {
-          ...CRESCENT,
-          style: ENEMY_CRESCENT,
-          // Clear of the body it belongs to, which is larger than the player's.
-          bodyClearPx: e.radius * 0.8,
-          width: 1,
-          // Fading out over the back half of the commit, so the swing finishes
-          // rather than being dropped.
-          fade: Math.min(1, (e.attackMs / MELEE_LUNGE_MS) * 2),
-          tailCut: 0,
-        });
+        // Not for the king: his own sword, turned to the cut by the renderer, is
+        // the swing — a crescent over it was a second, stranger blade.
+        if (e.archetype !== "boss") {
+          this.bladeGfx.fillStyle(0xffffff, 1);
+          drawCrescent(this.bladeGfx, box, {
+            ...CRESCENT,
+            style: ENEMY_CRESCENT,
+            // Clear of the body it belongs to, which is larger than the player's.
+            bodyClearPx: e.radius * 0.8,
+            width: 1,
+            // Fading out over the back half of the commit, so the swing finishes
+            // rather than being dropped.
+            fade: Math.min(1, (e.attackMs / MELEE_LUNGE_MS) * 2),
+            tailCut: 0,
+          });
+        }
       }
     }
   }
@@ -5690,6 +12390,48 @@ export class PlayScene extends Phaser.Scene {
    * grip just off the body to `reach`; `angle` is where it points and
    * `facing` is where the body faces, which differ while it is raised.
    */
+  /**
+   * **The king's crescent** (doc 020): the arc his greatsword cuts, drawn
+   * whole the moment the cut commits — not grown along the swing, 大起大落 —
+   * held through the cut and fading over the first beat of its recovery. At
+   * the height of his grip and flattened into the plane the sword swings in,
+   * so it sits on the sword rather than on the floor, and much thicker than
+   * any other body's. A cut with no sweep (the cleave, the dashcut) is given
+   * a short arc of its own round the line it strikes along. Not for the cuts
+   * that throw a sword wave (`castShockwave` in `enemy.ts`): the wave is theirs.
+   */
+  private drawBossCrescent(e: Enemy): void {
+    const spec = e.meleeKind ? MELEE_ATTACKS[e.meleeKind] : null;
+    if (!spec || spec.kind === "charge") return;
+    // A cut that throws a sword wave shows the wave instead: two crescents on one cut read as two cuts.
+    if (spec.kind === "greatsweep" || spec.kind === "greatcleave") return;
+    let fade = 0;
+    if (e.attack === "lunge") fade = 1;
+    else if (e.attack === "recover") fade = 1 - Math.max(0, spec.recoverMs - e.attackMs) / BOSS_CRESCENT_TAIL_MS;
+    if (fade <= 0) return;
+    const box = e.swing;
+    /*
+     * Whole from the first frame, and **exactly the ground its tell showed**:
+     * the sweep and the blade's own width, out to the full reach, on the
+     * floor. Drawn raised to the grip and flattened into the swing's plane it
+     * came up short of the tell, most of all across his front, where the
+     * flattening bites hardest — a cut that looked smaller than the warning.
+     */
+    const sweepDeg = Math.max(box.sweepDeg, spec.kind === "dashcut" ? 40 : 26) + (box.halfArc * 360) / Math.PI;
+    const whole = { ...box, sweepDeg, angle: box.facing + (box.sweep * sweepDeg * Math.PI) / 360 };
+    this.bladeGfx.fillStyle(0xffffff, 1);
+    drawCrescent(this.bladeGfx, whole, {
+      ...CRESCENT,
+      style: BOSS_CRESCENT,
+      bodyClearPx: e.radius * 0.8,
+      sparks: 9,
+      width: 1,
+      fade: Math.min(1, fade),
+      tailCut: 0,
+      blade: false,
+    });
+  }
+
   private drawGreatsword(e: Enemy, facing: number, angle: number, alpha: number): void {
     const box = e.swing;
     const gx = e.x + Math.cos(facing) * e.radius * 0.4;
@@ -5699,6 +12441,7 @@ export class PlayScene extends Phaser.Scene {
       const blade = this.add.image(gx, gy, this.textureKey, "weapon_enemy_tank")
         .setOrigin(ENEMY_WEAPON_GRIP_X / 64, 0.5).setRotation(angle)
         .setScale(1 / ART_SCALE).setAlpha(alpha).setDepth(8.8);
+      if (e.hitFlashMs > 0) blade.setTintFill(0xffffff);
       this.hazardMarks.push(blade);
       return;
     }
@@ -5732,8 +12475,13 @@ export class PlayScene extends Phaser.Scene {
     const w = this.world;
     for (const p of w.props) {
       const state = propState(p);
+      if (p.kind === "column" || p.kind === "candelabrum") { this.drawHallProp(p, state); continue; }
       const frame = propFrame(p, state, w.tick);
       const standing = state !== "broken";
+      // Scenery is drawn smaller than the cell it blocks: a crate filling its
+      // whole tile stood as tall as a body and crowded the floor round it. A
+      // conjured pillar is the spell's stone, and keeps the cell's size.
+      const size = (p.kind === "pillar" ? 1 : PROP_DRAW_SCALE) / ART_SCALE;
       const img = this.add.image(
         p.x, standing ? p.y + TILE_PX / 2 : p.y,
         this.textureKey, safeFrame(this.atlas, frame, "prop_break_crate_0"),
@@ -5744,8 +12492,8 @@ export class PlayScene extends Phaser.Scene {
         .setOrigin(0.5, standing ? 1 : 0.5)
         // Shards sit under the bodies; a standing object sits among them, so
         // a pot in front of an enemy actually reads as being in front of it.
-        .setDepth(state === "broken" ? 1 : 5)
-        .setScale(1 / ART_SCALE);
+        .setDepth(state === "broken" ? 1 : bodyDepth(p.y + TILE_PX / 2, 0))
+        .setScale(size);
       if (state === "broken") img.setAlpha(0.85);
       // A conjured pillar is the spell's colour, so it is not mistaken for the
       // room's own stone: the same cool light the player's bolts carry.
@@ -5762,10 +12510,196 @@ export class PlayScene extends Phaser.Scene {
        * pot needs to say only *that landed*.
        */
       if (p.hitFlashMs > 0) {
-        img.setScale((1 / ART_SCALE) * 1.1, (1 / ART_SCALE) * 0.92);
+        img.setScale(size * 1.1, size * 0.92);
         img.setTint(0xffd9b0);
       }
       this.sprites.add(img);
+    }
+  }
+
+  /**
+   * Eases the drawn velocity toward the body's, kicks dust at the heels while
+   * it runs — more on a start or a sharp turn — and returns the lean.
+   */
+  private stepMoveFeel(): number {
+    const p = this.world.player;
+    const dt = Math.min(0.05, this.game.loop.delta / 1000);
+    const prev = this.movePrev ?? { x: p.x, y: p.y };
+    this.movePrev = { x: p.x, y: p.y };
+    const vx = dt > 0 ? (p.x - prev.x) / dt : 0, vy = dt > 0 ? (p.y - prev.y) / dt : 0;
+    const k = Math.min(1, dt * 14);
+    const before = Math.hypot(this.moveVel.x, this.moveVel.y);
+    const turn = before > 40 && Math.hypot(vx, vy) > 40
+      ? (this.moveVel.x * vx + this.moveVel.y * vy) / (before * Math.hypot(vx, vy)) : 1;
+    this.moveVel.x += (vx - this.moveVel.x) * k;
+    this.moveVel.y += (vy - this.moveVel.y) * k;
+    const speed = Math.hypot(this.moveVel.x, this.moveVel.y);
+    const feetY = p.y + 2;
+    this.dustMs -= dt * 1000;
+    if (speed > 60 && this.dustMs <= 0 && !this.renderingDemo) {
+      this.dustMs = 170;
+      this.burst(p.x - this.moveVel.x * 0.03, feetY, 0x8a8398, 2, 30, Math.atan2(-this.moveVel.y, -this.moveVel.x), 1.2, 0.55, -10);
+    }
+    // A start from standing, or a turn past a right angle: a puff that says so.
+    if ((before < 30 && speed > 70) || turn < -0.1) {
+      this.burst(p.x, feetY, 0x9a93a8, 5, 60, undefined, Math.PI * 2, 0.7, -12);
+      this.dustMs = 120;
+    }
+    const top = PLAYER_SPEED_PX;
+    return Math.max(-1, Math.min(1, this.moveVel.x / top)) * LEAN_MAX;
+  }
+
+  /**
+   * The scarf: six links from the neck, each keeping its length from the one
+   * before, carried by its own inertia and a little gravity and wind, so it
+   * streams back when the body runs, swings when it turns, and hangs and
+   * sways when it stands. Drawn on the art's pixel grid, a band two pixels
+   * wide narrowing to one, outlined, behind the body unless its back is to us.
+   */
+  private drawScarf(facing: string): void {
+    const g = this.scarfGfx;
+    g.clear();
+    const p = this.world.player;
+    const dt = Math.min(0.05, this.game.loop.delta / 1000);
+    const ax = p.x + (facing === "w" ? 2 : facing === "e" ? -2 : 0);
+    const ay = p.y - BODY_LIFT - 6;
+    const n = 6, seg = 3.2;
+    if (this.scarf.length !== n || Math.hypot(this.scarf[0]!.x - ax, this.scarf[0]!.y - ay) > 60)
+      this.scarf = Array.from({ length: n }, (_, i) => ({ x: ax, y: ay + i * seg, px: ax, py: ay + i * seg }));
+    const wind = Math.sin(this.time.now / 380) * 18;
+    for (let i = 1; i < n; i++) {
+      const s = this.scarf[i]!;
+      const vx = (s.x - s.px) * 0.9, vy = (s.y - s.py) * 0.9;
+      s.px = s.x; s.py = s.y;
+      s.x += vx + wind * dt * dt * 60;
+      s.y += vy + 90 * dt * dt * 60;
+    }
+    this.scarf[0] = { x: ax, y: ay, px: ax, py: ay };
+    for (let it = 0; it < 3; it++)
+      for (let i = 1; i < n; i++) {
+        const a = this.scarf[i - 1]!, b = this.scarf[i]!;
+        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+        b.x = a.x + (dx / d) * seg;
+        b.y = a.y + (dy / d) * seg;
+      }
+    g.setDepth(facing === "n" ? 8.2 : 7.95);
+    const cell = 1 / ART_SCALE;
+    const px = new Map<string, number>();
+    for (let i = 1; i < n; i++) {
+      const a = this.scarf[i - 1]!, b = this.scarf[i]!;
+      const half = (i < 3 ? 1.2 : 0.7) * ART_SCALE;
+      const steps = Math.ceil(seg * ART_SCALE * 1.5);
+      for (let s = 0; s <= steps; s++) {
+        const x = (a.x + (b.x - a.x) * (s / steps)) * ART_SCALE, y = (a.y + (b.y - a.y) * (s / steps)) * ART_SCALE;
+        for (let oy = -half; oy <= half; oy += 0.5) for (let ox = -half; ox <= half; ox += 0.5)
+          if (ox * ox + oy * oy <= half * half) px.set(`${Math.round(x + ox)},${Math.round(y + oy)}`, i === n - 1 ? 0x8fe8ff : oy < 0 ? 0x3ec8e8 : 0x1f8fb8);
+      }
+    }
+    g.fillStyle(0x0d0b1f, 1);
+    for (const k of px.keys()) {
+      const [kx, ky] = k.split(",").map(Number) as [number, number];
+      for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const)
+        if (!px.has(`${kx + ox},${ky + oy}`)) g.fillRect((kx + ox) * cell, (ky + oy) * cell, cell, cell);
+    }
+    for (const [k, c] of px) {
+      const [kx, ky] = k.split(",").map(Number) as [number, number];
+      g.fillStyle(c, dashInvulnerable(p) ? 0.55 : 1);
+      g.fillRect(kx * cell, ky * cell, cell, cell);
+    }
+  }
+
+  /**
+   * The ground eruptions (`World.eruptions`), drawn in code: before its beat
+   * a cell shows as a faint crack or glow where it will go off; then a stone
+   * cell throws up three spikes — a lit face, a shaded face and an outline —
+   * that stab up at once, stand, and sink; a fire cell a column of flame,
+   * layered from dark orange to a white-yellow core, that shoots up and
+   * gutters out.
+   */
+  /**
+   * The ground eruptions, from the drawn frames under `assets/effects`.
+   *
+   * They were vector triangles, which read as vector triangles next to art
+   * that is all hand-placed pixels. Each cell now plays its own frames off
+   * its own clock: a stone cell cracks the floor while it waits, is at **full
+   * height on the beat it does its damage** (`ageMs` 0, the moment
+   * `stepEruptions` hits), then crumbles and leaves a crack behind. Fire
+   * keeps a dim, still telegraph — the room's rule for what has not gone off
+   * yet — and lights into a column or a geyser burst.
+   *
+   * Two spike variants, picked off the cell's own position, so a line of five
+   * is not one drawing stamped five times.
+   */
+  private drawEruptions(): void {
+    const g = this.eruptGfx;
+    g.clear();
+    const tick = this.world.tick;
+    const play = (x: number, y: number, name: string, alpha: number): void => {
+      if (!this.atlas.has(name)) return;
+      this.sprites.add(this.add.image(x, y + ERUPTION_FOOT_PX, this.textureKey, name)
+        .setOrigin(0.5, 1).setScale(1 / ART_SCALE)
+        /*
+         * In the body band, by the foot of the spike rather than over every
+         * body in the room: stone coming up between two enemies has to be in
+         * front of the near one and behind the far one, which a fixed depth
+         * above both of them cannot say.
+         */
+        .setDepth(bodyDepth(y + ERUPTION_FOOT_PX, 0) + 0.003).setAlpha(alpha));
+    };
+    for (const c of this.world.eruptions) {
+      if (!c.alive) continue;
+      const t = c.ageMs / ERUPTION_SHOW_MS;
+      if (c.kind === "earth") {
+        const variant = (Math.abs(Math.round(c.x / 13) + Math.round(c.y / 13)) % 2) ? "b" : "a";
+        // Waiting: the floor cracking, dim and still. Then out, and down.
+        const step = !c.fired ? (c.delayMs > 90 ? 0 : 1) : t < 0.62 ? 2 : 3;
+        const alpha = c.fired ? 1 : 0.4 + 0.5 * Math.max(0, 1 - c.delayMs / 250);
+        play(c.x, c.y, `vfx_earth_spike_${variant}${step}`, alpha);
+        // The crack it leaves, pushed once, on the frame the spike gives way.
+        const cross = ERUPTION_SHOW_MS * 0.62;
+        if (c.fired && c.ageMs >= cross && c.ageMs - this.game.loop.delta < cross)
+          this.eruptCracks.push({ x: c.x, y: c.y, ms: 0, variant: variant === "b" ? 1 : 0 });
+        continue;
+      }
+      if (!c.fired) {
+        // A telegraphed cell is marked on the floor by the spell (`drawSpellOptions`).
+        if (c.telegraphMs > 0) continue;
+        const soon = Math.max(0, 1 - c.delayMs / 250);
+        g.fillStyle(0xff7a2a, 0.12 + 0.3 * soon);
+        g.fillEllipse(c.x, c.y, c.radius * 1.4, c.radius * 0.6);
+        continue;
+      }
+      /*
+       * A landing (a telegraphed cell, the meteor's) is wider than a tile, so
+       * one geyser would be a spark in the middle of the mark: the whole
+       * circle goes up, a burst at the heart and a ring of them round it, each
+       * a frame behind the last so it reads as fire spreading out of the hit.
+       */
+      if (c.telegraphMs > 0 && c.radius > TILE_PX * 0.6) {
+        const spots = 6;
+        play(c.x, c.y, `vfx_cinder_geyser_${Math.min(4, 1 + Math.floor(t * 4.4))}`, 1);
+        for (let k = 0; k < spots; k++) {
+          const a = (k / spots) * Math.PI * 2 + 0.4;
+          const lag = Math.max(0, t - 0.06 - 0.02 * k);
+          if (lag <= 0) continue;
+          play(c.x + Math.cos(a) * c.radius * 0.55, c.y + Math.sin(a) * c.radius * 0.45,
+            `vfx_cinder_geyser_${Math.min(4, 1 + Math.floor(lag * 4.4))}`, 1);
+        }
+        continue;
+      }
+      // A line of columns holds; a scatter is one burst that throws cinders.
+      const name = c.castId > 0
+        ? `vfx_flame_pillar_${t < 0.1 ? 1 : t < 0.72 ? 2 + (((tick >> 2) + Math.round(c.x)) % 3) : 5}`
+        : `vfx_cinder_geyser_${Math.min(4, 1 + Math.floor(t * 4.4))}`;
+      play(c.x, c.y, name, 1);
+    }
+    this.eruptCracks = this.eruptCracks.filter((k) => (k.ms += this.game.loop.delta) < ERUPTION_CRACK_MS);
+    for (const k of this.eruptCracks) {
+      if (!this.atlas.has(`vfx_earth_crack_${k.variant}`)) break;
+      // On the floor, under the bodies: what is left is scenery, not an effect.
+      this.sprites.add(this.add.image(k.x, k.y + ERUPTION_FOOT_PX, this.textureKey, `vfx_earth_crack_${k.variant}`)
+        .setOrigin(0.5, 1).setScale(1 / ART_SCALE).setDepth(2.9)
+        .setAlpha(0.75 * Math.min(1, (ERUPTION_CRACK_MS - k.ms) / 300)));
     }
   }
 
@@ -5779,6 +12713,90 @@ export class PlayScene extends Phaser.Scene {
    * shifts hue (research §3.1). Anything whose length varies is tiled from a
    * segment rather than stretched.
    */
+  /**
+   * The boss's travelling ground ring. The drawing itself is in `ground.ts`,
+   * so the harness can bake it to a PNG and it can be judged without a
+   * browser; this only hands it the layer and the clock.
+   */
+  private drawShockwaves(): void {
+    const w = this.world;
+    this.ringGfx.clear();
+    this.soilGfx.clear();
+    /*
+     * Clipped to what the camera can see. A late band's outer edge is most of
+     * a room across and scan-converting all of it is a few thousand
+     * rectangles for a ring that is almost entirely off screen; the geometry
+     * is unchanged, so the part that is on screen is identical either way.
+     */
+    drawShockwaves(this.soilGfx, this.ringGfx, w.shockwaves.filter((s) => s.facing === undefined), w.tick * STEP_MS, this.teleView());
+    /*
+     * The king's sword waves: the same crescent of energy the player's
+     * enchant throws (`drawCrescentWave`), in the danger palette — a dark
+     * lip, red light, a hot core — never the player's colours, so it reads
+     * as a threat. Its leading edge is the wave's leading edge and it is no
+     * deeper than the band that hits; it sheds embers behind it, and as it
+     * runs out it dissolves from the tips inward. Drawing only: the band's
+     * geometry and timing are the simulation's.
+     */
+    for (const s of w.shockwaves) {
+      if (!s.alive || s.facing === undefined || s.half === undefined) continue;
+      const wave = {
+        x: s.x, y: s.y, radius: s.inner + s.thickness, facing: s.facing, half: s.half,
+        thick: s.thickness, life: Math.max(0, Math.min(1, (s.maxRadius - s.inner) / (TILE_PX * 3))),
+        flash: false, tick: w.tick, seed: Math.round(s.x + s.y) % 97, palette: KING_WAVE,
+      };
+      // On the floor layer, which is cleared with the rings — the blade layer is cleared after this draws.
+      drawCrescentWave(this.soilGfx, wave, Math.min(1, 0.25 + wave.life));
+      const back = { x: -Math.cos(s.facing), y: -Math.sin(s.facing) };
+      for (const q of waveTrailPoints(wave, Math.random() < 0.7 ? 2 : 1))
+        this.shed({ x: q.x, y: q.y, vx: back.x * (20 + Math.random() * 30) + (Math.random() - 0.5) * 24, vy: back.y * (20 + Math.random() * 30) + (Math.random() - 0.5) * 24 - 8, ms: 0, life: 200 + Math.random() * 160, size: 1, colour: Math.random() < 0.5 ? KING_WAVE.mid : KING_WAVE.aura, gravity: -10 });
+    }
+    /*
+     * The king's chain (doc 020). While it lies on the floor, the ground its
+     * sweep will cross is drawn with the same tell a blade's arc has, filling
+     * as the sweep comes due — the chain alone said where it was, not where it
+     * was going, and where it is going is the whole read.
+     */
+    for (const a of w.arms) {
+      if (!a.alive || a.teleMs <= 0) continue;
+      const span = (a.spin * a.activeMaxMs) / 1000;
+      drawSectorTell(this.threatGfx, a.x, a.y, a.length, a.angle + span / 2, Math.min(Math.PI, Math.abs(span) / 2),
+        1 - a.teleMs / Math.max(1, a.teleMaxMs), w.tick, this.teleView());
+    }
+    // The chain itself, from his hand: laid on the floor, dimmer, while it is read; live once it sweeps.
+    // (The capsule `drawArms` drew under it is the old limb, and drew a second, bare bar beside the chain.)
+    for (const arm of w.arms) {
+      if (!arm.alive) continue;
+      const king = w.enemies.find((enemy) => enemy.id === arm.owner && enemy.archetype === "boss");
+      if (!king) { drawArms(this.soilGfx, this.ringGfx, [arm]); continue; }
+      this.drawBossChainArt(king,
+        arm.x + Math.cos(arm.angle) * arm.length,
+        arm.y + Math.sin(arm.angle) * arm.length, false, arm.teleMs > 0 ? 2.6 : 8.4, arm.teleMs > 0 ? 0.6 : 1);
+    }
+  }
+
+  /**
+   * **What the camera can see**, with a cell of margin, reused by every
+   * scan-converted drawing in the frame.
+   *
+   * A pixel telegraph is a few hundred rectangles and a late shockwave is a
+   * few thousand, and most of them are off screen in a room the camera is
+   * only showing part of. The geometry is unchanged by the clip, so the part
+   * that *is* on screen is identical either way. Returned from one kept
+   * object rather than a fresh literal, because this is called a dozen times
+   * a frame.
+   */
+  private teleBox = { x0: 0, y0: 0, x1: 0, y1: 0 };
+
+  private teleView(): ViewBox {
+    const cam = this.cameras.main.worldView;
+    this.teleBox.x0 = cam.x - 16;
+    this.teleBox.y0 = cam.y - 16;
+    this.teleBox.x1 = cam.right + 16;
+    this.teleBox.y1 = cam.bottom + 16;
+    return this.teleBox;
+  }
+
   private drawExpansion(): void {
     const w = this.world;
     const tick = w.tick;
@@ -5794,7 +12812,7 @@ export class PlayScene extends Phaser.Scene {
       const len = Math.hypot(x1 - x0, y1 - y0);
       if (len < 1) return;
       const a = Math.atan2(y1 - y0, x1 - x0);
-      const seg = 64 / ART_SCALE;
+      const seg = TILE_PX;
       const n = Math.max(1, Math.ceil(len / seg));
       for (let i = 0; i < n; i++) {
         const along = Math.min(len, (i + 0.5) * seg);
@@ -5803,36 +12821,89 @@ export class PlayScene extends Phaser.Scene {
         im.setRotation(a).setAlpha(alpha);
         // The last tile is cut to the line's end rather than overshooting it.
         const left = len - i * seg;
-        if (left < seg) im.setCrop(0, 0, (left / seg) * 64, 64).setX(x0 + Math.cos(a) * (i * seg + left / 2));
+        if (left < seg) im.setCrop(0, 0, (left / seg) * FRAME_PX, FRAME_PX).setX(x0 + Math.cos(a) * (i * seg + left / 2));
       }
     };
 
     for (const r of w.rifts) {
       const ex = r.x + Math.cos(r.angle) * r.length;
       const ey = r.y + Math.sin(r.angle) * r.length;
+      /*
+       * **A bolt of the king's storm**: marked as the turret's strike is — a
+       * hard ring and a centre filling as it comes due — then the bolt out of
+       * the sky onto it, a white flash over the circle, and a scorch.
+       */
+      if (r.bolt) {
+        if (r.teleMs > 0) {
+          drawStrikeMark(this.hazardGfx, r.x, r.y, r.width / 2, r.teleMs / r.teleMaxMs, tick, this.teleView());
+        } else if (r.activeMs > 0) {
+          const t = Math.max(0, Math.min(1, 1 - r.activeMs / 230));
+          const boltFrame = `vfx_bolt_${Math.min(2, Math.floor(t * 3))}`;
+          // From the top of the view: a bolt out of the sky, not a spark off his sword.
+          if (this.atlas.has(boltFrame)) {
+            const img = this.add.image(r.x, r.y, this.textureKey, boltFrame).setOrigin(0.5, 1).setDepth(10);
+            img.setScale(1.4 / ART_SCALE, Math.max(1.4 / ART_SCALE, (r.y - this.cameras.main.worldView.y) / Math.max(1, img.height)));
+            this.hazardMarks.push(img);
+          }
+          this.hazardGfx.fillStyle(0xe4f4ff, 0.75 * (1 - t));
+          this.hazardGfx.fillCircle(r.x, r.y, (r.width / 2) * (1 + 0.35 * t));
+          this.hazardGfx.lineStyle(2, 0x7fc8ff, 0.9 * (1 - t));
+          this.hazardGfx.strokeCircle(r.x, r.y, (r.width / 2) * (1.1 + 0.5 * t));
+        } else {
+          this.hazardGfx.fillStyle(0x151320, 0.4 * Math.max(0, r.scarMs / 1500));
+          this.hazardGfx.fillCircle(r.x, r.y, r.width * 0.32);
+        }
+        continue;
+      }
       if (r.length <= 0) {
         // A circle: the ground heaving under a closing ring, then the eruption.
         if (r.teleMs > 0) {
           const t = 1 - r.teleMs / r.teleMaxMs;
-          this.threatGfx.lineStyle(1.5 + t * 1.5, 0xff5544, 0.35 + 0.55 * t);
-          this.threatGfx.strokeCircle(r.x, r.y, r.width / 2 * (1.25 - 0.25 * t));
-          this.threatGfx.fillStyle(0xff5544, 0.08 + 0.18 * t);
-          this.threatGfx.fillCircle(r.x, r.y, r.width / 2);
+          drawRiftCircle(this.threatGfx, r.x, r.y, r.width / 2, t, tick, this.teleView());
         } else if (r.activeMs > 0) {
-          const k = Math.min(2, Math.floor((1 - r.activeMs / 230) * 3));
-          const ring = img(r.x, r.y, `vfx_emerge_ring_${k}`, 5.6);
-          ring?.setDisplaySize(r.width * 1.3, r.width * 1.3);
+          // The burst, as the circle it hits: a flash over the whole area and a
+          // ring thrown past its edge. The sprite it used was an ellipse, and
+          // stood beside the circular telegraph before it and the circular
+          // ringing after it as a different shape.
+          const t = 1 - r.activeMs / 230;
+          drawRiftBurst(this.threatGfx, r.x, r.y, r.width / 2, t, this.teleView());
         }
         continue;
       }
       if (r.teleMs > 0) {
-        // Growing from the caster along its length: the crack has a direction.
+        /*
+         * **The ground about to split, and the crack running out along it.**
+         * The tell was the delivered `vfx_rift_seg` tiled along the line — a row
+         * of red ticks on a dashed rule — and on a line this thin it read as a
+         * comb, not as a crack (reported as never understood). Now: the lane it
+         * will burst along, a soft red that deepens as it comes due; and in it a
+         * dark crack growing out from where it starts, lit orange at its heart
+         * in the last third, so what it is and when it goes are both on the floor.
+         */
         const t = 1 - r.teleMs / r.teleMaxMs;
         const grow = Math.min(1, t * 1.6);
-        const stage = Math.min(3, Math.floor(t * 4));
-        tile("vfx_rift_seg", r.x, r.y, r.x + (ex - r.x) * grow, r.y + (ey - r.y) * grow, 2.4, 0.55 + 0.35 * t, () => stage);
-        img(r.x, r.y, `vfx_rift_cap_0`, 2.45)?.setRotation(r.angle + Math.PI).setAlpha(0.8);
-        if (grow >= 1) img(ex, ey, `vfx_rift_cap_1`, 2.45)?.setRotation(r.angle).setAlpha(0.8);
+        const ux = Math.cos(r.angle), uy = Math.sin(r.angle);
+        const nx = -uy, ny = ux;
+        const hw = r.width / 2;
+        const g = this.threatGfx;
+        g.fillStyle(0xff5544, 0.1 + 0.2 * t);
+        g.fillPoints([
+          { x: r.x + nx * hw, y: r.y + ny * hw }, { x: ex + nx * hw, y: ey + ny * hw },
+          { x: ex - nx * hw, y: ey - ny * hw }, { x: r.x - nx * hw, y: r.y - ny * hw },
+        ], true);
+        const run = r.length * grow;
+        const n = Math.max(2, Math.floor(run / 7));
+        const crack: { x: number; y: number }[] = [];
+        for (let i = 0; i <= n; i++) {
+          const d = (run * i) / n;
+          // A fixed zigzag, from where the crack is, so it does not crawl as it grows.
+          const j = i === 0 ? 0 : Math.sin(i * 12.9898 + r.x * 0.37 + r.y * 0.11) * 2.6;
+          crack.push({ x: r.x + ux * d + nx * j, y: r.y + uy * d + ny * j });
+        }
+        g.lineStyle(3, 0x140a08, 0.9);
+        g.strokePoints(crack, false);
+        g.lineStyle(1, t > 0.66 ? 0xffd9a0 : 0xff7a55, 0.55 + 0.45 * t);
+        g.strokePoints(crack, false);
       } else if (r.activeMs > 0) {
         const k = Math.min(2, Math.floor((1 - r.activeMs / 230) * 3));
         tile("vfx_rift_burst", r.x, r.y, ex, ey, 5.6, 1, () => k);
@@ -5845,18 +12916,36 @@ export class PlayScene extends Phaser.Scene {
 
     for (const m of w.mines) {
       if (m.burstMs > 0) {
-        const k = Math.min(2, Math.floor((1 - m.burstMs / 300) * 3));
-        img(m.x, m.y, `vfx_mine_burst_${k}`, 5.6)?.setDisplaySize(TILE_PX * 2.6, TILE_PX * 2.6);
+        /*
+         * **The blast opens at full size and dissipates**, rather than growing
+         * into it. The three drawn frames get bigger with their index — rays
+         * out to 12, 18 and 24 px — so playing them forwards put the damage,
+         * which lands on the very first frame of the burst, on the smallest
+         * and dimmest of the three, and the picture of an explosion arrived
+         * two hundred milliseconds after the heart did. That is the report
+         * that the hit is judged before the blast.
+         *
+         * The hit stop then holds this frame for as long as it freezes the
+         * world, which is now the right thing: the freeze holds the flash.
+         */
+        const t = 1 - Math.max(0, m.burstMs) / MINE_BURST_MS;
+        const k = 2 - Math.min(2, Math.floor(t * 3));
+        img(m.x, m.y, `vfx_mine_burst_${k}`, 5.6)
+          ?.setDisplaySize(TILE_PX * 2.6, TILE_PX * 2.6).setAlpha(1 - t * 0.55);
       } else if (m.primeMs > 0) {
         // Set off: it swells and flashes fast, and the blast it is about to
         // make is drawn on the floor, so the way out is visible.
         const k = 1 - m.primeMs / MINE_PRIME_MS;
         img(m.x, m.y, `vfx_mine_armed_${(tick >> 1) & 3}`, 2.5)?.setScale((0.8 + 0.35 * k) / ART_SCALE)
           .setTint((tick >> 2) & 1 ? 0xffffff : 0xff5544);
-        this.fxTopGfx.lineStyle(1.5, 0xff5544, 0.5 + 0.5 * k);
-        this.fxTopGfx.strokeCircle(m.x, m.y, MINE_BLAST);
-        this.fxTopGfx.fillStyle(0xff5544, 0.12 + 0.18 * k);
-        this.fxTopGfx.fillCircle(m.x, m.y, MINE_BLAST);
+        /*
+         * On the **threat layer**, not the additive top one. The blast circle
+         * is a place on the floor, and it needs its dark liner to hold an
+         * edge — an additive layer can only add light, so the liner would
+         * have been invisible there. It was also being thrown away: `drawFx`
+         * clears `fxTopGfx` after this runs.
+         */
+        drawBlastRing(this.threatGfx, m.x, m.y, MINE_BLAST, k, tick, this.teleView());
       } else if (m.inertMs > 0) {
         img(m.x, m.y, `vfx_mine_seed_${(tick >> 4) & 1}`, 2.5)?.setScale(0.8 / ART_SCALE);
       } else {
@@ -5882,6 +12971,10 @@ export class PlayScene extends Phaser.Scene {
           this.fxTopGfx.lineStyle(1 + 2 * k, 0xffffff, 0.35 + 0.55 * k);
           this.fxTopGfx.lineBetween(ends.x0 + jx, ends.y0 - 4 + jy, ends.x1 - jx, ends.y1 - 4 - jy);
         }
+        // The toll's light running out to the ally, and the shield popping full.
+        if (t.pulseMs > 0)
+          drawTollPulse(this.fxTopGfx, { x0: ends.x0, y0: ends.y0 - 4, x1: ends.x1, y1: ends.y1 - 4 },
+            1 - Math.max(0, t.pulseMs) / TOLL_PULSE_MS);
         // The first ward of the run says what it is for.
         this.teach("ward", (ends.x0 + ends.x1) / 2, (ends.y0 + ends.y1) / 2 - 16);
         img(ends.x0, ends.y0 - 4, `vfx_tether_node_${(tick >> 3) % 3}`, 5.75)?.setScale(0.6 / ART_SCALE);
@@ -5894,6 +12987,7 @@ export class PlayScene extends Phaser.Scene {
           this.fxTopGfx.strokePath();
         }
       } else if (t.kind === "hook") {
+        const king = w.enemies.find((enemy) => enemy.id === t.from && enemy.archetype === "boss");
         if (t.phase === "aim") {
           // The chain laid on the floor along the line it will be thrown: matte and still.
           tile("vfx_chain_seg", ends.x0, ends.y0, ends.x1, ends.y1, 2.5, 0.55, () => 0);
@@ -5901,12 +12995,18 @@ export class PlayScene extends Phaser.Scene {
           const k = 1 - Math.max(0, t.ms) / 330;
           const hx = ends.x0 + (ends.x1 - ends.x0) * k;
           const hy = ends.y0 + (ends.y1 - ends.y0) * k;
-          tile("vfx_chain_seg", ends.x0, ends.y0 - 3, hx, hy - 3, 5.7, 1, (i) => i & 1);
-          img(hx, hy - 3, `vfx_chain_hook_${(tick >> 2) & 1}`, 5.75)?.setRotation(Math.atan2(hy - ends.y0, hx - ends.x0));
+          if (king) this.drawBossChainArt(king, hx, hy - 3, true);
+          else {
+            tile("vfx_chain_seg", ends.x0, ends.y0 - 3, hx, hy - 3, 5.7, 1, (i) => i & 1);
+            img(hx, hy - 3, `vfx_chain_hook_${(tick >> 2) & 1}`, 5.75)?.setRotation(Math.atan2(hy - ends.y0, hx - ends.x0));
+          }
         } else if (t.phase === "drag") {
           const p = w.player;
-          tile("vfx_chain_seg", ends.x0, ends.y0 - 3, p.x, p.y - 3, 8.5, 1, (i) => i & 1);
-          img(p.x, p.y - 3, `vfx_chain_hook_1`, 8.55)?.setRotation(Math.atan2(p.y - ends.y0, p.x - ends.x0));
+          if (king) this.drawBossChainArt(king, p.x, p.y - 3, true);
+          else {
+            tile("vfx_chain_seg", ends.x0, ends.y0 - 3, p.x, p.y - 3, 8.5, 1, (i) => i & 1);
+            img(p.x, p.y - 3, `vfx_chain_hook_1`, 8.55)?.setRotation(Math.atan2(p.y - ends.y0, p.x - ends.x0));
+          }
         }
       } else if (t.kind === "chain") {
         // Live: bright and moving.
@@ -5931,17 +13031,36 @@ export class PlayScene extends Phaser.Scene {
       img(gx, gy - lift - 6, shot, 7.2, 1 / ART_SCALE);
     }
 
-    for (const f of w.slowFields) {
-      const fade = Math.min(1, f.lifeMs / 500) * Math.min(1, (f.maxLifeMs - f.lifeMs) / 300);
-      img(f.x, f.y, `vfx_slowfield_${(tick >> 5) & 3}`, 1.95)?.setDisplaySize(f.radius * 2, f.radius * 2).setAlpha(0.85 * fade);
-    }
+    // The boss's travelling ground ring, as the circle it is (`drawShockwaves`).
+    this.drawShockwaves();
 
     for (const e of w.enemies) {
       if (e.hp <= 0) continue;
-      if (e.archetype === "delver" && e.delve === "under")
-        img(e.x, e.y + 2, `vfx_mound_${((e.travelled / 6) | 0) & 3}`, 2.6)?.setRotation(Math.atan2(e.delveY, e.delveX));
+      if ((e.archetype === "delver" || e.archetype === "burrower") && e.delve === "under") {
+        /*
+         * **Something moving under the floor.** The mound was turned along its
+         * heading, and a flat oval turned on its side read as the body rolled
+         * into a ball — a rugby ball, not a burrow. Now it stays a low bulge of
+         * earth that shivers as it goes, and the floor behind it cracks open
+         * and throws up dirt: a trail that says where it went and that it is
+         * under there.
+         */
+        const bob = Math.sin(tick * 0.9 + e.id) * 0.6;
+        img(e.x, e.y + 3 + bob, `vfx_mound_${((e.travelled / 6) | 0) & 3}`, 2.6)
+          ?.setScale(0.85 / ART_SCALE, 0.55 / ART_SCALE);
+        const last = this.burrowTrail.get(e.id);
+        if (!last || Math.hypot(e.x - last.x, e.y - last.y) >= BURROW_CRACK_EVERY_PX) {
+          this.burrowTrail.set(e.id, { x: e.x, y: e.y });
+          if (!this.renderingDemo) {
+            this.eruptCracks.push({ x: e.x, y: e.y + 2, ms: 0, variant: (e.id + tick) & 1 });
+            this.burst(e.x, e.y + 2, 0x7a5a3a, 3, 70, Math.atan2(-e.delveY, -e.delveX), 1.4, 1.1, 260);
+          }
+        }
+      } else if (this.burrowTrail.has(e.id)) this.burrowTrail.delete(e.id);
       if (e.wardArmour > 0)
         img(e.x, e.y - 2, `vfx_ward_aura_${(tick >> 3) % 3}`, 6.05)?.setDisplaySize(e.radius * 3.4, e.radius * 3.4).setAlpha(0.85);
+      // Hurried by a bell: the cue goes on the body, never on the floor.
+      if (e.hastedMs > 0) drawHasteCue(this.fxTopGfx, e, tick);
       // The elite peal's windup: a ring growing on the ringer, the only warning the room is about to be armed.
       if (e.archetype === "bellringer" && e.pose === "peal_windup") {
         const t = 1 - Math.max(0, e.poseMs) / 1100;
@@ -5951,10 +13070,97 @@ export class PlayScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * The edge of a lava line or a grass patch where it meets the floor, so it
+   * lies in the floor rather than on it as a square: lava in a crust of dark
+   * rock, ragged on its inside, with the glow bleeding a pixel onto the
+   * stone; grass in tufts reaching a few pixels over the floor. On the art's
+   * grid and fixed per cell, so it is the same every frame.
+   */
+  private groundEdges(cells: readonly (readonly [number, number])[], kind: "lava" | "grass"): void {
+    const g = this.add.graphics().setDepth(kind === "lava" ? 1.02 : 1.03);
+    this.tiles.add(g);
+    const has = new Set(cells.map(([x, y]) => y * GRID_W + x));
+    const px = 1 / FX_TEXEL;
+    const hash = (a: number, b: number, c: number) => {
+      let h = (a * 73856093) ^ (b * 19349663) ^ (c * 83492791);
+      h = Math.imul(h ^ (h >>> 13), 1274126177);
+      return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+    };
+    for (const [cx, cy] of cells) {
+      for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]] as const) {
+        if (has.has((cy + dy) * GRID_W + cx + dx)) continue;
+        // Texels along this side of the cell, 64 of them, and which way is out.
+        for (let i = 0; i < TILE_PX * FX_TEXEL; i++) {
+          const along = i * px;
+          const bx = dx === 0 ? cx * TILE_PX + along : dx > 0 ? (cx + 1) * TILE_PX : cx * TILE_PX;
+          const by = dy === 0 ? cy * TILE_PX + along : dy > 0 ? (cy + 1) * TILE_PX : cy * TILE_PX;
+          const r = hash(cx * 4 + (dx + 1), cy * 4 + (dy + 1), i);
+          if (kind === "lava") {
+            /*
+             * A channel is below the floor. A bank of dark stone bites into the
+             * melt raggedly from every side it meets floor — deeper and with a
+             * lit lip on the north, the face the three-quarter view looks at —
+             * and the melt glows brighter in a band along it.
+             */
+            // Ragged, but in swells along the bank rather than texel by texel,
+            // and continuous across cells: a function of where along it is.
+            const sw = (dx === 0 ? bx : by) * FX_TEXEL;
+            const swell = Math.sin(sw * 0.21 + (dx === 0 ? by : bx) * 0.7) + 0.6 * Math.sin(sw * 0.53 + 1.3);
+            const bank = (dy < 0 ? 8 : 4) + Math.max(0, Math.round(1.2 + swell * 1.3)) + (r > 0.92 ? 1 : 0);
+            const stone = dy < 0 ? [0x5a5462, 0x3a3440, 0x2e2a34, 0x26222c, 0x221e28, 0x1e1a24, 0x1a1620] : [0x3a3440, 0x2a2630, 0x221e28, 0x1a1620];
+            for (let k = 0; k < bank + 3; k++) {
+              const inX = dx > 0 ? -(k + 1) : dx < 0 ? k : 0, inY = dy > 0 ? -(k + 1) : dy < 0 ? k : 0;
+              const c = k < bank ? stone[Math.min(stone.length - 1, k)]! : k === bank ? 0xffd070 : 0xf8a848;
+              g.fillStyle(c, 1);
+              g.fillRect(bx + inX * px, by + inY * px, px, px);
+            }
+          } else {
+            // Tufts outward over the floor, 1 to 4 texels, lit at the tip.
+            if (r < 0.3) continue;
+            const len = 1 + Math.floor(r * 4);
+            for (let k = 0; k < len; k++) {
+              g.fillStyle(k === len - 1 ? 0x7cb24c : k === 0 ? 0x224826 : 0x33662e, 1);
+              g.fillRect(bx + dx * k * px - (dx < 0 ? px : 0), by + dy * k * px - (dy < 0 ? px : 0), px, px);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /** Lava flowing, and grass as it stands, burns and is burnt. */
+  private updateGround(): void {
+    const frame = (this.world.tick >> 3) % LAVA_FRAMES;
+    for (const l of this.lavaTiles) l.img.setFrame(`${l.sheet}_${frame}`);
+    for (const c of this.world.grass) {
+      const t = this.grassTiles.get(c.y * GRID_W + c.x);
+      if (!t) continue;
+      // Smouldering grass flickers between standing and alight: it is about to go up.
+      const name = c.state === "grass" ? `grass_${t.v}`
+        : c.state === "catching" ? (((this.world.tick >> 2) & 1) === 0 ? `grass_${t.v}` : `grass_burning_${t.v & 1}`)
+        : c.state === "burning" ? `grass_burning_${(t.v + (this.world.tick >> 3)) & 1}`
+        : `grass_burnt_${t.v}`;
+      if (t.img.frame.name !== name) t.img.setFrame(name);
+    }
+  }
+
   private drawHazards(): void {
     for (const m of this.hazardMarks) m.destroy();
     this.hazardMarks.length = 0;
     this.hazardGfx.clear();
+    /*
+     * **The threat layer is emptied here**, at the first of the frame's draws,
+     * and not in `drawEnemyBlades` where it used to be.
+     *
+     * `drawExpansion` runs before `drawEnemyBlades` and puts the rift's heave
+     * and the mine's blast on this layer; a `clear()` afterwards threw both
+     * away before the frame was ever rendered, so two telegraphs the sim was
+     * running were simply invisible. Phaser's `Graphics` is a retained command
+     * buffer — whatever is cleared last wins — so the clear belongs at the top
+     * of the frame, once, in front of everything that draws into it.
+     */
+    this.threatGfx.clear();
     const w = this.world;
 
     // Marks first, under everything: they are the floor's memory, not an
@@ -6027,10 +13233,7 @@ export class PlayScene extends Phaser.Scene {
        * The radius is also a parameter, and a drawing scaled to an arbitrary
        * radius loses the crisp edge that is the entire information.
        */
-      this.hazardGfx.lineStyle(2, 0x9ad8ff, 0.9);
-      this.hazardGfx.strokeCircle(s.x, s.y, s.radius);
-      this.hazardGfx.fillStyle(0x9ad8ff, 0.18);
-      this.hazardGfx.fillCircle(s.x, s.y, s.radius * (1 - left));
+      drawStrikeMark(this.hazardGfx, s.x, s.y, s.radius, left, w.tick, this.teleView());
     }
   }
 
@@ -6058,7 +13261,7 @@ export class PlayScene extends Phaser.Scene {
       if (this.atlas.has("vfx_ward_0")) {
         const rune = this.add.image(
           ward.x, ward.y, this.textureKey, `vfx_ward_${(w.tick >> 3) & 1}`,
-        ).setOrigin(0.5).setScale(1).setAlpha(0.35 + 0.65 * life).setDepth(2.8);
+        ).setOrigin(0.5).setScale(1 / TUNED).setAlpha(0.35 + 0.65 * life).setDepth(2.8);
         this.hazardMarks.push(rune);
       } else {
         gfx.lineStyle(2, 0xffe9a8, 0.35 + 0.45 * life);
@@ -6078,7 +13281,7 @@ export class PlayScene extends Phaser.Scene {
       const y = e.y - e.radius - 10 + Math.sin(w.tick / 5) * 1.5;
       if (this.atlas.has("vfx_brand_mark")) {
         const mark = this.add.image(e.x, y, this.uiTextureKey, "vfx_brand_mark")
-          .setOrigin(0.5).setScale(1).setDepth(9.4);
+          .setOrigin(0.5).setScale(1 / TUNED).setDepth(9.4);
         this.hazardMarks.push(mark);
       } else {
         gfx.fillStyle(0xff8877, 0.95);
@@ -6111,12 +13314,233 @@ export class PlayScene extends Phaser.Scene {
      * sines per axis rather than noise, so it reads as a jolt, not a jitter.
      */
     const level = SHAKE_LEVEL[this.shakeSetting];
+    // A world that has stopped stepping — the player dead, the run over — no
+    // longer decays its own trauma, and the last blow shook the screen for as
+    // long as the game-over card stood. It dies away here instead.
+    if (this.world.player.hearts <= 0 || this.won) this.world.trauma = Math.max(0, this.world.trauma - (this.game.loop.delta / 1000) * 2.5);
     const t = this.world.trauma * this.world.trauma * level;
     const now = this.time.now / 1000;
     const dx = t * SHAKE_MAX_PX * (Math.sin(now * 61) * 0.6 + Math.sin(now * 97 + 1.3) * 0.4);
     const dy = t * SHAKE_MAX_PX * (Math.sin(now * 73 + 0.7) * 0.6 + Math.sin(now * 89 + 2.1) * 0.4);
-    cam.centerOn(VIEW_W / 2 + dx, (VIEW_H + HUD_H) / 2 + dy);
     cam.setRotation(0);
+    if (!this.uiCam) return;
+    /*
+     * Near and following, the way pixel games' cameras follow (Celeste, Hollow
+     * Knight, the Gungeon). Two points, not one:
+     *
+     * - an **anchor**, held rigidly so the player stays inside a dead zone
+     *   round it (`CLOSE_DEAD_*`) — it moves only when they push its edge,
+     *   and then exactly as they do;
+     * - the **view**, which goes to the anchor at a capped speed and a capped
+     *   acceleration, braking to arrive. Walking is under the cap, so the
+     *   view is on the anchor with no lag at all; a dash is over it, so the
+     *   view falls behind and comes after, never flung at dash speed.
+     *
+     * The dead zone used to be measured round the view itself, so a player
+     * walking steadily left it, the view sped up, caught them, found them
+     * inside again and stopped, and they left it again: the view moved in
+     * surges, which was the shake and the drag. A spring toward the anchor
+     * trailed a walking player by its own lag. Stepped on the simulation's
+     * clock, so view and body move on the same beats.
+     */
+    // The canvas follows the window (`main.ts`); both cameras follow the canvas.
+    const cw = this.scale.width, ch = this.scale.height;
+    if (cam.width !== cw || cam.height !== ch) cam.setSize(cw, ch);
+    if (this.uiCam.width !== cw || this.uiCam.height !== ch) this.uiCam.setSize(cw, ch);
+    /*
+     * **The throne hall is seen whole** (doc 020). The close camera followed
+     * the player, and the king's reach — a sweep across his front, a wave
+     * flying on past it, a chain, a leap from across the room — was most of
+     * the time partly off the view. There the view is fixed and zoomed to fit
+     * the room, which is the view's shape; the clamps below then hold it still.
+     */
+    const hall = this.world.room.id === "fixed-boss";
+    const roomW0 = this.world.room.extent.w * TILE_PX, roomH0 = this.world.room.extent.h * TILE_PX;
+    cam.setZoom(hall ? Math.min(cw / roomW0, ch / (roomH0 * BOSS_VIEW_SPARE)) : this.worldZoom());
+    const p = this.world.player;
+    const halfW = cam.width / cam.zoom / 2, halfH = cam.height / cam.zoom / 2;
+    // Bodies past the view hold their fire (doc 017), whatever the view is now.
+    this.world.viewHalf = { x: halfW, y: halfH };
+    // Where the view is, a step behind at most: it trails the player and stops at the room's edge.
+    this.world.viewCentre = this.camFocus ? { x: this.camFocus.x, y: this.camFocus.y } : null;
+    // Held inside the room's own extent; the grid past it is filler wall.
+    const roomW = this.world.room.extent.w * TILE_PX, roomH = this.world.room.extent.h * TILE_PX;
+    const clampX = (x: number) => (halfW * 2 >= roomW ? roomW / 2 : Math.max(halfW, Math.min(roomW - halfW, x)));
+    // In the hall the spare height goes mostly below the room, under the HUD.
+    const clampY = (y: number) => (halfH * 2 >= roomH
+      ? (hall ? halfH - (halfH * 2 - roomH) * 0.2 : roomH / 2)
+      : Math.max(halfH, Math.min(roomH - halfH, y)));
+    if (!this.camFocus) {
+      this.camAnchor = { x: p.x, y: p.y };
+      this.camFocus = { x: clampX(p.x), y: clampY(p.y) };
+      this.camVel = { x: 0, y: 0 };
+      this.camTick = this.world.tick;
+    }
+    const f = this.camFocus, v = this.camVel, an = this.camAnchor;
+    const steps = Math.min(8, Math.max(0, this.world.tick - this.camTick));
+    this.camTick = this.world.tick;
+    const dt = STEP_MS / 1000;
+    for (let i = 0; i < steps; i++) {
+      /*
+       * Not while the player is being thrown. A hit's shove, or a ram's throw,
+       * carried rigidly into the view jolted the whole room with the body —
+       * a shake nobody asked for. The anchor waits, and once the shove is
+       * over the view comes after at its capped speed.
+       */
+      if (p.hurtMs > 0) {
+        this.camHeld = true;
+      } else if (p.x > an.x + CLOSE_DEAD_X) an.x = p.x - CLOSE_DEAD_X;
+      else if (p.x < an.x - CLOSE_DEAD_X) an.x = p.x + CLOSE_DEAD_X;
+      if (p.hurtMs <= 0) {
+        if (p.y > an.y + CLOSE_DEAD_Y) an.y = p.y - CLOSE_DEAD_Y;
+        else if (p.y < an.y - CLOSE_DEAD_Y) an.y = p.y + CLOSE_DEAD_Y;
+      }
+      const tx = clampX(an.x), ty = clampY(an.y);
+      const gx = tx - f.x, gy = ty - f.y, gap = Math.hypot(gx, gy);
+      // Within a walking step of it: there, now — the view stops when the
+      // player does. Braking from a walk overshot by the braking distance and
+      // came back, a wobble at every stop.
+      // After a shove the view eases back in rather than snapping, however small the gap.
+      if (gap / dt <= CAM_RIGID_SPEED && !this.camHeld) { v.x = gx / dt; v.y = gy / dt; f.x = tx; f.y = ty; continue; }
+      if (gap < 0.25) { this.camHeld = false; f.x = tx; f.y = ty; v.x = 0; v.y = 0; continue; }
+      // The speed it wants: to be there this step, no faster than the cap,
+      // and no faster than it can still brake from.
+      const speed = Math.min(gap / dt, CAM_MAX_SPEED, Math.sqrt(2 * CAM_ACCEL * gap));
+      const wx = (gx / gap) * speed, wy = (gy / gap) * speed;
+      const ax = wx - v.x, ay = wy - v.y, al = Math.hypot(ax, ay), maxA = CAM_ACCEL * dt;
+      if (al > maxA) { v.x += (ax / al) * maxA; v.y += (ay / al) * maxA; } else { v.x = wx; v.y = wy; }
+      // Never past it.
+      const nx = f.x + v.x * dt, ny = f.y + v.y * dt;
+      if ((tx - nx) * gx + (ty - ny) * gy <= 0) { f.x = tx; f.y = ty; v.x = 0; v.y = 0; continue; }
+      f.x = nx;
+      f.y = ny;
+    }
+    const step = camStep(cam.zoom);
+    cam.centerOn(Math.round((f.x + dx) / step) * step, Math.round((f.y + dy) / step) * step);
+    // The HUD is laid out on the room's own coordinates, fitted into the canvas.
+    this.uiCam.setZoom(Math.min(cw / UI_W, ch / (UI_H + HUD_H))).centerOn(UI_W / 2, (UI_H + HUD_H) / 2);
+    this.drawOffscreen(this.camFocus.x, this.camFocus.y, halfW, halfH);
+    this.drawMinimap(this.camFocus.x, this.camFocus.y, halfW, halfH);
+  }
+
+  /**
+   * The room at a glance, with the close camera: the walls, the part of the
+   * room in view, the player, and every body — dim asleep, bright awake,
+   * brightest and larger while it holds a turn to attack. The edge pointers
+   * say which way; this says how far and how many.
+   */
+  private drawMinimap(cx: number, cy: number, halfW: number, halfH: number): void {
+    const g = this.minimapGfx;
+    if (!g) return;
+    g.clear();
+    const hidden = !!(this.titleUi || this.intentUi || this.transitionUi || this.offerUi || this.pauseUi || this.staffUi);
+    if (hidden) return;
+    const ext = this.world.room.extent;
+    const cell = minimapCell(ext);
+    const scale = cell / TILE_PX;
+    const w = ext.w * cell, h = ext.h * cell;
+    // Top right under the gold; the beat and the mute notice move below it.
+    const x0 = UI_W - w - HUD_INSET, y0 = MINIMAP_TOP;
+    /*
+     * A solid plate with a border, not a wash.
+     *
+     * At 0.72 over stone the map was dark grey walls on a dark grey floor on
+     * a dark grey room, and the whole widget disappeared — while still
+     * covering the gameplay under it, so it took a corner of the arena and
+     * gave nothing back for it. Opaque, bordered, and with the walls pulled
+     * up to a legible grey: it is now either a map or it is out of the way,
+     * rather than both at once.
+     */
+    g.fillStyle(0x0d0b1f, 0.95);
+    g.fillRect(x0 - 3, y0 - 3, w + 6, h + 6);
+    g.lineStyle(1, 0x4a5480, 0.9);
+    g.strokeRect(x0 - 3, y0 - 3, w + 6, h + 6);
+    const grid = this.world.room.grid;
+    g.fillStyle(0x8892b8, 1);
+    for (let ty = 0; ty < ext.h; ty++) for (let tx = 0; tx < ext.w; tx++) {
+      const t = grid[ty * GRID_W + tx]!;
+      if (t === Tile.Floor || t === Tile.Prop) continue;
+      g.fillRect(x0 + tx * cell, y0 + ty * cell, cell, cell);
+    }
+    g.lineStyle(1, 0xc9cfe8, 0.45);
+    g.strokeRect(x0 + (cx - halfW) * scale, y0 + (cy - halfH) * scale, halfW * 2 * scale, halfH * 2 * scale);
+    for (const e of this.world.enemies) {
+      if (e.hp <= 0 || e.spawnFadeMs > 0) continue;
+      const hot = e.hasFireToken || e.hasToken || e.telegraphMs > 0;
+      g.fillStyle(0xff5a6e, hot ? 1 : e.awake ? 0.8 : 0.35);
+      const d = hot ? 3 : 2;
+      g.fillRect(x0 + e.x * scale - d / 2, y0 + e.y * scale - d / 2, d, d);
+    }
+    // The way on, so it is never lost in a room larger than the view: the
+    // reward a gold diamond, an open portal a violet ring.
+    const drop = this.world.rewardDrop;
+    if (drop) {
+      const rx = x0 + drop.x * scale, ry = y0 + drop.y * scale;
+      g.fillStyle(0xffd45e, 1);
+      g.fillPoints([{ x: rx, y: ry - 3 }, { x: rx + 3, y: ry }, { x: rx, y: ry + 3 }, { x: rx - 3, y: ry }], true);
+    }
+    /*
+     * What a room with no fight in it holds, so the stop before the boss does
+     * not have to be walked to be read: the vendors a warm square, the
+     * fountain a cyan one that goes grey once it has been drunk. The fountain
+     * is the only one of the three whose state can change while the player is
+     * in the room, and a marker that did not change with it would be telling
+     * them to walk back to something they have already taken.
+     */
+    for (const n of this.npcs) {
+      g.fillStyle(n.kind === "fountain" ? (this.fountainDry ? 0x5a6480 : 0x6fd8e8) : 0xffc868, 1);
+      g.fillRect(x0 + n.x * scale - 2, y0 + n.y * scale - 2, 4, 4);
+    }
+    for (const portal of this.world.portals) {
+      if (!portal.open) continue;
+      g.lineStyle(1.5, 0xc79bff, 1);
+      g.strokeCircle(x0 + portal.x * scale, y0 + portal.y * scale, 2.5);
+    }
+    const p = this.world.player;
+    g.fillStyle(0xffffff, 1);
+    g.fillRect(x0 + p.x * scale - 1.5, y0 + p.y * scale - 1.5, 3, 3);
+  }
+
+  /**
+   * The HUD and menus to their own camera, the world to the near one. Run
+   * just before rendering, once the frame's objects exist: most are made
+   * afresh each frame, and one assigned earlier would be drawn by both.
+   */
+  private assignCameras(): void {
+    if (!this.uiCam) return;
+    const main = this.cameras.main.id, ui = this.uiCam.id;
+    for (const go of this.children.list) {
+      const isUi = (go as unknown as { depth: number }).depth >= UI_DEPTH;
+      go.cameraFilter = (go.cameraFilter & ~(main | ui)) | (isUi ? main : ui);
+    }
+  }
+
+  /**
+   * Bodies off the near camera's view, pointed at from its edge: a small
+   * wedge where the line from the view's centre leaves it, faint for a body
+   * that is awake and bright for one taking a turn to attack.
+   */
+  private drawOffscreen(cx: number, cy: number, halfW: number, halfH: number): void {
+    const g = this.offscreenGfx;
+    if (!g) return;
+    g.clear();
+    const inset = 5;
+    for (const e of this.world.enemies) {
+      if (e.hp <= 0 || !e.awake || e.spawnFadeMs > 0) continue;
+      const rx = e.x - cx, ry = e.y - cy;
+      if (Math.abs(rx) < halfW - inset && Math.abs(ry) < halfH - inset) continue;
+      const k = Math.min((halfW - inset) / Math.max(1e-6, Math.abs(rx)), (halfH - inset) / Math.max(1e-6, Math.abs(ry)));
+      const ex = cx + rx * k, ey = cy + ry * k;
+      const a = Math.atan2(ry, rx);
+      const hot = e.hasFireToken || e.hasToken || e.telegraphMs > 0;
+      g.fillStyle(hot ? 0xff5a6e : 0xffb0b8, hot ? 0.95 : 0.55);
+      const s = hot ? 4.5 : 3.5;
+      g.fillTriangle(
+        ex + Math.cos(a) * s, ey + Math.sin(a) * s,
+        ex + Math.cos(a + 2.4) * s, ey + Math.sin(a + 2.4) * s,
+        ex + Math.cos(a - 2.4) * s, ey + Math.sin(a - 2.4) * s,
+      );
+    }
   }
 
   private enemyBulletCount(): number {
@@ -6149,6 +13573,57 @@ export class PlayScene extends Phaser.Scene {
    * sliding across the floor with a bob: the legs moved whether or not the
    * body did.
    */
+  /** What is left of the off-hand raise after a cast. */
+  private castPoseMs = 0;
+  /**
+   * The player's motion transform this frame, and the pivot it turns about.
+   *
+   * Set once per draw, before anything is placed from a frame anchor, so that
+   * the body and everything it holds move together (`attachToBody`).
+   */
+  private bodyXform: { pivotX: number; pivotY: number; feel: BodyFeel } | null = null;
+
+  /**
+   * A world point that belongs to the player's body, moved as the body is.
+   *
+   * The sprite is scaled and turned about its own pivot and then offset, so a
+   * point painted at one of its anchors has to take the same three steps in
+   * the same order. Without it the sword hangs in the air where the hand used
+   * to be — which is exactly what a swing looked like once the body started
+   * gathering and lunging under it.
+   */
+  /** How high a leap has the player off the floor this frame, in world px; 0 on the ground. */
+  private leapLift(): number {
+    const p = this.world.player;
+    if (!this.leap || !p.landing || p.strikeMs <= 0) return 0;
+    const u = 1 - p.strikeMs / this.leap.totalMs;
+    const reach = Math.hypot(this.leap.x1 - this.leap.x0, this.leap.y1 - this.leap.y0);
+    return Math.sin(Math.max(0, Math.min(1, u)) * Math.PI) * Math.min(22, 8 + reach * 0.16);
+  }
+
+  private attachToBody(x: number, y: number): { x: number; y: number } {
+    const t = this.bodyXform;
+    if (!t) return { x, y };
+    const dx = (x - t.pivotX) * t.feel.scaleX;
+    const dy = (y - t.pivotY) * t.feel.scaleY;
+    const cos = Math.cos(t.feel.tilt), sin = Math.sin(t.feel.tilt);
+    return {
+      x: t.pivotX + dx * cos - dy * sin + t.feel.offX,
+      y: t.pivotY + dx * sin + dy * cos + t.feel.offY,
+    };
+  }
+
+  /** How many walk frames the atlas has for the player, counted once. */
+  private walkFrameCount = 0;
+  private walkFrames(): number {
+    if (!this.walkFrameCount) {
+      let n = 0;
+      while (this.atlas.has(`player_s_walk${n}`)) n++;
+      this.walkFrameCount = Math.max(1, n);
+    }
+    return this.walkFrameCount;
+  }
+
   private playerPose(): string {
     const p = this.world.player;
 
@@ -6160,11 +13635,48 @@ export class PlayScene extends Phaser.Scene {
 
     if (p.dashMs > 0) return "dash";
 
+    /*
+     * The swing in four drawings: wound back, the strike between, the follow
+     * through, and the recovery between that and standing. The blade crosses
+     * two thirds of its arc in the first third of the active frames (008), so
+     * the strike is held only for those.
+     */
     const phase = swingPhase(p);
     if (phase === "windup") return "windup";
-    if (phase === "active" || phase === "recover") return "follow";
+    if (phase === "active") {
+      // The body keys with the blade (`conjuredPose`): two steps across, then the follow through.
+      const since = swingElapsed(p) - SWING_WINDUP_MS;
+      return since < KEY_MS ? "strike" : since < 2 * KEY_MS ? "slash" : "follow";
+    }
+    if (phase === "recover") return "recover";
+
+    /*
+     * A cast in four beats, not one held pose.
+     *
+     * It used to be a single drawing — the off hand an inch higher — held
+     * through the wind-up, the shot and the recovery, which on a heavy spell
+     * is most of a second of a body standing to attention. A cast is a move:
+     * the body **coils** back over the gathering flame, **thrusts** after the
+     * shot, and **settles**. The gather has two drawings because the spells
+     * do: a light flick at `move_scale` above 0.7, and a two-handed overhead
+     * for the heavy ones, which is the same number the sim already derives
+     * from the spell's weight (`castTiming`), so nothing new is threaded
+     * through. The release is one frame on the cast flash; the settle runs to
+     * the end of the sim's own recovery.
+     */
+    // A `charge` held is a windup the player is choosing to prolong: the same gather.
+    if (p.castPending >= 0 || p.chargeKey >= 0) return p.castMoveScale <= 0.7 ? "cast_gather" : "cast";
+    if (this.castPoseMs > 0) {
+      this.castPoseMs -= STEP_MS;
+      return this.castPoseMs > CAST_POSE_MS - CAST_RELEASE_MS ? "cast_release" : "cast_recover";
+    }
+    if (p.castRecoverMs > 0) return "cast_recover";
 
     const moved = Math.hypot(p.x - this.lastX, p.y - this.lastY);
+    // Which way the body is running, eased, so the lean follows a turn
+    // rather than snapping with it.
+    const runTo = moved > 0.2 ? (p.x - this.lastX) / moved : 0;
+    this.runX += (runTo - this.runX) * 0.25;
     this.lastX = p.x;
     this.lastY = p.y;
     if (moved > 0.2) {
@@ -6176,7 +13688,10 @@ export class PlayScene extends Phaser.Scene {
       // is half of what reads as a twitch.
       this.walkHoldMs -= STEP_MS;
     }
-    if (this.walkHoldMs > 0) return `walk${Math.floor(this.walkDistance / WALK_FRAME_PX) % 4}`;
+    if (this.walkHoldMs > 0) {
+      const n = this.walkFrames();
+      return `walk${Math.floor((this.walkDistance / WALK_CYCLE_PX) * n) % n}`;
+    }
     return `idle${Math.floor(this.world.tick / IDLE_FRAME_TICKS) % 4}`;
   }
 
@@ -6195,8 +13710,58 @@ export class PlayScene extends Phaser.Scene {
     if (this.offerUi || this.staffUi) return null;
     const bound: (Phaser.Input.Keyboard.Key | undefined)[] =
       [this.keys.U, this.keys.I, this.keys.O];
-    for (let i = 0; i < bound.length; i++) if (bound[i]?.isDown) return i;
+    for (let i = 0; i < bound.length; i++) {
+      if (!bound[i]?.isDown) continue;
+      // Remembered even when the press is refused: the bar's cost tick
+      // follows the key the player is actually using.
+      this.lastSpellKey = i;
+      return i;
+    }
     return null;
+  }
+
+  /**
+   * A press that produced nothing, from the simulation's own account of why.
+   *
+   * Four reasons, and each is answered clearly and differently, because a
+   * press that seems to do nothing reads as a dropped input whatever the
+   * reason was. **Mana** asks the player to change what they are doing, so
+   * it is the loudest: the slot shakes in the mana blue, the bar marks the
+   * shortfall, `ui_deny` sounds and "not enough mana" rises over the head.
+   * A **cooldown** says *not yet*: the key's cover flashes pale gold, the
+   * menu tick sounds an octave down and quieter, and "Cooldown 1.2s" rises
+   * small over the head — distinct from the mana answer in colour, sound
+   * and word, so it teaches the other lesson.
+   * **Busy** (the last cast still recovering) and **empty** (a key with
+   * nothing on it) flash the slot grey and say nothing: both pass on their
+   * own within moments. A key held down refuses every frame, so the sounds
+   * and the marks over the head answer a **fresh press** only
+   * (`REFUSAL_FRESH_MS`), and each mark has its own least gap on top; the
+   * slot's cue simply stays lit while the key is held.
+   */
+  private noteRefusal(why: string, key: number): void {
+    if (why !== "mana" && why !== "cooldown" && why !== "busy" && why !== "empty") return;
+    const now = this.time.now;
+    const fresh = now - (this.lastRefusalAt.get(key) ?? -Infinity) > REFUSAL_FRESH_MS || this.refusedWhy !== why || this.refusedKey !== key;
+    this.lastRefusalAt.set(key, now);
+    this.refusedKey = key;
+    this.refusedWhy = why;
+    this.refusedMs = why === "mana" ? REFUSED_MANA_MS : why === "cooldown" ? REFUSED_COOLDOWN_MS : REFUSED_QUIET_MS;
+    // The mark over the player for mana, once a gap has passed since the last one (`MANA_CUE_EVERY_MS`).
+    if (why === "mana" && this.manaCueGapMs >= MANA_CUE_EVERY_MS) {
+      this.manaCueMs = MANA_CUE_MS;
+      this.manaCueGapMs = 0;
+    }
+    if (why === "cooldown" && fresh) {
+      // The menu tick an octave down: *not yet*, rather than the deny's *not enough*.
+      this.sfx.play("ui_move", 0.5);
+      const left = this.world.spells[key]?.cooldownMs ?? 0;
+      if (left > 0 && this.cooldownCueGapMs >= COOLDOWN_CUE_EVERY_MS) {
+        this.cooldownCueMs = COOLDOWN_CUE_MS;
+        this.cooldownCueGapMs = 0;
+        this.cooldownCueText = t("cue.cooldown", { s: (Math.ceil(left / 100) / 10).toFixed(1) });
+      }
+    }
   }
 
   private readInput(): Input {
@@ -6210,6 +13775,12 @@ export class PlayScene extends Phaser.Scene {
      * by holding the body still while it is up.
      */
     if (this.offerUi) return NO_INPUT;
+    // The walk into the throne hall is not theirs: in to the mark, facing him, and held there (`bossCine`).
+    const cine = this.bossCine;
+    if (cine && !cine.release) {
+      const pl = this.world.player;
+      return { ...NO_INPUT, moveY: pl.y > cine.toY ? -1 : 0, aimX: pl.x, aimY: pl.y - 64 };
+    }
     const k = this.keys;
     const p = this.input.activePointer;
     const x = (down(k.D) || down(k.RIGHT) ? 1 : 0) - (down(k.A) || down(k.LEFT) ? 1 : 0);
@@ -6237,10 +13808,7 @@ export class PlayScene extends Phaser.Scene {
        * queueing the next one is exactly right for a basic attack.
        */
       spell: this.pressedSpell(),
-      // Doc 006's auto-firing staff. The world no longer steps it; spells are
-      // keyed, on 1, 2 and 3.
-      fire: false,
-      dash: down(k.K) || down(k.SPACE) || down(k.SHIFT) || p.rightButtonDown(),
+      dash: down(k.K),
       // An edge, like the spell index: taking a card and stepping through a
       // portal are both decisions that must cost one press, not one frame.
       interact: this.interactPressed,
@@ -6249,6 +13817,26 @@ export class PlayScene extends Phaser.Scene {
 
   private draw(): void {
     this.sprites.clear(true, true);
+    /*
+     * **The player sorts with the bodies.**
+     *
+     * It was drawn at a flat 8, above every enemy, so a tank standing in
+     * front of the player was drawn behind them and the floor stopped
+     * reading as a floor. The player now takes its place in the same band
+     * the bodies use (`bodyDepth`), off its own foot line, with id 0.
+     *
+     * Everything the player *holds* — the sword, the focus, the arc of a
+     * swing, the conjure and magic light, the flame, the dash trail — is
+     * offset from that depth by a ten-thousandth each frame rather than
+     * pinned to a number of its own, so the order within the body is fixed
+     * while the body itself moves through the band. The offsets are far
+     * smaller than one body's slot, so they never jump a whole body.
+     */
+    this.playerDepth = bodyDepth(this.world.player.y, 0);
+    this.bladeGfx.setDepth(this.playerDepth + PLAYER_HELD);
+    this.conjureGfx.setDepth(this.playerDepth + PLAYER_CONJURE);
+    this.magicGfx.setDepth(this.playerDepth + PLAYER_MAGIC);
+    this.swingGfx.setDepth(this.playerDepth + PLAYER_SWING);
     // A column's upper half goes see-through while a body stands behind it.
     for (const top of this.pillarTops) {
       const behind = (x: number, y: number, r: number) =>
@@ -6330,9 +13918,37 @@ export class PlayScene extends Phaser.Scene {
         drawProjectile(this.fxGfx, this.projGfx, b, look, w.tick, (sp) => this.shed(sp));
         continue;
       }
-      // Its own shape, pointed along its flight, and its own particles.
-      drawProjectile(this.fxGfx, this.projGfx, b, look, w.tick, (sp) => this.shed(sp));
+      if (b.delivery === "boomerang") {
+        const speed = Math.hypot(b.vx, b.vy);
+        const rate = Math.max(4, Math.min(24, 24 * speed / Math.max(1, b.launchSpeed)));
+        const turn = (this.bladeSpin.get(b) ?? Math.atan2(b.vy, b.vx)) + rate * Math.min(this.game.loop.delta, 50) / 1000;
+        this.bladeSpin.set(b, turn);
+        this.drawThrownSword(b, look, turn, rate);
+        continue;
+      }
+      // An enchant's wave is the swing's own edge, thrown: drawn with the swing (`drawWaves`).
+      if (b.delivery === "wave") continue;
+      if (look.shape === "frost_orb" && b.emitMs > 0) {
+        this.spellSprite(`vfx_frost_orb_${Math.floor(w.tick / 7.5) % 4}`, b.x, b.y, 7.2);
+        continue;
+      }
+      /*
+       * A frozen orb's shard: the delivered ice diamond, pointed along its
+       * flight and flickering between its two frames, rather than a drawn
+       * sliver — the splinters and the orb are one frost spell.
+       */
+      if (look.shape === "frost_orb" && b.emitMs <= 0 && this.atlas.has("bullet_player_a_0")) {
+        this.sprites.add(this.add.image(b.x, b.y, this.textureKey, `bullet_player_a_${(w.tick >> 2) & 1}`)
+          .setScale(1 / ART_SCALE).setRotation(Math.atan2(b.vy, b.vx) + Math.PI / 2).setDepth(7.2));
+        if (Math.random() < 0.25)
+          this.shed({ x: b.x, y: b.y, vx: -b.vx * 0.05 + (Math.random() - 0.5) * 12, vy: -b.vy * 0.05 + (Math.random() - 0.5) * 12, ms: 0, life: 160 + Math.random() * 100, size: 0.8, colour: 0xcfefff, gravity: 6 });
+        continue;
+      }
+      // Its own shape, pointed along its flight, and its own particles; a
+      // charged shot at the charge it left with.
+      drawProjectile(this.fxGfx, this.projGfx, b, look, w.tick, (sp) => this.shed(sp), this.bulletMemory.get(b)?.charge ?? 1);
     }
+    if (this.bladeSpin.size > 0) for (const b of this.bladeSpin.keys()) if (!b.alive || b.delivery !== "boomerang") this.bladeSpin.delete(b);
     this.drawProps();
     /*
      * Drops, on the floor and animated.
@@ -6370,7 +13986,13 @@ export class PlayScene extends Phaser.Scene {
       this.sprites.add(img);
     }
     const label = (k: string, x: number, y: number, t: string, st: Phaser.Types.GameObjects.Text.TextStyle) => this.ftext(k, x, y, t, st);
-    for (const e of w.enemies) drawEnemy(this, w, e, this.textureKey, this.atlas, this.sprites, label);
+    this.drawKingGoblet(this.game.loop.delta * this.labSpeed);
+    for (const e of w.enemies) {
+      const unbind = this.bossUnbind.get(e.id);
+      if (unbind && unbind.until <= this.time.now) this.bossUnbind.delete(e.id);
+      drawEnemy(this, w, e, this.textureKey, this.atlas, this.sprites, label, this.subspecies,
+        unbind && unbind.until > this.time.now ? unbind.frame : undefined);
+    }
     for (const b of w.enemyBullets) {
       if (!b.alive) continue;
       /*
@@ -6381,9 +14003,13 @@ export class PlayScene extends Phaser.Scene {
        */
       if (b.from === "lancer") {
         const a = Math.atan2(b.vy, b.vx);
+        // As thick in the air as it was on the body, and its hitbox is the
+        // same size it looks (`SPIKE_SIZE` in `enemy.ts`).
+        this.fxTopGfx.lineStyle(SPIKE_OUTLINE_PX, 0x120e1a, 0.9);
+        this.fxTopGfx.lineBetween(b.x - Math.cos(a) * 5, b.y - Math.sin(a) * 5, b.x + Math.cos(a) * 5, b.y + Math.sin(a) * 5);
         if (this.atlas.has("vfx_spike_gold"))
           this.sprites.add(this.add.image(b.x, b.y, this.textureKey, "vfx_spike_gold")
-            .setOrigin(0.5).setRotation(a).setScale(1.2 / ART_SCALE).setDepth(7));
+            .setOrigin(0.5).setRotation(a).setScale(1.2 / ART_SCALE, SPIKE_FAT / ART_SCALE).setDepth(7));
         continue;
       }
       /*
@@ -6401,7 +14027,7 @@ export class PlayScene extends Phaser.Scene {
           const i = (w.tick >> 2) & 1;
           const o = info.origins[i]!;
           this.sprites.add(this.add.image(b.x, b.y, FX_TEXTURE, `${sheet}_${i}`)
-            .setOrigin(o[0], o[1]).setRotation(Math.atan2(b.vy, b.vx)).setScale(0.5).setDepth(7));
+            .setOrigin(o[0], o[1]).setRotation(Math.atan2(b.vy, b.vx)).setScale(1 / FX_TEXEL).setDepth(7));
           continue;
         }
       }
@@ -6420,17 +14046,75 @@ export class PlayScene extends Phaser.Scene {
     // the character is standing perfectly still.
     const flameBob = Math.sin(w.tick / 9) * 0.8;
     const anchor = this.atlas.playerAnchor(spin.name);
-    const mirrorX = (x: number) => spin.flipX ? 64 - x : x;
-    const offhand = anchor?.offhand ?? [spin.flipX ? 14 : 50, 34];
-    const grip = anchor?.grip ?? [spin.flipX ? 50 : 14, 34];
+    const mirrorX = (x: number) => spin.flipX ? FRAME_PX - x : x;
+    const offhand = anchor?.offhand ?? [(spin.flipX ? 14 : 50) * TUNED, 34 * TUNED];
+    const grip = anchor?.grip ?? [(spin.flipX ? 50 : 14) * TUNED, 34 * TUNED];
     const facing = spin.name.split("_")[1];
+
+    /*
+     * The motion layer, computed **before** anything is placed from an anchor.
+     *
+     * `body-feel.ts` offsets, scales and tilts the player sprite through a
+     * swing, a dash and a hit. Everything the player *holds* is drawn as its
+     * own sprite at a frame anchor — the sword, the focus, the crystal the
+     * magic blade grows from, the mana flame — and those were still placed
+     * from the untransformed anchor, so the body gathered and lunged and the
+     * staff stayed where it was. A held thing has to ride the same transform
+     * as the hand holding it, so the transform is worked out here and every
+     * attachment goes through `attachToBody`.
+     */
+    const swing = swingPhase(w.player);
+    const aimLen = Math.hypot(w.player.aim.x, w.player.aim.y) || 1;
+    const feel = bodyFeel({
+      weight: "light",
+      framePx: FRAME_PX,
+      tick: w.tick,
+      attack: swing === "windup" ? "windup" : swing === "active" ? "lunge" : swing === "recover" ? "recover" : null,
+      attackMs: swing === "windup" ? SWING_WINDUP_MS - swingElapsed(w.player)
+        : swing === "active" ? SWING_WINDUP_MS + SWING_ACTIVE_MS - swingElapsed(w.player)
+        : SWING_WINDUP_MS + SWING_ACTIVE_MS + SWING_RECOVER_MS - swingElapsed(w.player),
+      aimX: w.player.aim.x / aimLen,
+      aimY: w.player.aim.y / aimLen,
+      hitMs: Math.max(0, w.player.invulnMs - (INVULN_MS - HURT_POSE_MS * 1.6)),
+      hitX: -w.player.aim.x / aimLen,
+      hitY: -w.player.aim.y / aimLen,
+      travelled: this.walkDistance,
+      stride: WALK_CYCLE_PX / 2,
+      moving: this.walkHoldMs > 0,
+      moveX: this.runX,
+      dashMs: w.player.dashMs,
+    });
+    /*
+     * **A leap is a jump.** The body goes up and comes down along the dash —
+     * an arc, highest in the middle of the flight — while its shadow stays on
+     * the floor, so the player can see they are off the ground and out of
+     * reach. Through the motion layer, so the sword and the flame ride up with
+     * the hands holding them.
+     */
+    const lift = this.leapLift();
+    const pfeel = lift > 0 ? { ...feel, offY: feel.offY - lift } : feel;
+    // The sprite's own pivot: where it is rotated and scaled about.
+    this.bodyXform = { pivotX: w.player.x, pivotY: w.player.y - BODY_LIFT + LEAN_PIVOT_Y, feel: pfeel };
+
+    /*
+     * The mana flame burns in the open off hand, in front of the body, at
+     * every facing.
+     *
+     * Facing north it used to be drawn *behind* the sprite, on the reasoning
+     * that a body with its back turned has its hands on the far side. The
+     * drawing does not agree: seen from behind the arms hang at the sides and
+     * the mitt is the **leftmost thing in the silhouette**, so a flame placed
+     * on it and painted behind the body is a flame painted behind the widest
+     * part of the figure — three stray blue pixels beside the sleeve, which is
+     * what it looked like. Nothing about it read as fire in a hand. Drawn in
+     * front, on the same joint the other facings use, it reads exactly as the
+     * south view does. (The north hand's `offhand` joint moved with it: the
+     * anchor sat at the wrist, inside the robe, rather than on the mitt.)
+     */
     const flameOffset = {
-      x: (mirrorX(offhand[0]) - 32) / ART_SCALE,
-      y: (offhand[1] - 32) / ART_SCALE + flameBob - BODY_LIFT,
-      behind: facing === "n",
+      x: (mirrorX(offhand[0]) - FRAME_PX / 2) / ART_SCALE,
+      y: (offhand[1] - FRAME_PX / 2) / ART_SCALE + flameBob - BODY_LIFT,
     };
-    if (w.player.mana > 0 && flameOffset.behind)
-      put(w.player.x + flameOffset.x, w.player.y + flameOffset.y, flameName, 7.9, FLAME_SCALE * this.flare());
     /*
      * Afterimages, Symphony of the Night's kind.
      *
@@ -6449,7 +14133,8 @@ export class PlayScene extends Phaser.Scene {
      */
     if (w.player.dashMs > 0)
       this.ghosts.push({
-        x: w.player.x, y: w.player.y - BODY_LIFT, frame: frame(spin.name),
+        // Up the arc with the body, for a leap: the chain of copies is the jump's path.
+        x: w.player.x, y: w.player.y - BODY_LIFT - lift, frame: frame(spin.name),
         flipX: spin.flipX, ms: GHOST_MS,
       });
     for (const g of this.ghosts) {
@@ -6460,7 +14145,7 @@ export class PlayScene extends Phaser.Scene {
           // Shrinking very slightly as it fades, so the chain reads as
           // receding rather than as a row of identical cut-outs.
           .setScale((1 / ART_SCALE) * (1 - k * 0.12))
-          .setDepth(7.5)
+          .setDepth(this.playerDepth + PLAYER_TRAIL)
           .setFlipX(g.flipX)
           .setAlpha(0.42 * (1 - k) ** 1.4)
           .setTint(0x9ad8ff),
@@ -6493,9 +14178,10 @@ export class PlayScene extends Phaser.Scene {
         w.player.y - BODY_LIFT + shadowOffset(this.atlas, frame(spin.name), "shadow_player"),
         this.textureKey, "shadow_player",
       ).setOrigin(0.5)
-        .setScale(shadowScale(this.atlas, frame(spin.name), "shadow_player"), 1 / ART_SCALE)
+        // Smaller and fainter the higher a leap has the body.
+        .setScale(shadowScale(this.atlas, frame(spin.name), "shadow_player") * (1 - lift / 60), (1 / ART_SCALE) * (1 - lift / 60))
         .setDepth(3)
-        .setAlpha(0.5);
+        .setAlpha(0.5 - lift / 80);
       this.sprites.add(shadow);
     }
 
@@ -6576,19 +14262,19 @@ export class PlayScene extends Phaser.Scene {
     const sf = this.slashFrame();
     const inPlane = swinging && w.player.swingStretch === 1;
     const planeAngle = Math.atan2(Math.sin(swordAngle) * sf.squash, Math.cos(swordAngle));
-    const restSide = Math.sign(mirrorX(grip[0]) - 32) || (spin.flipX ? -1 : 1);
+    const restSide = Math.sign(mirrorX(grip[0]) - FRAME_PX / 2) || (spin.flipX ? -1 : 1);
     const heldAngle = resting ? Math.PI / 2 : swordAngle;
     const swordX = spinWindup ? w.player.x + 3
       // At the **sword hand**, from the frame's grip anchor: the flame has the
       // other hand, so the blade floats over the empty one whichever way the
       // player faces.
-      : resting ? w.player.x + restSide * (Math.abs(mirrorX(grip[0]) - 32) / ART_SCALE + 6)
+      : resting ? w.player.x + restSide * (Math.abs(mirrorX(grip[0]) - FRAME_PX / 2) / ART_SCALE + 6)
       : inPlane ? w.swing.x + sf.dx + Math.cos(swordAngle) * flyPx
       : w.player.x + Math.cos(swordAngle) * flyPx;
     const swordY = spinWindup ? w.player.y - BODY_LIFT - 14
       // The hilt at the hand, the blade hanging down past the hip: clear of
       // the face, which the raised version covered.
-      : resting ? w.player.y - BODY_LIFT + (grip[1] - 32) / ART_SCALE - 2 + bob
+      : resting ? w.player.y - BODY_LIFT + (grip[1] - FRAME_PX / 2) / ART_SCALE - 2 + bob
       : inPlane ? w.swing.y - sf.lift + sf.dy + Math.sin(swordAngle) * sf.squash * flyPx
       : w.player.y - flyLift + Math.sin(swordAngle) * flyPx;
     /*
@@ -6598,37 +14284,102 @@ export class PlayScene extends Phaser.Scene {
      * they carried; sheathing it on the back was better and still furniture.
      * Now the sword is the attack, and nothing else.
      */
-    const sword = this.add.image(
-      swordX,
-      swordY,
-      this.textureKey,
-      "weapon_player_sword",
+    if (FOCUS) {
       /*
-       * Pivoted at the **hilt**, and never stretched.
-       *
-       * Both were wrong together. The origin was the frame's centre, so the
-       * whole sword orbited the grip point instead of rotating in the hand —
-       * the hilt swung out as far as the tip. And the x scale was
-       * `bladeReach / 16`, which at the current reach of one tile is a **2x
-       * stretch on one axis**: the delivered blade is 30 art pixels from grip
-       * to tip and was being drawn 60 long. Stretching pixel art on one axis
-       * is the thing the art rules forbid outright, and it is exactly what
-       * "the sword is too long" was.
-       *
-       * A reach upgrade does not stretch the drawing. The hitbox grows, and
-       * what shows it is the spread the arc attack already has; a blade that
-       * physically lengthens with a stat is not something this art can say.
+       * The conjured blade (`?focus=`): a focus in the fist instead of a
+       * floating sword. At rest it is held — under the body, so the fist
+       * closes over it — and in the swing it is at the magic blade's root,
+       * which grows out of its point (`drawMagicBlade`).
        */
-    ).setOrigin(SWORD_GRIP_X / 64, 0.5)
-      .setScale(1 / ART_SCALE)
-      .setRotation(spinWindup ? -Math.PI / 2 : inPlane ? planeAngle : heldAngle)
-      // Behind the body while sheathed; in front, or behind when facing away, when out.
-      .setDepth(facing === "n" ? 7.8 : 8.6);
-    if (dashInvulnerable(w.player)) sword.setAlpha(0.55);
-    else if (w.player.invulnMs > 0) sword.setAlpha((w.tick >> 2) & 1 ? 0.35 : 1);
-    // Charged: the blade goes white and swells, the way ALttP's does.
-    if (spinWindup) { sword.setTintFill((w.tick >> 1) & 1 ? 0xffffff : 0xffe9a8); sword.setScale((1 / ART_SCALE) * 1.15); }
-    this.sprites.add(sword);
+      const hand = anchor?.hand ?? grip;
+      const outward = Math.sign(mirrorX(hand[0]) - FRAME_PX / 2) || 1;
+      const held = this.attachToBody(
+        w.player.x + (mirrorX(hand[0]) - FRAME_PX / 2) / ART_SCALE,
+        w.player.y - BODY_LIFT + (hand[1] - FRAME_PX / 2) / ART_SCALE,
+      );
+      this.frameHand = held;
+      /*
+       * **The staff, in every state, from the model's own numbers.**
+       *
+       * No frame draws one any more (doc 016), so there is no `crystal`
+       * anchor to read: the crystal is where this frame's grip, angle and
+       * grip-to-crystal put it. A mirrored facing mirrors the lean with the
+       * body, which is what keeps the east idle from crossing the head.
+       */
+      this.frameStaff = {
+        gripToCrystal: (anchor?.staffGripPx ?? STAFF_LEN_PX * ART_SCALE) / ART_SCALE,
+        angleDeg: anchor?.staffAngleDeg ?? -90,
+        depth: anchor?.staffDepth ?? 1,
+        flipX: spin.flipX,
+      };
+      /*
+       * **The guard** (doc 006's stance): the staff brought forward and up
+       * across the body, held there while the stance lasts. The posture is
+       * the first thing that says "guarding"; its light is `drawCasterStates`.
+       */
+      if (w.player.stance && swingPhase(w.player) === "none") {
+        // Forward along the facing on screen, whichever way the frame is mirrored.
+        const onScreen = -90 + GUARD_STAFF_LEAN_DEG * (Math.cos(w.player.facing) >= 0 ? 1 : -1);
+        this.frameStaff = { ...this.frameStaff, angleDeg: this.frameStaff.flipX ? 180 - onScreen : onScreen, depth: 1 };
+      }
+      const st = FOCUS === "staff" ? this.heldStaffNow() : null;
+      this.frameCrystal = st ? { x: st.crystalX, y: st.crystalY } : null;
+      this.frameShaft = st ? { gx: st.gripX, gy: st.gripY, cx: st.crystalX, cy: st.crystalY } : null;
+      this.drawHeldStaff(st);
+      const hx = held.x;
+      const hy = held.y;
+      if (this.frameCrystal) {
+        this.focusGfx.clear();
+        if (resting) this.focusPoint = this.frameCrystal;
+      } else if (resting) {
+        const a = FOCUS === "dagger" ? Math.PI / 2 - 0.45 * outward : -Math.PI / 2 + 0.15 * outward;
+        this.drawFocus(hx, hy, a, this.playerDepth + PLAYER_HELD, false);
+        const tip = FOCUS_TIP_PX[FOCUS];
+        this.focusPoint = { x: hx + Math.cos(a) * tip, y: hy + Math.sin(a) * tip };
+      } else if (spinWindup) {
+        this.drawFocus(w.player.x + 3, w.player.y - BODY_LIFT - 10, -Math.PI / 2, this.playerDepth + PLAYER_CONJURE, true);
+      } else if (inPlane && FOCUS === "staff" && this.atlas.has("weapon_player_staff")) {
+        // The swing draws the same staff as an atlas sprite, turned about the
+        // hand. Leaving the old procedural focus visible draws a second shaft.
+        this.focusGfx.clear();
+      } else {
+        const root = this.focusRoot();
+        this.drawFocus(root.x, root.y, root.angle, this.playerDepth + PLAYER_CONJURE, false);
+      }
+    } else {
+      const held = this.attachToBody(swordX, swordY);
+      const sword = this.add.image(
+        held.x,
+        held.y,
+        this.textureKey,
+        "weapon_player_sword",
+        /*
+         * Pivoted at the **hilt**, and never stretched.
+         *
+         * Both were wrong together. The origin was the frame's centre, so the
+         * whole sword orbited the grip point instead of rotating in the hand —
+         * the hilt swung out as far as the tip. And the x scale was
+         * `bladeReach / 16`, which at the current reach of one tile is a **2x
+         * stretch on one axis**: the delivered blade is 30 art pixels from grip
+         * to tip and was being drawn 60 long. Stretching pixel art on one axis
+         * is the thing the art rules forbid outright, and it is exactly what
+         * "the sword is too long" was.
+         *
+         * A reach upgrade does not stretch the drawing. The hitbox grows, and
+         * what shows it is the spread the arc attack already has; a blade that
+         * physically lengthens with a stat is not something this art can say.
+         */
+      ).setOrigin(SWORD_GRIP_X / 64, 0.5)
+        .setScale(1 / ART_SCALE)
+        .setRotation(spinWindup ? -Math.PI / 2 : inPlane ? planeAngle : heldAngle)
+        // Behind the body while sheathed; in front, or behind when facing away, when out.
+        .setDepth(this.playerDepth + (facing === "n" ? -PLAYER_HELD : PLAYER_CONJURE));
+      if (dashInvulnerable(w.player)) sword.setAlpha(0.55);
+      else if (w.player.invulnMs > 0) sword.setAlpha((w.tick >> 2) & 1 ? 0.35 : 1);
+      // Charged: the blade goes white and swells, the way ALttP's does.
+      if (spinWindup) { sword.setTintFill((w.tick >> 1) & 1 ? 0xffffff : 0xffe9a8); sword.setScale((1 / ART_SCALE) * 1.15); }
+      this.sprites.add(sword);
+    }
 
     // A dear spell kicks the body back along its line for a few frames.
     let kickX = 0;
@@ -6640,31 +14391,65 @@ export class PlayScene extends Phaser.Scene {
       this.recoil.ms -= this.game.loop.delta;
       if (this.recoil.ms <= 0) this.recoil = null;
     }
-    const player = this.add.image(w.player.x + kickX, w.player.y - BODY_LIFT + kickY, this.textureKey, frame(spin.name))
-      .setOrigin(0.5).setScale(1 / ART_SCALE).setDepth(8).setFlipX(spin.flipX);
+    /*
+     * **Speed in the body.** The walk cycle alone moved the legs and left the
+     * figure upright at any pace, so running read as sliding. The body leans
+     * into its travel from the feet, a few degrees at full speed, and dust
+     * kicks up at the heels.
+     */
+    const lean = this.stepMoveFeel();
+    const player = this.add.image(w.player.x + kickX, w.player.y - BODY_LIFT + kickY + LEAN_PIVOT_Y, this.textureKey, frame(spin.name))
+      .setOrigin(0.5, 0.5 + LEAN_PIVOT_Y / (FRAME_PX / ART_SCALE)).setScale(1 / ART_SCALE).setDepth(this.playerDepth).setFlipX(spin.flipX)
+      .setRotation(lean);
+    /*
+     * The same motion layer the bodies get (`body-feel.ts`), read off the
+     * player's own state: the give as a foot lands, the coil and overshoot of
+     * a swing between its drawn keys, the flinch of a hit, the stretch of a
+     * dash. It multiplies over the lean and the kick rather than replacing
+     * them, because those say where the player is going and this says what
+     * their body is doing about it.
+     */
+    player.setScale(player.scaleX * pfeel.scaleX, player.scaleY * pfeel.scaleY);
+    player.x += pfeel.offX;
+    player.y += pfeel.offY;
+    player.setRotation(player.rotation + pfeel.tilt);
+    // No drawn scarf: a line chain on top of the pixel art read as a stray braid, not as cloth.
+    this.scarfGfx.clear();
     if (dashInvulnerable(w.player)) player.setAlpha(0.55);
     else if (w.player.invulnMs > 0) player.setAlpha((w.tick >> 2) & 1 ? 0.35 : 1);
     // A status shows on the body: warm while burning, green while poisoned.
+    // The bell no longer slows the player, so there is no third tint.
     if (w.player.burnMs > 0) player.setTint((w.tick >> 2) & 1 ? 0xffb080 : 0xffd0a8);
     else if (w.player.poisonMs > 0) player.setTint(0xa8f0a8);
+    // Guarding: the body a shade paler in the guard's light, steady rather than blinking.
+    else if (w.player.stance) player.setTint(0xdcfff6);
     this.sprites.add(player);
     this.drawPlayerStatus();
-    if (w.player.mana > 0 && !flameOffset.behind)
-      put(w.player.x + flameOffset.x, w.player.y + flameOffset.y, flameName, 9, FLAME_SCALE * this.flare());
-
-    for (const pop of this.pops) {
-      const t = 1 - pop.ms / 200;
-      const name = pop.frame;
-      this.sprites.add(
-        this.add.image(pop.x, pop.y, this.textureKey, name)
-          .setOrigin(0.5)
-          .setFlipX(pop.flipX)
-          .setScale((1 / ART_SCALE) * (1 + t * 0.6))
-          .setAlpha(1 - t)
-          .setTintFill(0xffffff)
-          .setDepth(7),
-      );
+    this.drawCasterStates();
+    /*
+     * The flame is out while the sword is.
+     *
+     * It burns in the **off** hand, and through a swing that hand is behind
+     * the body doing nothing while every eye is on the blade — so on the back
+     * view it read as a second, unrelated light sitting at the waist on the
+     * wrong side, competing with the cut. A caster's off hand closes when the
+     * sword comes out. It fades rather than cutting, and returns over the
+     * recovery, so the mana it stands for is never gone for long.
+     */
+    const cutting = swingPhase(w.player);
+    const flameAlpha = cutting === "windup" || cutting === "active" ? 0
+      : cutting === "recover" ? 1 - Math.max(0, Math.min(1, w.player.swingMs / SWING_RECOVER_MS))
+      : 1;
+    this.handAt = this.attachToBody(w.player.x + flameOffset.x, w.player.y + flameOffset.y);
+    if (w.player.mana > 0 && flameAlpha > 0.02) {
+      const fp = this.attachToBody(w.player.x + flameOffset.x, w.player.y + flameOffset.y);
+      const flame = this.add.image(fp.x, fp.y, this.textureKey, frame(flameName))
+        .setOrigin(0.5).setScale(FLAME_SCALE * this.flare())
+        .setDepth(this.playerDepth + PLAYER_FLAME).setAlpha(flameAlpha);
+      this.sprites.add(flame);
     }
+
+    this.drawPops(this.renderingDemo && this.demo ? this.demo.pops : this.pops);
 
     /*
      * Sparks: small, dim dots.
@@ -6696,9 +14481,17 @@ export class PlayScene extends Phaser.Scene {
      */
     for (const hit of this.impacts) {
       const t = 1 - hit.ms / IMPACT_MS;
-      if (hit.slashAngle !== undefined && this.atlas.has("vfx_impact_0")) {
+      /*
+       * The frame is clamped to the three there are. An impact that lives
+       * longer than `IMPACT_MS` (a wave's cut, a guard's clash) starts at a
+       * negative `t`, and `vfx_impact_-1` is not a frame: Phaser drew the
+       * sheet's base frame instead — the whole atlas from its corner, which
+       * is the boss — for the first frames of every such hit.
+       */
+      const frameName = impactFrame(t);
+      if (hit.slashAngle !== undefined && this.atlas.has(frameName)) {
         const impact = this.add.image(
-          hit.x, hit.y, this.textureKey, `vfx_impact_${Math.min(2, Math.floor(t * 3))}`,
+          hit.x, hit.y, this.textureKey, frameName,
         ).setOrigin(0.5)
           .setRotation(hit.slashAngle)
           .setScale((1 / ART_SCALE) * hit.scale)
@@ -6715,14 +14508,23 @@ export class PlayScene extends Phaser.Scene {
     this.drawDamageNumbers(this.game.loop.delta);
     this.drawShards(this.game.loop.delta);
     this.drawVortices();
+    this.drawSpellOptions();
     this.drawPets();
     this.drawDashStrike();
     if (this.renderingDemo) return;
     this.drawFxAnims(this.game.loop.delta);
     this.drawLessons(this.game.loop.delta);
+    // The refusal cue runs on the wall clock, like every other HUD fade.
+    this.refusedMs = Math.max(0, this.refusedMs - this.game.loop.delta);
+    this.drawManaCue(this.game.loop.delta);
+    this.drawCooldownCue(this.game.loop.delta);
 
     // Soft backing behind the body's gauges, so they read over stone.
-    const topBacking = this.add.rectangle(4, 2, HUD_BAR_X + HUD_BAR_W + 8, 25, 0x0d0b1f, 0.6).setOrigin(0).setDepth(99);
+    // Held off the frame by the same margin as the rest of the HUD, and
+    // opaque enough to be a panel rather than a smudge over the stones.
+    const topBacking = this.add.rectangle(
+      HUD_INSET - 10, HUD_INSET - 8, HUD_BAR_X + HUD_BAR_W + 18 - HUD_INSET, 36, 0x0d0b1f, 0.8,
+    ).setOrigin(0).setStrokeStyle(1, 0x2a2750, 0.8).setDepth(99);
 
     /*
      * Health as a **bar with a number**, matching the mana bar below it.
@@ -6737,16 +14539,16 @@ export class PlayScene extends Phaser.Scene {
     /*
      * The boss's bar, across the top: the one health bar an enemy gets on the
      * HUD, because the boss is the one fight whose length is the point. Phase
-     * marks at 60% and 30% so the change is seen coming; the armour as a
-     * pale band above the health, as on the body's own bar; the phase named.
+     * marks at 60% and 30% so the change is seen coming; the phase named. No
+     * armour band: the king has none, since nothing interrupts him.
      */
-    const bossFade = this.sprites.getLength();
+    const bossFade = this.fadeMark();
     const boss = w.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
     if (boss) {
       const BW = 280;
-      const BX = VIEW_W / 2 - BW / 2;
+      const BX = UI_W / 2 - BW / 2;
       // At the bottom, above the spell row, so the top row is the player's.
-      const BY = VIEW_H - 52;
+      const BY = UI_H - 52;
       this.sprites.add(this.add.rectangle(BX - 2, BY, BW + 4, 11, 0x0d0b1f, 0.85).setOrigin(0, 0.5).setDepth(100));
       this.sprites.add(this.add.rectangle(BX, BY, BW, 7, 0x2a1418, 1).setOrigin(0, 0.5).setDepth(100.5));
       const frac = Math.max(0, boss.hp / Math.max(1, boss.maxHp));
@@ -6758,16 +14560,16 @@ export class PlayScene extends Phaser.Scene {
       }
       for (const mark of [0.6, 0.3])
         this.sprites.add(this.add.rectangle(BX + BW * mark, BY, 1, 9, 0xffe9a8, 0.8).setOrigin(0.5).setDepth(102));
-      this.ftext("boss:title", BX, BY - 11, "THE FLOOR'S MASTER", {
-        fontFamily: "monospace", fontSize: `${Math.round(7 * ZOOM)}px`, color: "#ffe9a8",
+      this.ftext("boss:title", BX, BY - 11, t("hud.bossTitle"), {
+        fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(7, ZOOM) * ZOOM)}px`, color: "#ffe9a8",
       }).setScale(1 / ZOOM).setOrigin(0, 0.5).setDepth(102);
-      this.ftext("boss:phase", BX + BW, BY - 11, `phase ${["I", "II", "III"][boss.phase - 1] ?? boss.phase}`, {
-        fontFamily: "monospace", fontSize: `${Math.round(7 * ZOOM)}px`, color: boss.phase >= 3 ? "#ff9a6a" : "#c9cfe8",
+      this.ftext("boss:phase", BX + BW, BY - 11, t("hud.bossPhase", { n: ["I", "II", "III"][boss.phase - 1] ?? boss.phase }), {
+        fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(7, ZOOM) * ZOOM)}px`, color: boss.phase >= 3 ? "#ff9a6a" : "#c9cfe8",
       }).setScale(1 / ZOOM).setOrigin(1, 0.5).setDepth(102);
       this.fadeIfCovering(bossFade, BX - 2, BY - 18, BW + 4, 26);
     }
 
-    const topFade = this.sprites.getLength();
+    const topFade = this.fadeMark();
     this.sprites.add(topBacking);
     const hpMax = (MAX_HEARTS + w.player.mods.maxHearts) * HP_PER_HEART;
     const hp = Math.max(0, Math.round(w.player.hearts * HP_PER_HEART));
@@ -6780,8 +14582,18 @@ export class PlayScene extends Phaser.Scene {
     if (this.atlas.has("ui_heart_full"))
       this.sprites.add(this.add.image(HUD_BAR_X - 2, HP_Y, this.uiTextureKey, "ui_heart_full")
         .setOrigin(1, 0.5).setDisplaySize(12, 12).setDepth(101));
+    /*
+     * The number on the bar, outlined.
+     *
+     * White on the red fill and white on the dark empty track are two very
+     * different contrasts, and the text crosses from one to the other as the
+     * bar drains — so at half health the left half of `30/60` was legible and
+     * the right half was not. A dark stroke round the glyphs makes the
+     * contrast the same wherever the fill happens to end.
+     */
     this.ftext("hud:hp", HUD_BAR_X + HUD_BAR_W / 2, HP_Y, `${hp}/${hpMax}`, {
-      fontFamily: "monospace", fontSize: `${Math.round(7 * ZOOM)}px`, color: "#ffffff",
+      fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(7, ZOOM) * ZOOM)}px`, color: "#ffffff",
+      stroke: "#0d0b1f", strokeThickness: 2.5 * ZOOM,
     }).setScale(1 / ZOOM).setOrigin(0.5).setDepth(102);
 
     /*
@@ -6821,53 +14633,169 @@ export class PlayScene extends Phaser.Scene {
       this.add.rectangle(BAR_X, BAR_Y, BAR_W * filled, 7, 0x6fa8ff, 1)
         .setOrigin(0, 0.5).setDepth(101),
     );
+    /*
+     * **What the next cast costs, marked on the bar.**
+     *
+     * A cost is a share of the cap (doc 013), so it is a *position* on this
+     * gauge rather than a number to subtract — and the question the player is
+     * asking while the bar refills is "am I there yet", which a mark answers
+     * and a number does not. The mark follows the key last pressed, which is
+     * the key they are waiting on; the boss bar's phase marks are the same
+     * one-pixel tick, so the HUD only has one idea of a threshold.
+     *
+     * On a refusal the shortfall itself is lit: the band between where the
+     * bar is and where the mark is, which says *how far short* in the one
+     * place the player is already looking.
+     */
+    // Before the first press it is the first key that holds a spell, so the
+    // mark is on the bar from the start rather than appearing once the player
+    // has already been refused.
+    const markKey = this.lastSpellKey ?? w.spells.findIndex((x) => !!x);
+    const lastSlot = markKey < 0 ? null : w.spells[markKey] ?? null;
+    const lastCost = lastSlot ? slotCost(lastSlot, ITEMS, w.staff) : 0;
+    const shortCue = this.refusedWhy === "mana" && this.refusedMs > 0
+      ? this.refusedMs / REFUSED_MANA_MS : 0;
+    if (lastSlot && lastCost > 0 && lastCost <= w.staff.mana_max) {
+      const tick = BAR_X + BAR_W * (lastCost / w.staff.mana_max);
+      const short = w.player.mana < lastCost;
+      if (shortCue > 0)
+        this.sprites.add(this.add.rectangle(BAR_X + BAR_W * filled, BAR_Y, Math.max(1, tick - (BAR_X + BAR_W * filled)), 7, 0xff8877, 0.55 * shortCue)
+          .setOrigin(0, 0.5).setDepth(101.4));
+      /*
+       * Two-tone, because the mark crosses from the bar's light blue fill to
+       * its dark track as the bar drains: a gold hairline alone disappeared
+       * into a full bar exactly when it was worth seeing. Under the `now/max`
+       * number (depth 102), because a spell costing half the pool puts the
+       * mark exactly where the number is and the number has to win.
+       */
+      this.sprites.add(this.add.rectangle(tick, BAR_Y, 3, 11, 0x0d0b1f, 0.85).setDepth(101.7));
+      this.sprites.add(this.add.rectangle(tick, BAR_Y, 1, 11,
+        short ? 0xff9a88 : 0xffe9a8, 1).setDepth(101.75));
+    }
     if (this.atlas.has("ui_mana_pip"))
       // The same size as the heart beside the bar above, so the two gauges
       // read as a pair; the pip's own scale was half again as tall.
       this.sprites.add(this.add.image(BAR_X - 2, BAR_Y, this.uiTextureKey, "ui_mana_pip")
-        .setOrigin(1, 0.5).setDisplaySize(12, 12).setDepth(101).setTint(0x8fdcff));
-    // The number, as on the health bar: what the player is adding costs against.
+        .setOrigin(1, 0.5).setDisplaySize(12, 12).setDepth(101)
+        // The pip brightens with the refusal, so the gauge as a whole is seen
+        // to answer rather than one band of it changing colour.
+        .setTint(shortCue > 0 ? 0xffb0a0 : 0x8fdcff));
+    if (shortCue > 0)
+      this.sprites.add(this.add.rectangle(BAR_X, BAR_Y, BAR_W, 7, 0, 0)
+        .setOrigin(0, 0.5).setStrokeStyle(1, 0xffb0a0, shortCue).setDepth(101.6));
+    // The number, as on the health bar: what the player is adding costs
+    // against, outlined for the same reason the health number is.
     this.ftext("hud:mana", BAR_X + BAR_W / 2, BAR_Y, `${Math.floor(w.player.mana)}/${w.staff.mana_max}`, {
-      fontFamily: "monospace", fontSize: `${Math.round(7 * ZOOM)}px`, color: "#ffffff",
+      fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(7, ZOOM) * ZOOM)}px`, color: "#ffffff",
+      stroke: "#0d0b1f", strokeThickness: 2.5 * ZOOM,
     }).setScale(1 / ZOOM).setOrigin(0.5).setDepth(102);
 
-    this.fadeIfCovering(topFade, 0, 0, HUD_BAR_X + HUD_BAR_W + 16, 30);
+    /*
+     * **Experience, under the two bars it feeds** (`run/levels.ts`).
+     *
+     * Thinner than health and mana and without a number on it, because it is
+     * not a resource the player spends or budgets: the only questions it
+     * answers are "what level am I" and "am I nearly there", and a bar plus a
+     * level answers both without asking to be read. It sits third because it
+     * is the one of the three that is never urgent.
+     *
+     * The band the last kills paid is drawn **ahead of the settled fill**, in
+     * white, and fades over `XP_FLASH_MS`. That is the whole of the per-kill
+     * feedback: several kills in one beat merge into one wider band by
+     * construction, and nothing is ever drawn over the fight.
+     */
+    this.xpFlashMs = Math.max(0, this.xpFlashMs - this.game.loop.delta);
+    if (this.xpFlashMs <= 0) this.xpFlash = 0;
+    const XP_Y = HUD_TOP_Y + 20;
+    const xp = levelAt(w.xp);
+    const fill = Math.max(0, Math.min(1, xp.into / Math.max(1, xp.toNext)));
+    // Where the bar stood before the flash, so the lit band is what was gained.
+    const was = Math.max(0, Math.min(fill, (xp.into - this.xpFlash) / Math.max(1, xp.toNext)));
+    this.sprites.add(this.add.rectangle(HUD_BAR_X, XP_Y, HUD_BAR_W, 4, 0x27351f, 1).setOrigin(0, 0.5).setDepth(100));
+    this.sprites.add(this.add.rectangle(HUD_BAR_X, XP_Y, HUD_BAR_W * was, 4, 0x6fc46a, 1).setOrigin(0, 0.5).setDepth(101));
+    if (fill > was)
+      this.sprites.add(this.add.rectangle(HUD_BAR_X + HUD_BAR_W * was, XP_Y, HUD_BAR_W * (fill - was), 4, 0xe8ffd8, 1)
+        .setOrigin(0, 0.5).setDepth(101.2).setAlpha(0.35 + 0.65 * (this.xpFlashMs / XP_FLASH_MS)));
+    /*
+     * The level, in the column the heart and the mana pip stand in. Left-aligned
+     * inside the plate rather than right-aligned to the bar: "Lv 10" is wider
+     * than "Lv 1" and the right-aligned version grew out through the plate's
+     * left edge on the way there.
+     */
+    this.ftext("hud:level", HUD_INSET - 6, XP_Y, t("hud.level", { n: w.level }), {
+      fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(6, ZOOM) * ZOOM)}px`, color: "#a8f0a0",
+    }).setScale(1 / ZOOM).setOrigin(0, 0.5).setDepth(102);
+
+    this.fadeIfCovering(topFade, 0, 0, HUD_BAR_X + HUD_BAR_W + 16, 38);
     this.drawActionBar(w);
+    this.drawDirectorBadge();
 
     /*
-     * The HUD names the beat the player is in, because the two beats after a
-     * fight are new and neither is self-explanatory the first time: a reward
-     * on the floor could be scenery, and a shut portal could be broken.
+     * The status line is gone: the reward rising beside the player and the
+     * portals opening in front of them say the beat themselves, and a muted
+     * game is heard.
+     *
+     * The one line left on it was the cleared run's — "…  —  R to run again" —
+     * and it never went away, because nothing ever cleared it and R was not
+     * bound to anything. The results card (`showVictory`) says both, once.
      */
-    const beat = this.won ? `${this.tookLabel}  —  R to run again`
-      : w.player.hearts <= 0 ? ""
-      : this.tookMs > 0 ? `took ${this.tookLabel}`
-      : w.rewardPending ? "a reward waits in the middle"
-      : w.portals.some((p) => p.open) ? "step into a portal"
-      : worldCleared(w) ? "cleared"
-      : "";
-    this.hud.setText(
-      // Mana is the bar below; printing it as a percentage as well was the
-      // same number twice, in the units the bar exists to avoid.
-      // Only what the player needs told: the beat, and a muted game. The room
-      // number, stage and enemy count are on the Tab screen and the debug panel.
-      [beat, this.sfx.isMuted() ? "muted (M)" : ""].filter(Boolean).join("  ·  "),
-    );
+    this.hud.setText("");
     this.hud.setVisible(this.hud.text.length > 0);
+    /*
+     * What was just gained: above the action bar, fading over its last half
+     * second. The win's own toast is a short beat before the results card,
+     * so it runs the clock down like every other one rather than being
+     * pinned by `won`.
+     */
+    const showToast = this.tookMs > 0 && !!this.tookLabel;
+    this.toast.box.setVisible(showToast);
+    if (showToast) {
+      this.toast.setText(this.tookLabel);
+      this.toast.box.setPosition(UI_W / 2, UI_H - 62).setAlpha(Math.min(1, this.tookMs / 500));
+    }
+    this.hud.setY(MINIMAP_TOP + w.room.extent.h * minimapCell(w.room.extent) + 6);
     /*
      * Gold as a coin and a number, beside the body's gauges: the pickup's own
      * frame, so the thing on the floor and the count in the corner are
      * visibly the same thing.
      */
     // Top right, on its own: the one number the player carries between rooms.
-    const goldText = this.ftext("hud:gold", VIEW_W - 10, HUD_TOP_Y + 3, `${this.runGold + w.gold}`, {
-      fontFamily: "monospace", fontSize: `${Math.round(9 * ZOOM)}px`, color: "#ffd45e",
+    // Right-aligned to the same inset the minimap under it uses, so the two
+    // share an edge instead of each finding their own.
+    const goldFade = this.fadeMark();
+    const goldText = this.ftext("hud:gold", UI_W - HUD_INSET - 4, HUD_TOP_Y, `${this.runGold + w.gold}`, {
+      fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(9, ZOOM) * ZOOM)}px`, color: "#ffd45e",
     }).setScale(1 / ZOOM).setOrigin(1, 0.5).setDepth(102);
-    const goldX = VIEW_W - 10 - goldText.displayWidth - 8;
-    this.sprites.add(this.add.rectangle(goldX - 8, HUD_TOP_Y + 3, VIEW_W - goldX + 4, 16, 0x0d0b1f, 0.6).setOrigin(0, 0.5).setDepth(99));
+    const goldX = UI_W - HUD_INSET - 4 - goldText.displayWidth - 8;
+    this.sprites.add(this.add.rectangle(goldX - 8, HUD_TOP_Y, UI_W - HUD_INSET + 2 - (goldX - 8), 16, 0x0d0b1f, 0.8)
+      .setOrigin(0, 0.5).setStrokeStyle(1, 0x2a2750, 0.8).setDepth(99));
     if (this.atlas.has("pickup_coin_0"))
-      this.sprites.add(this.add.image(goldX, HUD_TOP_Y + 3, this.uiTextureKey, "pickup_coin_0")
+      this.sprites.add(this.add.image(goldX, HUD_TOP_Y, this.uiTextureKey, "pickup_coin_0")
         .setOrigin(0.5).setDisplaySize(11, 11).setDepth(102));
+    this.fadeIfCovering(goldFade, goldX - 8, HUD_TOP_Y - 8, UI_W - HUD_INSET + 2 - (goldX - 8), 16);
+
+    /*
+     * The two HUD widgets that outlive the frame fade from the same test.
+     *
+     * The minimap is one Graphics and the hint strip one container, both made
+     * at start-up and only redrawn, so neither is in the frame's group nor in
+     * the kept texts: `fadeIfCovering` cannot reach them. They set their own
+     * alpha instead, every frame, so it is restored as the body walks off.
+     */
+    const map = this.minimapGfx;
+    if (map?.visible) {
+      const cell = minimapCell(w.room.extent);
+      const mw = w.room.extent.w * cell, mh = w.room.extent.h * cell;
+      const mx = UI_W - mw - HUD_INSET;
+      map.setAlpha(this.bodyUnder(mx - 3, MINIMAP_TOP - 3, mw + 6, mh + 6) ? HUD_FADE : 1);
+    }
+    const strip = this.hintStrip;
+    if (strip?.visible) {
+      const b = strip.getBounds();
+      strip.setAlpha(this.bodyUnder(b.x, b.y, b.width, b.height) ? HUD_FADE : 1);
+    }
+    // Last, over everything the HUD set for itself this frame.
+    this.drawCinema();
   }
 }
 
@@ -6886,7 +14814,7 @@ function down(k: Phaser.Input.Keyboard.Key | undefined): boolean {
 /**
  * One enemy stride, in px.
  *
- * The same yardstick as the player's `WALK_FRAME_PX`, and deliberately shared:
+ * The same yardstick as the player's walk (`WALK_CYCLE_PX` over four frames), and deliberately shared:
  * when every body advances a frame per fixed distance rather than per fixed
  * time, weight falls out of the speeds already in the roster. A rusher at 112
  * px/s runs its cycle at 5 fps and a tank at 52 plods at 2.4, with nothing
@@ -6909,14 +14837,26 @@ function spikeColour(e: Enemy): number {
  * poses (`attacks.ts`), and the elite forms of the old roster, each of which
  * has its own drawing. Null for none.
  */
+/** Variants drawn from a model of their own, whose poses are their own case in `specialPose`. */
+const OWN_POSES: ReadonlySet<string> = new Set(["lancer"]);
+
 function specialPose(w: World, e: Enemy): string | null {
-  switch (e.archetype) {
+  // By the base body: a variant is drawn from its base's sheet and does its
+  // base's moves, so keying on the variant's own id left every one of them
+  // without its poses. A variant with a model of its own (the lancer) keeps
+  // its own case.
+  switch (OWN_POSES.has(e.archetype) ? e.archetype : baseArchetype(e.archetype)) {
     case "warden":
       // The drawn aim: raised to load, levelled to fire, and held level
       // through the start of the reload while the smoke clears.
       if (e.pose === "musket_windup") return "windup";
       if (e.pose === "musket_fire" || e.pose === "musket_second") return "lunge";
       if (e.pose === "musket_reload" && e.poseMs > 800) return "lunge";
+      // The shield bash: the plate comes up, then goes through. It borrows the
+      // gun's two frames rather than asking for art it has not been drawn — a
+      // heavy body raising and driving reads the same either way.
+      if (e.attack === "windup") return "windup";
+      if (e.attack === "lunge") return "lunge";
       return null;
     case "bellringer":
       if (e.pose === "cast") return e.poseMs > 260 ? "windup" : "cast";
@@ -6928,6 +14868,9 @@ function specialPose(w: World, e: Enemy): string | null {
       return null;
     case "snarecaster":
       if (e.pose === "windup_hook") return "windup";
+      // The lash: the chain is coming round its own feet, so it is holding
+      // the same wound-up stance the throw used (doc 005, the snarecaster).
+      if (e.pose === "lash_windup") return "windup";
       if (e.pose === "fire" || e.pose === "anchor_cast") return e.pose;
       if (w.tethers.some((t) => t.kind === "hook" && t.from === e.id && t.phase === "hold")) return "whip";
       return null;
@@ -6956,16 +14899,265 @@ function specialPose(w: World, e: Enemy): string | null {
     case "lancer":
       return e.spikeMs > 0 ? "burst" : null;
     case "boss":
-      // Its own attack poses, per phase: the slam and the leap, then the blade.
-      if (e.bossCast === "slam") return "slam";
-      if (e.bossCast === "leap") return "leap";
+      if (e.armourBreakMs > 0 || e.staggerMs > 0)
+        return e.armourBreakMs > 0 || e.staggerMs > STAGGER_MS * .5 ? "stagger1" : "stagger0";
+      /*
+       * The Crypt King's poses (doc 020). A ground strike is the greatsword
+       * raised through the telegraph and brought down on the commit — held
+       * low while the band goes out — so the moment the floor breaks is the
+       * moment the sword arrives, rather than a standing body the ground
+       * cracks beside. The quake is the same blow; its floor tells them apart.
+       */
+      /*
+       * **The ceremony**: until his first turn he stands as he rose from the
+       * throne, the sword planted before him and both hands on the pommel,
+       * breathing, while his name goes up. Then the guard, and the fight.
+       */
+      // Walking down from the throne: his stride, on the clock rather than the ground, since he is drawn moving.
+      {
+        const walk = bossEntrance.get(e.id);
+        if (walk) return `walk${Math.floor(walk.ms / 110) % 6}`;
+      }
+      if (e.bossLastAct === "" && e.attack === "approach" && e.bossCast === "none") {
+        // Every phase has the pair (art order B8); a sheet without it falls back to the idle (`safeFrame`).
+        return ((w.tick / 48) | 0) % 2 === 0 ? "ceremony0" : "ceremony1";
+      }
+      // Lifted through the raise (`slam_lift`), driven in on the commit (`slam_drive`), knelt on while it rings out (`slam`).
+      if (e.bossCast === "slam" || e.bossCast === "quake")
+        return e.bossCastMs > 0 ? "slam_lift" : -e.bossCastMs < BOSS_DRIVE_MS ? "slam_drive" : "slam";
+      // The storm: the greatsword held straight up over his head for all of it (art order B8, `storm`).
+      if (e.bossCast === "storm") return "storm";
+      // The leap: low for the gather, the sword over his head in the air, low again on the landing.
+      if (e.bossCast === "leap")
+        return e.airborne ? "leap_air" : e.bossCastMs > 0 ? "leap_gather" : -e.bossCastMs < BOSS_DRIVE_MS ? "slam_drive" : "slam";
+      // Aim is a held threat; only show the chain leaving the body when the
+      // simulation's tether actually leaves its aim phase.
+      if (e.bossCast === "hook")
+        return w.tethers.some((t) => t.alive && t.from === e.id && t.kind === "hook" && t.phase !== "aim")
+          ? "hook" : "hook_wind";
+      // The greatsword's cuts, frame by frame from their sequences (`BOSS_BLADE_FRAMES`).
+      {
+        const blade = bossBladeFrame(e);
+        if (blade !== undefined) return blade?.replace("~", "") ?? null;
+      }
+      if (e.meleeKind === "maul" && e.attack === "windup") return "leap_gather";
+      if (e.meleeKind === "maul" && e.attack === "lunge") return "backhand";
       if (e.attack === "windup") return "windup";
-      if (e.attack === "lunge") return "commit";
+      if (e.attack === "lunge") return (e.attackMs ?? 0) > 90 ? "commit" : "follow";
+      if (e.attack === "recover" && (e.attackMs ?? 0) > 280) return "follow";
       return null;
     default:
       return null;
   }
 }
+
+/**
+ * Whether the king is drawn mirrored. His sheet has one facing, so the roster's
+ * facing rule never mirrored him and every cut, throw and cast went to the
+ * right of the screen whichever side the player was on. His action frames are
+ * drawn acting to his right (the screen's) — the sweeps crossing his front
+ * from right to left — so he is mirrored whenever the action goes the other
+ * way: for a blade, as it was armed, held for the whole attack so he does not
+ * turn round mid-swing; for the hook, towards the player; otherwise not at all.
+ */
+/**
+ * The king walking down from his throne after the entrance (`tickKingIntro`):
+ * how far into the walk, and how far above where his body stands he started,
+ * px. Drawn only — the body is on the floor at the foot of the dais throughout.
+ */
+const bossEntrance = new Map<number, { ms: number; dy: number }>();
+/** How far up the dais steps the king is drawn now, px (negative is up), easing down to his feet. */
+function bossEntranceLift(e: Enemy): number {
+  const walk = bossEntrance.get(e.id);
+  if (!walk) return 0;
+  const t = Math.min(1, walk.ms / KING_DESCEND_MS);
+  return walk.dy * (1 - t * (2 - t));
+}
+
+function bossFlip(w: World, e: Enemy): boolean {
+  let left: boolean;
+  const wide = e.attack !== "approach" ? bossWideCut(e) : null;
+  if (wide) return wide.flip;
+  if (e.attack !== "approach") {
+    // A sweep across his front is drawn right to left; one coming back left to right is it mirrored.
+    // Every other cut is drawn going to his right, and is mirrored going left.
+    left = e.meleeKind === "greatsweep" || e.meleeKind === "greatslash"
+      ? e.swing.sweep < 0
+      : Math.cos(e.swing.facing) < 0;
+  }
+  /*
+   * Between turns, never. He faces the camera, and his walk is drawn with the
+   * sword in his right hand; mirrored towards the player it went to his left,
+   * and pacing across in front of them it changed hands at every leg. Only a
+   * blade, or a move with a side (the hook, the dashcut), is ever mirrored.
+   */
+  else left = e.bossCast === "hook" ? w.player.x < e.x : false;
+  // A key marked `~` in its sequence is drawn the other way round from the cut it belongs to (`BOSS_BLADE_FRAMES`).
+  return bossBladeFrame(e)?.endsWith("~") ? !left : left;
+}
+
+/**
+ * How far across the king's frame is moved so his body stands where he does,
+ * world px: his frames put the body at a different place across each
+ * (`RecolourableAtlas.bodyCentreX`), and a cut read as the whole king
+ * jumping from side to side, doubled when it was mirrored for the stroke
+ * coming back.
+ */
+/**
+ * How much larger to draw a king's frame so it is his idle's size. Several of
+ * his action frames were delivered drawn smaller — a cut's windup at three
+ * quarters, the cleave's raise and the dashcut at two thirds — so he shrank
+ * into every attack and grew back out of it. The armour a frame shows
+ * (`RecolourableAtlas.bodyArea`) is nearly the same in every pose, so its
+ * root against the idle's is the drawing's scale. Only ever enlarged, not
+ * for the few percent a pose hides behind an arm, and never past half again.
+ * Art order B8 asks for the frames to be redrawn to one scale; this goes to
+ * 1 by itself when they are.
+ */
+function bossFrameScale(atlas: RecolourableAtlas, name: string): number {
+  const ref = /^boss_p\d/.exec(name)?.[0];
+  if (!ref || !atlas.has(`${ref}_idle0`) || !atlas.has(name)) return 1;
+  const s = Math.sqrt(atlas.bodyArea(`${ref}_idle0`) / Math.max(1, atlas.bodyArea(name)));
+  return s < BOSS_SCALE_DEADBAND ? 1 : Math.min(BOSS_SCALE_MAX, s);
+}
+const BOSS_SCALE_DEADBAND = 1.12;
+const BOSS_SCALE_MAX = 1.45;
+
+function bossBodyShift(atlas: RecolourableAtlas, name: string, flipX: boolean): number {
+  if (!atlas.has(name)) return 0;
+  const w = atlas.frame(name).w;
+  const c = atlas.bodyCentreX(name);
+  return (w / 2 - (flipX ? w - c : c)) / ART_SCALE;
+}
+
+/*
+ * **The king's cuts, as sequences of drawn keys** (doc 020, art order B8;
+ * `boss-king-anchors.json` lists them). Each part of a cut — its windup, its
+ * strike, its recovery — is split evenly among its keys, and the frame snaps
+ * from one to the next with nothing between (大起大落). The sweeps' strike
+ * carries the sword across his front, right to left as drawn; the cleave's and
+ * the dashcut's go to his right. `bossFlip` mirrors each the other way.
+ *
+ * A key ending `~` is drawn mirrored against its cut. The sweeps' recovery
+ * keys were drawn for a sword finishing on the other side from where the
+ * strike leaves it, so the blade jumped across him as the cut ended; turned
+ * round, the follow-through stays low on the side the cut went to, and the
+ * sword comes back to the middle as he stands.
+ */
+type BladeFrames = { windup: readonly string[]; strike: readonly string[]; recovery: readonly string[] };
+const BOSS_BLADE_FRAMES: Partial<Record<MeleeKind, BladeFrames>> = {
+  greatsweep: {
+    windup: ["sweep_wind"],
+    strike: ["sweep_enter", "sweep_cross", "sweep_mid", "sweep_cut"],
+    recovery: ["sweep_recover~", "sweep_reset~"],
+  },
+  greatcleave: {
+    windup: ["windup", "cleave_raise"],
+    strike: ["cleave_fall", "cleave_cut"],
+    recovery: ["cleave_hold", "recover"],
+  },
+  dashcut: {
+    windup: ["leap_gather"],
+    strike: ["dash_cut"],
+    recovery: ["dash_skid", "recover"],
+  },
+};
+// The light slash is too quick (160 ms) for the sweep's four strike keys, which flickered past unread:
+// wound back, then the end of the cut held — two keys, 大起大落.
+BOSS_BLADE_FRAMES.greatslash = {
+  windup: ["sweep_wind"],
+  strike: ["sweep_cut"],
+  recovery: ["sweep_recover~", "sweep_reset~"],
+};
+/**
+ * **The cleave at a player in front of him**: straight down towards the
+ * camera — raised over his head, and the sword planted in the floor before
+ * his feet — rather than the side cut, which went off to his right whoever
+ * it was aimed at.
+ */
+const BOSS_CLEAVE_FRONT: BladeFrames = {
+  windup: ["windup"],
+  strike: ["cleave_stuck"],
+  recovery: ["cleave_stuck", "idle0"],
+};
+/*
+ * **The wide cuts** (art order B8, `boss-king/wide/choreography.json`): the
+ * string drawn in 336 px cells. A sweep or a slash is the front cut (the
+ * sword from his right across to his left, as drawn) or the return (back the
+ * other way), by which way this blow goes against the string's opening one;
+ * the cleave at a player before him is the vertical finisher. The whole
+ * string is mirrored or not together (`Enemy.bossComboFlip`). Used wherever
+ * the phase has them; the 256 px keys above otherwise.
+ */
+/** How long the sword is being driven into the floor before he kneels on it, after a ground strike's commit. */
+const BOSS_DRIVE_MS = 140;
+const WIDE_FRONT: BladeFrames = {
+  windup: ["sweep_front_wind"], strike: ["sweep_front_enter", "sweep_front_mid", "sweep_front_cut"], recovery: ["sweep_front_cut"],
+};
+// The slash is quick (160 ms): the front cut's last two keys, so neither flickers past unread.
+const WIDE_FRONT_SLASH: BladeFrames = {
+  windup: ["sweep_front_wind"], strike: ["sweep_front_mid", "sweep_front_cut"], recovery: ["sweep_front_cut"],
+};
+const WIDE_BACK: BladeFrames = {
+  windup: ["sweep_back_wind"], strike: ["sweep_back_cross", "sweep_back_cut"], recovery: ["sweep_back_cut"],
+};
+const WIDE_CLEAVE: BladeFrames = {
+  windup: ["cleave_front_raise"], strike: ["cleave_front_fall", "cleave_front_cut"], recovery: ["cleave_front_follow"],
+};
+/** Whether the sheet has a frame, for the drawing helpers below that are not handed the atlas; set by `drawEnemy`. */
+let bossArtHas: (name: string) => boolean = () => false;
+/** The wide sequence this blade is drawn from and whether it is mirrored, or null where the phase has none. */
+function bossWideCut(e: Enemy): { seq: BladeFrames; flip: boolean } | null {
+  const has = (k: string) => bossArtHas(`boss_p${Math.min(3, Math.max(1, e.phase))}_${k}`);
+  const inString = e.bossStringN > 1;
+  if (bossCleavesFront(e) && has("cleave_front_raise"))
+    return { seq: WIDE_CLEAVE, flip: inString ? e.bossComboFlip : Math.cos(e.swing.facing) < 0 };
+  if ((e.meleeKind === "greatsweep" || e.meleeKind === "greatslash") && has("sweep_front_wind")) {
+    const front = (e.swing.sweep < 0) === e.bossComboFlip;
+    return { seq: front ? (e.meleeKind === "greatslash" ? WIDE_FRONT_SLASH : WIDE_FRONT) : WIDE_BACK, flip: e.bossComboFlip };
+  }
+  return null;
+}
+/** How far above his feet a king's frame is centred, px: from its pivot where it has one (the wide cuts), else the 256 px cells' floor line. */
+function bossRiseFor(atlas: RecolourableAtlas, name: string): number {
+  const pivot = atlas.bossAnchor(name)?.pivot;
+  if (!pivot || !atlas.has(name)) return BOSS_DRAW_RISE_PX;
+  return (pivot[1] - atlas.frame(name).h / 2) / ART_SCALE - BOSS_FOOT_PX;
+}
+
+/**
+ * Whether his blade is the cleave — always the vertical cut, whichever side
+ * it is thrown to: raised over the head and brought straight down in front
+ * of him, mirrored to the player's side (`bossWideCut`).
+ */
+function bossCleavesFront(e: Enemy): boolean {
+  return e.meleeKind === "greatcleave";
+}
+
+/** The key a king's blade is on now, or undefined when it has no sequence (the backhand keeps its own). */
+function bossBladeFrame(e: Enemy): string | null | undefined {
+  const seq = bossWideCut(e)?.seq ?? (bossCleavesFront(e) ? BOSS_CLEAVE_FRONT : e.meleeKind ? BOSS_BLADE_FRAMES[e.meleeKind] : undefined);
+  const spec = e.meleeKind ? MELEE_ATTACKS[e.meleeKind] : null;
+  if (!seq || !spec) return undefined;
+  const pick = (keys: readonly string[], t: number): string => keys[Math.min(keys.length - 1, Math.max(0, Math.floor(t * keys.length)))]!;
+  if (e.attack === "windup") return pick(seq.windup, 1 - e.attackMs / Math.max(1, e.windupMs));
+  if (e.attack === "lunge") return pick(seq.strike, 1 - Math.max(0, e.attackMs) / Math.max(1, spec.lungeMs));
+  if (e.attack === "recover") {
+    // Between the blows of a string there is no recovery: the cut's last key holds into the next.
+    if (e.bossString.length > 0) return seq.strike[seq.strike.length - 1]!;
+    return pick(seq.recovery, bossRecovering(e));
+  }
+  return null;
+}
+
+/** How far through its recovery the king's blade is, 0 to 1 (the time left is `attackMs`). */
+function bossRecovering(e: Enemy): number {
+  const spec = e.meleeKind ? MELEE_ATTACKS[e.meleeKind] : null;
+  // Between the blows of a string there is no recovery to show: the next blow is already coming.
+  if (!spec || e.attack !== "recover" || e.bossString.length > 0) return 0;
+  return Math.max(0, Math.min(1, 1 - e.attackMs / Math.max(1, spec.recoverMs)));
+}
+
 
 /** The sheet a body is drawn from; the boss changes sheet with its phase. */
 function frameBaseOf(e: Enemy): string {
@@ -6981,6 +15173,9 @@ function drawEnemy(
   group: Phaser.GameObjects.Group,
   /** A kept text by key (the scene's `ftext`), so a mark over a head is not rebuilt each frame. */
   label?: (key: string, x: number, y: number, text: string, style: Phaser.Types.GameObjects.Text.TextStyle) => Phaser.GameObjects.Text,
+  /** The subspecies palette swaps and marks (doc 019), absent on a plain body. */
+  subspecies?: SubspeciesVisuals,
+  replacementFrame?: string,
 ): void {
   /*
    * Roused, but not yet alerted: close enough to be standing, not close
@@ -6994,18 +15189,23 @@ function drawEnemy(
    * Under the floor, the body is not drawn at all: the mound is (see
    * `drawExpansion`). What cannot be hit must not be seen as a target.
    */
-  if (e.archetype === "delver" && e.delve === "under") return;
+  if ((e.archetype === "delver" || e.archetype === "burrower") && e.delve === "under") return;
   const chosen = enemyFrame(
     {
       ...e, roused,
+      sleeping: !e.awake && e.idleRole === "sleeper",
       recoversBraced: ENEMIES[e.archetype].melee === "charge",
+      flinches: e.archetype !== "boss",
+      idlesInStride: e.archetype === "boss",
       stationary: ENEMIES[e.archetype].behaviour === "stationary",
-      special: specialPose(w, e),
+      // The storm's raise stands in for its own drawing until that is packed.
+      special: ((sp) => sp === "storm" && !atlas.has(`${frameBaseOf(e)}_storm`) ? "windup" : sp)((bossArtHas = (n) => atlas.has(n), specialPose(w, e))),
     },
     w.tick, (n) => atlas.has(n), frameBaseOf(e),
   );
-  const name = safeFrame(atlas, chosen.name, `${frameBaseOf(e)}_idle0`);
-  const flipX = chosen.flipX;
+  const name = replacementFrame && atlas.has(replacementFrame)
+    ? replacementFrame : safeFrame(atlas, chosen.name, `${frameBaseOf(e)}_idle0`);
+  const flipX = e.archetype === "boss" ? bossFlip(w, e) : chosen.flipX;
 
 
 
@@ -7025,60 +15225,83 @@ function drawEnemy(
    * slow heavy archetype barely bobs and barely leans, which is what weight
    * looks like.
    */
+  /*
+   * Which way this body is throwing itself, and which way it was hit from.
+   * The lunge direction is locked by the sim at the end of the windup; before
+   * that the body is still tracking, so the gather leans at the player.
+   */
+  const toPlayer = Math.hypot(w.player.x - e.x, w.player.y - e.y) || 1;
+  const attackDir = e.lungeX || e.lungeY
+    ? { x: e.lungeX, y: e.lungeY }
+    : { x: (w.player.x - e.x) / toPlayer, y: (w.player.y - e.y) / toPlayer };
+  const hitDir = { x: (e.x - w.player.x) / toPlayer, y: (e.y - w.player.y) / toPlayer };
   const lightness = Math.min(1, ENEMIES[e.archetype].speed / 112);
-  const bob = speed > 12
+  // Not the king: a body that size bobbing on every step read as bouncing (doc 020); his walk is drawn (art order B8).
+  const bob = speed > 12 && e.archetype !== "boss"
     // On the same stride as the walk cycle, so the bob lands with a footfall.
     ? Math.sin((e.travelled / strideFor(e.radius)) * Math.PI) * 1.3 * lightness
     : 0;
+  /*
+   * **In the air** (`Enemy.bossLift`): the body is lifted off its own ground
+   * position and its shadow is left behind on the floor, tightened and
+   * darkened as it goes up.
+   *
+   * The shadow is the whole of what makes a leap readable. The sim moves the
+   * boss along the ground line while it flies, so the shadow closing on the
+   * landing mark *is* the clock: the player is not timing a sprite in the air,
+   * they are watching a spot on the floor they have to be off.
+   */
+  const lift = e.bossLift ?? 0;
+  const airK = Math.min(1, Math.abs(lift) / 84);
   const shadowName = `shadow_${ENEMY_FRAME[e.archetype].replace("enemy_", "")}`;
   if (atlas.has(shadowName)) {
     const shadow = scene.add.image(
-      e.x, e.y + shadowOffset(atlas, name, shadowName), textureKey, shadowName,
+      e.x, e.y + (e.archetype === "boss" ? bossShadowOffset(atlas, shadowName) + bossEntranceLift(e) : shadowOffset(atlas, name, shadowName)), textureKey, shadowName,
     ).setOrigin(0.5)
-      .setScale(shadowScale(atlas, name, shadowName), 1 / ART_SCALE)
+      .setScale(shadowScale(atlas, name, shadowName) * (1 - 0.45 * airK), (1 - 0.45 * airK) / ART_SCALE)
       .setDepth(3)
-      .setAlpha(e.awake ? 0.5 : 0.34);
+      .setAlpha((e.awake ? 0.5 : 0.34) * (1 - 0.25 * airK));
     group.add(shadow);
   } else {
     const shadow = scene.add.ellipse(
-      e.x, e.y + e.radius * 0.66, e.radius * 1.55, e.radius * 0.62, 0,
+      e.x, e.y + e.radius * 0.66,
+      e.radius * 1.55 * (1 - 0.45 * airK), e.radius * 0.62 * (1 - 0.45 * airK), 0,
     );
-    shadow.setFillStyle(0x0d0b1f, e.awake ? 0.4 : 0.28);
+    shadow.setFillStyle(0x0d0b1f, (e.awake ? 0.4 : 0.28) * (1 - 0.25 * airK));
     shadow.setDepth(3);
     group.add(shadow);
   }
 
 
 
-  const img = scene.add.image(e.x, e.y + bob, textureKey, name)
+  const img = scene.add.image(
+    e.x + (e.archetype === "boss" ? bossBodyShift(atlas, name, flipX) : 0),
+    e.y + bob - (e.archetype === "boss" ? bossRiseFor(atlas, name) - bossEntranceLift(e) : 0), textureKey, name,
+  )
     .setOrigin(0.5)
-    .setDepth(6)
+    .setDepth(bodyDepth(e.y + e.radius, e.id))
     .setFlipX(flipX);
+
   /*
-   * A waddle for the sheets whose walk cycle has no steps in it. The
-   * expansion bodies were delivered with one standing column per facing, and
-   * the pipeline's `legs` motion shifts the same pixels the same way for all
-   * four walk frames, so their walks are four identical stills (measured: 0%
-   * difference, against 23–65% for the drawn cycles). Until they are drawn,
-   * the body rocks from foot to foot on its own stride: a small tilt, a lift
-   * on each step and a settle as it lands.
+   * **The leap, drawn as an arc.** The body is never hidden and never moved
+   * by the renderer: it is lifted by exactly the height the sim is carrying,
+   * over exactly the ground position the sim has it at. It squashes into the
+   * gather (`bossLift` goes slightly negative), stretches off the floor, and
+   * lands on the frame the sim says it lands.
    */
-  let waddle = 0;
-  if (STILL_WALKS.has(e.archetype) && /_walk[0-3]$/.test(name)) {
-    const phase = (e.travelled / strideFor(e.radius, e.speed)) * Math.PI * 0.5;
-    // Pivot at the feet, so the tilt rocks the body over them rather than spinning it.
-    img.setOrigin(0.5, 0.82).setY(img.y + (img.height / ART_SCALE) * 0.32 - Math.abs(Math.sin(phase)) * 1.6);
-    waddle = Math.sin(phase) * 0.06;
+  if (e.archetype === "boss" && lift !== 0) {
+    // Lifted only: the gather and the flight are drawn frames, and squashing
+    // them on top read as the king being pressed flat.
+    img.y -= lift;
+    img.setDepth(bodyDepth(e.y + e.radius, e.id) + (lift > 0 ? 3 : 0));
   }
-  // The boss's leap: it rises out of the frame, is gone while airborne, and
-  // drops onto the mark (drawn by `drawEnemyBlades`).
-  if (e.archetype === "boss" && e.bossCast === "leap" && e.bossCastMs > 0) {
-    const elapsed = BOSS_LEAP_MS - e.bossCastMs;
-    if (elapsed < BOSS_LEAP_RISE_MS) img.y -= (elapsed / BOSS_LEAP_RISE_MS) * 60;
-    else img.setVisible(false);
-  }
-  // Slamming: a shudder in the plant.
-  if (e.archetype === "boss" && e.bossCast === "slam" && e.bossCastMs > 0) img.x += Math.sin(w.tick * 2.3) * 1.2;
+  /*
+   * **Slamming**: the body rises onto the raise and comes down on the plant,
+   * so the shockwave has something visible to come out of. A shudder alone
+   * read as the boss standing still and the ring appearing by itself.
+   */
+  // The slam's raise and plant are the `windup` and `slam` frames now; the
+  // body is no longer bounced up and down under them.
   /*
    * Elemental statuses show on the body. The sim has carried burn, poison and
    * slow for a while and nothing about the sprite said so — a burning body
@@ -7097,22 +15320,37 @@ function drawEnemy(
   if (e.archetype === "sentinel" && e.hp > 0 && e.spawnFadeMs <= 0) {
     const aim = e.awake ? seenPlayer(w, e) : { x: e.x + 1, y: e.y };
     const a = Math.atan2(aim.y - e.y, aim.x - e.x);
-    if (atlas.has("weapon_enemy_sentinel_barrel"))
-      group.add(scene.add.image(e.x, e.y - 3, textureKey, "weapon_enemy_sentinel_barrel")
-        .setOrigin(0.2, 0.5).setRotation(a).setScale(1 / ART_SCALE).setDepth(6.1));
+    if (atlas.has("weapon_enemy_sentinel_barrel")) {
+      const barrel = scene.add.image(e.x, e.y - 3, textureKey, "weapon_enemy_sentinel_barrel")
+        .setOrigin(0.2, 0.5).setRotation(a).setScale(1 / ART_SCALE)
+        // Just inside the body band, so it stays over its own body and still
+        // sorts against the others by where that body is standing.
+        .setDepth(bodyDepth(e.y + e.radius, e.id) + 0.002);
+      // The barrel is part of the body: it flashes with it when struck.
+      if (e.hitFlashMs > 0) barrel.setTintFill(0xffffff);
+      group.add(barrel);
+    }
   }
   /*
    * An elite body is **enraged**: the warm pink cast the player picked out
    * on a tinted body and asked for on every elite, plus the ring at its feet
    * below. It goes with the speed and attack rate the sim gives it.
    */
+  /*
+   * **A subspecies is its base, recoloured, with one mark** (doc 019).
+   *
+   * The swap is a pipeline rather than a tint, so the tint below stays free
+   * for the states that own it — the hit flash, the freeze, the slow and the
+   * elite's warm cast. A body can be a pinner *and* enraged, and read as both.
+   */
+  if (isSubspecies(e.archetype) && e.hp > 0) subspecies?.apply(img, e.archetype);
   if (e.affixes.length > 0 && e.hp > 0) img.setTint(0xffa8b8);
 
   // Fire and poison gauges, as the player has them: filling on hits, the
   // status's clock once it runs.
   if (e.hp > 0 && e.spawnFadeMs <= 0 && (e.burnBuild > 0 || e.poisonBuild > 0 || e.chillBuild > 0)) {
-    // Above the armour bar when there is one (it sits at radius + 9).
-    const gy = e.y - e.radius - (e.maxArmour > 0 && e.armour > 0 ? 14 : 9);
+    // Above the armour bar when there is one (it sits at `overheadPx`).
+    const gy = e.y - overheadPx(e) - (e.maxArmour > 0 && e.armour > 0 ? 5 : 0);
     const bars: [number, number][] = [];
     if (e.burnBuild > 0) bars.push([e.burnBuild, e.burnMs > 0 ? 0xffb050 : 0xc0602a]);
     if (e.poisonBuild > 0) bars.push([e.poisonBuild, e.poisonMs > 0 ? 0x9ff07a : 0x4f9a40]);
@@ -7166,9 +15404,19 @@ function drawEnemy(
   // Leaning into travel costs nothing and reads as weight — from the velocity
   // it is steering at rather than the one it was shoved to.
   const lean = Math.max(-0.14, Math.min(0.14, (e.velX / 900) * lightness));
-  img.setRotation((speed > 12 ? lean * (flipX ? -1 : 1) : 0) + waddle);
+  img.setRotation(speed > 12 ? lean * (flipX ? -1 : 1) : 0);
 
-  const base = (1 / ART_SCALE) * (e.affixes.length > 0 ? 1.1 : 1);
+  /*
+   * The king's frames drawn smaller than his idle are drawn up to its size
+   * (`bossFrameScale`), from his feet: the body's middle and the foot line
+   * stay where they were.
+   */
+  const bossScale = e.archetype === "boss" ? bossFrameScale(atlas, name) : 1;
+  if (bossScale !== 1) {
+    img.x += bossBodyShift(atlas, name, flipX) * (bossScale - 1);
+    img.y -= (atlas.contentBottom(name) - atlas.frame(name).h / 2) * (bossScale - 1) / ART_SCALE;
+  }
+  const base = (1 / ART_SCALE) * (e.affixes.length > 0 ? 1.1 : 1) * bossScale;
 
   // A body still arriving is drawn by the spawn block below, awake or not.
   // This branch came first and caught every dormant spawn — which is every
@@ -7184,6 +15432,7 @@ function drawEnemy(
     img.setScale(base);
     if (e.hitFlashMs > 0) img.setTintFill(0xffffff);
     group.add(img);
+    drawSubspeciesMark(scene, group, textureKey, atlas, e, img, name, flipX);
     return;
   }
 
@@ -7194,7 +15443,8 @@ function drawEnemy(
    * and the ring says how long there is left to answer it.
    */
   if (e.attack === "windup") {
-    const t = 1 - e.attackMs / MELEE_WINDUP_MS;
+    // Against this body's own windup, which its tempo and jitter set (doc 005).
+    const t = 1 - e.attackMs / Math.max(1, e.windupMs);
     const ring = scene.add.circle(e.x, e.y, e.radius + 22 * (1 - t), 0, 0);
     ring.setStrokeStyle(2, 0xff6a6a, 0.85);
     ring.setDepth(5);
@@ -7237,7 +15487,7 @@ function drawEnemy(
      * HUD vocabulary not already taken — ice is the pale cyan.
      */
     const W = Math.max(16, e.radius * 2.2);
-    const y = e.y + bob - e.radius - 9;
+    const y = e.y + bob - overheadPx(e);
     const back = scene.add.rectangle(e.x - W / 2, y, W, 3, 0x0f1c3a, 0.9)
       .setOrigin(0, 0.5).setDepth(9);
     const fill = scene.add.rectangle(
@@ -7264,28 +15514,29 @@ function drawEnemy(
     const pop = Math.min(1, (ALERT_MS - e.alertMs) / 90);
     if (atlas.has("icon_status_alert")) {
       group.add(scene.add.image(e.x, e.y - e.radius - 14 - (1 - pop) * 4, textureKey, "icon_status_alert")
-        .setOrigin(0.5).setScale(0.9 * (0.6 + 0.4 * pop)).setDepth(8));
+        .setOrigin(0.5).setScale((0.9 * (0.6 + 0.4 * pop)) / TUNED).setDepth(8));
     } else if (label) {
       label(`alert:${e.id}`, e.x, e.y - e.radius - 12, "!", {
-        fontFamily: "monospace", fontSize: "12px", color: "#ffe9a8",
+        fontFamily: fontFamily(), fontSize: "12px", color: "#ffe9a8",
       }).setOrigin(0.5).setDepth(8);
     }
   }
   /*
    * **One status mark over the head**, the delivered icons, the one that
-   * matters most first: frozen, stunned, burning, poisoned, chilled, reeling.
-   * The gauges say how full; the mark says what it is.
+   * matters most first: frozen, stunned, burning, poisoned, chilled. Not the
+   * brief reel every hit gives, which is in the flash and the body's recoil;
+   * its mark — a cracked shield — came up on every blow and read as armour
+   * breaking. The gauges say how full; the mark says what it is.
    */
   if (e.hp > 0 && e.spawnFadeMs <= 0) {
     const status = e.frozenMs > 0 ? "freeze"
       : e.staggerMs > 400 ? "stun"
       : e.burnMs > 0 ? "burn"
       : e.poisonMs > 0 ? "poison"
-      : e.chillBuild > 0.3 ? "chill"
-      : e.staggerMs > 0 ? "stagger" : null;
+      : e.chillBuild > 0.3 ? "chill" : null;
     if (status && atlas.has(`icon_status_${status}`))
       group.add(scene.add.image(e.x + e.radius * 0.9, e.y - e.radius - 8, textureKey, `icon_status_${status}`)
-        .setOrigin(0.5).setScale(0.62).setDepth(9.65));
+        .setOrigin(0.5).setScale(0.62 / TUNED).setDepth(9.65));
   }
   /*
    * Asleep: a small "z" drifting up, so a sleeper — the body the player can
@@ -7294,7 +15545,7 @@ function drawEnemy(
   if (!e.awake && e.idleRole === "sleeper" && e.hp > 0 && e.spawnFadeMs <= 0 && e.wakeDelayMs <= 0) {
     const u = ((w.tick + e.id * 17) % 90) / 90;
     label?.(`sleep:${e.id}`, e.x + 5 + u * 4, e.y - e.radius - 6 - u * 10, "z", {
-      fontFamily: "monospace", fontSize: `${Math.round(7 * ZOOM)}px`, color: "#c9cfe8",
+      fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(7, ZOOM) * ZOOM)}px`, color: "#c9cfe8",
     }).setOrigin(0.5).setScale(1 / ZOOM).setAlpha(0.8 * (1 - u)).setDepth(8);
   }
   /*
@@ -7449,7 +15700,213 @@ function drawEnemy(
    */
   if (e.hitFlashMs > 0) img.setTintFill(0xffffff);
 
+  /*
+   * The motion the frames do not carry (`body-feel.ts`): the give as a foot
+   * lands, the gather and overshoot of an attack between its drawn keys, the
+   * flinch of a hit arriving mid-frame, the squash through a turn. Applied
+   * last and multiplied over whatever the branches above set, because it is
+   * *on top of* what the body is doing rather than one of the things it does.
+   */
+  const feel = bodyFeel({
+    weight: weightOf(e.radius),
+    framePx: enemyFramePx(atlas, name),
+    tick: w.tick,
+    attack: e.attack,
+    attackMs: e.attackMs,
+    aimX: attackDir.x, aimY: attackDir.y,
+    hitMs: e.hitFlashMs,
+    hitX: hitDir.x, hitY: hitDir.y,
+    travelled: e.travelled,
+    stride: strideFor(e.radius, ENEMIES[e.archetype].speed),
+    moving: speed > 12 && e.archetype !== "boss",
+    hover: HOVERING_BODIES.has(e.archetype),
+    sinceTurn: turnAge(e.id, flipX, w.tick),
+  });
+  // The king's frames carry his weight; squashed on top of them he read as soft.
+  if (e.archetype !== "boss") img.setScale(img.scaleX * feel.scaleX, img.scaleY * feel.scaleY);
+  img.x += feel.offX;
+  img.y += feel.offY;
+  img.setRotation(img.rotation + feel.tilt);
+
+  /*
+   * **Calling the storm**: a blue glow off his whole outline, pulsing out
+   * from him — his own frame behind him, filled pale blue, added, a little
+   * larger on each pulse and fading as it swells, like a drop shadow of
+   * light. Only while the storm is in hand.
+   */
+  if (e.archetype === "boss" && e.bossCast === "storm") {
+    const beat = (w.tick % 24) / 24;
+    for (const [k, a] of [[0, 0.55], [0.5, 0.35]] as const) {
+      const t = (beat + k) % 1;
+      const glow = scene.add.image(img.x, img.y, textureKey, name)
+        .setOrigin(img.originX, img.originY).setFlipX(img.flipX).setRotation(img.rotation)
+        .setScale(img.scaleX * (1.02 + 0.08 * t), img.scaleY * (1.02 + 0.08 * t))
+        .setTintFill(0x7fc8ff).setBlendMode(Phaser.BlendModes.ADD).setAlpha(a * (1 - t))
+        .setDepth(img.depth - 0.0005);
+      group.add(glow);
+    }
+  }
+
   group.add(img);
+  // The king's frames are to carry his sword (doc 020, art order B8: his cuts go to his sides, so a
+  // drawn sword can match them). Until the atlas packs those frames, the sword is placed here.
+  if (BOSS_PLACED_SWORD && e.archetype === "boss" && e.hp > 0 && !replacementFrame && atlas.has("weapon_boss_sword")) {
+    const grip = atlas.bossAnchor(name)?.grip ?? [128, 112];
+    const gx = img.x + (flipX ? 128 - grip[0] : grip[0] - 128) / ART_SCALE;
+    const gy = img.y + (grip[1] - 128) / ART_SCALE;
+    // The authored weapon points up; rotate its grip to the simulation's
+    // instantaneous blade angle. A planted idle carries it diagonally so the
+    // longer blade's tip brushes the floor instead of sinking through it.
+    let blade = flipX ? Math.PI / 4 : 3 * Math.PI / 4;
+    /*
+     * The cut in two held keys rather than a turn (大起大落): through the middle
+     * of the arc for its first two fifths, then at the end of it. The hitbox
+     * still sweeps continuously; only the drawn sword snaps.
+     */
+    if (e.swing.active && e.attack === "lunge") {
+      const spec = e.meleeKind ? MELEE_ATTACKS[e.meleeKind] : null;
+      const t = spec ? 1 - Math.max(0, e.attackMs) / Math.max(1, spec.lungeMs) : 1;
+      const half = (e.swing.sweepDeg * Math.PI) / 360;
+      blade = e.swing.facing + e.swing.sweep * (t < 0.4 ? 0 : half);
+    }
+    else if (name.endsWith("_slam") || name.endsWith("_cleave_stuck") || name.includes("_stagger"))
+      blade = flipX ? Math.PI / 6 : 5 * Math.PI / 6;
+    else if (e.attack === "windup" && e.meleeKind === "greatsweep")
+      blade = e.swing.facing - e.swing.sweep * e.swing.sweepDeg * Math.PI / 360;
+    else if (e.attack === "windup" || e.bossCast === "leap" && e.airborne)
+      blade = -Math.PI / 2;
+    // Held along the cut for the first half of the recovery; back at guard, with the frame, for the second.
+    else if (e.attack === "recover" && e.meleeKind && e.meleeKind !== "charge" && bossRecovering(e) < 0.5)
+      blade = e.swing.angle;
+    const sword = scene.add.image(gx, gy, textureKey, "weapon_boss_sword")
+      .setOrigin(.5, 158 / 192)
+      .setScale(1 / ART_SCALE)
+      .setRotation(blade + Math.PI / 2)
+      .setDepth(img.depth + (Math.sin(blade) < -.3 ? -.002 : .002));
+    if (e.hitFlashMs > 0) sword.setTintFill(0xffffff);
+    group.add(sword);
+    const fist = `weapon_boss_fist_p${Math.min(3, Math.max(1, e.phase))}`;
+    if (atlas.has(fist)) {
+      const wrap = scene.add.image(gx, gy, textureKey, fist)
+        .setScale(1 / ART_SCALE).setDepth(img.depth + .004);
+      if (e.hitFlashMs > 0) wrap.setTintFill(0xffffff);
+      group.add(wrap);
+    }
+  }
+  drawSubspeciesMark(scene, group, textureKey, atlas, e, img, name, flipX);
+}
+
+/**
+ * **The half of a subspecies that reads at 1x** (doc 019): one small sprite —
+ * a horn, a lens, a plume — hung off the base body at the `mark` anchor.
+ *
+ * The palette swap is the other half, and on its own it is not enough. A hue
+ * shift on a 32-unit body, in a busy room, on a floor the same room has just
+ * tinted, is a difference the player can be shown and still not see; a
+ * silhouette that is not the one they learned is a difference they cannot
+ * miss. So this is drawn whether or not the swap ran, and it is drawn from the
+ * atlas rather than tinted in code, because it is art.
+ *
+ * It is placed **from the frame's own anchor** (`markAnchors`), which rides
+ * the pose: the point moves with the part it hangs from, through the walk, the
+ * windup and the sleep, so the horn stays on the head instead of drifting
+ * across it. A pose that hides that part carries no anchor, and then there is
+ * no mark on that frame — which is a body facing away from its own horn, not
+ * a rendering fault.
+ *
+ * Everything the body is doing is already on `img` by the time this runs — the
+ * scale, the lean, the bob, the spawn climb, the motion layer's offsets — so
+ * the mark is placed in the body's own frame and carried through it, rather
+ * than recomputing any of it. The hit flash is the one state it copies: a
+ * struck body has to flash whole.
+ */
+function drawSubspeciesMark(
+  scene: Phaser.Scene,
+  group: Phaser.GameObjects.Group,
+  textureKey: string,
+  atlas: RecolourableAtlas,
+  e: Enemy,
+  img: Phaser.GameObjects.Image,
+  frameName: string,
+  flipX: boolean,
+): void {
+  if (!isSubspecies(e.archetype) || e.hp <= 0 || !img.visible) return;
+  const facing = (/_([snw])_/.exec(frameName)?.[1] ?? "s") as "s" | "n" | "w";
+  const mark = markFrame(e.archetype, facing);
+  const at = atlas.markAnchor(frameName);
+  if (!at || !atlas.has(mark)) return;
+
+  // The anchor, from art px in the frame to the body's own space: mirrored
+  // with the body, scaled as the body is, turned as the body is.
+  const rect = atlas.frame(frameName);
+  const ax = (at[0] - rect.w / 2) * (flipX ? -1 : 1) * img.scaleX;
+  const ay = (at[1] - rect.h / 2) * img.scaleY;
+  const cos = Math.cos(img.rotation), sin = Math.sin(img.rotation);
+
+  const decal = scene.add.image(
+    img.x + ax * cos - ay * sin,
+    img.y + ax * sin + ay * cos,
+    textureKey, mark,
+  )
+    .setOrigin(0.5)
+    .setFlipX(flipX)
+    .setRotation(img.rotation)
+    .setAlpha(img.alpha)
+    .setScale(img.scaleX, img.scaleY)
+    // Just over its own body, inside the band `bodyDepth` reserves, so it
+    // still sorts against other bodies by where this one is standing.
+    .setDepth(img.depth + 0.004);
+  if (e.hitFlashMs > 0) decal.setTintFill(0xffffff);
+  group.add(decal);
+}
+
+/** Bodies with no feet, which sway on a clock instead of stepping. */
+const HOVERING_BODIES = new Set(["shooter", "orbiter", "sower"]);
+
+/**
+ * How long ago a body flipped between facing west and east, in ticks.
+ *
+ * The only thing the motion layer remembers, and it is a fact about the
+ * drawing rather than about the world: the sim has no notion of the sprite
+ * having been mirrored. Keyed by the body's id, and dropped wholesale when it
+ * grows past a room's worth so a long run cannot leak.
+ */
+const lastFlip = new Map<number, { flipped: boolean; at: number }>();
+function turnAge(id: number, flipX: boolean, tick: number): number | undefined {
+  if (lastFlip.size > 512) lastFlip.clear();
+  const seen = lastFlip.get(id);
+  if (!seen || seen.flipped !== flipX) {
+    lastFlip.set(id, { flipped: flipX, at: tick });
+    return seen ? 0 : undefined;
+  }
+  return tick - seen.at;
+}
+
+/** A frame's height in art px, for snapping the motion layer's scale to the grid. */
+function enemyFramePx(atlas: RecolourableAtlas, name: string): number {
+  return atlas.has(name) ? atlas.frame(name).h : 64;
+}
+
+/**
+ * Where a body sits in the play field's stack, by its feet.
+ *
+ * Every enemy drew at a flat depth of 6, so two bodies overlapping were
+ * ordered by whichever Phaser happened to add first — a tank in front of a
+ * rusher drew behind it, and a spike coming up between them could only be in
+ * front of both or behind both. Sorting by the foot line is what makes an
+ * overlap read as depth.
+ *
+ * The band is deliberately narrow, a sixteenth of a depth unit across the
+ * whole room, so everything already keyed to 6.1 and above keeps the order it
+ * had; the body's own attachments sit just inside it. Ties are broken by id
+ * rather than left to the insertion order, because two bodies that share a y
+ * and swap every frame flicker.
+ */
+const BODY_LAYER = 6;
+const BODY_LAYER_SPAN = 0.06;
+function bodyDepth(footY: number, id: number): number {
+  const t = Math.max(0, Math.min(1, footY / (GRID_H * TILE_PX)));
+  return BODY_LAYER + t * BODY_LAYER_SPAN + (id & 15) * 1e-6;
 }
 
 /** Door types, in the order doc 003 offers them. */
@@ -7472,6 +15929,20 @@ function safeFrame(atlas: RecolourableAtlas, name: string, fallback: string): st
   // Loud, because silence is what let this reach the screen twice.
   console.warn(`[frames] no "${name}" in the sheet; drew "${fallback}" instead`);
   return atlas.has(fallback) ? fallback : "player_s_idle0";
+}
+
+/** How many frames the fountain's water shimmers over. */
+const FOUNTAIN_SHIMMER_FRAMES = 3;
+
+/**
+ * The fountain's frame: one still drawing once it is dry, and a short water
+ * loop while it is full. The dry state is the whole point of the animation —
+ * moving water says *there is a drink here*, and stopping it is how the
+ * fountain says it has been taken without a line of text.
+ */
+function fountainFrame(dry: boolean, tick: number): string {
+  if (dry) return "prop_fountain_dry_0";
+  return `prop_fountain_${Math.floor(tick / 10) % FOUNTAIN_SHIMMER_FRAMES}`;
 }
 
 /**
@@ -7500,6 +15971,22 @@ function bulletFrame(b: Bullet, tick: number, enemy: boolean): string {
 
 /** How long one impact burst lasts: three frames at about 50 ms each. */
 const IMPACT_MS = 150;
+/** How long before a `collapse` pull implodes that it starts drawing itself in. */
+const COLLAPSE_GATHER_MS = 520;
+/**
+ * A free dash cut waits this long before it is drawn: past the sword's own
+ * hit flash (`HIT_FLASH_MS`, 60) and its slash mark, so the two are seen as
+ * two blows. Then it takes `FREE_CUT_MS` to pass through.
+ */
+const FREE_CUT_DELAY_MS = 90;
+/** How far a stance's guard leans the held staff forward from upright, toward the facing, in degrees. */
+const GUARD_STAFF_LEAN_DEG = 48;
+const FREE_CUT_MS = 170;
+/** A stance's answering spin: how long the full sweep takes, and how long the weak one. */
+const ANSWER_MS = 200;
+const ANSWER_WEAK_MS = 160;
+/** How far above its mark a meteor's rock is when the mark goes down, in world px. */
+const METEOR_FALL_PX = 190;
 
 /**
  * What a spell looks like, by element.
@@ -7520,58 +16007,18 @@ const IMPACT_MS = 150;
  * fire is unreadable as fire — so it is pushed to amber, about 70 degrees
  * away, and only the glow carries it; the sprite itself stays pale.
  */
-const ELEMENT_TINT: Readonly<Record<Element, { core: number; glow: number }>> = {
-  none: { core: 0xe4faff, glow: 0x4fd2ff },
-  fire: { core: 0xfff1c0, glow: 0xffc44a },
-  ice: { core: 0xf2fbff, glow: 0x8fdcff },
-  poison: { core: 0xe8ffd4, glow: 0x6fdc5a },
-};
-
-/**
- * What a **named spell** looks like, where the element alone is not enough.
- *
- * Element gives a colour, which separates fire from frost and no more: the
- * five unelemented attacks were one cyan dot at five sizes, and a player
- * cannot learn which key they pressed from that. This table is the per-spell
- * layer on top — its own light, and a `shape` the renderer draws differently.
- *
- * Every shape is drawn in code (`projectiles.ts`): a round sprite in a tint
- * made a needle, a spit and a dart the same ball. `lightning` is a bolt along
- * the shot's recent path, which no sprite can carry, because its length
- * changes every frame and an arc between two bodies is a different line each
- * time.
+/*
+ * The tables themselves are core's (`render/spell-look.ts`). They moved there
+ * when the `chain` affix started releasing a copy of the spell that made it:
+ * "the same shape and the same element" is a claim about identity, and a
+ * claim the simulation makes has to be one a test can check.
  */
 type SpellLook = ProjectileLook;
-const SPELL_LOOK: Readonly<Record<string, SpellLook>> = {
-  magic_bolt: { core: 0xe4faff, glow: 0x4fd2ff, shape: "dart" },
-  shock_arc: { core: 0xffffff, glow: 0x9ad2ff, shape: "lightning" },
-  arc_lance: { core: 0xffffff, glow: 0x7fb4ff, shape: "lightning" },
-  spark_spray: { core: 0xfff6d6, glow: 0xffd45e, shape: "spark" },
-  scatter_shot: { core: 0xffeccc, glow: 0xffa94f, shape: "pellet" },
-  stone_shard: { core: 0xe9dcc4, glow: 0xb08a58, shape: "rock" },
-  ember_dart: { core: 0xfff1c0, glow: 0xff8a3a, shape: "flame" },
-  frost_needle: { core: 0xf2fbff, glow: 0x7fd0ff, shape: "needle" },
-  venom_spit: { core: 0xe8ffd4, glow: 0x6fdc5a, shape: "glob" },
-  glacier_spike: { core: 0xf2fbff, glow: 0x7fd0ff, shape: "spike" },
-  void_orb: { core: 0xd9c6ff, glow: 0x7a4fd6, shape: "orb" },
-  plague_bloom: { core: 0xe8ffd4, glow: 0x6fdc5a, shape: "bubbles" },
-  cinder_burst: { core: 0xfff1c0, glow: 0xff8a3a, shape: "flame" },
-  spirit_blades: { core: 0xf4f0ff, glow: 0xb9a7ff, shape: "blade" },
-  spirit_ally: { core: 0xe6fff4, glow: 0x7fe8c0, shape: "dart" },
-};
-
-/** A shot with no spell of its own takes its element's shape. */
-const ELEMENT_SHAPE: Readonly<Record<Element, SpellLook["shape"]>> = {
-  none: "dart", fire: "flame", ice: "needle", poison: "glob",
-} as Record<Element, SpellLook["shape"]>;
 
 /** The look for a shot: its spell's if it has one, else its element's. */
 function lookOf(b: Bullet, spells: World["spells"]): SpellLook {
   const slot = b.spellIndex >= 0 ? spells[b.spellIndex] : null;
-  const named = slot ? SPELL_LOOK[slot.item.base] : undefined;
-  if (named) return named;
-  const t = ELEMENT_TINT[b.element] ?? ELEMENT_TINT.none;
-  return { core: t.core, glow: t.glow, shape: ELEMENT_SHAPE[b.element] ?? "dart" };
+  return spellLookOf(slot ? slot.item.base : null, b.element);
 }
 
 /**
@@ -7724,7 +16171,7 @@ function simplifyPath(pts: readonly { x: number; y: number }[], tol: number): { 
   return [...left.slice(0, -1), ...simplifyPath(clean.slice(at), tol)];
 }
 
-/** The flash where a shot is born: at the hand, or where a carrier bursts. */
+/** The flash where a shot is born: at the hand, or where an affix casts it. */
 const CAST_MS = 140;
 /** The fizzle where a shot stops without a body: a wall, or its own lifetime. */
 const PUFF_MS = 170;
@@ -7742,15 +16189,6 @@ const TRAIL_POINTS = 10;
  */
 const REWARD_BEAM_H = 190;
 
-/**
- * What a gold room pays.
- *
- * Larger than the gold *card* in a mixed offer, because taking that card
- * costs two other cards while a gold room costs a whole room — the player
- * gave up a spell, an affix and a stat by walking through that portal, and
- * the payout has to be worth a room rather than worth a card.
- */
-const GOLD_ROOM_VALUE = GOLD_CARD_VALUE * 2;
 
 /**
  * What the merchant charges, by kind. Doc 003's economy: 15 / 30 / 50 for
@@ -7775,27 +16213,83 @@ function damageColour(what: string): string {
 }
 
 /** The four build styles of doc 003's intent screen, and what each starts with. */
-const STYLES: readonly { id: "spam" | "nuke" | "area" | "dot" | "melee"; name: string; desc: string }[] = [
-  { id: "spam", name: "Barrage", desc: "Many cheap casts, kept up. Fast spells that chain and fan out." },
-  { id: "nuke", name: "Heavy", desc: "Few big hits, placed well. Slow, expensive spells that end fights." },
-  { id: "area", name: "Crowd", desc: "Hit many at once. Bursts, rings and ground that rewards a bunched room." },
-  { id: "dot", name: "Affliction", desc: "Burn and poison. Let it tick, and keep moving while it does." },
-  { id: "melee", name: "Blade", desc: "Live in sword range. Spells that circle and strike close, cast by the sword itself." },
-];
-const STYLE_START: Readonly<Record<"spam" | "nuke" | "area" | "dot" | "melee", string>> = {
-  spam: "shock_arc", nuke: "stone_shard", area: "scatter_shot", dot: "ember_dart", melee: "spirit_blades",
-};
+/**
+ * The style screen's layout, in one place.
+ *
+ * The card's width and gap decide both the row of styles and the panel under
+ * it — and the demo camera's viewport, which is placed over a box drawn on
+ * that panel. Three copies of `-190` is how the panel came to be 60 px
+ * narrower than the row it belonged to.
+ */
+const STYLE_CARD_W = 116;
+const STYLE_CARD_GAP = 10;
+/** The demo stage's box, on the left of the preview panel. */
+const STYLE_STAGE_W = 170;
+const STYLE_STAGE_H = 80;
+const STYLE_STAGE_Y = 262;
+/**
+ * The free-text field's box, in room coordinates.
+ *
+ * One definition, because the canvas draws the box and a DOM `<input>` is
+ * laid exactly over it; two copies of these numbers would be two boxes a few
+ * pixels apart, which is the kind of drift a player sees as a rendering bug.
+ */
+function intentFieldBox(): { x: number; y: number; w: number; h: number } {
+  const w = 380;
+  return { x: UI_W / 2 - w / 2, y: 348, w, h: 18 };
+}
+
+/** The style cards' row, edge to edge: the preview panel matches it. */
+function styleRowWidth(): number {
+  return STYLES.length * STYLE_CARD_W + (STYLES.length - 1) * STYLE_CARD_GAP;
+}
+
+/** The demo stage's centre x, inset from the panel's left edge. */
+function styleStageX(): number {
+  return UI_W / 2 - styleRowWidth() / 2 + 10 + STYLE_STAGE_W / 2;
+}
+
+/** The five style cards, from the one place they are written (`STYLE_CARDS`). */
+const STYLES: readonly { id: "spam" | "nuke" | "area" | "dot" | "melee"; name: string; desc: string }[] =
+  ARCHETYPES.map((id) => ({ id, ...STYLE_CARDS[id] }));
 
 const DAMAGE_NUMBERS_KEY = "jr-damage-numbers";
 const ROOM_PARAMS_KEY = "jr-room-params";
-const MUTE_KEY = "jr-muted";
+/** Where the sound setting is remembered. Off unless it says otherwise. */
+/**
+ * The melee attacks whose windup gathers rather than winds up.
+ *
+ * Two contours and two answers: a charge says a body is about to cross the
+ * room in a line, and is answered sideways; a slam says the ground is about
+ * to stop being ground, and is answered by leaving it. The sounds are shaped
+ * to match — one rises and tightens, the other falls and swells — so the
+ * answer can be chosen without looking away from what is in front of you.
+ */
+const SLAM_KINDS = new Set<MeleeKind>(["slam", "cleave", "bash", "whirlwind", "sweep", "greatsweep", "greatcleave"]);
+
+const SOUND_KEY = "jr.sound";
+/** Set once the first-launch key guide has been seen. */
+const SEEN_CONTROLS_KEY = "jr.seenControls";
+
+/** The stored sound setting. The old on/off switch stored "1" for on, which is read as the default style. */
+function soundStyle(): SoundStyle {
+  try {
+    const v = localStorage.getItem(SOUND_KEY);
+    return v === "8bit" || v === "16bit" ? v : v === "1" ? "8bit" : "off";
+  } catch { return "off"; }
+}
+
+function setSoundStyle(style: SoundStyle): void {
+  try { localStorage.setItem(SOUND_KEY, style); } catch { /* this session's only */ }
+}
 const SHAKE_KEY = "jr-shake";
 const SHAKE_SETTINGS = ["on", "reduced", "off"] as const;
 type ShakeSetting = (typeof SHAKE_SETTINGS)[number];
 /** How much of the trauma each setting lets reach the camera. */
 const SHAKE_LEVEL: Readonly<Record<ShakeSetting, number>> = { on: 1, reduced: 0.4, off: 0 };
 /** The camera's largest offset at full trauma, in world px. */
-const SHAKE_MAX_PX = 6;
+// World px: the camera is 1.5× nearer than the room view this was sized in, so 6 shook half as hard again on screen.
+const SHAKE_MAX_PX = 4;
 const DEALT_KEY = "jr-damage-dealt";
 const TAKEN_KEY = "jr-damage-taken";
 const INVINCIBLE_KEY = "jr-invincible";
@@ -7807,9 +16301,80 @@ interface FxSpark {
 }
 
 /** How long E is held over a floor spell to take it apart. */
+/**
+ * How far each of the player's own layers sits from the player's depth.
+ *
+ * A ten-thousandth is well under one body's slot in the band, so these order
+ * the player's own parts without ever crossing another body.
+ */
+const PLAYER_TRAIL = -0.0002;
+const PLAYER_HELD = 0.0001;
+const PLAYER_CONJURE = 0.0002;
+const PLAYER_GRIP = 0.00025;
+const PLAYER_MAGIC = 0.0003;
+const PLAYER_SWING = 0.0004;
+const PLAYER_FLAME = 0.0005;
+
 const FLOOR_HOLD_MS = 600;
 /** A press released sooner than this is a tap: pick up, not the start of a hold. */
 const FLOOR_TAP_MS = 200;
+
+/**
+ * The world prompt's panel, and the air it keeps under itself.
+ *
+ * The panel is `px + 11` tall and centred on the prompt's y — see `panel` in
+ * `ui/keycap.ts` — and the prompt is drawn at 9 px. `PROMPT_CLEAR` is what
+ * `promptAbove` leaves between that panel and whatever badge the prompt is
+ * placed over, so the two never touch whatever the art does.
+ */
+const PROMPT_PANEL_H = 9 + 11;
+const PROMPT_CLEAR = 5;
+
+/**
+ * How long a refused press is answered for.
+ *
+ * Short, because the answer is to a key that is pressed constantly: long
+ * enough to be seen as a response to *this* press, over before the next one.
+ * Mana gets the longer of the two because it is the refusal that asks the
+ * player to change what they are doing.
+ */
+const REFUSED_MANA_MS = 260;
+const REFUSED_QUIET_MS = 150;
+/**
+ * A cooldown refusal is held on the key longer than the quiet ones: it
+ * carries a number — the seconds still to wait — and a number has to be
+ * on screen long enough to be read.
+ */
+const REFUSED_COOLDOWN_MS = 480;
+/**
+ * A key refuses every frame it is held, so a refusal counts as a **fresh
+ * press** only when the same key was not refused for this long before it:
+ * the sound and the mark over the head answer presses, not frames.
+ */
+const REFUSAL_FRESH_MS = 120;
+/** The cooldown's mark over the head: how long it lasts, and the least gap between two. */
+const COOLDOWN_CUE_MS = 420;
+const COOLDOWN_CUE_EVERY_MS = 700;
+
+/**
+ * The mark over the player's head on a mana refusal: how long it lasts, and
+ * **how often it is allowed to appear at all**.
+ *
+ * Longer than the slot's shake, because it has a word in it to read, and
+ * gated at a gap of its own: a held key refuses every frame, and a fight can
+ * refuse eighty presses. One mark a second says the same thing without
+ * becoming the thing the player is watching instead of the fight.
+ */
+const MANA_CUE_MS = 520;
+const MANA_CUE_EVERY_MS = 900;
+
+/**
+ * The pause between the boss falling and the results card.
+ *
+ * Long enough to see the last body go and hear the clear sting, short enough
+ * that it reads as the run ending rather than as the game having stopped.
+ */
+const WIN_BEAT_MS = 1200;
 
 /** A spell lying on the floor, as it was when it came off its key. */
 interface FloorSpell {
@@ -7820,7 +16385,7 @@ interface FloorSpell {
 }
 
 /** A held spell's shape, as the card pool reads it. */
-type HeldShape = ReturnType<typeof itemShape>;
+type HeldShape = HeldSpell;
 
 /** A room's offer questions, built before the room is planned; see `offerRequest`. */
 interface OfferAsk {
@@ -7840,22 +16405,57 @@ interface PlanLine {
   readonly px?: number;
   /** A little space above: the start of a request. */
   readonly gap?: boolean;
+  /** The line in coloured pieces, as the debug sidebar marks it: what was chosen stands out. `text` is their sum. */
+  readonly spans?: readonly PlanSpan[];
 }
 
-/** Breaks text at spaces into lines of at most `max` characters. */
-function wrapWords(text: string, max: number): string[] {
-  const out: string[] = [];
-  let line = "";
-  for (const word of text.split(" ")) {
-    if (line && (line + " " + word).length > max) { out.push(line.trimEnd()); line = ""; }
-    line = line ? `${line} ${word}` : word;
-    while (line.length > max) { out.push(line.slice(0, max)); line = line.slice(max); }
-  }
-  if (line.trim()) out.push(line.trimEnd());
-  return out.length ? out : [""];
+interface PlanSpan {
+  readonly text: string;
+  readonly color: string;
+  readonly bold?: boolean;
 }
+
 /** The difficulty multiples the settings step through. */
 const MULT_STEPS: readonly number[] = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+/**
+ * The row the room plan keeps clear at the foot of every scrolling column for
+ * its "▾ more" hint, and the row its tabs sit on, which the "▴ more above"
+ * hint shares. Both are reserved rather than borrowed from a neighbour: the
+ * hints were drawn over the page title and over the footer once CJK took the
+ * line pitch it needs.
+ */
+const HINT_ROW_PX = 12;
+const TAB_Y = 62;
+
+/** Lines the room plan moves for a press, a held repeat or a wheel notch. */
+const PLAN_SCROLL_STEP = 1;
+/** A burrowing body cracks the floor this often, px travelled. */
+const BURROW_CRACK_EVERY_PX = 12;
+/** A kill pop's length, and the share of it that is the white flash before the drawn death frame shows; then it bursts. */
+const POP_MS = 160;
+const POP_FLASH_SHARE = 0.35;
+/** The filter over the death frame: a glow cooling from white-gold to ember as the body gives. */
+const POP_GLOW_HOT = 0xffe2a8;
+const POP_GLOW_COOL = 0xc8402a;
+/** Whether the option taken is not the one the distribution ranked first. */
+function drawnBelowTop(choice: string, probs: readonly (readonly [string, number])[]): boolean {
+  let top = -1;
+  for (const [, p] of probs) top = Math.max(top, p);
+  const mine = probs.find(([k]) => k === choice)?.[1];
+  return mine !== undefined && mine < top - 1e-9;
+}
+
+/** Two 0xRRGGBB colours mixed, `t` of the way from `a` to `b`. */
+function lerpColour(a: number, b: number, t: number): number {
+  const k = Math.max(0, Math.min(1, t));
+  const ch = (shift: number) => Math.round(((a >> shift) & 255) + ((((b >> shift) & 255) - ((a >> shift) & 255)) * k));
+  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+}
+/** A kill being shown: where, which death frame, which way it faced, and how long before it bursts. */
+interface KillPop { x: number; y: number; frame: string; flipX: boolean; ms: number }
+/** A held arrow on the room plan: the beat before it repeats, and a line every so often after. */
+const PLAN_REPEAT_DELAY_MS = 150;
+const PLAN_REPEAT_MS = 30;
 
 function readSetting(key: string, fallback: number): number {
   try {
@@ -7874,20 +16474,18 @@ const MUZZLE_WEIGHT: Readonly<Record<string, "s" | "m" | "l">> = {
   shooter: "m", orbiter: "m", summoner: "m", snarecaster: "m",
 };
 
-/** When each of the warden blast's six baked frames ends, in ms from the shot. */
-const BLAST_FRAME_MS = [45, 110, 220, 380, 600, 900] as const;
+/** How long the warden's muzzle smoke takes to thin out after the flash. */
+const MUSKET_SMOKE_MS = 420;
 
-/** Bodies whose delivered walk frames are all the same drawing; see the waddle in the body renderer. */
-const STILL_WALKS: ReadonlySet<string> = new Set(["warden", "bellringer", "snarecaster", "delver", "cinderling"]);
+/** When each of the warden blast's six baked frames ends, in ms from the shot. */
+// The fire keeps its pace; only the smoke frames at the tail are short.
+const BLAST_FRAME_MS = [45, 110, 220, 330, 430, 520] as const;
+
 
 /** How long a lesson stays up. */
 const TEACH_MS = 4500;
-const LESSONS: Readonly<Record<string, string>> = {
-  ward: "Stand on the link to cut it",
-};
-
-const SHOP_PRICE: Readonly<Record<string, number>> = {
-  stat: 20, affix: 30, spell: 45, gold: 0,
+const LESSONS: Readonly<Record<string, StringKey>> = {
+  ward: "prompt.cutTheLink",
 };
 
 /**
@@ -7911,17 +16509,306 @@ function shopKind(rng: { next(): number }): RewardCardKind {
  * a fractional size resamples and the card text is the smallest text in the
  * game — the one place a blur is least affordable.
  */
-const BODY_FITS: readonly (readonly [number, number])[] = [[7, 1], [7, 0], [6, 0], [6, -1], [5, 0]];
+/**
+ * In **whole multiples of the pixel font's 12 px**, largest first, with the
+ * leading each one gets.
+ *
+ * It used to be 7, 6 and 5 px against a scalable system font, and those steps
+ * mean nothing to a 12 px bitmap face: every one of them resampled, and the
+ * card body — the smallest text in the game — was the worst place for it. A
+ * body never goes below `1`, which is the face drawn at its own size; if the
+ * copy will not fit at that, the copy is cut rather than the type shrunk.
+ */
+const BODY_FITS: readonly (readonly [number, number])[] = [[4, 0.5], [3, 0.5], [3, 0.35], [3, 0.2]];
+
+/** A size in room units that renders the pixel font at `k` times its native 12. */
+function nativePx(k: number): number {
+  return (12 * k) / ZOOM;
+}
 
 /**
  * A run seed: the URL's `?seed=` if given, else a short random one. Random
  * from the clock and `Math.random`, which is exactly as unpredictable as a
  * roguelike needs and reproducible the moment it is written down.
  */
-function directorArm(): DirectorArm {
+/** Where the Director settings are remembered. */
+const DIRECTOR_KEY = "jr.director";
+const INVITE_KEY = "jr.invite";
+
+/**
+ * What the invitation dialog is currently saying about the code in its field.
+ *
+ * Every state is a sentence the player can act on, which is why "could not
+ * reach the server" and "not recognised" are separate: one says try again,
+ * the other says this code is wrong.
+ */
+type InviteStatus =
+  | "idle" | "checking" | "accepted" | "rejected" | "empty" | "cleared"
+  | "notNeededStatus" | "unreachable" | "tooMany";
+
+/**
+ * Whether this build may run Jev without an invite code.
+ *
+ * Only the dev server may: its proxy has no gate on it. A deployed build runs
+ * Jev on the **host's** key and lets an invite code decide whose requests may
+ * spend it, so without a code there is no Jev run to offer — the proxy would
+ * answer 401 and every request would fall back.
+ */
+const DEV_BUILD: boolean =
+  (import.meta as ImportMeta & { env?: Record<string, unknown> }).env?.["DEV"] === true;
+
+/**
+ * What the title menu's switch says, before the key is taken into account.
+ *
+ * `?director=` still wins, because a pinned URL is how a run is reproduced
+ * and a remembered setting must not quietly change what that URL does.
+ */
+function directorSetting(): DirectorArm {
   const asked = new URLSearchParams(window.location.search).get("director");
-  return asked === "jev" || asked === "random" ? asked : "rule";
+  if (asked === "jev" || asked === "random" || asked === "rule") return asked;
+  try {
+    const saved = localStorage.getItem(DIRECTOR_KEY);
+    if (saved === "jev" || saved === "rule") return saved;
+  } catch { /* no storage: the rule arm */ }
+  return "rule";
 }
+
+/**
+ * What the proxy said about **this deployment's** gate, or `null` until it
+ * has been asked (`/invite/verify`, doc 009).
+ *
+ * `false` means there is no gate at all — a developer running the dev server
+ * on their own key — which is a different answer from "your code is wrong",
+ * and the one the invite row has to give before a player goes looking for a
+ * code they do not need. Kept in memory rather than stored: the host can add
+ * or remove `INVITE_CODES` at any time, and a remembered "no gate" would
+ * outlive the deployment it was true of.
+ */
+let inviteGateNeeded: boolean | null = null;
+
+/** Whether Jev *can* run: an invite code, a dev server, or a proxy with no gate. */
+function jevAvailable(): boolean {
+  return !!storedInvite() || DEV_BUILD || inviteGateNeeded === false;
+}
+
+/**
+ * The arm a run actually starts on.
+ *
+ * The switch being On is not enough. Without an invite the proxy answers 401
+ * and every request falls back anyway, so a run that said "Jev" and played
+ * out entirely on the rule table would be lying about the one thing this game
+ * is for. The gate is here, once, rather than at each place that asks.
+ */
+function directorArm(): DirectorArm {
+  const setting = directorSetting();
+  if (setting === "jev" && !jevAvailable()) return "rule";
+  return setting;
+}
+
+function setDirectorArm(arm: "jev" | "rule"): void {
+  try { localStorage.setItem(DIRECTOR_KEY, arm); } catch { /* the setting is this session's only */ }
+}
+
+/**
+ * The invite code this browser holds, if any.
+ *
+ * Read through a function rather than captured, so a code entered on the
+ * title screen reaches a Director that was built before it. **Never logged**:
+ * it is a credential — it spends someone else's key — and the one place it is
+ * shown it is masked to its last four.
+ */
+function storedInvite(): string {
+  try { return localStorage.getItem(INVITE_KEY) ?? ""; } catch { return ""; }
+}
+
+function setStoredInvite(code: string): void {
+  try {
+    if (code) localStorage.setItem(INVITE_KEY, code);
+    else localStorage.removeItem(INVITE_KEY);
+  } catch { /* the code is this session's only */ }
+  /*
+   * Clearing the code turns the switch off with it — **unless Jev was never
+   * the code's to give**. On the dev server, or against a proxy with no gate,
+   * the arm runs without one, and taking it away because a code was cleared
+   * would be turning off something the code had nothing to do with.
+   */
+  if (!jevAvailable() && directorSetting() === "jev") setDirectorArm("rule");
+}
+
+/**
+ * Takes `?invite=<code>` off the URL and hands it back, **unverified**.
+ *
+ * An invite arrives as a link, and a link stays in the address bar — where it
+ * is in every screenshot and every shared tab. It is taken out of the bar
+ * with `replaceState`, which leaves no history entry to go back to it, and
+ * the code is then checked against the proxy before anything is stored: a
+ * code that does not work should say so, not sit in the browser pretending.
+ */
+function claimInviteFromUrl(): string {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("invite")?.trim() ?? "";
+  if (!code) return "";
+  params.delete("invite");
+  const rest = params.toString();
+  try {
+    window.history.replaceState(null, "", `${window.location.pathname}${rest ? `?${rest}` : ""}${window.location.hash}`);
+  } catch { /* nothing is stored yet; the bar keeps it until the tab is closed */ }
+  return code;
+}
+
+/** The longest code the proxy will look at (`MAX_INVITE_LENGTH` in the Worker). */
+const MAX_INVITE_CHARS = 128;
+
+/**
+ * Where the proxy answers "does this code work?".
+ *
+ * The same deployment as `DECIDE_URL`, on its other path: `/api/decide`
+ * locally, and the Worker's own origin when the build points at a hosted one.
+ */
+function verifyUrl(): string {
+  const base = DECIDE_URL.replace(/\/+$/, "");
+  return `${base.endsWith("/decide") ? base.slice(0, -"/decide".length) : base}/invite/verify`;
+}
+
+/** What the proxy said, or why it could not be asked. */
+type InviteCheck =
+  | { readonly ok: true; readonly valid: boolean; readonly needed: boolean }
+  | { readonly ok: false; readonly why: "rate" | "net" };
+
+/**
+ * Asks the proxy about a code.
+ *
+ * It never sends the code anywhere else and **never logs it**: the code is a
+ * credential, and a credential in a console is a credential in a screenshot.
+ * A deployment with no gate answers `needed: false`, which is remembered for
+ * the session so the menu can say a code is not wanted here.
+ */
+async function checkInviteCode(code: string): Promise<InviteCheck> {
+  let res: Response;
+  try {
+    res = await fetch(verifyUrl(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+      cache: "no-store",
+    });
+  } catch { return { ok: false, why: "net" }; }
+  if (res.status === 429) return { ok: false, why: "rate" };
+  // A body over the cap is not a code; the proxy says so without reading it.
+  if (res.status === 413) return { ok: true, valid: false, needed: true };
+  if (!res.ok) return { ok: false, why: "net" };
+  let body: { valid?: unknown; needed?: unknown } | null = null;
+  try {
+    body = await res.json() as { valid?: unknown; needed?: unknown } | null;
+  } catch { return { ok: false, why: "net" }; }
+  if (typeof body?.valid !== "boolean") return { ok: false, why: "net" };
+  const needed = body.needed !== false;
+  inviteGateNeeded = needed;
+  return { ok: true, valid: body.valid, needed };
+}
+
+/**
+ * Asks once, with no code, purely to learn whether this deployment has a gate.
+ *
+ * Without it a build served beside an ungated proxy would tell the player to
+ * go and find a code that nothing is going to ask them for.
+ */
+async function probeInviteGate(): Promise<void> {
+  if (inviteGateNeeded !== null) return;
+  await checkInviteCode("");
+}
+
+/** A held code shown without showing it: the last four, which is enough to tell two apart. */
+function maskedInvite(code: string): string {
+  const tail = code.slice(-4);
+  return `${"•".repeat(Math.min(8, Math.max(2, code.length - tail.length)))}${tail}`;
+}
+
+/** The style screen's demo bodies, from the caster: three, so a chain has somewhere to go twice. */
+const DEMO_SPOTS: readonly (readonly [number, number])[] = [[70, -26], [96, 22], [128, -6]];
+/**
+ * How long the demo runs before it starts over. A spell worn at the side is
+ * shown by walking it through the bodies and back, which takes 3.6 s and is
+ * replayed; every other spell stays up, its bodies falling and standing again
+ * — reset at 3.6 s it had put down one body at most, and read as a spell that
+ * cannot finish anything.
+ */
+function demoLoopMs(spell: string): number {
+  return DEMO_WALKED.has(String(ITEMS.get(spell)?.params["shape"] ?? "")) ? 3600 : 9000;
+}
+
+/** The shapes the style screen's demo shows by walking the caster through the bodies and back. */
+const DEMO_WALKED: ReadonlySet<string> = new Set(["orbit", "pillar", "trail"]);
+
+/**
+ * `?demo=<spell>`: **development only**, the style screen's demo casts this
+ * spell instead of the chosen style's starter, for looking at how a shape is
+ * demonstrated before any style starts with it.
+ */
+function DEMO_SPELL(): string | null {
+  const asked = new URLSearchParams(globalThis.location?.search ?? "").get("demo");
+  return asked && ITEMS.get(asked) ? asked : null;
+}
+
+/** A floating damage number, in the room or in the style screen's demo. */
+interface FloatingNumber {
+  id: number; x: number; y: number; text: string; colour: string; ms: number; drift: number;
+  /** A merged number's hits: their total, how many, the first one's amount, whether all were that amount, and its mark. */
+  value?: number; mark?: string; hits?: number; each?: number; even?: boolean;
+  /** Since the number last grew, for its pop. */
+  bumpMs?: number;
+}
+
+/**
+ * **Hits that land together are one number.** Five pellets of a scatter
+ * shot into one body drew five numbers on the same spot, a smudge nobody
+ * could read. A hit in the same colour, on the same spot, within
+ * `DAMAGE_MERGE_MS` of the last joins that number instead, and the number
+ * pops again as it grows.
+ *
+ * It counts rather than sums — `4×3`, not `12` — because a total reads as
+ * one hit that big. Hits of different sizes cannot be counted so, and show
+ * their total. A number in another colour on the same spot — a burn under a
+ * hit — stands a line above it.
+ */
+function addDamageNumber(
+  list: FloatingNumber[], x: number, y: number, n: number, colour: string, mark: string, nextId: () => number,
+): void {
+  const near = list.find((d) => d.value !== undefined && d.colour === colour
+    && (d.bumpMs ?? d.ms) < DAMAGE_MERGE_MS && Math.hypot(d.x - x, d.y - y) < DAMAGE_MERGE_PX);
+  if (near) {
+    near.value! += n;
+    near.hits = (near.hits ?? 1) + 1;
+    near.even = (near.even ?? true) && Math.floor(n) === Math.floor(near.each ?? n);
+    near.mark = near.mark || mark;
+    near.text = near.even ? `${Math.floor(near.each ?? n)}×${near.hits}${near.mark}` : `${Math.floor(near.value!)}${near.mark}`;
+    near.bumpMs = 0;
+    near.ms = Math.min(near.ms, DAMAGE_MERGE_MS);
+    return;
+  }
+  const stacked = list.filter((d) => d.ms < DAMAGE_MERGE_MS * 2 && Math.hypot(d.x - x, d.y - y) < DAMAGE_MERGE_PX).length;
+  list.push({
+    id: nextId(), x, y: y - stacked * DAMAGE_STACK_PX, text: `${Math.floor(n)}${mark}`, colour, ms: 0,
+    drift: (Math.random() - 0.5) * 10, value: n, mark, bumpMs: 0, hits: 1, each: n, even: true,
+  });
+}
+
+/** Damage numbers: hits this close in time and space merge; a second colour stacks this far above. */
+const DAMAGE_MERGE_MS = 120;
+const DAMAGE_MERGE_PX = 14;
+const DAMAGE_STACK_PX = 8;
+
+/**
+ * Casts of the demo's spell that put a demo body down, and how long it stays
+ * down. Thicker than a room's body on purpose: at three a body fell before the
+ * spell's behaviour — a chain's second jump, a burn's ticks — could be seen.
+ */
+const DEMO_CASTS_TO_FALL = 6;
+const DEMO_RESPAWN_MS = 900;
+/** How far ahead of the caster the still preview camera looks: the bodies, and the walk out to them. */
+const DEMO_CAM_AHEAD = 70;
+/** How far a stance demo's caster steps in first, so its answer reaches the nearer bodies. */
+const DEMO_GUARD_STEP_PX = 44;
 
 /** The proxy the Jev arm posts to: the dev server's, or a hosted build's own (doc 009). */
 const DECIDE_URL: string =
@@ -7933,13 +16820,172 @@ function freshSeed(): string {
   return `${Date.now().toString(36)}-${Math.floor(Math.random() * 46656).toString(36)}`;
 }
 
-/** `magic_bolt` as "Magic Bolt", for a HUD line. */
+/**
+ * **The one place an id becomes a display name.**
+ *
+ * `magic_bolt` as "Magic Bolt". Every name the player reads — spells, enemies,
+ * affixes, schools, stat families, reward kinds — is an id in `core`, and the
+ * ids are lower snake case because they are data. Nothing that shows a name
+ * should capitalise it at the call site: it would be done differently in each
+ * of the dozen places that show one, which is how the UI ended up all
+ * lowercase in some screens and shouting in others.
+ *
+ * Ids themselves are never touched. This is display only.
+ */
 function titleOfId(id: string): string {
-  return id.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  return id.split(/[_\s]+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
+/**
+ * A room's stage or type in the player's language.
+ *
+ * Both the plan's title, the character screen's run line and the death
+ * screen name a room the same way, and the ids they name it with are core's
+ * (`combat`, `boss`, `shop`), so one lookup serves all three. An id with no
+ * key falls back to its own words rather than printing nothing.
+ */
+const ROOM_TYPE_KEY: Readonly<Record<string, StringKey>> = {
+  combat: "roomType.combat", elite: "roomType.elite", treasure: "roomType.treasure",
+  shop: "roomType.shop", rest: "roomType.rest", boss: "roomType.boss",
+  merchant: "roomType.merchant", blacksmith: "roomType.blacksmith",
+  fountain: "roomType.fountain",
+};
+
+/**
+ * The room-name id for each thing a room with no fight can hold. The core
+ * kind is `smith`; the room it stands in has always been named "blacksmith",
+ * and the fountain's room is named after the fountain.
+ */
+const NPC_ROOM_ID: Readonly<Record<NpcKind, string>> = {
+  merchant: "merchant", smith: "blacksmith", fountain: "fountain",
+};
+
+function roomTypeName(id: string): string {
+  const key = ROOM_TYPE_KEY[id];
+  return key ? t(key) : titleOfId(id).toUpperCase();
+}
+
+/**
+ * Why a request fell back, said rather than printed as a status code.
+ *
+ * The page showed `529` — the status a busy upstream answers with — in the
+ * middle of a Chinese line, which tells a player nothing at all. A status is
+ * a class of answer, and the class is what is worth saying.
+ */
+function fallbackReason(path: string): string {
+  // `declined: portal_kinds, variety` — the path, then the questions it names.
+  const at = path.indexOf(":");
+  if (at >= 0) {
+    const names = path.slice(at + 1).split(",").map((n) => questionName(n.trim())).filter(Boolean);
+    return t("plan.note.declined", { names: names.join(t("list.sep")) });
+  }
+  const status = Number(path);
+  if (!Number.isFinite(status) || status === 0) return term(path);
+  // 429 and 529 are "too many requests" and "overloaded": Jev is busy.
+  if (status === 429 || status === 529 || status === 503) return t("plan.jevBusy");
+  if (status === 401 || status === 403) return t("plan.jevRefused");
+  if (status >= 500) return t("plan.jevFailed");
+  return t("plan.jevBadRequest");
+}
+
+/**
+ * An option, in words, knowing which question it answers.
+ *
+ * Most options are content (a spell, an affix, a stat) or a term; the ones
+ * that collide across questions — `mid`, `long`, `none` — are told apart by
+ * the question's own name, which `term` uses to look for a scoped key first.
+ */
+function optionName(option: string, question: string): string {
+  // A blended offer's "answer" is the cards it produced, which is a list.
+  if (option.includes(", "))
+    return option.split(", ").map((one) => term(one, questionBase(question))).join(t("list.sep"));
+  /*
+   * A **ranking** — `spell > gold > stat`, the portal needs in order — is one
+   * answer made of several ids, and it went through `term` whole: no table
+   * has heard of `spell > gold > stat`, so the plan page printed it in
+   * English across a Chinese row. The order is the answer, so the arrows stay
+   * and each id is named on its own.
+   */
+  if (option.includes(" > "))
+    return option.split(" > ").map((one) => term(one, questionBase(question))).join(" > ");
+  return term(option, questionBase(question));
+}
+
+/** Why an answer was not a plain draw, in the player's language. */
+function planNote(key: NoteKey): string {
+  return t(`plan.note.${key}` as StringKey);
+}
+
+/**
+ * One line of the state a request carried, both halves named.
+ *
+ * The flattening in `director-readout.ts` leaves three shapes: a plain
+ * `field  value`, a list joined with commas (`dominant_tags`), and a fact
+ * hung off a card's own id (`card_facts.ember_dart`). The free text the
+ * player typed is the one value that is already words and is left alone.
+ */
+function stateLine([key, value]: readonly [string, string]): string {
+  if (key === "intent.free_text") return `${term("free_text")}  ${value}`;
+  if (key.startsWith("card_facts.")) {
+    const id = key.slice("card_facts.".length);
+    const facts = value.split(/[\s,]+/).filter(Boolean).map((f) => term(f, "fact")).join(t("list.sep"));
+    return `${contentName(id, titleOfId(id))}  ${facts}`;
+  }
+  /*
+   * The staff, key by key (`run/build-facts.ts`) — **a quotation, not a
+   * field.** The value is already an English sentence written for Jev, and it
+   * opens with the spell's own English name, so there is nothing here to name
+   * and nothing to look up: the line is what was sent, drawn as the briefing
+   * is and under the heading `stateBlock` puts over the run of them. It used
+   * to be prefixed with the translated name, which said the same spell twice
+   * in two languages and made the English that followed look like a failure
+   * to translate rather than a quotation.
+   */
+  if (key.startsWith("held_spells.")) return value;
+  const field = key.includes(".") ? key.slice(key.lastIndexOf(".") + 1) : key;
+  // The flattening writes an empty list and an empty value as `(none)`.
+  const said = value === "(none)"
+    ? term("none")
+    : value.split(", ").map((v) => term(v, field)).join(t("list.sep"));
+  return `${term(field)}  ${said}`;
+}
+
+/** What a request was for, as its heading. Round 2 of a room is its own line. */
+function requestTitle(purpose: string, round: number): string {
+  if (purpose === "room") return t(round === 1 ? "term.req.room1" : "term.req.room2");
+  if (purpose === "staff") return t("term.req.staff");
+  if (purpose === "doors") return t("term.req.doors");
+  if (purpose === "offer") return t("term.req.offer");
+  if (purpose === "portals") return t("term.req.portals");
+  if (purpose.startsWith("cards:")) {
+    const [, kind, shelf] = purpose.split(":");
+    const named = term(kind ?? "", "reward_kind");
+    return t(shelf ? "term.req.shelf" : "term.req.cards", { kind: named });
+  }
+  return term(purpose);
+}
+
+/**
+ * The same, for a sentence: only the first letter.
+ *
+ * Headings, names and buttons are Title Case; a hint row, a description or a
+ * stat line is a sentence, and Title Case on a sentence reads as shouting.
+ */
+function sentenceOf(str: string): string {
+  const s = str.replace(/_/g, " ");
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** `?spells=a,b+affix,c`: a development loadout (`debugSpells`). Empty when not asked for. */
+function DEBUG_SPELLS(): string[] {
+  const asked = new URLSearchParams(globalThis.location?.search ?? "").get("spells");
+  return asked ? asked.split(",").map((x) => x.trim()).filter(Boolean) : [];
 }
 
 /** The keys the three spells are bound to, in slot order. */
 const SPELL_KEYS = ["U", "I", "O"] as const;
+/** The player's own `shot` events, which are never an enemy's shot; those without a sound of their own say nothing. */
+const PLAYER_SHOT_EVENTS: ReadonlySet<string> = new Set(["free_strike", "land", "emit_burst", "contagion"]);
 /**
  * How far above the body's position the player sprite is drawn, in world px.
  *
@@ -7951,6 +16997,19 @@ const SPELL_KEYS = ["U", "I", "O"] as const;
  * sword and the dash ghosts all move with it; the hit tests do not.
  */
 const BODY_LIFT = 7;
+/**
+ * World px of ground an eruption frame carries below its floor line: every
+ * family under `assets/effects` leaves the same 8 art px, so one offset puts
+ * all of them on the cell when they are drawn bottom-anchored.
+ */
+const ERUPTION_FOOT_PX = 8 / ART_SCALE;
+/** How long the crack a stone spike leaves is drawn for. */
+const ERUPTION_CRACK_MS = 900;
+/** How far the body leans into its travel at full speed, and where it pivots: at the feet, below the frame's middle. */
+const LEAN_MAX = 0.08;
+const LEAN_PIVOT_Y = 9;
+/** The walking speed the lean is measured against, world px/s: the body's own. */
+const PLAYER_SPEED_PX = PLAYER_SPEED;
 /** A card frame's decoration: an L tick in each corner and a fine inner line. */
 function drawCardDeco(
   g: Phaser.GameObjects.Graphics, r: { x: number; y: number; w: number; h: number }, colour: number,
@@ -7976,11 +17035,11 @@ function drawCardDeco(
 
 /** A card's look by rarity: its label, frame, ground and corner decoration. */
 const RARITY_STYLE: Readonly<Record<"common" | "rare" | "legendary", {
-  label: string; text: string; stroke: number; strokeOn: number; fill: number; fillOn: number; corner: number;
+  label: StringKey; text: string; stroke: number; strokeOn: number; fill: number; fillOn: number; corner: number;
 }>> = {
-  common: { label: "COMMON", text: "#c9cfe8", stroke: 0x5a628f, strokeOn: 0xe8e3d8, fill: 0x161334, fillOn: 0x221d46, corner: 0x8792b5 },
-  rare: { label: "RARE", text: "#6fb4ff", stroke: 0x3f7fe0, strokeOn: 0x9fd0ff, fill: 0x13203f, fillOn: 0x1b2c58, corner: 0x5a9ef0 },
-  legendary: { label: "LEGENDARY", text: "#ffb040", stroke: 0xd08a30, strokeOn: 0xffd080, fill: 0x2a1d18, fillOn: 0x3a2818, corner: 0xe8a040 },
+  common: { label: "card.common", text: "#c9cfe8", stroke: 0x5a628f, strokeOn: 0xe8e3d8, fill: 0x161334, fillOn: 0x221d46, corner: 0x8792b5 },
+  rare: { label: "card.rare", text: "#6fb4ff", stroke: 0x3f7fe0, strokeOn: 0x9fd0ff, fill: 0x13203f, fillOn: 0x1b2c58, corner: 0x5a9ef0 },
+  legendary: { label: "card.legendary", text: "#ffb040", stroke: 0xd08a30, strokeOn: 0xffd080, fill: 0x2a1d18, fillOn: 0x3a2818, corner: 0xe8a040 },
 };
 
 /** The colour of each kind of figure on a numbers line; see `statRow`. */
@@ -7989,14 +17048,25 @@ const TONE_COLOUR: Readonly<Record<string, string>> = {
   trait: "#c9cfe8", mod: "#f5a623", grade: "#ffd45e",
 };
 
+/**
+ * Where a screen over the game is laid out: the HUD camera's frame, the room's
+ * own size (`holdCamera` fits it into the canvas). The dim behind a screen is
+ * drawn three times its size, to cover the canvas past the frame.
+ */
+function uiView(): Phaser.Geom.Rectangle {
+  return new Phaser.Geom.Rectangle(0, 0, UI_W, UI_H + HUD_H);
+}
+
 /** Armour's colour: a shield blue, distinct from ice's pale cyan. */
 const SHIELD_BLUE = 0x4f86ff;
 
-/** The armour mark: the delivered `ui_shield`, or the drawn shield when the sheet has none. */
-function shieldMark(scene: Phaser.Scene, atlas: RecolourableAtlas, key: string, x: number, y: number, size: number): Phaser.GameObjects.Image | Phaser.GameObjects.Polygon {
-  if (atlas.has("ui_shield"))
-    return scene.add.image(x, y, key, "ui_shield").setOrigin(0.5).setDisplaySize(size * 1.25, size * 1.25).setDepth(10.5);
-  return shieldIcon(scene, x, y, size);
+/**
+ * The armour mark: a **solid** shield, drawn. The delivered `ui_shield` is an
+ * outline, and at the size of a bar's end it read as a ring round nothing
+ * beside a solid blue bar; filled, it is the same thing as the bar.
+ */
+function shieldMark(scene: Phaser.Scene, _atlas: RecolourableAtlas, _key: string, x: number, y: number, size: number): Phaser.GameObjects.Polygon {
+  return shieldIcon(scene, x, y, size * 1.1);
 }
 
 /** A small heater shield, centred at `x, y`, `size` px tall: the mark beside an armour bar. */
@@ -8009,17 +17079,24 @@ function shieldIcon(scene: Phaser.Scene, x: number, y: number, size: number): Ph
 
 
 /** The two resource bars share one left edge and one width. */
-const HUD_BAR_X = 22;
+const HUD_BAR_X = HUD_INSET + 14;
 const HUD_BAR_W = 96;
+/**
+ * How long the experience bar keeps the band it was just paid lit
+ * (`run/levels.ts`). Long enough to be seen out of the corner of the eye
+ * while the player is looking at the body they killed, short enough that a
+ * fast room does not leave it permanently bright.
+ */
+const XP_FLASH_MS = 420;
 /** Room the rage segments take between the mana pips and the spell names. */
 const RAGE_W = 44;
 
 /** What a card is, said in a word and a colour. See `showRewards`. */
-const KIND_TAG: Readonly<Record<RewardCardKind, { label: string; color: string }>> = {
-  spell: { label: "SPELL", color: "#8fdcff" },
-  affix: { label: "AFFIX", color: "#d9a5ff" },
-  stat: { label: "STAT", color: "#a8f0a0" },
-  gold: { label: "GOLD", color: "#ffd45e" },
+const KIND_TAG: Readonly<Record<RewardCardKind, { label: StringKey; color: string }>> = {
+  spell: { label: "card.spell", color: "#8fdcff" },
+  affix: { label: "card.affix", color: "#d9a5ff" },
+  stat: { label: "card.stat", color: "#a8f0a0" },
+  gold: { label: "card.gold", color: "#ffd45e" },
 };
 
 /**
@@ -8030,27 +17107,23 @@ const KIND_TAG: Readonly<Record<RewardCardKind, { label: string; color: string }
 function openDemoRoom(): RoomPlan {
   const base = fixedRoom("shop", new RngSource("demo-room").stream("room"));
   const grid = Uint8Array.from(base.grid);
-  for (let y = 1; y < GRID_H - 1; y++) for (let x = 1; x < GRID_W - 1; x++) grid[y * GRID_W + x] = Tile.Floor;
+  for (let y = 1; y < base.extent.h - 1; y++) for (let x = 1; x < base.extent.w - 1; x++) grid[y * GRID_W + x] = Tile.Floor;
   return { ...base, grid, zones: base.zones.map((z) => ({ ...z, feature: "none" })) };
 }
 
-function fixedRoom(stage: "shop" | "boss", rng: ReturnType<RngSource["stream"]>): RoomPlan {
-  const space = stage === "boss" ? BOSS_ARCHETYPES[0]!.id : "open_arena";
-  const g = generateRoom(
-    { space, symmetry: "mirrored", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
-    "S", stage === "boss" ? "boss" : "combat", rng, { plain: true },
-  );
-  return toRoomPlan(g, { id: `fixed-${stage}`, seed_key: `fixed-${stage}`, reward_kind: "item", params_source: "rule" });
+/** The two rooms drawn by hand, the same every run (`rooms/fixed.ts`): the throne hall and the merchant's hall. */
+function fixedRoom(stage: "shop" | "boss", _rng?: ReturnType<RngSource["stream"]>): RoomPlan {
+  return stage === "boss" ? throneHall() : merchantHall();
 }
 
 /**
  * A room feature's art, and whether it lies on the floor or stands on it.
  *
- * The old version tested for three hazards and returned crumbling floor for
+ * The old version tested for three hazards and returned broken paving for
  * **everything else** — so a brazier, a mirror pillar, a mana font and a
- * turret mount were all drawn as broken paving, while `prop_brazier`,
- * `prop_mirror`, `prop_manawell` and `prop_pillar` sat unused in the sheet.
- * Four of the eight features in the library were lying about what they were.
+ * turret mount were all drawn as rubble, while `prop_brazier`, `prop_mirror`,
+ * `prop_manawell` and `prop_pillar` sat unused in the sheet. Half the library
+ * was lying about what it was.
  *
  * Floor features are a texture on the ground; the others are objects standing
  * on it, which is a different depth and a different footprint, so the two are
@@ -8109,19 +17182,11 @@ function featureArt(feature: string): FeatureArt {
     return { frame: "hazard_poison_0", standing: false, pair: "hazard_poison_1", slab: true };
   if (feature.includes("ice"))
     return { frame: "hazard_ice_0", standing: false, pair: "hazard_ice_1", slab: true };
-  if (feature.includes("crumble"))
-    return { frame: "hazard_crumble_0", standing: false, pair: "hazard_crumble_1" };
   if (feature.includes("brazier"))
     return { frame: "prop_brazier_0", standing: true, pair: "prop_brazier_1", fixture: true, cycles: true };
   if (feature.includes("turret_mount")) return { frame: "prop_pillar_0", standing: true, hidden: true };
-  return { frame: "hazard_crumble_0", standing: false };
+  return { frame: "hazard_spike_0", standing: false };
 }
-
-/** Backing store in physical pixels: art resolution times the pixel ratio. */
-export const VIEW = {
-  width: Math.round(VIEW_W * ZOOM),
-  height: Math.round((VIEW_H + HUD_H) * ZOOM),
-};
 
 /**
  * Floor frames. `tile_floor_3` is a drain grate, which is an object rather
@@ -8143,14 +17208,33 @@ function floorFrame(x: number, y: number, drains: ReadonlySet<number>): string {
 }
 
 /** Two drains per room, deterministic in the grid so they never flicker. */
+/**
+ * How far above a body's centre its overhead marks sit — the armour bar and
+ * the status gauges. Just over the collision circle for the roster, whose
+ * drawings are about that size; the Crypt King stands far taller than the
+ * circle he fights on, so his sit over his crown rather than on his chest.
+ */
+function overheadPx(e: { archetype: string; radius: number }): number {
+  return e.archetype === "boss" ? 56 + BOSS_DRAW_RISE_PX : e.radius + 9;
+}
+
+/** How far apart a room's two drains are kept, in cells: two grates side by side read as one broken one. */
+const DRAIN_SPACING = 4;
+
 function drainCells(grid: Uint8Array): Set<number> {
   const floor: number[] = [];
   for (let i = 0; i < grid.length; i++) if (grid[i] === Tile.Floor) floor.push(i);
   const out = new Set<number>();
   if (floor.length === 0) return out;
   for (let n = 0; n < 2; n++) {
-    const pick = floor[(hash2(n + 1, floor.length) % floor.length)];
-    if (pick !== undefined) out.add(pick);
+    // From the hashed cell on to the first one clear of the drains already laid.
+    const start = hash2(n + 1, floor.length) % floor.length;
+    for (let k = 0; k < floor.length; k++) {
+      const pick = floor[(start + k * 7) % floor.length]!;
+      const px = pick % GRID_W, py = Math.floor(pick / GRID_W);
+      const clear = [...out].every((o) => Math.max(Math.abs((o % GRID_W) - px), Math.abs(Math.floor(o / GRID_W) - py)) >= DRAIN_SPACING);
+      if (clear) { out.add(pick); break; }
+    }
   }
   return out;
 }
@@ -8204,17 +17288,6 @@ function isolatedSolid(grid: Uint8Array, x: number, y: number): boolean {
   return open(0, -1) && open(0, 1) && open(-1, 0) && open(1, 0);
 }
 
-/** Open floor on both sides of one axis: a one-tile-thick wall. */
-function thinWall(grid: Uint8Array, x: number, y: number): boolean {
-  const open = (dx: number, dy: number): boolean => {
-    const nx = x + dx;
-    const ny = y + dy;
-    if (nx < 0 || ny < 0 || nx >= GRID_W || ny >= GRID_H) return false;
-    return visuallyOpenTile(grid[ny * GRID_W + nx]!);
-  };
-  return (open(0, -1) && open(0, 1)) || (open(-1, 0) && open(1, 0));
-}
-
 function wallFrame(grid: Uint8Array, x: number, y: number): string {
   const open = (dx: number, dy: number): boolean => {
     const nx = x + dx;
@@ -8234,6 +17307,27 @@ function wallFrame(grid: Uint8Array, x: number, y: number): string {
   // name the new sheet no longer has, which drew the border walls as pieces
   // of the player.
   return `tile_wall_${WALL_CASE[mask]!}`;
+}
+
+/**
+ * The inside corners of a wall cell: each corner where both neighbours
+ * beside it are walls and the diagonal between them is open floor. The four
+ * neighbours say nothing about a diagonal, so there the caps of the two
+ * walls beside it both stopped short and the lit edge broke; each such
+ * corner gets the cap square that turns it (`tile_wall_inner_*`).
+ */
+function innerCorners(grid: Uint8Array, x: number, y: number): string[] {
+  const open = (dx: number, dy: number): boolean => {
+    const nx = x + dx, ny = y + dy;
+    if (nx < 0 || ny < 0 || nx >= GRID_W || ny >= GRID_H) return false;
+    return visuallyOpenTile(grid[ny * GRID_W + nx]!);
+  };
+  const out: string[] = [];
+  if (!open(0, -1) && !open(1, 0) && open(1, -1)) out.push("ne");
+  if (!open(1, 0) && !open(0, 1) && open(1, 1)) out.push("es");
+  if (!open(0, 1) && !open(-1, 0) && open(-1, 1)) out.push("sw");
+  if (!open(-1, 0) && !open(0, -1) && open(-1, -1)) out.push("wn");
+  return out;
 }
 
 /** Cells rendered with floor art must also open the neighbouring wall cap. */

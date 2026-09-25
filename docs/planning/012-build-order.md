@@ -47,7 +47,7 @@ nothing here is a version, and no step is a lesser edition of a later one.
 
 - The generator: space archetypes, symmetry, measurement against the requested
   labels, retries, authored fallbacks.
-- Zone features (spike strip, poison pool, ice patch, crumbling floor, brazier,
+- Zone features (spike strip, poison pool, ice patch, brazier,
   turret mount) and room mood derived into a palette under contrast rules.
 - `planRoom`'s two rounds: archetype, symmetry and mood, then zone features and
   the encounter profile.
@@ -73,6 +73,10 @@ nothing here is a version, and no step is a lesser edition of a later one.
   three distributions blended by run progress, the wildcard, pity and
   temptation; gold rooms paying coins instead.
 - The merchant and the blacksmith, gold, and dismantling a spell back into it.
+- Experience and levels (003): a kill pays what its own definition is worth,
+  the run carries the total across the portal, and `createWorld` folds the
+  level into the body. The experience bar and level on the HUD, the level-up
+  toast, burst and cue, and the two rows on the character screen.
 - The intent screen before the run, the game-over card, and the settings.
 
 ## 7. Boss — done
@@ -110,7 +114,52 @@ proxy, with the arm selectable for the comparison.
 Check: fallback rate under 5% and Director fidelity above 80% over ten internal
 runs, with traces readable.
 
-## 11. Evaluation
+## 11. Sprite models
+
+Move every body onto a sprite model (016), each step leaving the game
+shippable: a body not yet moved keeps its delivered sheets, and the atlas mixes
+both under the same frame names.
+
+- The compositor, the `.px` format, `sprite:split`, `sprite:cut`,
+  `sprite:preview`, and the checks. — done
+- **The player**, as the proof: walk in eight frames, idle in four, the swing
+  with an in-between either side of the strike, and a cast. The renderer reads
+  cycle lengths from the atlas. — done
+- The shape-fill helper (`sprite:draw`). — done
+- The player's staff and sword arm drawn into its frames, facing south. — done
+- The same for north and west.
+- The model kind in the animation lab.
+- The six expansion bodies; then `drawnWalk` is deleted.
+- The original roster, the companion and the vendors; then the boss.
+
+Check: the player's composed frames side by side with the delivered ones in the
+lab, judged by a person to be the same character; no model frame fails the
+palette, joint, silhouette or ground checks.
+
+## 12. The close camera — done
+
+The world camera nearer than the room and following the player, the HUD on
+its own camera, bodies off the view pointed at from its edge, and a minimap
+(doc 008). Chosen over the whole-room view in play, which was removed.
+
+## 13. Rooms larger than the view
+
+Doc 017, each step leaving the game shippable:
+
+- The unzoomed viewport at a whole-number scale; fire and closing speed
+  fading past its edge; the reward and portals beside the player; walls
+  meeting only along an edge. — done
+- The viewport decoupled from the room's grid, so a room's grid can be larger
+  than the view.
+- The size label and chambers joined by openings; the Director's question.
+- Camps (`placement: "camps"` today), dealt per chamber with per-chamber
+  pressure, and the optional reinforcement.
+
+Check: the harness's combat room in 30 to 40 s with camps; bodies attacking
+at once no higher than with waves; a person's choice between waves and
+camps, and the other removed.
+
+## 14. Evaluation
 
 - Blind-test mode, input and event recording, full replay with hash assertions,
   a remote trace sink, and a Pages deploy from CI alongside the Worker.

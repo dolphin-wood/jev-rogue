@@ -6,9 +6,11 @@
  */
 import type {
   Composition, Density, EncounterPlan, EncounterProfile, EnemyId, EntryPattern,
-  RoomPlan, SpawnGroup, Wave, WaveStructure, AssemblableId,} from "../types.ts";
+  RoomPlan, SpawnGroup, Wave, WaveStructure, AssemblableId, BaseEnemyId, SubspeciesWeight,} from "../types.ts";
 import type { Rng } from "../rng.ts";
-import { ENEMY_IDS, MAX_CONCURRENT_ENEMIES, SUMMONER_MINION_CAP } from "./enemies.ts";
+import { BASE_ENEMY_IDS, ENEMY_IDS, MAX_CONCURRENT_ENEMIES, SUBSPECIES_OF, SUMMONER_MINION_CAP, baseArchetype, isSubspecies, threatWeight } from "./enemies.ts";
+import { rampAllows } from "./ramp.ts";
+
 import {
   ASSUMED_TTK_MS, contextFor, inBand, measurePressure, peakConcurrency, round3,
 } from "./pressure.ts";
@@ -18,11 +20,31 @@ import type { EncounterPreset, PresetTier } from "./presets.ts";
 
 /* -------------------------------- step 2 ---------------------------------- */
 
-/** Archetype ratios per composition (doc 005 step 2). */
-export const MIX_RATIOS: Readonly<Record<Composition, Readonly<Record<AssemblableId, number>>>> = {
+/**
+ * **Subspecies take a share of their base's ratio** (doc 019).
+ *
+ * A composition is a statement about kinds of fight — "mostly shooters that
+ * keep their distance" — so it is written over the bodies a player can name,
+ * and each subspecies then takes a slice of the body it varies. Two things
+ * follow that a flat table of twenty-seven rows would not give:
+ *
+ * - **A row is always total.** A new variant cannot silently change what
+ *   `ranged_heavy` means, because it comes out of its own base's share rather
+ *   than off the end of everyone else's.
+ * - **The tier is one number.** Doc 019 asks for subspecies less common than
+ *   base bodies and far more common than elites; that is this constant, and
+ *   it is the only place to move it.
+ *
+ * 0.28 of each pair puts a room at about a fifth to a quarter subspecies once
+ * the ramp allows them — doc 019's 15–25% band — against an elite's two bodies
+ * a room at most. It reproduces the melee harness's tuned rusher/lancer split
+ * exactly: 0.50 of the pair becomes 0.36 and 0.14.
+ */
+export const SUBSPECIES_SHARE_OF_BASE = 0.28;
+
+/** The ratios as they are written: over base archetypes only. */
+const BASE_RATIOS: Readonly<Record<Composition, Readonly<Partial<Record<BaseEnemyId, number>>>>> = {
   /*
-   * The lancer is not rostered: it is what a rusher becomes in an elite room.
-   *
    * The expansion gives each composition bodies that change its question
    * rather than more of the same one (research §1.9): `melee_heavy` gets a
    * body that is not there (delver) and a coal that feeds on fire
@@ -31,38 +53,65 @@ export const MIX_RATIOS: Readonly<Record<Composition, Readonly<Record<Assemblabl
    * gunner whose spray is answered by distance (warden). `mixed` draws
    * everything.
    */
-  melee_heavy: {
-    rusher: 0.5, lancer: 0, orbiter: 0.15, tank: 0.1, shooter: 0, turret: 0, summoner: 0, sentinel: 0,
-    warden: 0, delver: 0.15, cinderling: 0.1, bellringer: 0, rifter: 0, snarecaster: 0, sower: 0,
-  },
+  melee_heavy: { rusher: 0.5, orbiter: 0.15, tank: 0.1, delver: 0.15, cinderling: 0.1 },
   ranged_heavy: {
-    shooter: 0.22, turret: 0.12, sentinel: 0.12, orbiter: 0.1, rusher: 0, tank: 0, summoner: 0, lancer: 0,
-    bellringer: 0.1, snarecaster: 0.1, sower: 0.08, rifter: 0.08, warden: 0.08, delver: 0, cinderling: 0,
+    shooter: 0.22, turret: 0.12, sentinel: 0.12, orbiter: 0.1,
+    bellringer: 0.1, snarecaster: 0.1, sower: 0.08, rifter: 0.08, warden: 0.08,
   },
-  mixed: {
-    rusher: 1 / 14, shooter: 1 / 14, turret: 1 / 14, orbiter: 1 / 14, tank: 1 / 14, summoner: 1 / 14, lancer: 0,
-    sentinel: 1 / 14, warden: 1 / 14, bellringer: 1 / 14, rifter: 1 / 14, snarecaster: 1 / 14, delver: 1 / 14,
-    cinderling: 1 / 14, sower: 1 / 14,
-  },
+  mixed: Object.fromEntries(BASE_ENEMY_IDS.map((id) => [id, 1 / BASE_ENEMY_IDS.length])) as Partial<Record<BaseEnemyId, number>>,
   siege: {
-    turret: 0.22, sentinel: 0.18, shooter: 0.14, rusher: 0.1, orbiter: 0, tank: 0, summoner: 0, lancer: 0,
-    rifter: 0.14, warden: 0.12, bellringer: 0.05, sower: 0.05, snarecaster: 0, delver: 0, cinderling: 0,
+    turret: 0.22, sentinel: 0.18, shooter: 0.14, rusher: 0.1,
+    rifter: 0.14, warden: 0.12, bellringer: 0.05, sower: 0.05,
   },
 };
 
-/** Mean threat weight of a composition, which is what sets its option tier. */
+/**
+ * A composition's row over the whole roster: the bases carry it, and the
+ * subspecies sit at zero.
+ *
+ * **They are promoted, not drawn** (`subspeciesFilter`), and the reason is the
+ * apportionment. The draw hands out seats to whichever ratio is furthest ahead
+ * of what it has been given, so a small ratio only gets a seat in a large
+ * house: at a quarter of its base's share, a subspecies' first seat in `mixed`
+ * came up around the twenty-fifth body, and a room holds eight to fourteen.
+ * Measured, a twenty-body mixed roster contained **one**, and a normal room
+ * none at all — a tier that exists in the table and never on the floor.
+ *
+ * So the composition still says what kind of fight the room is, over the
+ * bodies a player can name, and which of them turn up as variants is decided
+ * after the roster exists, where a share means what it says.
+ */
+function withSubspecies(row: Readonly<Partial<Record<BaseEnemyId, number>>>): Record<AssemblableId, number> {
+  const out = Object.fromEntries(ENEMY_IDS.map((id) => [id, 0])) as Record<AssemblableId, number>;
+  for (const [base, share] of Object.entries(row) as [BaseEnemyId, number][]) out[base] = share;
+  return out;
+}
+
+/** Archetype ratios per composition (doc 005 step 2). */
+export const MIX_RATIOS: Readonly<Record<Composition, Readonly<Record<AssemblableId, number>>>> = {
+  melee_heavy: withSubspecies(BASE_RATIOS.melee_heavy),
+  ranged_heavy: withSubspecies(BASE_RATIOS.ranged_heavy),
+  mixed: withSubspecies(BASE_RATIOS.mixed),
+  siege: withSubspecies(BASE_RATIOS.siege),
+};
+
+/**
+ * Mean threat weight of a composition, which is what sets its option tier.
+ *
+ * **From the roster's own weights** (`threatWeight`), which is the table the
+ * pressure model measures with. There used to be a second copy here — the
+ * rusher at 1.0 against the roster's 1.25, the tank at 3.0 against 5.0, the
+ * summoner at 3.0 against 4.5 — so the tier a composition was *offered* as
+ * and the pressure it actually measured came from different numbers, and
+ * calibrating one silently failed to move the other. One table, in one place.
+ */
 export function meanThreatOf(composition: Composition): number {
   const ratios = MIX_RATIOS[composition];
   let sum = 0;
-  for (const id of ENEMY_IDS) sum += ratios[id] * THREAT[id];
+  for (const id of ENEMY_IDS) sum += ratios[id] * threatWeight(id);
   return round3(sum);
 }
 
-const THREAT: Readonly<Record<AssemblableId, number>> = {
-  rusher: 1.0, shooter: 1.5, turret: 2.0, orbiter: 2.0, tank: 3.0, summoner: 3.0,
-  lancer: 1.4, sentinel: 1.7,
-  warden: 2.6, bellringer: 2.4, rifter: 2.0, snarecaster: 2.2, delver: 1.8, cinderling: 2.0, sower: 2.2,
-};
 
 /**
  * A repeating draw order over the composition's ratios (highest-average
@@ -81,19 +130,41 @@ const THREAT: Readonly<Record<AssemblableId, number>> = {
  * which is how rooms came to have two. The mix ratios still say how often the
  * heavy appears at all; this says it appears once.
  */
-const ROSTER_CAP: Readonly<Record<AssemblableId, number>> = {
-  rusher: Infinity, shooter: Infinity, orbiter: Infinity, lancer: Infinity,
+const ROSTER_CAP: Readonly<Record<BaseEnemyId, number>> = {
+  rusher: Infinity, shooter: Infinity, orbiter: Infinity,
   turret: 1, tank: 1, summoner: 1, sentinel: 1,
   // One of each question per room: two wardens is a crossfire, two sowers a floor of pips.
   warden: 1, bellringer: 1, rifter: 1, snarecaster: 1, sower: 1, delver: 2, cinderling: 2,
 };
 
+/**
+ * **A subspecies counts against its base's cap** (doc 019).
+ *
+ * The cap is on how many of a *question* a room may ask, and a subspecies asks
+ * its base's question with one verb changed. Counted separately, a room could
+ * hold a rifter and a quaker — two bodies cracking lines across a floor built
+ * for one — which is the exact thing the cap exists to prevent, arriving
+ * through the door the variants opened. So the budget is shared, and `delver:
+ * 2` means two of the delver-and-burrower pair rather than two of each.
+ */
 export function rosterOrder(composition: Composition, rng: Rng, length = MAX_CONCURRENT_ENEMIES * 3): EnemyId[] {
   const ratios = MIX_RATIOS[composition];
-  const taken: Record<AssemblableId, number> = {
-    rusher: 0, shooter: 0, turret: 0, orbiter: 0, tank: 0, summoner: 0, lancer: 0, sentinel: 0,
-    warden: 0, bellringer: 0, rifter: 0, snarecaster: 0, delver: 0, cinderling: 0, sower: 0,
-  };
+  /*
+   * **Two counters, because they answer two different questions.**
+   *
+   * `taken` is the apportionment's own count, per id, and it has to stay per
+   * id: the method picks the id whose ratio is furthest ahead of what it has
+   * been given, and a base always has a larger ratio than its subspecies, so
+   * sharing one counter means the base wins every comparison and the
+   * subspecies is **never drawn at all**. That was measured — a twenty-body
+   * mixed roster came out with none.
+   *
+   * `takenBase` is the cap's count, per base, and it has to be shared: the cap
+   * is on how many of a *question* a room asks, and a quaker asks the
+   * rifter's.
+   */
+  const taken = Object.fromEntries(ENEMY_IDS.map((id) => [id, 0])) as Record<AssemblableId, number>;
+  const takenBase = Object.fromEntries(BASE_ENEMY_IDS.map((id) => [id, 0])) as Record<BaseEnemyId, number>;
   const out: EnemyId[] = [];
   for (let k = 0; k < length; k++) {
     let bestScore = -1;
@@ -101,7 +172,8 @@ export function rosterOrder(composition: Composition, rng: Rng, length = MAX_CON
     for (const id of ENEMY_IDS) {
       const r = ratios[id];
       if (r <= 0) continue;
-      if (taken[id] >= ROSTER_CAP[id]) continue;
+      const cap = baseArchetype(id) as BaseEnemyId;
+      if (takenBase[cap] >= ROSTER_CAP[cap]) continue;
       const score = r / (taken[id] + 1);
       if (score > bestScore + 1e-12) {
         bestScore = score;
@@ -113,9 +185,49 @@ export function rosterOrder(composition: Composition, rng: Rng, length = MAX_CON
     if (best.length === 0) break;
     const chosen = best.length === 1 ? best[0]! : rng.pick(best);
     taken[chosen]++;
+    takenBase[baseArchetype(chosen) as BaseEnemyId]++;
     out.push(chosen);
   }
   return out;
+}
+
+/**
+ * How much of the eligible roster a `subspecies_weight` label means.
+ *
+ * The label is the Director's and the number is code's (doc 002: a quantity
+ * chosen from a short option list is a Choice, and what the label means stays
+ * where the ramp can bound it). 0.15 and 0.25 are the ends of doc 019's own
+ * 15-25% band.
+ */
+export const SUBSPECIES_SHARE: Readonly<Record<SubspeciesWeight, number>> = {
+  none: 0, some: 0.5, many: 0.85,
+};
+
+/**
+ * Turns the room's answers into its actual bodies.
+ *
+ * Every subspecies the Director did **not** name falls back to its base, and
+ * the ones it named are kept at the chosen weight. `some` keeps about half of
+ * what the mix drew and `many` keeps all of it, which against the mix's own
+ * 0.28 split lands a room at roughly a sixth and a quarter subspecies — doc
+ * 019's band, arrived at from the two numbers that are allowed to decide it.
+ */
+export function subspeciesFilter(
+  order: readonly EnemyId[], profile: EncounterProfile, rng: Rng, roomIndex?: number,
+): EnemyId[] {
+  const share = SUBSPECIES_SHARE[profile.subspecies_weight ?? "none"];
+  const asked = new Set((profile.subspecies ?? [])
+    .filter((id) => roomIndex === undefined || rampAllows(roomIndex, id)));
+  if (asked.size === 0 || share === 0) return order.map((id) => baseArchetype(id));
+  /** The subspecies this room asked for, by the base it would replace. */
+  const promote = new Map<EnemyId, EnemyId>();
+  for (const id of asked) promote.set(baseArchetype(id), id);
+  return order.map((id) => {
+    const base = baseArchetype(id);
+    const sub = promote.get(base);
+    if (!sub) return base;
+    return rng.next() < share ? sub : base;
+  });
 }
 
 /**
@@ -159,7 +271,7 @@ export function maxCountFor(profile: EncounterProfile): number {
   // chunks of TRICKLE_CHUNK — has fewer bodies up than in its roster, so only
   // a trickle may draw on the larger figure. Rounds are apart, so each brings
   // its own share.
-  const perRound = profile.wave_structure === "trickle" ? TRICKLE_ROUND_MAX : MAX_CONCURRENT_ENEMIES;
+  const perRound = profile.wave_structure === "breathe" ? TRICKLE_ROUND_MAX : MAX_CONCURRENT_ENEMIES;
   return Math.min(MAX_ROSTER, perRound * roundsOf(profile));
 }
 
@@ -256,9 +368,9 @@ export function splitWaves(
 ): PlannedWave[] {
   if (roster.length === 0) return [];
   switch (structure) {
-    case "single":
+    case "relentless":
       return [{ at_ms: 0, enemies: [...roster] }];
-    case "two_waves": {
+    case "steady": {
       if (roster.length === 1) return [{ at_ms: 0, enemies: [...roster] }];
       const first = Math.max(1, Math.min(roster.length - 1, Math.round(roster.length * TWO_WAVE_SPLIT)));
       return [
@@ -266,7 +378,7 @@ export function splitWaves(
         { at_ms: TWO_WAVE_DELAY_MS, enemies: roster.slice(first) },
       ];
     }
-    case "trickle": {
+    case "breathe": {
       const out: PlannedWave[] = [];
       let i = 0;
       let w = 0;
@@ -480,6 +592,14 @@ export interface EncounterAssembly {
 export interface AssembleOptions {
   /** Stamped on the plan when no preset was needed. */
   readonly source?: "jev" | "rule" | "random";
+  /**
+   * Where in the run this room is (1-based), for the run-progress ramp
+   * (`ramp.ts`). Given, the roster is sized to the ramp here, which is where
+   * the pressure is measured and the retries happen — so a room is planned at
+   * the size it will be played at rather than assembled large and cut down.
+   * Absent, nothing changes and the world's clamp is the only bound.
+   */
+  readonly room_index?: number;
 }
 
 function fit(
@@ -597,11 +717,52 @@ export function assembleEncounterDetailed(
   options: AssembleOptions = {},
 ): EncounterAssembly {
   const source = options.source ?? "jev";
-  const order = rosterOrder(profile.composition, rng);
+  /*
+   * The ramp's **subspecies gate**: a variant is a known body with one rule
+   * changed, so it only reads as that once the player has met the body it
+   * changes (`rampAllows`). Before then it is dropped from the draw order and
+   * the rest of the mix fills its place.
+   */
+  /*
+   * **The Director says which subspecies this room shows, and how heavily**
+   * (doc 019); the ramp says which may exist at all, and is the bound under
+   * both. A room draws from the composition as always, and then every body
+   * whose subspecies was not asked for falls back to its base — so a
+   * subspecies reads as a theme ("this room's shooters are pinners") rather
+   * than as a sprinkle, which is also how a player learns one.
+   */
+  const order = subspeciesFilter(
+    options.room_index === undefined
+      ? rosterOrder(profile.composition, rng)
+      : rosterOrder(profile.composition, rng).filter((id) => rampAllows(options.room_index!, id)),
+    profile, rng, options.room_index,
+  );
   const chunks = trickleChunks(rng);
   const ctx = contextFor(room, profile.composition);
 
-  const first = fit(profile, room, band, order, chunks, targetCount(profile.density, rng, roundsOf(profile)), ctx);
+  /*
+   * The ramp bounds the target before anything is fitted (doc 005). The world
+   * clamps too, and stays the backstop — this is so the *plan* is honest, and
+   * so the pressure the band checks is the pressure the room will have.
+   */
+  const wanted = targetCount(profile.density, rng, roundsOf(profile));
+  /*
+   * **The ramp does not bound the target here yet, and the reason is worth
+   * keeping.** Bounding the roster while still requiring the band means the
+   * assembler reaches that band with fewer, *heavier* bodies — measured, a
+   * twelve-body elite room of heavies cost 1.64 hearts against 1.42, and a
+   * run's median depth fell from sixteen rooms to twelve. A body count and a
+   * pressure band cannot both be held unless the **band** ramps too, which is
+   * its own calibration. Until it does, the world's clamp is the bound: it
+   * trims the plan after the band has been measured, so an early room plays
+   * below its band rather than at it with heavier bodies.
+   *
+   * `room_index` is read and threaded so the change is one line when the
+   * bands ramp.
+   */
+  void options.room_index;
+  const target = wanted;
+  const first = fit(profile, room, band, order, chunks, target, ctx);
   /*
    * **A floor on bodies.** A single wave's pressure climbs with every body,
    * so a release band held it to three or four and a room was over before it
@@ -609,8 +770,8 @@ export function assembleEncounterDetailed(
    * same roster is staged as a trickle instead, whose pressure is nearly flat
    * in its size, and the room gets the bodies its density asked for.
    */
-  if (first.ok && first.candidate.roster.length < MIN_ROOM_BODIES * roundsOf(profile) && profile.wave_structure !== "trickle") {
-    const staged: EncounterProfile = { ...profile, wave_structure: "trickle" };
+  if (first.ok && first.candidate.roster.length < MIN_ROOM_BODIES * roundsOf(profile) && profile.wave_structure !== "breathe") {
+    const staged: EncounterProfile = { ...profile, wave_structure: "breathe" };
     const again = fit(staged, room, band, order, chunks, Math.max(MIN_ROOM_BODIES * roundsOf(profile), targetCount(profile.density, rng, roundsOf(profile))), ctx);
     if (again.ok && again.candidate.roster.length > first.candidate.roster.length)
       return done(staged, again.candidate, band, source, {

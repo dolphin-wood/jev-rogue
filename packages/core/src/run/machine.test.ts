@@ -7,7 +7,7 @@ import type { EncounterPlan } from "../types.ts";
 import type { RoomPhase, RoomState } from "./machine.ts";
 
 const plan: EncounterPlan = {
-  profile: { composition: "mixed", density: "normal", wave_structure: "two_waves", anchor: "none", entry: "far_front" },
+  profile: { composition: "mixed", density: "normal", wave_structure: "steady", anchor: "none", entry: "far_front" },
   waves: [
     { at_ms: 0, spawns: [{ archetype: "rusher", spawn_group: "far", count: 2 }] },
     { at_ms: 2500, spawns: [{ archetype: "shooter", spawn_group: "far", count: 1 }] },

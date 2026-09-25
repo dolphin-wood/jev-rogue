@@ -20,12 +20,53 @@ export interface FrameRect {
 export interface AtlasJson {
   readonly frames: Readonly<Record<string, FrameRect>>;
   readonly playerAnchors?: Readonly<Record<string, PlayerAnchor>>;
+  readonly bossAnchors?: Readonly<Record<string, BossAnchor>>;
+  /**
+   * Where a subspecies' mark hangs on each frame of its base body (doc 019),
+   * in art pixels from that frame's top-left.
+   *
+   * Per frame rather than per body, because the point rides the pose: a horn
+   * is somewhere else on a windup than on an idle, and a mark pinned to the
+   * body's centre would slide about on its head as the body moved. The rig
+   * declares it once (`models.ts`, `rig.marks`) and the pipeline resolves it
+   * for every frame it delivers.
+   */
+  readonly markAnchors?: Readonly<Record<string, readonly [number, number]>>;
 }
 
 export interface PlayerAnchor {
   readonly grip: readonly [number, number];
   readonly offhand: readonly [number, number];
   readonly bladeAngleDeg: number;
+  /** The sword fist's centre, from a sprite model's joint (doc 016). */
+  readonly hand?: readonly [number, number];
+  /**
+   * The staff, which **no player frame draws** any more: one sprite the
+   * renderer places in every state, from the model's own `staff.up`.
+   *
+   * `staffAngleDeg` is the way this frame holds it, so the idle keeps the
+   * look the drawing had; `staffGripPx` is how far the crystal is from the
+   * fist along the shaft in art pixels, which the back view grips higher up
+   * than the other two; `staffDepth` is positive to paint it over the body
+   * and negative to paint it behind. All three come from the model
+   * (`anims.json`), so they are data rather than a table in the renderer.
+   */
+  readonly staffAngleDeg?: number;
+  readonly staffGripPx?: number;
+  readonly staffDepth?: number;
+  /**
+   * The crystal, on `weapon_player_staff` only: the staff **sprite's** own
+   * joint, which says how far its grip — the frame's centre — is from its
+   * head. No body frame carries one, because no body frame draws a staff.
+   */
+  readonly crystal?: readonly [number, number];
+}
+
+export interface BossAnchor {
+  readonly grip?: readonly [number, number];
+  readonly chain?: readonly [number, number];
+  /** Where the feet meet the floor, art px of the frame: the wide cuts' 336 px cells are laid on this. */
+  readonly pivot?: readonly [number, number];
 }
 
 export interface SheetSource {
@@ -93,6 +134,55 @@ export class RecolourableAtlas {
     return b.right - b.left + 1;
   }
 
+  /**
+   * Where a frame's **body** stands across it, art px from its left: the
+   * middle of its armour, leaving out the cape (violet) and the blade
+   * (unsaturated light steel), cached.
+   *
+   * For the Crypt King, whose action frames were drawn with the body in a
+   * different place across each frame — the crown at 175 on one key and 73
+   * on the next — so a cut snapped the whole body sideways, and mirroring a
+   * cut for the other direction doubled it. Held to this, the body stays
+   * where he stands and only the sword and the cape move (`drawEnemy`).
+   */
+  bodyCentreX(name: string): number {
+    return this.body(name).x;
+  }
+
+  /**
+   * How much armour a frame shows, in art px²: the same measure, counted.
+   * Across one body's frames it is nearly the same whatever the pose, which
+   * makes it the size of the drawing — the king's cuts were delivered drawn
+   * smaller than his idle, some by a third (`bossFrameScale` in play.ts).
+   */
+  bodyArea(name: string): number {
+    return this.body(name).n;
+  }
+
+  private body(name: string): { x: number; n: number } {
+    const hit = this.bodyCache.get(name);
+    if (hit !== undefined) return hit;
+    const r = this.frame(name);
+    let sum = 0;
+    let n = 0;
+    for (let y = 0; y < r.h; y++)
+      for (let x = 0; x < r.w; x++) {
+        const i = ((r.y + y) * this.sheetWidth + (r.x + x)) << 2;
+        if (this.base[i + 3]! < 16) continue;
+        const R = this.base[i]!, G = this.base[i + 1]!, B = this.base[i + 2]!;
+        if (B > R + 15 && B > G + 25) continue;
+        const hi = Math.max(R, G, B), lo = Math.min(R, G, B);
+        if (hi - lo < 28 && hi > 120) continue;
+        sum += x;
+        n++;
+      }
+    const out = { x: n > 0 ? sum / n : r.w / 2, n };
+    this.bodyCache.set(name, out);
+    return out;
+  }
+
+  private readonly bodyCache = new Map<string, { x: number; n: number }>();
+
   private readonly boundsCache =
     new Map<string, { top: number; bottom: number; left: number; right: number }>();
 
@@ -132,6 +222,18 @@ export class RecolourableAtlas {
 
   playerAnchor(name: string): PlayerAnchor | undefined {
     return this.atlas.playerAnchors?.[name];
+  }
+
+  bossAnchor(name: string): BossAnchor | undefined {
+    return this.atlas.bossAnchors?.[name];
+  }
+
+  /**
+   * Where this frame carries a subspecies' mark, in art px from its top-left,
+   * or `undefined` for a frame whose pose hides the part it hangs from.
+   */
+  markAnchor(name: string): readonly [number, number] | undefined {
+    return this.atlas.markAnchors?.[name];
   }
 
   /** A fresh tinted copy; the original is never mutated, so moods are independent. */

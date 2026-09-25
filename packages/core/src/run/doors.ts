@@ -20,7 +20,10 @@
 import type { PortalSpec, RewardCardKind } from "../sim/exits.ts";
 import type { Rng } from "../rng.ts";
 
-import { SPELL_SCHOOLS } from "../spells/schools.ts";
+import { SPELL_SCHOOLS, schoolOf } from "../spells/schools.ts";
+import { BASE_ITEMS } from "../spells/items.ts";
+import { ARCHETYPES } from "../content/tags.ts";
+import type { BaseItem } from "../types.ts";
 import type { SpellSchool } from "../spells/schools.ts";
 import { STAT_FAMILIES } from "./stats.ts";
 import type { StatFamily } from "./stats.ts";
@@ -39,23 +42,49 @@ export interface DoorOffer {
   readonly family?: StatFamily;
   readonly grade: number;
   /**
-   * A door to a **vendor's room** instead of a fight: the merchant or the
-   * blacksmith alone, met mid-run. Rare, and never the only way on.
+   * A door to a **room with no fight** instead of one: the merchant, the
+   * blacksmith or the fountain alone, met mid-run. Never the only way on.
    */
   readonly npc?: NpcKind;
+  /**
+   * The run's shape fixed this door rather than the Director choosing it, so
+   * it promises the room ahead and no reward (`fixedExit`, `PortalSpec.onward`).
+   */
+  readonly onward?: boolean;
 }
 
-export type NpcKind = "merchant" | "smith";
+/**
+ * The three rooms that have no fight in them. The two vendors trade gold for
+ * power; the **fountain** trades a fight's reward for health — one drink of
+ * `FOUNTAIN_HEAL_FRACTION` of the bar, and then it is dry.
+ */
+export type NpcKind = "merchant" | "smith" | "fountain";
 
 
-/** The schools that hold at least one spell tagged with each build style. */
-export const STYLE_SCHOOLS: Readonly<Record<string, readonly SpellSchool[]>> = {
-  spam: ["storm", "void", "frost", "spirit"],
-  nuke: ["stone", "storm", "frost", "spirit"],
-  area: ["flame", "stone", "void", "spirit", "venom"],
-  dot: ["flame", "venom"],
-  melee: ["spirit", "stone", "storm"],
-};
+/**
+ * **The schools a style's door may promise** (doc 006): a school serves a
+ * style when it holds at least two spells tagged with it, so a door that
+ * promises it to that style is a choice between spells rather than one card.
+ *
+ * Derived from the pool rather than written out. It was a hand-kept table,
+ * and a table beside the data it summarises is a second copy that goes stale
+ * the day a spell is added or re-tagged — the door then promises a school
+ * that holds nothing for the style, which is the dead draw the door exists
+ * to avoid. In `SPELL_SCHOOLS` order, so a door's draw is stable.
+ */
+const STYLE_SCHOOL_MIN = 2;
+export const STYLE_SCHOOLS: Readonly<Record<string, readonly SpellSchool[]>> = styleSchools(BASE_ITEMS);
+
+/** Per style, the schools holding at least `STYLE_SCHOOL_MIN` spells tagged with it. */
+export function styleSchools(items: readonly BaseItem[]): Record<string, readonly SpellSchool[]> {
+  const out: Record<string, readonly SpellSchool[]> = {};
+  for (const style of ARCHETYPES) {
+    out[style] = SPELL_SCHOOLS.filter((school) =>
+      items.filter((i) => schoolOf(i.id) === school && i.tags.includes(style)).length >= STYLE_SCHOOL_MIN);
+  }
+  return out;
+}
+
 
 function gradeFor(elite: boolean, roomIndex: number, rng: Rng): number {
   if (elite) return rng.next() < 0.35 ? 3 : 2;
@@ -116,8 +145,29 @@ export const RUN_BOSS_ROOM = RUN_SHOP_ROOM + 1;
 
 export interface RunShape {
   readonly roomIndex: number;
-  /** Whether the room just left was an elite one. Rule 5. */
+  /**
+   * **Whether the room these portals lead out of is itself elite.** Rule 5:
+   * no elite straight after an elite.
+   *
+   * The name is older than the meaning and both callers read it the older
+   * way, passing the elite flag of the room *before* this one — so an elite
+   * room's own doors were still allowed to promise another elite, and a real
+   * run came back with rooms 4 and 5 both elite. The portals out of a room
+   * are decided while the player is standing in it, so "the room just left"
+   * is, from the next room's point of view, this one.
+   */
   readonly lastWasElite: boolean;
+  /**
+   * Elite rooms **entered** so far this run, and ordinary fights since the
+   * last one (0 while standing in an elite room, absent before the first).
+   *
+   * `lastWasElite` on its own only forbids two in a row, which over fourteen
+   * fights permits seven. Measured: 30% of the fights of a rule run and 4 of
+   * the 12 of a real one. Doc 003 has the elite as the run's spike, and a
+   * spike every other room is the run's ordinary pitch with a badge on it.
+   */
+  readonly elitesSoFar?: number;
+  readonly fightsSinceElite?: number;
   /** Doc 003 forbids an elite while the player is one hit from dying. */
   readonly critical: boolean;
   /**
@@ -128,6 +178,35 @@ export interface RunShape {
   /** Vendor rooms already met this run, and whether the room just left was one. */
   readonly npcRooms?: number;
   readonly lastWasNpc?: boolean;
+  /**
+   * Vendor **portals already offered** this run, met or declined.
+   *
+   * Separate from `npcRooms`, and the reason is what a full Jev run looked
+   * like without it: the merchant was on the portal list in nine rooms of
+   * sixteen. Two of them could have been entered and the other seven were the
+   * same badge appearing again and again, which reads as the game nagging
+   * rather than as an opportunity. `NPC_ROOMS_MAX` caps what the run *spends*
+   * on vendors; this caps what it *says about* them.
+   */
+  readonly npcOffers?: number;
+  /**
+   * Fountain rooms already met this run. Counted apart from the vendors, so
+   * the run's one drink is not spent by a merchant stop and the other way
+   * round; `lastWasNpc` still covers both, because two rooms with no fight in
+   * a row is a gap in the run whichever two they are.
+   */
+  readonly fountains?: number;
+  /** Fountain portals put on the list this run, taken or declined. */
+  readonly fountainOffers?: number;
+  /**
+   * Whether the player has lost health this run.
+   *
+   * The fountain is the run's answer to a bad stretch, and on a full bar it
+   * is a door that pays nothing — so a run that has not been hurt yet is not
+   * offered one at all. A code bound rather than a question, because "is the
+   * drink worth a room" has one right answer when the bar is full.
+   */
+  readonly hurt?: boolean;
 }
 
 export type RoomStage = "combat" | "shop" | "boss";
@@ -145,8 +224,29 @@ export function stageFor(roomIndex: number): RoomStage {
  * The only two pacing rules left. Everything else the old enumeration enforced
  * was about types that no longer exist.
  */
+/**
+ * **How far apart the elite rooms stand, and how many a run holds.**
+ *
+ * Two ordinary fights between them, and four in all. The old rule was "not
+ * two in a row", which over fourteen fights allows seven — and it was not
+ * even doing that, because both callers passed the difficulty of the room
+ * *before* the one whose doors were being decided (`RunShape.lastWasElite`),
+ * so a real run came back with rooms 4 and 5 both elite and 4 elites in its
+ * 12 fights. An elite is the run's spike; a spike every other room is the
+ * run's ordinary pitch wearing a badge.
+ *
+ * Four, because the run is fourteen fights: one in the opening third, two
+ * through the middle and one before the stop is a shape, and the player can
+ * still decline every one of them.
+ */
+export const ELITE_GAP_FIGHTS = 2;
+export const ELITE_ROOMS_MAX = 4;
+
 export function legalDifficulties(run: RunShape): readonly Difficulty[] {
   if (run.lastWasElite || run.critical) return ["normal"];
+  if ((run.elitesSoFar ?? 0) >= ELITE_ROOMS_MAX) return ["normal"];
+  // Absent before the first elite, which is when there is nothing to be near.
+  if (run.fightsSinceElite !== undefined && run.fightsSinceElite < ELITE_GAP_FIGHTS) return ["normal"];
   // Elite from room 3, as doc 003 has always had it: the first two rooms are
   // where the player learns what their build does.
   return run.roomIndex >= 3 ? ["normal", "elite"] : ["normal"];
@@ -213,45 +313,164 @@ export function ruleDoors(run: RunShape, rng: Rng, count = drawPortalCount(rng))
  */
 export interface PortalChoices {
   readonly count: number;
-  /** Every legal set of reward kinds, one per portal, no kind twice. */
-  readonly kindSets: readonly (readonly RewardCardKind[])[];
+  /**
+   * The reward kinds a portal here may stand for, **one per option**.
+   *
+   * It used to be `kindSets`: every legal *combination* of kinds, enumerated,
+   * and the Director picked a whole set. That is the wrong question in two
+   * ways. It asks Jev to compare bundles — "stat, spell and affix" against
+   * "spell, affix and gold" — where with three doors drawn from four kinds
+   * every bundle overlaps every other in two thirds of its content, so the
+   * options are nearly the same sentence four times and the answer is decided
+   * by which one happens to carry the most matching clauses. And it throws
+   * away the ranking: a set answer says nothing about which door the player
+   * needs *most*, which is the one thing the offer wants to know.
+   *
+   * So the question is "which reward does this player need most now?", asked
+   * over single kinds, and code takes the top `count` distinct answers by
+   * sampling without replacement at `PORTAL_NEED_TEMPERATURE`. The first door
+   * is almost always the top need; the ones after it vary a little.
+   */
+  readonly kinds: readonly RewardCardKind[];
+  /**
+   * The rooms with **no fight** that may replace one of the portals here —
+   * the merchant, the blacksmith, the fountain — as options of the same
+   * question. Code's caps decide which of them are legal at all; whether one
+   * is worth a door is the Director's answer, and it wins a door only by
+   * outranking the reward kinds.
+   */
+  readonly npcKinds: readonly NpcKind[];
   /** Whether one of the portals may be elite. */
   readonly elite: boolean;
   /** Late in the run a normal door may be graded up. */
   readonly lateGrade: boolean;
-  /** Whether a vendor's room may replace one of the portals. */
-  readonly npc: boolean;
   readonly schools: readonly SpellSchool[];
   readonly families: readonly StatFamily[];
 }
 
-/** First room a vendor may appear behind, and the most a run meets. */
-export const NPC_FIRST_ROOM = 3;
-export const NPC_ROOMS_MAX = 2;
+/**
+ * **How much the ranking is perturbed.**
+ *
+ * Below one, so the distribution is sharpened rather than flattened: the
+ * top-ranked need wins the first door nearly every time, and the doors after
+ * it are drawn from what is left with enough spread that two rooms in the same
+ * state do not offer the same three badges in the same order. A run whose
+ * every offer is the argmax is a run with no choice in it, and one drawn at
+ * the raw distribution is a run whose first door is often not what the player
+ * needs at all.
+ */
+export const PORTAL_NEED_TEMPERATURE = 0.45;
+
+/**
+ * **How much the doors *after* the first are perturbed.**
+ *
+ * One temperature cannot do both jobs. Sharp enough that the first door is
+ * reliably the top need is also sharp enough that the second and third are
+ * reliably the second and third, and with three doors drawn from four reward
+ * kinds that makes almost every offer the same three badges — measured on the
+ * live model, one run put an affix badge on twelve consecutive offers and gold
+ * on none at all. The player's first door was answering their build; the offer
+ * as a whole had stopped being a choice.
+ *
+ * So the ranking is drawn in two parts: the first door at
+ * `PORTAL_NEED_TEMPERATURE`, which sharpens, and the rest at this, which
+ * spreads. The Director's top answer still wins the door it was asked for, and
+ * what stands beside it varies from room to room.
+ */
+export const PORTAL_TAIL_TEMPERATURE = 1.3;
+
+/**
+ * First room a vendor may appear behind, and **the most a run meets** — the
+ * global cap doc 003 asks the early economy to sit inside.
+ *
+ * Moved from room 3 to room 2 with the gold door's payout (`GOLD_ROOM_COINS`).
+ * The two numbers are one decision: gold is only worth taking if there is
+ * somewhere to spend it, and a run that met its first vendor at room 3 at best
+ * and usually not at all was a run where the gold portal paid in a currency
+ * with no shop. The cap stays at two, because a third vendor is a third room
+ * with no fight in it, and the run is fourteen fights long.
+ */
+/**
+ * **A room with no fight in it is rarer than any reward.**
+ *
+ * Reported from a real sixteen-room run: the shop badge was on the offer at
+ * rooms 6, 10 and 15, and "it feels like the game is pushing you to spend
+ * money. In a normal roguelike, apart from the shop, an NPC room should be
+ * very rare, rarer than gold." The old numbers — two vendor rooms entered,
+ * four vendor portals offered, from room 2 to room 12 — made the merchant
+ * and the smith ordinary furniture rather than a find.
+ *
+ * So: **one** vendor room a run before the fixed stop, **two** offers, and a
+ * window in the middle of the run. The window is the honest part of it. A
+ * vendor before room 4 is a shelf the player cannot afford, and one after
+ * room 10 is a purchase the fixed stop is four rooms away from making
+ * anyway; between those the gold has somewhere to go and the stop is far
+ * enough off to be worth not waiting for.
+ *
+ * `NPC_OFFERS_MAX` and `NPC_ROOMS_MAX` are different caps for the reason they
+ * always were: the first is what the run *says about* vendors, the second
+ * what it *spends* on them. Both have to be small, because a badge shown and
+ * declined four times is the nagging the report was about.
+ */
+export const NPC_FIRST_ROOM = 4;
+export const NPC_LAST_ROOM = 10;
+export const NPC_ROOMS_MAX = 1;
+/** How many times a run may put a vendor on the portal list at all. */
+export const NPC_OFFERS_MAX = 2;
+/**
+ * The fountain's window and caps, the same shape as the vendors'.
+ *
+ * **One drink**, because the fountain is the run's answer to a bad stretch,
+ * not an income: a second one would make the health bar a resource the player
+ * tops up rather than the budget doc 001 spends. The boss approach has its
+ * own fountain at the vendors' stop and does not draw on this one.
+ *
+ * It opens later than the vendors and closes later too: what it is for is a
+ * run that has gone wrong, which takes a few rooms to happen, and the room
+ * before the last fight is exactly where a player on a sliver of the bar
+ * wants it. `RunShape.hurt` is the other half of that — on a full bar the
+ * door pays nothing, so it is not offered at all.
+ */
+export const FOUNTAIN_FIRST_ROOM = 5;
+export const FOUNTAIN_ROOMS_MAX = 1;
+export const FOUNTAIN_OFFERS_MAX = 2;
 
 export function portalChoices(run: RunShape, rng: Rng, count = drawPortalCount(rng)): PortalChoices {
   const n = Math.max(1, Math.min(count, REWARD_KINDS.length));
+  // Neither may be the only way on, and neither may follow another room with
+  // no fight in it: two in a row is a hole in the run.
+  const roomToSpare = n >= 2 && !run.lastWasNpc;
+  const npc = roomToSpare && run.roomIndex >= NPC_FIRST_ROOM && run.roomIndex <= NPC_LAST_ROOM
+    && (run.npcRooms ?? 0) < NPC_ROOMS_MAX && (run.npcOffers ?? 0) < NPC_OFFERS_MAX;
+  /*
+   * The fountain runs to the last fight, unlike the vendors: the room it would
+   * displace is a fight, and a player who has to reach the boss on a sliver of
+   * the bar is exactly who it is for. What it must not do is stand where the
+   * vendors' stop already does, so it stops one short of the doors that open
+   * onto it.
+   */
+  const fountain = roomToSpare && run.roomIndex >= FOUNTAIN_FIRST_ROOM && run.roomIndex < RUN_COMBAT_ROOMS
+    && (run.fountains ?? 0) < FOUNTAIN_ROOMS_MAX && (run.fountainOffers ?? 0) < FOUNTAIN_OFFERS_MAX
+    // A drink on a full bar is a room that pays nothing; see `RunShape.hurt`.
+    && run.hurt !== false;
   return {
     count: n,
-    kindSets: combinations(REWARD_KINDS, n),
+    /*
+     * **A spell door to a full staff is not a plain spell door.** It is an
+     * upgrade door: `cardPool` deals copies of the keys already held, which
+     * raise their level, because a new spell on a full staff costs the player
+     * one they chose. The kind stays legal — an upgrade is a real reward — and
+     * the option text says which of the two it is.
+     */
+    kinds: REWARD_KINDS,
+    npcKinds: [...(npc ? ["merchant", "smith"] as const : []), ...(fountain ? ["fountain"] as const : [])],
     elite: legalDifficulties(run).includes("elite"),
     lateGrade: run.roomIndex >= 8,
-    // Never the only way on, never twice running, never the last fight's
-    // doors (those open onto the merchant anyway).
-    npc: n >= 2 && run.roomIndex >= NPC_FIRST_ROOM && run.roomIndex < RUN_COMBAT_ROOMS - 1
-      && !run.lastWasNpc && (run.npcRooms ?? 0) < NPC_ROOMS_MAX,
     schools: SPELL_SCHOOLS,
     families: STAT_FAMILIES,
   };
 }
 
-/** A kind set as one option id, and back. */
-export function kindSetKey(set: readonly RewardCardKind[]): string {
-  return set.join("+");
-}
-export function parseKindSetKey(key: string): RewardCardKind[] {
-  return key.split("+") as RewardCardKind[];
-}
 
 export interface PortalAnswers {
   readonly kinds: readonly RewardCardKind[];
@@ -267,8 +486,9 @@ export interface PortalAnswers {
 
 /**
  * The portals, from the Director's answers. The elite door goes **last**, so
- * the leftmost is never the hard one taken by accident; a vendor replaces
- * the first normal door, so the elite survives it.
+ * the leftmost is never the hard one taken by accident; a room with no fight
+ * in it — a vendor or the fountain — replaces the first normal door, so the
+ * elite survives it.
  */
 export function assemblePortals(a: PortalAnswers): DoorOffer[] {
   const kinds = [...a.kinds];
@@ -286,10 +506,67 @@ export function assemblePortals(a: PortalAnswers): DoorOffer[] {
     };
   });
   if (a.npc) {
-    const i = doors.findIndex((d) => d.difficulty === "normal");
-    if (i >= 0 && doors.length > 1) doors[i] = { reward: "gold", difficulty: "normal", grade: 1, npc: a.npc };
+    /*
+     * The **last** normal door, not the first. `kinds` arrives in need order
+     * now (`PORTAL_NEED_TEMPERATURE`), so the first of them is the reward the
+     * Director ranked highest; replacing that one would have the vendor
+     * consume exactly the door the player most wanted. The last is the one
+     * ranked lowest, which is what a vendor is worth displacing.
+     */
+    for (let i = doors.length - 1; i >= 0; i--)
+      if (doors[i]!.difficulty === "normal" && doors.length > 1) {
+        doors[i] = { reward: "gold", difficulty: "normal", grade: 1, npc: a.npc };
+        break;
+      }
   }
   return doors;
+}
+
+/**
+ * **The one way out of the vendors' stop: the boss.**
+ *
+ * The pre-boss room used to fall through to `ruleDoors`, because no portal
+ * question is asked there — so it raised up to three portals with stat, spell
+ * and affix badges on them, all of which led to the same boss fight. Three
+ * doors that go to one place is not a choice, it is three copies of a door
+ * with three different lies written on them.
+ */
+export function bossExit(): PortalSpec[] {
+  return [{ reward: "gold", elite: false, grade: 1, type: "boss", boss: true, onward: true }];
+}
+
+/**
+ * **The one way out of the last fight: the vendors' stop.**
+ *
+ * The same fault as `bossExit`, one room earlier and still there. Room
+ * `RUN_COMBAT_ROOMS` is the last fight, and every portal out of it opens onto
+ * the merchant whatever badge it wears — so the room was ending with up to
+ * three doors promising a spell, an affix and a stat, all three of which led
+ * to the same shop, and none of which handed out what it said. Reported from
+ * play as "random doors around the shop".
+ *
+ * It is not a Director question either, and that is the point: with one legal
+ * answer there is nothing to choose (doc 002, "a question with one option is
+ * not asked"), so the room costs no portal question at all and the request it
+ * would have ridden in is smaller.
+ *
+ * `onward` is what stops the badge lying: the door promises no currency, so it
+ * is drawn as the room ahead rather than as a reward this room will never pay.
+ */
+export function shopExit(): PortalSpec[] {
+  return [{ reward: "gold", elite: false, grade: 1, type: "shop", onward: true }];
+}
+
+/**
+ * Whether this room's portals are fixed by the run's shape rather than asked
+ * for: the last fight opens onto the vendors' stop, and the stop opens onto
+ * the boss. One place, so the scene and the harness cannot disagree about
+ * where the run narrows.
+ */
+export function fixedExit(roomIndex: number): PortalSpec[] | null {
+  if (roomIndex === RUN_COMBAT_ROOMS) return shopExit();
+  if (roomIndex === RUN_SHOP_ROOM) return bossExit();
+  return null;
 }
 
 /** Portal specs for the world, from door offers: what each opens onto. */
@@ -309,9 +586,3 @@ export function doorSpecs(doors: readonly DoorOffer[], roomIndex: number): Porta
   }));
 }
 
-function combinations<T>(xs: readonly T[], k: number): T[][] {
-  if (k === 0) return [[]];
-  if (xs.length < k) return [];
-  const [head, ...rest] = xs;
-  return [...combinations(rest, k - 1).map((c) => [head!, ...c]), ...combinations(rest, k)];
-}

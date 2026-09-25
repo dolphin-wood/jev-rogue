@@ -10,10 +10,11 @@ import { PNG } from "pngjs";
 import {
   GRID_W, GRID_H, TILE_PX, Tile, MAX_HEARTS, STEP_MS, ITEMS,
   RngSource, assembleEncounter, createWorld, generateRoom, plainInstance,
-  staffFor, step, toRoomPlan, worldCleared, PRESSURE_BANDS, PLAYABLE_ARCHETYPES,
+  step, toRoomPlan, worldCleared, PRESSURE_BANDS, PLAYABLE_ARCHETYPES,
   moodTransform, tintRGBA,
 } from "@jr/core";
 import type { Enemy, EnemyId, ItemInstance, Mood, World } from "@jr/core";
+import { fillSubspecies } from "@jr/core";
 import { referenceInput } from "../play/player-model.ts";
 
 const ART_SCALE = 2;
@@ -23,14 +24,14 @@ const atlas = JSON.parse(readFileSync(join(DIR, "sprites.json"), "utf8")) as {
 };
 const sheet = PNG.sync.read(readFileSync(join(DIR, "sprites.png")));
 
-const ENEMY_FRAME: Record<EnemyId, string> = {
+const ENEMY_FRAME: Record<EnemyId, string> = fillSubspecies<string>({
   rusher: "enemy_rusher", shooter: "enemy_shooter", turret: "enemy_turret",
   orbiter: "enemy_orbiter", tank: "enemy_tank", summoner: "enemy_summoner",
   lancer: "enemy_lancer", sentinel: "enemy_sentinel",
   warden: "enemy_warden", bellringer: "enemy_bellringer", rifter: "enemy_rifter",
   snarecaster: "enemy_snarecaster", delver: "enemy_delver", cinderling: "enemy_cinderling", sower: "enemy_sower",
   boss: "boss_p1",
-};
+});
 
 const seed = process.argv[2] ?? "frame-1";
 const ticks = Number(process.argv[3] ?? 180);
@@ -40,14 +41,14 @@ const src = new RngSource(seed);
 const arch = PLAYABLE_ARCHETYPES[3]!;
 const mood: Mood = { temperature: "cold", brightness: "dim", particle_intensity: "calm" };
 const generated = generateRoom(
-  { space: arch.id, symmetry: "mirrored", mood }, arch.doors[0]!, "combat", src.stream("room"),
+  { space: arch.id, symmetry: "mirrored", size: "standard", mood }, arch.doors[0]!, "combat", src.stream("room"),
 );
 const room = toRoomPlan(generated, { id: "f", seed_key: seed, reward_kind: "item", params_source: "rule" });
 const encounter = assembleEncounter(
-  { composition: "mixed", density: "normal", wave_structure: "two_waves", anchor: "none", entry: "far_front" },
+  { composition: "mixed", density: "normal", wave_structure: "steady", anchor: "none", entry: "far_front" },
   room, PRESSURE_BANDS.build, src.stream("enc"), { source: "rule" },
 );
-const staff = staffFor({ slots: "many", mana: "high", tempo: "steady", special: "none" });
+const staff = { slots: 6, mana_max: 120 };
 const slots: (ItemInstance | null)[] = Array.from({ length: staff.slots }, (_, i) =>
   i === 0 ? plainInstance("magic_bolt") : i === 1 ? plainInstance("stone_shard") : null);
 

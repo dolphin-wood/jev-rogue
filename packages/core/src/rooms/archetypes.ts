@@ -8,15 +8,19 @@
  * of bug disappears by construction instead of being detected per seed.
  *
  * Every declared cell is checked by `checkArchetypeDeclarations` and by the
- * test sweep: free floor under the mask, far enough from every supported door
- * for a hazard (>= 4 tiles) or a spawn (>= 6 tiles), and disjoint from the
- * other declarations.
+ * test sweep, at every room size: free floor under the mask, far enough from
+ * every supported door for a hazard (>= 4 tiles) or a spawn (>= 6 tiles), and
+ * disjoint from the other declarations.
+ *
+ * The declarations are written on the base grid (`extent.ts`) and carried to a
+ * room's size by `archetypeAt`: zone slots moved, spawn cells spread.
  */
 import type {
-  Cell, Cover, DoorSide, Openness, Shape, SpaceArchetype, SpaceArchetypeId,
+  Cell, Cover, DoorSide, Extent, Openness, Shape, SpaceArchetype, SpaceArchetypeId,
   SpawnGroup, ZoneSlot,
 } from "../types.ts";
-import { DOOR_CELL, isFloor, manhattan, maskFor, rect } from "./masks.ts";
+import { doorCell, isFloor, manhattan, maskFor, rect } from "./masks.ts";
+import { BASE_EXTENT, cellAt, rectAt, slotAt } from "./extent.ts";
 
 /** A hazard may not sit within this many tiles of any supported door. */
 export const HAZARD_DOOR_CLEARANCE = 4;
@@ -209,10 +213,21 @@ export const SPACE_ARCHETYPES: readonly SpaceArchetype[] = DEFS.map((d) => ({
 
 const BY_ID = new Map<SpaceArchetypeId, SpaceArchetype>(SPACE_ARCHETYPES.map((a) => [a.id, a]));
 
+/** An archetype as declared, on the base grid. */
 export function archetype(id: SpaceArchetypeId): SpaceArchetype {
   const a = BY_ID.get(id);
   if (!a) throw new Error(`unknown space archetype ${id}`);
   return a;
+}
+
+/** An archetype's declarations carried to a room's extent: each zone slot moved, each spawn cell spread. */
+export function archetypeAt(a: SpaceArchetype, ext: Extent): SpaceArchetype {
+  if (ext.w === BASE_EXTENT.w && ext.h === BASE_EXTENT.h) return a;
+  return {
+    ...a,
+    zoneSlots: a.zoneSlots.map((z) => ({ id: z.id, cells: slotAt(z.cells, ext) })),
+    spawnGroups: a.spawnGroups.map((g) => ({ id: g.id, cells: g.cells.map((c) => cellAt(c, ext)) })),
+  };
 }
 
 export const PLAYABLE_ARCHETYPES: readonly SpaceArchetype[] =
@@ -220,8 +235,11 @@ export const PLAYABLE_ARCHETYPES: readonly SpaceArchetype[] =
 export const BOSS_ARCHETYPES: readonly SpaceArchetype[] =
   SPACE_ARCHETYPES.filter((a) => a.boss === true);
 
-/** The boss arena keeps this block clear and all cover at least 3 tiles away. */
-export const BOSS_CENTRE: readonly Cell[] = rect(7, 4, 7, 5);
+/** The boss arena keeps this block clear and all cover at least 3 tiles away: 7 x 5 on the base. */
+export function bossCentre(ext: Extent): Cell[] {
+  const [x, y, w, h] = rectAt([7, 4, 7, 5], ext);
+  return rect(x, y, w, h);
+}
 export const BOSS_COVER_CLEARANCE = 3;
 
 /* -------------------------- declaration self-check -------------------------- */
@@ -232,9 +250,10 @@ export const BOSS_COVER_CLEARANCE = 3;
  * placement reserves these cells and their mirrors), far enough from the doors,
  * and not shared between a zone and a spawn.
  */
-export function checkArchetypeDeclarations(a: SpaceArchetype): string[] {
+export function checkArchetypeDeclarations(base: SpaceArchetype, ext: Extent): string[] {
   const problems: string[] = [];
-  const mask = maskFor(a.shape);
+  const a = archetypeAt(base, ext);
+  const mask = maskFor(a.shape, ext);
   const seenZone = new Map<string, string>();
 
   for (const z of a.zoneSlots) {
@@ -246,7 +265,7 @@ export function checkArchetypeDeclarations(a: SpaceArchetype): string[] {
       if (prev) problems.push(`${a.id}/${z.id}: ${key} already used by ${prev}`);
       seenZone.set(key, z.id);
       for (const side of a.doors) {
-        if (manhattan(cell, DOOR_CELL[side]) < HAZARD_DOOR_CLEARANCE) {
+        if (manhattan(cell, doorCell(side, ext)) < HAZARD_DOOR_CLEARANCE) {
           problems.push(`${a.id}/${z.id}: ${key} is within ${HAZARD_DOOR_CLEARANCE} of door ${side}`);
         }
       }
@@ -261,7 +280,7 @@ export function checkArchetypeDeclarations(a: SpaceArchetype): string[] {
       const z = seenZone.get(key);
       if (z) problems.push(`${a.id}/${g.id}: ${key} collides with zone ${z}`);
       for (const side of a.doors) {
-        if (manhattan(cell, DOOR_CELL[side]) < SPAWN_ENTRY_CLEARANCE) {
+        if (manhattan(cell, doorCell(side, ext)) < SPAWN_ENTRY_CLEARANCE) {
           problems.push(`${a.id}/${g.id}: ${key} is within ${SPAWN_ENTRY_CLEARANCE} of entry ${side}`);
         }
       }

@@ -12,9 +12,9 @@
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { ENEMIES } from "@jr/core";
+import { ENEMIES, fillSubspecies } from "@jr/core";
 import type { EnemyId } from "@jr/core";
-import { strideFor, enemyFrame, frameForFacing } from "./enemy-frames.ts";
+import { strideFor, enemyFrame, enemyPose, frameForFacing } from "./enemy-frames.ts";
 import type { FramedEnemy } from "./enemy-frames.ts";
 
 const sheet = JSON.parse(readFileSync(new URL("../../../../assets/sprites.json", import.meta.url), "utf8")) as {
@@ -23,7 +23,7 @@ const sheet = JSON.parse(readFileSync(new URL("../../../../assets/sprites.json",
 const has = (n: string): boolean => n in sheet.frames;
 
 /** What the play scene maps archetypes to. Kept in step by the test below. */
-const ENEMY_FRAME: Record<EnemyId, string> = {
+const ENEMY_FRAME: Record<EnemyId, string> = fillSubspecies<string>({
   rusher: "enemy_rusher", shooter: "enemy_shooter", turret: "enemy_turret",
   orbiter: "enemy_orbiter", tank: "enemy_tank", summoner: "enemy_summoner",
   lancer: "enemy_lancer", sentinel: "enemy_sentinel",
@@ -31,7 +31,7 @@ const ENEMY_FRAME: Record<EnemyId, string> = {
   snarecaster: "enemy_snarecaster", delver: "enemy_delver", cinderling: "enemy_cinderling", sower: "enemy_sower",
   // Undirected and three-phase, like the turret is undirected.
   boss: "boss_p1",
-};
+});
 
 const FACINGS = [0, Math.PI / 2, Math.PI, -Math.PI / 2, 0.7, 2.4, 4.0, 5.6];
 const PHASES = ["approach", "windup", "lunge", "recover"];
@@ -70,33 +70,57 @@ describe("enemy frame naming", () => {
   });
 
   it("never asks the sheet for a frame it does not have", () => {
+    /*
+     * `enemyFrame` is `frameForFacing(enemyPose(…), facing)`, and the pose
+     * never reads the facing (pinned by the next test). So the product is
+     * swept once for the poses and each pose is then drawn at every facing:
+     * the same names are asked for as by sweeping the facing inside, at an
+     * eighth of the calls. Swept inside, this was a minute of the suite.
+     */
     const missing: string[] = [];
     for (const id of Object.keys(ENEMIES) as EnemyId[]) {
       const base = ENEMY_FRAME[id];
-      for (const facing of FACINGS)
-        for (const attack of PHASES)
-          for (const awake of [true, false])
-            for (const hitFlashMs of [0, 90])
-              for (const roused of [true, false])
-              for (const brakeMs of [0, 120])
-              for (const recoversBraced of [true, false])
-              for (const telegraphMs of [0, 200])
-              for (const stationary of [true, false])
-                for (const moving of [true, false])
-                  // Four walk frames and two idle frames, so the tick and the
-                  // distance both have to be swept to reach every branch.
-                  for (const travelled of [0, 22, 44, 66, 88])
-                    for (const tick of [0, 1, 2, 3, 14, 15, 28]) {
-                      const e = enemy({
-                        awake, roused, brakeMs, recoversBraced, attack, hitFlashMs,
-                        telegraphMs, stationary, facing, travelled,
-                        vx: moving ? 80 : 0,
-                      });
-                      const { name } = enemyFrame(e, tick, has, base);
-                      if (!has(name)) missing.push(`${id}: ${name}`);
-                    }
+      const poses = new Set<string>();
+      for (const attack of PHASES)
+        for (const awake of [true, false])
+          for (const hitFlashMs of [0, 90])
+            for (const roused of [true, false])
+            for (const brakeMs of [0, 120])
+            for (const recoversBraced of [true, false])
+            for (const telegraphMs of [0, 200])
+            for (const stationary of [true, false])
+              for (const moving of [true, false])
+                // Four walk frames and two idle frames, so the tick and the
+                // distance both have to be swept to reach every branch.
+                for (const travelled of [0, 22, 44, 66, 88])
+                  for (const tick of [0, 1, 2, 3, 14, 15, 28]) {
+                    const e = enemy({
+                      awake, roused, brakeMs, recoversBraced, attack, hitFlashMs,
+                      telegraphMs, stationary, travelled,
+                      vx: moving ? 80 : 0,
+                    });
+                    poses.add(enemyPose(e, tick, has, base));
+                  }
+      for (const pose of poses)
+        for (const facing of FACINGS) {
+          const { name } = frameForFacing(base, pose, facing, has);
+          if (!has(name)) missing.push(`${id}: ${name}`);
+        }
     }
     expect([...new Set(missing)]).toEqual([]);
+  });
+
+  it("chooses a pose without reading the facing", () => {
+    // What lets the sweep above draw each pose at every facing afterwards.
+    for (const id of Object.keys(ENEMIES) as EnemyId[])
+      for (const attack of PHASES)
+        for (const awake of [true, false])
+          for (const moving of [true, false])
+            for (const tick of [0, 15]) {
+              const at = (facing: number) => enemyPose(
+                enemy({ attack, awake, facing, vx: moving ? 80 : 0, travelled: 22 }), tick, has, ENEMY_FRAME[id]);
+              for (const facing of FACINGS) expect(at(facing), `${id} ${attack}`).toBe(at(0));
+            }
   });
 
   it("draws the turret from its one undirected frame", () => {
@@ -104,7 +128,7 @@ describe("enemy frame naming", () => {
     // name for it is exactly the mistake that rendered a boss.
     for (const facing of FACINGS) {
       const { name, flipX } = enemyFrame(enemy({ facing, roused: true }), 0, has, "enemy_turret");
-      expect(name).toMatch(/^enemy_turret_(dormant|dormant1|idle0|idle1)$/);
+      expect(name).toMatch(/^enemy_turret_(dormant\d?|idle\d)$/);
       expect(flipX).toBe(false);
     }
   });
@@ -119,7 +143,7 @@ describe("enemy frame naming", () => {
     const live = at({ awake: true });
     const firing = at({ awake: true, telegraphMs: 200 });
 
-    expect(scanning).toMatch(/^enemy_turret_dormant1?$/);
+    expect(scanning).toMatch(/^enemy_turret_dormant\d?$/);
     expect(live).toBe("enemy_turret_tele");
     // Firing shares the pose and is separated by the renderer's red flash,
     // which is the one state that may reuse a drawing.

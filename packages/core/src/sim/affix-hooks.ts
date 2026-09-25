@@ -20,11 +20,11 @@
  *
  * ### Why several effects reuse existing machinery
  *
- * Doc 013's test for an affix was that it be a *use* of `firePayloadChild`
- * and the world's events rather than a request for new machinery. That holds:
+ * Doc 013's test for an affix was that it be a *use* of the simulation's
+ * existing moments rather than a request for new machinery. That holds:
  * `fork` and `shatter` set the split count that `splitBullets` already reads;
- * `repeat` is the scope's own `repeat`; `bloom` is a fire patch; `retort` and
- * `slipstream` fire the spell's own unit at a target through the same
+ * `repeat` fires the spell again as echoes; `bloom` is a fire patch; `retort`
+ * and `slipstream` fire the spell itself at a target through the same
  * `fireUnit` a keypress uses. The genuinely new things are small — a mark on
  * an enemy, a ward that eats bullets, an arc that seeks the next body — and
  * each is a few lines.
@@ -35,7 +35,10 @@
  * of purity would be a second thing to balance. The card says "leaves a
  * field", which is true.
  */
-import type { CastUnit, Element } from "../types.ts";
+import type { Element } from "../types.ts";
+import { addPower, copyPowers, dominantElement, noPowers } from "../content/tags.ts";
+import { PROC_CHAIN } from "./cast.ts";
+import type { ElementPowers } from "../types.ts";
 import { spellAffixById } from "../spells/affixes.ts";
 import type { AffixEffect } from "../spells/affixes.ts";
 import type { Bullet, Enemy, World } from "./types.ts";
@@ -65,7 +68,16 @@ export function effectOf(a: AttachedAffix): AffixEffect | null {
  */
 export interface HookSim {
   hurt(e: Enemy, amount: number): void;
-  fire(unit: CastUnit, origin: { x: number; y: number }, target: { x: number; y: number }): void;
+  /**
+   * Casts the spell in slot `spellIndex`, free, from `origin` at `target`.
+   *
+   * **The slot, not the item.** Fired through an empty scope, a cast loses
+   * everything that says *which* spell this is: the slot index the renderer
+   * looks the art up by, the affixes, the element and the level. A
+   * `resonance` or `retort` cast came out as a generic pale bolt instead of
+   * the spell the player put on the key.
+   */
+  fire(spellIndex: number, origin: { x: number; y: number }, target: { x: number; y: number }): void;
 }
 
 /** A rune left on the floor by `ward`, which stops enemy projectiles. */
@@ -79,10 +91,19 @@ export interface Ward {
 
 export const WARD_RADIUS = 18;
 export const WARD_LIFE_MS = 6000;
-/** How far a `chain` arc will look for its next body. */
-const ARC_SPEED = 520;
+/**
+ * The floor under a chained copy's speed, so a slow spell's chain still
+ * arrives while the pack is still a pack.
+ */
+const ARC_MIN_SPEED = 320;
 /** The reach of an arc from a spell that chains without an affix saying so. */
 const ARC_DEFAULT_RANGE = 170;
+/**
+ * What a chained copy keeps of the shot that made it, besides its identity:
+ * its size, and how long it has to reach the next body.
+ */
+const ARC_SIZE = 0.65;
+const ARC_LIFE_MS = 900;
 /**
  * Fraction of the parent's damage an arc carries: **half**, each jump.
  *
@@ -138,6 +159,8 @@ export function castAdditions(affixes: readonly AttachedAffix[]): {
   /** What the `shape` affixes do to the projectile, as scope changes. */
   mods: {
     pierceAdd: number; homing: number; bounce: number; damageMult: number; radiusMult: number; speedMult: number;
+    /** Every element the affixes grant, by power: `kindle` **and** `blight`. */
+    elements: ElementPowers;
     element: Element | null; elementPower: number;
   };
 } {
@@ -146,7 +169,7 @@ export function castAdditions(affixes: readonly AttachedAffix[]): {
   let spreadDirs = 0;
   const mods = {
     pierceAdd: 0, homing: 0, bounce: 0, damageMult: 1, radiusMult: 1, speedMult: 1,
-    element: null as Element | null, elementPower: 0,
+    elements: noPowers(), element: null as Element | null, elementPower: 0,
   };
   for (const a of affixes) {
     const e = effectOf(a);
@@ -157,7 +180,12 @@ export function castAdditions(affixes: readonly AttachedAffix[]): {
     mods.damageMult *= e.damage ?? 1;
     mods.radiusMult *= e.radius ?? 1;
     mods.speedMult *= e.speed ?? 1;
-    if (e.element) { mods.element = e.element; mods.elementPower = Math.max(mods.elementPower, e.power ?? 1); }
+    /*
+     * **Two element affixes are two elements**, and two of the same are one
+     * element twice as strong. `kindle` used to overwrite `rime`, so the
+     * second card the player attached silently deleted the first.
+     */
+    if (e.element) addPower(mods.elements, e.element, e.power ?? 1);
   }
   for (const a of at(affixes, "cast")) {
     const e = effectOf(a);
@@ -165,6 +193,8 @@ export function castAdditions(affixes: readonly AttachedAffix[]): {
     if (e.kind === "repeat") repeat += e.extra;
     if (e.kind === "spread") spreadDirs += e.dirs;
   }
+  mods.element = dominantElement(mods.elements) === "none" ? null : dominantElement(mods.elements);
+  mods.elementPower = mods.element ? mods.elements[mods.element as "fire"] : 0;
   // `fork` is a hit affix, but the split count has to be on the projectile
   // before it dies, so it is set at cast and consumed by `splitBullets`.
   const fork = find(at(affixes, "hit"), "split");
@@ -248,39 +278,67 @@ export function onHit(w: World, b: Bullet, e: Enemy, sim: HookSim): void {
     if (next) {
       const child = acquire(w.playerBullets, false);
       if (child) {
+        /*
+         * **The chain releases a smaller copy of the spell, not an arc.**
+         *
+         * It used to make a generic fast white streak at a fixed 520 px/s,
+         * which meant the affix looked and behaved identically on all twelve
+         * attacks: a chained void orb and a chained frost needle were the
+         * same object. That is the one thing an affix must not do — the spell
+         * on the key is the player's decision, and an affix that erases it
+         * makes every build's chain the same chain.
+         *
+         * So the child keeps the parent's **identity**: `spellIndex` (which
+         * is what the renderer takes the shape and the light from), element,
+         * element power, and the parent's own speed. What it loses is
+         * everything that would make it a multiplier — it is smaller, it does
+         * a fraction of the damage, and it carries none of the parent's
+         * pierce, bounce or split. A weaker second casting of the
+         * same spell, aimed at the next body.
+         */
         const d = Math.hypot(next.x - b.x, next.y - b.y) || 1;
+        const speed = Math.max(ARC_MIN_SPEED, Math.hypot(b.vx, b.vy));
         child.alive = true;
         child.x = b.x;
         child.y = b.y;
-        child.vx = ((next.x - b.x) / d) * ARC_SPEED;
-        child.vy = ((next.y - b.y) / d) * ARC_SPEED;
-        child.radius = Math.max(2, b.radius * 0.8);
+        child.vx = ((next.x - b.x) / d) * speed;
+        child.vy = ((next.y - b.y) / d) * speed;
+        child.radius = Math.max(2, b.radius * ARC_SIZE);
         // Not rounded up to one: a fourth jump doing what a third did would
         // make the halving a lie. Fractional damage is what the sim carries.
         child.damage = b.damage * ARC_DAMAGE;
-        child.lifeMs = 900;
+        child.lifeMs = ARC_LIFE_MS;
         child.element = b.element;
         child.elementPower = b.elementPower;
+        copyPowers(child.powers, b.powers);
+        // A jump is a lesser copy in what it triggers as well as in what it
+        // deals: Risk of Rain 2 discounts a chained hit twice, and so do we.
+        child.proc = b.proc * PROC_CHAIN;
+        child.statusMult = b.statusMult;
         child.affixes = b.affixes;
         child.spellIndex = b.spellIndex;
+        child.weight = b.weight * ARC_SIZE;
+        child.leavesFire = b.leavesFire;
         child.manaSpent = 0;
         child.arcLeft = b.arcLeft - 1;
-        // The arc is drawn as a line from the body it left to the body it is
-        // reaching, so it has to remember where it started.
+        // A copy is drawn as the spell is, and a bolt's streak runs back along
+        // its own path, so it has to remember where it started.
         child.originX = b.x;
         child.originY = b.y;
         child.targetId = next.id;
-        // Fast and straight: a chain is not a projectile that can be dodged.
+        // It still homes hard on the body it was released at: the affix's
+        // promise is that the hit reaches the next target, not that a second
+        // shot is fired in its general direction.
         child.seekDegPerS = 720;
-        // Carries the parent's hit list, so an arc never bounces back to the
+        child.seekMs = 0;
+        // Carries the parent's hit list, so a copy never comes back to the
         // body it just left.
         child.hitIds = [...b.hitIds, e.id];
         child.split = 0;
         child.pierce = 0;
         child.bounce = 0;
         child.homing = 0;
-        child.payloadUnit = null;
-        child.passthrough = false;
+        child.orbitMs = 0;
         w.events.push({ kind: "shot", x: b.x, y: b.y, what: "arc" });
       }
     }
@@ -289,7 +347,9 @@ export function onHit(w: World, b: Bullet, e: Enemy, sim: HookSim): void {
   if (hits.length === 0) return;
 
   const mark = find(hits, "mark");
-  if (mark && mark.kind === "mark") {
+  // A pellet of a cone marks a body a fraction as often as a bolt does: an
+  // on-hit trigger is bought with the hit's proc weight, not with its count.
+  if (mark && mark.kind === "mark" && (b.proc >= 1 || w.rng.next() < b.proc)) {
     if (e.marked) {
       e.marked = false;
       burst(w, e.x, e.y, mark.radiusPx, Math.round(b.damage * MARK_DAMAGE), sim, "brand");
@@ -390,13 +450,12 @@ export function wallSplitCount(b: Bullet): number {
  * to aim is a riposte that arrives after the second hit.
  */
 export function onHurt(w: World, fromX: number, fromY: number, sim: HookSim): void {
-  for (const slot of w.spells) {
-    if (!slot || !slot.unit) continue;
+  w.spells.forEach((slot, i) => {
+    if (!slot) return;
     const r = find(at(slot.affixes, "hurt"), "riposte");
-    if (!r || r.kind !== "riposte") continue;
-    const targets = nearestN(w, fromX, fromY, r.targets);
-    for (const t of targets) sim.fire(slot.unit, w.player, t);
-  }
+    if (!r || r.kind !== "riposte") return;
+    for (const t of nearestN(w, fromX, fromY, r.targets)) sim.fire(i, w.player, t);
+  });
 }
 
 /**
@@ -408,13 +467,13 @@ export function onHurt(w: World, fromX: number, fromY: number, sim: HookSim): vo
  */
 export function onDashThrough(w: World, e: Enemy, firedThisDash: number, sim: HookSim): boolean {
   let fired = false;
-  for (const slot of w.spells) {
-    if (!slot || !slot.unit) continue;
+  w.spells.forEach((slot, i) => {
+    if (!slot) return;
     const r = find(at(slot.affixes, "dash"), "riposte");
-    if (!r || r.kind !== "riposte" || firedThisDash >= r.targets) continue;
-    sim.fire(slot.unit, w.player, e);
+    if (!r || r.kind !== "riposte" || firedThisDash >= r.targets) return;
+    sim.fire(i, w.player, e);
     fired = true;
-  }
+  });
   return fired;
 }
 

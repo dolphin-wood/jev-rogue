@@ -77,6 +77,12 @@ export interface CrescentOptions {
   readonly squash?: number;
   readonly dx?: number;
   readonly dy?: number;
+  /**
+   * Whether to draw the blade's own flash — the line along it and the glint
+   * at its tip — at the head of the smear. Off where the blade itself is drawn
+   * (the king's sword is a sprite), or the line reads as a second blade.
+   */
+  readonly blade?: boolean;
 }
 
 /** Smoothstep, for ramps that should ease rather than kink. */
@@ -166,7 +172,7 @@ export function drawCrescent(
 
   // The blade's flash along its length, and a glint at the tip.
   const head = at(1);
-  if (o.tailCut < 0.9) {
+  if (o.tailCut < 0.9 && o.blade !== false) {
     const [ix, iy] = P(head.a, head.outer - head.thick);
     const [jx, jy] = P(head.a, head.outer - head.thick * 0.8);
     const [ox, oy] = P(head.a, head.outer + 1);
@@ -222,6 +228,15 @@ export const PLAYER_CRESCENT: CrescentStyle = {
  * identical is the point — the player learns one shape and it means *an arc is
  * being swung here*, whoever is swinging it.
  */
+/**
+ * The king's greatsword (doc 020): the enemy palette run hotter and whiter at
+ * the edge, and drawn far thicker, because the one thing it must say is weight.
+ */
+export const BOSS_CRESCENT: CrescentStyle = {
+  shadow: 0x1a0806, body: 0xff7a3c, rim: 0xffc98a, edge: 0xffffff, sparkColour: 0xffd9a0,
+};
+
 export const ENEMY_CRESCENT: CrescentStyle = {
   shadow: 0x2a0b12, body: 0xff5a3c, rim: 0xffa070, edge: 0xfff0d8, sparkColour: 0xffb37a,
 };
+

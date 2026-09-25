@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { ITEMS } from "../spells/items.ts";
 import { RngSource } from "../rng.ts";
-import { castableAlone, makeSpell, slotCost } from "../sim/spells.ts";
-import { plainInstance, staffFor } from "../spells/index.ts";
+import { makeSpell, slotCost } from "../sim/spells.ts";
+import { plainInstance } from "../spells/index.ts";
 
-const STAFF_FOR_COST = staffFor({ slots: "many", mana: "high", tempo: "steady", special: "none" });
-import { emptyHistory, offerCards, offerDoors, offerStats } from "./offer.ts";
-import { affixFits, spellAffixById } from "../spells/affixes.ts";
+const STAFF_FOR_COST = { slots: 6, mana_max: 120 };
+import { affixFitsHeld, cardPool, emptyHistory, fittingAffixes, heldSpell, offerCards, offerDoors, offerStatParts, offerStats } from "./offer.ts";
+import { affixFits, affixFitsSpell, SPELL_AFFIXES, spellAffixById } from "../spells/affixes.ts";
+import { PLAYER_TEXT } from "../content/player-text.ts";
+import { STAT_UPGRADES } from "./stats.ts";
 
 const rng = (seed = "o"): ReturnType<RngSource["stream"]> =>
   new RngSource(seed).stream("offer");
@@ -20,34 +22,8 @@ const item = (id: string) => {
 describe("offerStats", () => {
   it("leads with the cost, because that is what decides affordability", () => {
     // What the cast actually spends, not the item's cost rank.
-    expect(offerStats(item("magic_bolt"))).toMatch(new RegExp(`^${slotCost(makeSpell(plainInstance("magic_bolt"), ITEMS), ITEMS, STAFF_FOR_COST)} mana`));
+    expect(offerStats(item("magic_bolt"))).toMatch(new RegExp(`^${slotCost(makeSpell(plainInstance("magic_bolt")), ITEMS, STAFF_FOR_COST)} mana`));
     expect(offerStats(item("void_orb"))).toMatch(/mana/);
-  });
-
-  it("reads a multiplier as the change, not the factor", () => {
-    // 1.35 is "+35%", which is the question the player is asking. Printing
-    // "1.35 damage" makes them do the arithmetic.
-    expect(offerStats(item("power_rune"))).toContain("+35% damage");
-    expect(offerStats(item("greater_power_rune"))).toContain("+80% damage");
-    expect(offerStats(item("swift_rune"))).toContain("+50% speed");
-    expect(offerStats(item("heavy_rune"))).toContain("+60% size");
-  });
-
-  it("reads an additive modifier as a count", () => {
-    expect(offerStats(item("twin_rune"))).toContain("+1 projectiles");
-    expect(offerStats(item("piercing_rune"))).toContain("+2 pierce");
-  });
-
-  it("says how many extra times a repeat modifier casts", () => {
-    /*
-     * These were `multicast` items and are `boost`s with a `repeat` now: doc
-     * 006's multicast consumes the next N units of a *staff sequence*, which
-     * doc 013's three keyed spells do not have, so all three did nothing at
-     * all. The concept that survived is "cast the same spell again".
-     */
-    expect(offerStats(item("double_cast"))).toContain("+1 extra cast");
-    expect(offerStats(item("triple_cast"))).toContain("+2 extra casts");
-    expect(offerStats(item("chorus_cast"))).toContain("+3 extra casts");
   });
 
   it("leaves out the simulation's own numbers", () => {
@@ -62,12 +38,8 @@ describe("offerStats", () => {
   });
 
   it("names the effect, not just the cost", () => {
-    /*
-     * The gap a not-empty assertion cannot see. `frost_rune` has an element
-     * and no numeric parameter, so its line was "1 mana" — technically
-     * non-empty, and it told the player nothing about what the rune does.
-     * Every card has to say something beyond what it costs.
-     */
+    // The gap a not-empty assertion cannot see: every card has to say
+    // something beyond what it costs.
     for (const base of ITEMS.values()) {
       const line = offerStats(base);
       const onlyCost = /^[\d.]+ mana$/.test(line);
@@ -84,9 +56,18 @@ describe("offerStats", () => {
   });
 
   it("stays short enough to be read in a glance", () => {
+    /*
+     * Measured per **part**, not over the whole line. The card draws the
+     * parts as a wrapped row of coloured chips (`statRow`), so what has to be
+     * readable at a glance is each figure; the line as a whole grew when the
+     * element stopped being a word inside the damage and became a part that
+     * says what the status is worth. A part longer than this is one that has
+     * stopped being a figure and started being a sentence.
+     */
     for (const base of ITEMS.values())
-      expect({ id: base.id, len: offerStats(base).length <= 34 })
-        .toEqual({ id: base.id, len: true });
+      for (const part of offerStatParts(base))
+        expect({ id: base.id, part: part.text, len: part.text.length <= 40 })
+          .toEqual({ id: base.id, part: part.text, len: true });
   });
 });
 
@@ -99,9 +80,17 @@ describe("offerCards", () => {
     expect(cards.filter((c) => c.kind === "gold")).toHaveLength(1);
   });
 
-  it("offers a castable and a modifier alongside it", () => {
+  it("offers a spell and an affix alongside it", () => {
     const cards = offerCards(ITEMS, rng(), []);
     expect(cards.map((c) => c.kind)).toEqual(["spell", "affix", "gold"]);
+  });
+
+  it("deals the mixed offer's affix the way the affix door does: one a held spell can take", () => {
+    const held = [heldSpell(ITEMS.get("earth_spikes"))];
+    for (const seed of ["a", "b", "c", "d", "e", "f", "g", "h"]) {
+      const affix = offerCards(ITEMS, rng(seed), [], undefined, held).find((c) => c.kind === "affix");
+      expect(fittingAffixes(held).map((a) => a.id), seed).toContain(affix?.itemId);
+    }
   });
 
   it("prefers what the player does not already hold", () => {
@@ -110,24 +99,6 @@ describe("offerCards", () => {
       const cards = offerCards(ITEMS, rng(seed), owned);
       const spell = cards.find((c) => c.kind === "spell");
       expect(owned).not.toContain(spell?.itemId);
-    }
-  });
-
-  it("never offers a spell that cannot work in a slot on its own", () => {
-    /*
-     * The trap this closes: a multicast parsed into a single keyed slot has no
-     * children to repeat, so `fireUnit` iterates an empty list and the key does
-     * nothing — no shot, no mana spent, no refusal reported. Offering one cost
-     * the player a slot *and* the two real options on the same screen.
-     *
-     * Asserted across many seeds rather than once, because the pick is random
-     * and a single draw proves nothing about the pool it drew from.
-     */
-    for (const seed of ["a", "b", "c", "d", "e", "f", "g", "h"]) {
-      const spell = offerCards(ITEMS, rng(seed), []).find((c) => c.kind === "spell");
-      const base = ITEMS.get(spell?.itemId ?? "");
-      expect({ seed, id: spell?.itemId, ok: !!base && castableAlone(base) })
-        .toEqual({ seed, id: spell?.itemId, ok: true });
     }
   });
 
@@ -207,19 +178,10 @@ describe("a kind-driven offer", () => {
       }
   });
 
-  it("offers a spell that can work alone, whatever the kind asked for", () => {
-    for (const seed of ["a", "b", "c", "d", "e"])
-      for (const c of offerCards(ITEMS, rng(seed), [], "spell")) {
-        const base = ITEMS.get(c.itemId);
-        expect({ id: c.itemId, ok: !!base && castableAlone(base) })
-          .toEqual({ id: c.itemId, ok: true });
-      }
-  });
-
   it("deals only affixes some held spell can take", () => {
     // A staff of one burning field: no chains, no shatters, no repeats.
     for (const seed of ["a", "b", "c", "d", "e", "f"])
-      for (const c of offerCards(ITEMS, rng(seed), [], "affix", ["field"])) {
+      for (const c of offerCards(ITEMS, rng(seed), [], "affix", [{ shape: "field", count: 1, affixes: [] }])) {
         const a = spellAffixById(c.itemId)!;
         expect({ id: c.itemId, ok: affixFits(a, "field") }).toEqual({ id: c.itemId, ok: true });
         expect(c.description).toMatch(/Fits /);
@@ -231,6 +193,93 @@ describe("a kind-driven offer", () => {
     expect(ids.has("shatter") || ids.has("repeat") || ids.has("fork")).toBe(true);
   });
 
+  /**
+   * **The dead-combination audit** (reported from play: a scatter-shot build
+   * offered Seek, over and over).
+   *
+   * Seek does nothing on a spell that throws several projectiles — a fan that
+   * all bends onto one body is the fan collapsed to one shot — so
+   * `affixFitsSpell` refuses to attach it, and the shape filter could not see
+   * the difference because both are `bolt`. Every pair of a real spell and a
+   * real affix is checked here, so a new spell or a new affix that opens a dead
+   * combination fails the build rather than reaching a reward screen.
+   */
+  it("offers no affix a held spell cannot actually take, over every spell", () => {
+    const spells = [...ITEMS.values()];
+    const dead: string[] = [];
+    const unaffixable: string[] = [];
+    for (const spell of spells) {
+      const key = heldSpell(spell);
+      const fits = fittingAffixes([key]);
+      // The filter and the attach rule are the same rule, or one of them lies.
+      for (const a of SPELL_AFFIXES) {
+        const offered = fits.includes(a);
+        const attaches = affixFitsSpell(a, spell, []);
+        if (offered !== attaches) dead.push(`${spell.id} x ${a.id}: offered ${offered}, attaches ${attaches}`);
+      }
+      // A spell nothing fits would fall back to the whole pool, which is the
+      // dead card again wearing the fallback's clothes.
+      if (fits.length < 2) unaffixable.push(spell.id);
+    }
+    expect(dead).toEqual([]);
+    expect(unaffixable).toEqual([]);
+
+    // And the pool the Director draws from carries the same filter.
+    for (const spell of spells) {
+      const key = heldSpell(spell);
+      for (const c of cardPool(ITEMS, [], "affix", [key]).candidates) {
+        const a = spellAffixById(c.id)!;
+        expect({ spell: spell.id, affix: c.id, ok: affixFitsHeld(a, key) })
+          .toEqual({ spell: spell.id, affix: c.id, ok: true });
+      }
+    }
+  });
+
+  it("stops offering an affix once every key it could go on is full", () => {
+    // Three slots used on the one key, and none of them the affix in question:
+    // there is nowhere left to put a new one, so it leaves the pool.
+    const spell = [...ITEMS.values()].find((i) => Number(i.params["count"] ?? 1) === 1)!;
+    const full = heldSpell(spell, ["ward", "kindle", "resonance"]);
+    const offered = fittingAffixes([full]).map((a) => a.id);
+    expect(offered).toContain("ward");
+    expect(offered).not.toContain("pierce");
+    // A key with a slot left still sees the whole fitting set.
+    expect(fittingAffixes([heldSpell(spell, ["ward"])]).map((a) => a.id)).toContain("pierce");
+  });
+
+  /*
+   * **A spell offer to a full staff is both rewards at once** (doc 007).
+   *
+   * It used to be one: with no key free the pool became the held spells alone,
+   * so a run whose keys filled with the first three spells it was shown could
+   * never change its mind. Both are real rewards — a copy raises a level, a new
+   * spell is a replacement the player may well want — and which of them the
+   * offer leans toward is the Director's call, so code only guarantees that
+   * both are on the table.
+   */
+  it("offers a full staff both upgrades and replacements, and guarantees one of each", () => {
+    const held = [...ITEMS.values()].slice(0, 3).map((i) => i.id);
+    const pool = cardPool(ITEMS, [], "spell", [], {}, { keysFree: false, heldSpells: held });
+    const ids = pool.candidates.map((c) => c.id);
+    // Both sorts are in the pool: an upgrade of a held key, and a new spell.
+    expect(ids.some((id) => held.includes(id))).toBe(true);
+    expect(ids.some((id) => !held.includes(id))).toBe(true);
+    // And code says so, as the one bound the Director may not draw around.
+    expect(pool.guarantee).toHaveLength(2);
+    const [upgrades, replacements] = pool.guarantee!;
+    expect(upgrades!.every((id) => held.includes(id))).toBe(true);
+    expect(replacements!.every((id) => !held.includes(id))).toBe(true);
+    // A held spell already at the cap is not an upgrade, so it leaves that group.
+    const capped = cardPool(ITEMS, held.slice(0, 1), "spell", [], {}, { keysFree: false, heldSpells: held });
+    expect(capped.guarantee?.[0]).not.toContain(held[0]);
+  });
+
+  it("guarantees nothing when a key is still free: every spell is an addition", () => {
+    const held = [...ITEMS.values()].slice(0, 2).map((i) => i.id);
+    expect(cardPool(ITEMS, [], "spell", [], {}, { keysFree: true, heldSpells: held }).guarantee)
+      .toBeUndefined();
+  });
+
   it("prefers what the player does not hold, in every kind", () => {
     const owned = offerCards(ITEMS, rng("x"), [], "stat").map((c) => c.itemId);
     const next = offerCards(ITEMS, rng("x"), owned, "stat").map((c) => c.itemId);
@@ -238,3 +287,57 @@ describe("a kind-driven offer", () => {
     expect(next).not.toEqual(owned);
   });
 });
+
+/**
+ * **What a card's option says, and in whose voice.**
+ *
+ * The pool's `description` is the text the Director ranks a card by, and it
+ * used to be core's own — which is written for a designer choosing what to
+ * build next: "at the lowest mana cost in the attack pool", "suits a spam
+ * build", "the only stat that improves every part of the game at once, which
+ * is why its step is the smallest in the pool". Every one of those is a
+ * verdict about the pool handed to the thing being asked to judge the pool
+ * (finding 11). The descriptions are neutral facts now (doc 006, "What a
+ * spell tells Jev"), and the option is written from them; `PLAYER_TEXT` is the
+ * player's voice and stays with the game's own table.
+ */
+describe("a candidate's own sentence", () => {
+  const held = [heldSpell(item("magic_bolt"), [])];
+  const pools = () => [
+    cardPool(ITEMS, [], "spell"),
+    cardPool(ITEMS, [], "stat"),
+    cardPool(ITEMS, [], "affix", held),
+  ];
+
+  it("is the content table's neutral description, named once", () => {
+    for (const pool of pools())
+      for (const c of pool.candidates) {
+        const own = ITEMS.get(c.id)?.description ?? spellAffixById(c.id)?.description
+          ?? STAT_UPGRADES.find((u) => u.id === c.id)?.description;
+        // A spell's sentence opens with its name (doc 010, rule 1); the others are prefixed with it.
+        expect(c.description, c.id).toBe(ITEMS.has(c.id) ? own : `${nameOfCard(c.id)}: ${own}`);
+        expect(c.description.startsWith(nameOfCard(c.id)), c.id).toBe(true);
+      }
+  });
+
+  it("carries no verdict about the pool or about a build", () => {
+    const verdict = /suits an? \w+ build|in the (attack )?pool|smallest in the pool|the only \w+ that/i;
+    for (const pool of pools())
+      for (const c of pool.candidates)
+        expect(verdict.test(c.description), `${c.id}: ${c.description}`).toBe(false);
+  });
+
+  it("has a player line for every card any pool can offer", () => {
+    for (const pool of pools())
+      for (const c of pool.candidates) expect(PLAYER_TEXT[c.id], c.id).toBeTruthy();
+  });
+});
+
+/** A card's display name, as `cardText` builds it. */
+function nameOfCard(id: string): string {
+  const stat = STAT_UPGRADES.find((u) => u.id === id);
+  if (stat) return stat.name;
+  const affix = spellAffixById(id);
+  if (affix) return affix.name;
+  return id.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}

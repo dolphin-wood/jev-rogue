@@ -9,7 +9,7 @@
 import type {
   EliteAffix, EncounterPlan, EncounterProfile, EnemyId, RoomPlan, RunHistory,
 } from "../types.ts";
-import { MAX_CONCURRENT_ENEMIES, SUMMONER_MINION_CAP } from "./enemies.ts";
+import { ENEMIES, MAX_CONCURRENT_ENEMIES, SUMMONER_MINION_CAP } from "./enemies.ts";
 import { PRESSURE_BANDS, contextFor, inBand, round3 } from "./pressure.ts";
 import { bandError, buildFromRoster, maxCountFor } from "./assemble.ts";
 
@@ -18,9 +18,17 @@ import { bandError, buildFromRoster, maxCountFor } from "./assemble.ts";
 export interface AffixDef {
   readonly id: EliteAffix;
   readonly hp_mult: number;
+  /** Flat armour granted: the right to interrupt has to be bought first. */
+  readonly armour: number;
   readonly speed_mult: number;
-  /** Multiplier on every pattern interval; below 1 means faster. */
-  readonly interval_mult: number;
+  /**
+   * Multiplier on the **rest between turns**; below 1 comes round sooner.
+   *
+   * Never on a telegraph. Every tell is set from its own constant and reads no
+   * affix, which is what lets an elite be answered with the moves the player
+   * already learned (doc 019).
+   */
+  readonly rest_mult: number;
   /** Doc 005: armored 1.3, swift 1.3, others 1.15. */
   readonly pressure_mult: number;
   /** Charter cap on how many enemies in one encounter may carry it. */
@@ -28,30 +36,86 @@ export interface AffixDef {
   readonly description: string;
 }
 
+/* ---------------------------- the elite tier ------------------------------ */
+
+/**
+ * **What every elite is, before its affix says anything** (doc 019).
+ *
+ * An elite is the same fight, more expensive to get wrong — not a different
+ * fight. So the numbers that move are the ones that change what a mistake
+ * costs, and the ones that would change *what the answer is* do not move at
+ * all:
+ *
+ * - **Health ×2** — the health bar is the one number that never surprises the
+ *   player in the middle of an attack.
+ * - **Damage ×1.3** — every attack's answer is unchanged; only the price of
+ *   missing it moves.
+ * - **Speed ×1.15**, and never a commit speed: the fastest elite body in the
+ *   roster still moves at half the player's 240, so no elite can outrun a
+ *   retreat, and a ram is the ram the player learned.
+ * - **Rests ×0.85** — the gap *between* turns, which is pressure without
+ *   being a shorter question.
+ *
+ * And **no telegraph is ever shortened**. Every tell in the sim is set from
+ * its own constant — a windup from `MELEE_ATTACKS`, an aim from `AIM_MS`, a
+ * cast from its pose's duration — and none of them reads an affix. That is
+ * the contract the tier rests on, and `elite-fairness.test.ts` measures it
+ * rather than trusting it.
+ */
+export const ELITE_HP = 2.0;
+export const ELITE_DAMAGE = 1.3;
+export const ELITE_SPEED = 1.15;
+export const ELITE_REST = 0.85;
+
+/** Armour an `armored` elite carries: a tank's, which is the right to interrupt. */
+export const ARMORED_ARMOUR = 18;
+
 export const AFFIXES: Readonly<Record<EliteAffix, AffixDef>> = {
   armored: {
     id: "armored",
-    hp_mult: 1.6,
+    /*
+     * **Armour, not health** (doc 019).
+     *
+     * At ×2 health an `armored` elite was 3.2 tanks, which is a body the
+     * player hits until something else kills them. Armour is the more
+     * interesting rule anyway: it is the right to interrupt, which the player
+     * buys with their first hits (doc 013), so the affix changes a verb rather
+     * than a bar — and the elite's own ×2 stays the only thing that lengthens
+     * the bar.
+     */
+    hp_mult: 1,
+    armour: ARMORED_ARMOUR,
     speed_mult: 1,
-    interval_mult: 1,
+    rest_mult: 1,
     pressure_mult: 1.3,
     max_enemies: null,
-    description: "+60% hp: everything takes longer to remove.",
+    description: "Armoured: it has to be broken before it can be interrupted.",
   },
   swift: {
     id: "swift",
     hp_mult: 1,
-    speed_mult: 1.35,
-    interval_mult: 0.8,
+    armour: 0,
+    /*
+     * **No extra speed.** The enrage already gives every elite ×1.15, and doc
+     * 019 caps an elite there so nothing can outrun a retreat; +35% on top was
+     * a body the player cannot disengage from, which is not a harder fight but
+     * a different one.
+     *
+     * So swift is the one affix that moves the **cadence**: it presses, at the
+     * only place doc 019 lets pressure come from, the rest between turns.
+     */
+    speed_mult: 1,
+    rest_mult: 0.8,
     pressure_mult: 1.3,
     max_enemies: null,
-    description: "+35% move speed and 20% shorter pattern intervals.",
+    description: "Swift: it comes round again sooner, though every tell is the same length.",
   },
   burning: {
     id: "burning",
     hp_mult: 1,
+    armour: 0,
     speed_mult: 1,
-    interval_mult: 1,
+    rest_mult: 1,
     pressure_mult: 1.15,
     max_enemies: null,
     description: "Bullets apply fire on hit.",
@@ -59,8 +123,9 @@ export const AFFIXES: Readonly<Record<EliteAffix, AffixDef>> = {
   splitting: {
     id: "splitting",
     hp_mult: 1,
+    armour: 0,
     speed_mult: 1,
-    interval_mult: 1,
+    rest_mult: 1,
     pressure_mult: 1.15,
     max_enemies: null,
     description: "Dies into two rushers.",
@@ -68,8 +133,9 @@ export const AFFIXES: Readonly<Record<EliteAffix, AffixDef>> = {
   shielded: {
     id: "shielded",
     hp_mult: 1,
+    armour: 0,
     speed_mult: 1,
-    interval_mult: 1,
+    rest_mult: 1,
     pressure_mult: 1.15,
     // Doc 001: at most one enemy per encounter.
     max_enemies: 1,
@@ -78,8 +144,9 @@ export const AFFIXES: Readonly<Record<EliteAffix, AffixDef>> = {
   volatile: {
     id: "volatile",
     hp_mult: 1,
+    armour: 0,
     speed_mult: 1,
-    interval_mult: 1,
+    rest_mult: 1,
     pressure_mult: 1.15,
     // Two a room at most: a burst on every elite was the elite's whole identity.
     max_enemies: 2,
@@ -161,6 +228,26 @@ export function enumerateAffixSets(ctx: AffixContext): EliteAffix[][] {
   return sets;
 }
 
+/**
+ * **Exactly one affix, legal for this body** (doc 019).
+ *
+ * A pair was two new rules to read on a body that already reads as harder —
+ * and with the enrage carrying health, damage, speed and cadence, the affix is
+ * the only thing left that says what *kind* of harder this one is. One is
+ * enough to say it.
+ *
+ * The draw is even over what is legal, because the judgement is all in the
+ * enumeration: the charter filters, the roster size and this body's own
+ * exclusions. What survives them differs only in flavour, which is why doc 005
+ * keeps this a code decision rather than a Jev question.
+ */
+export function affixesFor(id: EnemyId, ctx: AffixContext, rng: { next(): number }): EliteAffix[] {
+  const excluded = new Set(ENEMIES[id].affix_excluded ?? []);
+  const legal = ELITE_AFFIX_IDS.filter((a) => !excluded.has(a) && affixAllowed(a, ctx));
+  if (legal.length === 0) return [];
+  return [legal[Math.min(legal.length - 1, Math.floor(rng.next() * legal.length))]!];
+}
+
 export function isLegalAffixSet(set: readonly EliteAffix[], ctx: AffixContext): boolean {
   if (set.length < 1 || set.length > 2) return false;
   if (new Set(set).size !== set.length) return false;
@@ -174,20 +261,41 @@ export function isLegalAffixSet(set: readonly EliteAffix[], ctx: AffixContext): 
 export interface AffixedStats {
   readonly hp_mult: number;
   readonly speed_mult: number;
-  readonly interval_mult: number;
+  /** On the rest between turns only. Never on a tell (doc 019). */
+  readonly rest_mult: number;
+  /** Flat armour the set grants, added to whatever the archetype carries. */
+  readonly armour: number;
+  /** What a hit costs the player, as a multiple: an elite's is `ELITE_DAMAGE`. */
+  readonly damage_mult: number;
 }
 
+/**
+ * What a body's affixes do to its stats, **including the enrage** every elite
+ * carries before its affix says anything (doc 019).
+ *
+ * One place rather than two: the enrage used to be applied at `makeEnemy` and
+ * the affixes here, so "what is an elite" was a question with two answers and
+ * the fairness rules could only be checked in one of them.
+ */
 export function affixStats(set: readonly EliteAffix[]): AffixedStats {
-  let hp = 1;
-  let speed = 1;
-  let interval = 1;
+  if (set.length === 0) {
+    return { hp_mult: 1, speed_mult: 1, rest_mult: 1, armour: 0, damage_mult: 1 };
+  }
+  let hp = ELITE_HP;
+  let speed = ELITE_SPEED;
+  let rest = ELITE_REST;
+  let armour = 0;
   for (const id of set) {
     const def = AFFIXES[id];
     hp *= def.hp_mult;
     speed *= def.speed_mult;
-    interval *= def.interval_mult;
+    rest *= def.rest_mult;
+    armour += def.armour;
   }
-  return { hp_mult: round3(hp), speed_mult: round3(speed), interval_mult: round3(interval) };
+  return {
+    hp_mult: round3(hp), speed_mult: round3(speed), rest_mult: round3(rest),
+    armour, damage_mult: ELITE_DAMAGE,
+  };
 }
 
 /**

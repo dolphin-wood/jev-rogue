@@ -3,7 +3,7 @@ id: 009
 title: Technical Architecture
 status: proposed
 date: 2026-09-21
-summary: Everything runs in the browser except a stateless key-holding proxy, required both to hide TYPESAFE_API_KEY and because the TypeSafe API rejects browser origins via CORS. The game is a static bundle (GitHub Pages); the proxy is a Cloudflare Worker. Core owns simulation at a fixed step; Phaser renders. Defines package layout, Director and plan schemas, transport, keyed RNG, content pipeline and tests.
+summary: Everything runs in the browser except a stateless proxy, required both to hide the deployer's TypeSafe key and because the TypeSafe API rejects browser origins via CORS; it spends the key only on requests carrying one of the deployer's invite codes. The game names the code, verifies it against the proxy before keeping it, and offers a row and a dialog for entering one. The game is a static bundle (GitHub Pages); the proxy is a Cloudflare Worker. Core owns simulation at a fixed step; Phaser renders. Defines package layout, Director and plan schemas, transport, keyed RNG, content pipeline and tests.
 depends_on: [002, 008]
 ---
 
@@ -13,19 +13,28 @@ depends_on: [002, 008]
 
 The game logic does not. Rooms, encounters, spells, sampling, validation and traces all run in the browser. Two facts force one thin piece outside the browser:
 
-1. `TYPESAFE_API_KEY` must not ship in client code; anyone could extract it and spend the quota.
+1. The deployer's key must not ship in client code; anyone could extract it and spend the quota.
 2. The TypeSafe API enforces a CORS origin allowlist. A preflight from `http://localhost:5173` on 2026-09-21 returned HTTP 400 `Disallowed CORS origin`, so browsers cannot call `api.typesafe.ai` directly regardless of the key.
 
-The piece is therefore a **stateless proxy**: it adds the `Authorization` header and the model, and forwards the body. It holds no game state and could be replaced by any HTTP forwarder.
+The piece is therefore a **stateless proxy**: it adds the `Authorization` header and the model to an invited request, and forwards the body. It holds no game state and could be replaced by any HTTP forwarder.
 
-The proxy does not tie the game to any hosting platform. The game is a static bundle and can live on GitHub Pages; the proxy lives wherever one HTTP function can run and answers CORS for the game's origin.
+## Whose key
 
-| Environment | Game | Proxy |
-|---|---|---|
-| local development | Vite dev server | A dev-server middleware at `/api/decide` that runs the Worker's own handler (`server/worker.ts`), with the key loaded from the repository root's `.env.local`. Development forwards exactly as hosting does. No separate process. |
-| hosted | GitHub Pages (static bundle from CI) | Cloudflare Worker (`server/worker.ts`): forwards, adds the key from a Worker secret, sets `Access-Control-Allow-Origin` to the Pages origin, rate-limits per IP. Free tier covers this game's volume. |
+The key is the deployer's, a Worker secret, and it answers only requests carrying one of the deployer's **invite codes** (`x-jr-invite`, checked against the secret `INVITE_CODES` without early exit). A request without a valid code is refused with 401 `invite_required` before its body is read, and the evaluator's failure path hands the room to the rule arm. The deployed Worker is always gated: with `INVITE_CODES` unset it admits nobody. So a public build costs its host nothing for strangers, and the host shares Jev with a friend by sending them a code; revoking is removing the code.
 
-Director arms `rule` and `random` never touch the proxy, so a build that runs either one needs no proxy at all.
+### The invite is named, and checked before it is kept
+
+A code is a credential the player holds, so the game says so. **Invitation code** is a row in the title menu and in Settings, under the *Jev* heading, showing the last four of a held code and opening a dialog to enter, change or clear one. A code also still arrives as `?invite=<code>` in a link, which is the easy way to hand one out.
+
+Both routes go through the same check. The proxy answers a second path, `POST /invite/verify`, with `{ code }` and returns `{ valid, needed }` and nothing else: it never calls Jev, never reads the key, holds the same `MAX_INVITE_LENGTH` cap and the same constant-time comparison as the header check, keeps CORS to `ALLOWED_ORIGIN`, and is rate limited per IP — through the Workers Rate Limiting binding `INVITE_RATE_LIMIT` when the deployment has one, and otherwise through an in-isolate counter, because the binding is not on every plan and a deployment without it must still be able to tell a friend whether their code works. `needed: false` means this deployment has no gate at all (the dev server on the developer's own key), and the row then reads *Not needed when running locally* rather than sending the player after a code nothing will ask for.
+
+A code that verifies is stored (`localStorage`, `jr.invite`), **turns the Jev Director on**, and is reported — *Invitation code accepted*. A code that does not is reported as *not recognised* and is not stored. A code from a link is taken out of the address bar with `replaceState` either way, so it is not in the next screenshot. Clearing the code turns the arm off again, unless the arm was never the code's to give. Nothing logs the code, in the Worker or in the client.
+
+The dialog's text field is a real `<input>` laid over the canvas, invisible and focused for as long as the dialog is up, with the scene's keyboard plugin *and* the game-level keyboard manager switched off — the manager is what calls `preventDefault` on the captured keys, which is most of a code's alphabet, and leaving it on is why an earlier key field dropped characters and let the menu behind it move. Enter runs the selected action, Tab walks them, Escape closes; everything else is the browser's, which is what makes paste, selection and an IME work.
+
+Players never enter a *key* into anyone's page — only a code, which spends nothing but the host's own allowance and can be revoked.
+
+The *Jev Director* row (`jr.director`; `?director=` overrides it) can be on only while a code is held, in development, or against a proxy that reports no gate.
 
 ## Stack
 
@@ -147,7 +156,9 @@ Traces go to a `TraceSink`; a console sink and an in-memory sink exist, and the 
 
 | Variable | Where | Meaning |
 |---|---|---|
-| TYPESAFE_API_KEY | Worker secret / Vite dev proxy only | TypeSafe key; never in a client bundle |
+| TYPESAFE_API_KEY | Worker secret / `.env.local` for the dev proxy and harness | the deployer's TypeSafe key; never in a client bundle |
+| INVITE_CODES | Worker secret | comma-separated codes that may spend the key; unset admits nobody |
+| INVITE_RATE_LIMIT | Worker binding, optional | per-IP limit on `/invite/verify` (`[[ratelimits]]`); absent, an in-isolate counter stands in |
 | ALLOWED_ORIGIN | proxy | the game's origin for CORS, e.g. `https://<user>.github.io` |
 | VITE_BASE | client build | base path for the static bundle |
 | VITE_DECIDE_URL | client build | the hosted proxy's URL for the Jev arm; `/api/decide` when unset |
@@ -156,5 +167,5 @@ Traces go to a `TraceSink`; a console sink and an in-memory sink exist, and the 
 
 - core: the room generator produces a valid, in-band room for every archetype × symmetry × seed with the relax rate under 10% (004); pressure bands, encounter assembly, elite and `shielded` affix rules, counter scoring and the showcase floor (001, 005); the spell parser, affix resolution and the deterministic damage math (006); label bucketing and the "no raw numbers in state" assertion (002, 010); room, mood and palette rendering data (008).
 - director: evaluator with mocked fetch (success, out-of-criteria, malformed probabilities, timeout, 429 retry, abandoned request); option-set and description rules; offer blending, pity and temptation precedence; acceptance metrics (011).
-- harness: pressure calibration over sampled profiles × rooms meets the correlation and band limits of 005; the six tiered presets pass individually; the Worker proxy's CORS, rate limit, body ceiling and key injection.
+- harness: pressure calibration over sampled profiles × rooms meets the correlation and band limits of 005; the six tiered presets pass individually; the Worker proxy's CORS, rate limit, body ceiling and key injection; the verify endpoint's valid, invalid, oversize, no-gate, rate-limited and preflight answers, and that it never reaches upstream.
 - game: the sprite atlas and the enemy frame set cover every enemy and animation the scenes ask for.

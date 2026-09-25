@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createEvaluator, MAX_BODY_BYTES } from "./evaluator.ts";
+import { createEvaluator, MAX_BODY_BYTES, MAX_RETRIES } from "./evaluator.ts";
 import { EvaluatorError, FALLBACK } from "./types.ts";
 import type { ChoiceQuestion, EvaluatorRequest } from "./types.ts";
 
@@ -81,20 +81,32 @@ describe("evaluator", () => {
     await expect(ev(request())).resolves.toMatchObject({ answers: { pick: { choice: FALLBACK } } });
   });
 
-  it("retries once on 429 and succeeds", async () => {
+  it("retries on 429 and succeeds, recording how many attempts it took", async () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce(reply({}, 429))
+      .mockResolvedValueOnce(reply({}, 529))
       .mockResolvedValueOnce(reply(good));
     const ev = createEvaluator({ url: "/x", fetch: fetch as never, sleep: async () => {} });
-    await expect(ev(request())).resolves.toBeTruthy();
-    expect(fetch).toHaveBeenCalledTimes(2);
+    await expect(ev(request())).resolves.toMatchObject({ retries: 2 });
+    expect(fetch).toHaveBeenCalledTimes(3);
   });
 
-  it("gives up after one retry", async () => {
+  /** Doubling, so a second attempt is not fired at the instant the first failed. */
+  it("waits longer before each retry", async () => {
+    const waits: number[] = [];
+    const fetch = vi.fn().mockResolvedValue(reply({}, 529));
+    const ev = createEvaluator({
+      url: "/x", fetch: fetch as never, sleep: async (ms) => { waits.push(ms); },
+    });
+    await expectPath(ev(request()), "retry_exhausted");
+    expect(waits).toEqual([400, 800, 1600]);
+  });
+
+  it("gives up after the retry ladder, and says how many attempts it made", async () => {
     const fetch = vi.fn().mockResolvedValue(reply({}, 529));
     const ev = createEvaluator({ url: "/x", fetch: fetch as never, sleep: async () => {} });
-    await expectPath(ev(request()), "retry_exhausted");
-    expect(fetch).toHaveBeenCalledTimes(2);
+    await expect(ev(request())).rejects.toMatchObject({ path: "retry_exhausted", retries: MAX_RETRIES });
+    expect(fetch).toHaveBeenCalledTimes(MAX_RETRIES + 1);
   });
 
   it("never retries 401 or 422", async () => {
@@ -106,9 +118,9 @@ describe("evaluator", () => {
     }
   });
 
-  it("does not start a retry when too little budget remains", async () => {
+  it("does not start a retry when too little of the room's deadline remains", async () => {
     let t = 0;
-    const fetch = vi.fn().mockImplementation(async () => { t += 4000; return reply({}, 429); });
+    const fetch = vi.fn().mockImplementation(async () => { t += 8500; return reply({}, 429); });
     const ev = createEvaluator({ url: "/x", fetch: fetch as never, now: () => t, sleep: async () => {} });
     await expectPath(ev(request()), "retry_exhausted");
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -127,7 +139,7 @@ describe("evaluator", () => {
       type: "choice",
       instructions: "x",
       criteria: Object.fromEntries(
-        Array.from({ length: 300 }, (_, i) => [`k${i}`, "y".repeat(300)]).concat([[FALLBACK, "z"]]),
+        Array.from({ length: 600 }, (_, i) => [`k${i}`, "y".repeat(300)]).concat([[FALLBACK, "z"]]),
       ),
     };
     const ev = createEvaluator({ url: "/x", fetch: fetch as never });

@@ -7,15 +7,15 @@
  * 600 enemy bullets, allocating per frame would dominate the step.
  */
 import type {
-  Element, EliteAffix, EnemyId, ItemInstance, RoomPlan, Staff, MeleeKind } from "../types.ts";
-import type { CastTree, CastUnit } from "../types.ts";
+  Element, ElementPowers, EliteAffix, EnemyId, ItemInstance, RoomPlan, Staff, MeleeKind } from "../types.ts";
 import type { Rng } from "../rng.ts";
+import type { AffixContext } from "../encounters/affixes.ts";
 import type { FlowField } from "./flow.ts";
 import type { SwingBox } from "./melee.ts";
 import type { SpellSlot } from "./spells.ts";
 import type { Destructible } from "./props.ts";
 import type { Pickup } from "./pickups.ts";
-import type { Portal, RewardDrop, RoomOffer } from "./exits.ts";
+import type { Portal, PortalSpec, RewardDrop, RoomOffer } from "./exits.ts";
 import type { AttachedAffix, Ward } from "./affix-hooks.ts";
 
 export const STEP_MS = 1000 / 60;
@@ -165,11 +165,29 @@ export interface Bullet {
   split: number;
   element: Element;
   elementPower: number;
-  /** Payload carriers cast their child where they stop. */
-  /** A carrier holds the unit it will cast where it stops (doc 006). */
-  payloadUnit: CastUnit | null;
-  /** Carriers keep flying through enemies until their own trigger fires. */
-  passthrough: boolean;
+  /**
+   * Every element it carries, by gauge-filling power. `element` above is only
+   * the loudest of these, for the renderer; this is what feeds the statuses.
+   * See `ElementPowers`.
+   */
+  powers: ElementPowers;
+  /**
+   * **What this hit is worth to everything that triggers on a hit** — the
+   * element gauges, `brand`, `harvest` — as a multiple of one ordinary hit.
+   * Risk of Rain 2's proc coefficient, and for its reason: without it the way
+   * to build any on-hit effect is to fire the most pieces, so a seven-pellet
+   * cone fills a poison gauge seven times faster than a bolt for the same
+   * damage and every on-hit affix collapses onto one spell. A piece of a
+   * multi-hit is worth a fraction; a slow heavy hit is worth more than one.
+   * See `procWeight` in `cast.ts`. A status tick is worth **zero**, which is
+   * what stops a burn feeding the burn that lit it.
+   */
+  proc: number;
+  /**
+   * The damage multiplier of the build that fired this, carried so the status
+   * it lights ticks as hard as the build hits: see `Enemy.statusMult`.
+   */
+  statusMult: number;
   hitIds: number[];
   /**
    * What the spell that fired this had attached. Written at cast, read when
@@ -221,6 +239,13 @@ export interface Bullet {
    */
   seekDegPerS: number;
   /**
+   * How much longer the bullet may steer, in ms: **0 is unlimited** (a seeking
+   * spell curves all the way in), a positive budget counts down, and -1 is a
+   * budget that has been spent. The wisp's curl is bounded (doc 019) so that
+   * the shot is answered by moving **late** rather than by outrunning it.
+   */
+  seekMs: number;
+  /**
    * An **orbiting** shot circles the player instead of travelling: `orbitMs`
    * is how long it has left, `orbitAngle` where it is on the circle, and
    * `orbitRadius` how far out. It ignores walls, never dies on a hit, and
@@ -246,6 +271,114 @@ export interface Bullet {
    * pattern to retune.
    */
   from: string;
+  /**
+   * A `doom` shot (doc 006): the mark it leaves on the body it hits — how long
+   * until the mark bursts, what the burst deals and how wide. Zero `doomMs` is
+   * a shot that marks nothing. See `Enemy.doomMs`.
+   */
+  doomMs: number;
+  doomDamage: number;
+  doomRadius: number;
+  /**
+   * An `emit` shot (doc 006): every `emitMs` of flight it throws a shard
+   * along `emitAngle`, which turns with each shard, and when it dies it bursts
+   * into `emitRing` of them. `emitClock` counts down to the next shard. Zero
+   * `emitMs` is a shot that throws nothing.
+   */
+  emitMs: number;
+  emitClock: number;
+  emitAngle: number;
+  emitDamage: number;
+  emitRing: number;
+  /**
+   * A `contagion` shot (doc 006): a body this leaves poisoned carries the
+   * contagion, and its death passes the poison on to up to this many bodies
+   * within `contagionReach`. Zero is a shot that carries none.
+   */
+  contagion: number;
+  contagionReach: number;
+  /**
+   * **What kind of thing of the spell this is** (doc 006's shapes), for the
+   * world's rules and the renderer's drawing: a `shot` flies and dies as a
+   * projectile always has; a `boomerang` flies out, turns and comes back to
+   * the caster (`returning`, below); a `strike` is an orb's blow, born on the
+   * body it hits; a `wave` is an enchant's crescent thrown by a sword swing.
+   */
+  delivery: BulletDelivery;
+  /**
+   * A `boomerang`: whether it has turned for home, how far its outward flight
+   * runs in all and how much of it is left, the speed it was thrown at, and
+   * the speed it comes back at. The flight slows as the distance left runs
+   * out, and the return steers at where the caster is **now**.
+   */
+  returning: boolean;
+  outPx: number;
+  outLeftPx: number;
+  launchSpeed: number;
+  returnSpeed: number;
+}
+
+/** See `Bullet.delivery`. */
+export type BulletDelivery = "shot" | "boomerang" | "strike" | "wave";
+
+/**
+ * A strike landed at a point without the player going there: a dash spell
+ * cast free (`resonance`, `retort`, `slipstream`, a `scatter` side cast).
+ * A sword hit must never throw the player across the room, so the free cast
+ * of a dash is its cut, delivered where it was aimed, and resolved on the
+ * next step by `stepDashStrike`.
+ */
+export interface FreeStrike {
+  x: number;
+  y: number;
+  radius: number;
+  damage: number;
+  element: Element;
+  powers: ElementPowers;
+  proc: number;
+  statusMult: number;
+  spellIndex: number;
+}
+
+/**
+ * A `doom` mark whose body died before it burst (doc 006). The burst still
+ * goes off, on its own clock, where the body fell: marking a pack and then
+ * killing into it is the play the delay asks for, and a mark that vanished
+ * with its body would punish the kill.
+ */
+export interface LooseDoom {
+  x: number;
+  y: number;
+  ms: number;
+  damage: number;
+  radius: number;
+  spellIndex: number;
+}
+
+/**
+ * A `land` dash in the air (doc 006): the ring of erupting ground it comes
+ * down in, waiting for the travel to end. Read off the spell at the cast and
+ * spent where the player actually lands, which a wall may make short of the
+ * body it was aimed at.
+ */
+export interface Landing {
+  damage: number;
+  radius: number;
+  rings: number;
+  first: number;
+  step: number;
+  delayMs: number;
+  /** How far apart a ring's cells stand along its circle, in cell radii (`ring_spacing`). */
+  spacing: number;
+  weight: number;
+  kind: "earth" | "fire";
+  element: Element;
+  elementPower: number;
+  powers: ElementPowers;
+  proc: number;
+  statusMult: number;
+  burnMs: number;
+  spellIndex: number;
 }
 
 /**
@@ -267,7 +400,79 @@ export interface Vortex {
   pull: number;
   tickMs: number;
   damage: number;
+  /**
+   * The element it carries and how hard, and how hard the build that made it
+   * burns (`Enemy.statusMult`). `kindle`, `rime` and `blight` say they fit
+   * every spell shape, and until these three fields existed they were a card
+   * that attached to a dash, a pull or a companion and did nothing.
+   */
+  element: Element;
+  elementPower: number;
+  /**
+   * Every element it carries, by gauge-filling power. `element` above is only
+   * the loudest of these, for the renderer; this is what feeds the statuses.
+   * See `ElementPowers`.
+   */
+  powers: ElementPowers;
+  /** What one of these is worth to on-hit effects; see `Bullet.proc`. */
+  proc: number;
+  statusMult: number;
   spellIndex: number;
+  /**
+   * What it deals, once, to every body still inside `radius` when the pull
+   * ends (`collapse`, doc 006); 0 for a vortex that simply lets go.
+   */
+  collapseDamage: number;
+}
+
+/**
+ * One cell of a **ground eruption**: a spell that is not a projectile but the
+ * floor going off, cell by cell along a line or across a spread — spikes of
+ * stone, columns of fire. Each waits its turn (`delayMs`), goes off once on
+ * what stands in it, and is drawn for a moment after.
+ */
+export interface Eruption {
+  alive: boolean;
+  x: number;
+  y: number;
+  /** Until it goes off. */
+  delayMs: number;
+  /** Since it went off, for the drawing. */
+  ageMs: number;
+  fired: boolean;
+  radius: number;
+  damage: number;
+  element: string;
+  elementPower: number;
+  /**
+   * Every element it carries, by gauge-filling power. `element` above is only
+   * the loudest of these, for the renderer; this is what feeds the statuses.
+   * See `ElementPowers`.
+   */
+  powers: ElementPowers;
+  /** The damage multiplier of the build that made it; see `Enemy.statusMult`. */
+  /** What one of these is worth to on-hit effects; see `Bullet.proc`. */
+  proc: number;
+  statusMult: number;
+  /** Its mass, as a shot's (`Bullet.weight`): the knockback and whether it staggers. */
+  weight: number;
+  /** Fire left on the cell after, ms; 0 for none. */
+  burnMs: number;
+  kind: "earth" | "fire";
+  spellIndex: number;
+  /**
+   * The cast it belongs to, for a line; 0 for a scatter. A line's cells hit a
+   * body once between them: each pushed it on into the next, so one body
+   * took every cell of a line of five, staggered five times over.
+   */
+  castId: number;
+  /**
+   * How long the cell was marked on the floor before it goes off, in ms; 0
+   * for an ordinary cell. A `telegraph_ms` eruption (doc 006) is a landing
+   * the bodies can see coming, and the renderer draws the mark for as long
+   * as `delayMs` runs against this.
+   */
+  telegraphMs: number;
 }
 
 /**
@@ -292,6 +497,23 @@ export interface Pet {
   damage: number;
   range: number;
   speed: number;
+  /**
+   * The element it carries and how hard, and how hard the build that made it
+   * burns (`Enemy.statusMult`). `kindle`, `rime` and `blight` say they fit
+   * every spell shape, and until these three fields existed they were a card
+   * that attached to a dash, a pull or a companion and did nothing.
+   */
+  element: Element;
+  elementPower: number;
+  /**
+   * Every element it carries, by gauge-filling power. `element` above is only
+   * the loudest of these, for the renderer; this is what feeds the statuses.
+   * See `ElementPowers`.
+   */
+  powers: ElementPowers;
+  /** What one of these is worth to on-hit effects; see `Bullet.proc`. */
+  proc: number;
+  statusMult: number;
   spellIndex: number;
   /** Counts down after a shot, for the attack pose. */
   attackMs: number;
@@ -299,6 +521,44 @@ export interface Pet {
   wanderA?: number;
   wanderR?: number;
   wanderMs?: number;
+}
+
+/**
+ * An **orb** (doc 006): a slow sphere drifting from where it was cast, which
+ * strikes the nearest body within `zapReach` every `zapMs`. It has no body of
+ * its own — nothing touches it and it touches nothing — so its whole damage
+ * is its strikes, each a `strike` bullet born on the body it hits so that
+ * the hit resolves, and fires the spell's hit and kill affixes, exactly as a
+ * shot's does. At most the item's `max_alive` from one key; a new one
+ * replaces that key's oldest (`born`).
+ */
+export interface Orb {
+  alive: boolean;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  /** Drawn size only: an orb collides with nothing. */
+  radius: number;
+  lifeMs: number;
+  maxLifeMs: number;
+  /** Counts down to the next strike; held at zero while nothing is in reach. */
+  zapClockMs: number;
+  zapMs: number;
+  zapReach: number;
+  damage: number;
+  element: Element;
+  elementPower: number;
+  powers: ElementPowers;
+  proc: number;
+  statusMult: number;
+  affixes: readonly AttachedAffix[];
+  spellIndex: number;
+  manaSpent: number;
+  /** When it was cast, in world ticks: the oldest of a key's orbs is the one a new one replaces. */
+  born: number;
+  /** The body it struck last and when, for the renderer's arc; -1 before its first strike. */
+  lastTargetId: number;
 }
 
 /**
@@ -360,6 +620,8 @@ export interface Rift {
   damage: number;
   /** Whether this rift has already struck the player. */
   struck: boolean;
+  /** A bolt from the sky rather than a crack in the floor (the king's storm): the same circle, drawn and heard as lightning. */
+  bolt?: boolean;
 }
 
 /**
@@ -407,6 +669,14 @@ export interface Tether {
   /** How long the player has stood in a ward line, toward cutting it. */
   cutMs: number;
   damage: number;
+  /**
+   * A **conduction pulse** running out along a ward line, in ms remaining
+   * (0 when none). The toll refills the shield at the far end instantly; this
+   * is the light that travels from the ringer to the ally to say so, and the
+   * shield is drawn popping full when it arrives. Sim-side so the renderer
+   * does not have to guess when a toll happened.
+   */
+  pulseMs: number;
 }
 
 /** An arcing throw with a landing ring (`lob`, research §3.4). The landing point is fixed at release. */
@@ -418,21 +688,121 @@ export interface Lob {
   y1: number;
   t: number;
   flightMs: number;
-  /** What it does on landing: a burst in a circle, or a patch of burning ground. */
-  lands: "burst" | "fire";
+  /**
+   * What it does on landing: a burst in a circle, a patch of burning ground,
+   * or — the brooder's coal — a body (doc 019).
+   */
+  lands: "burst" | "fire" | "hatch";
   radius: number;
   damage: number;
   from: EnemyId;
 }
 
-/** A cool, still, non-damaging patch that slows the player (research §3.7). */
-export interface SlowField {
+/**
+ * The ringing a bell-clap leaves behind (doc 005, the bellringer).
+ *
+ * It used to be a cold patch that slowed the *player*, and it was the one
+ * effect in the game nobody could name: a tint on the floor that took a
+ * quarter of the walk away for no reason the player could see. A support
+ * body's lingering effect belongs on the bodies it supports, so the patch
+ * **hurries its allies** instead — a rusher that arrives a beat early is a
+ * thing the player can read off the rusher.
+ *
+ * It is deliberately **not drawn on the floor**: the cue is on the bodies
+ * that are inside it (`Enemy.hastedMs`), because that is where the effect is.
+ */
+export interface HasteField {
   alive: boolean;
   x: number;
   y: number;
   radius: number;
   lifeMs: number;
   maxLifeMs: number;
+}
+
+/**
+ * An **expanding ring of broken ground** (doc 005, the boss's slam).
+ *
+ * A filled circle is a `Rift`, and a filled circle is a move whose answer is
+ * "be elsewhere". This is the other question: the ground breaks at the impact
+ * and the break *travels*, so the ground that is safe now is the ground that
+ * kills in half a second and the ground that just killed is safe. The answer
+ * is to dash **through** the band — the dash's i-frames are what crossing it
+ * means — or to already be beyond its reach.
+ *
+ * Geometry is an annulus: live between `inner` and `inner + thickness`, with
+ * `inner` growing at `speed` px/s until it passes `maxRadius`. A charge-up
+ * (`chargeMs`) holds it at its birth radius first, which is the tell.
+ */
+export interface Shockwave {
+  alive: boolean;
+  x: number;
+  y: number;
+  /** Counting down before the ring starts to travel: the charge-up tell. */
+  chargeMs: number;
+  chargeMaxMs: number;
+  /** Inner edge of the live band, in px. The leading edge is `inner + thickness`. */
+  inner: number;
+  thickness: number;
+  /** px/s the band travels outward. */
+  speed: number;
+  /** The band is gone once its inner edge passes this. */
+  maxRadius: number;
+  /** In hearts. */
+  damage: number;
+  /** One hit per wave: a ring that has caught the player is spent. */
+  struck: boolean;
+  /** The props this wave has already broken stone off (`bossStrikesProps`), by index. */
+  propsStruck?: number[];
+  /**
+   * A wave that is only a stretch of the ring — the king's sword wave (doc 020)
+   * — facing this way, this many radians either side. Absent: the whole ring.
+   */
+  facing?: number;
+  half?: number;
+}
+
+/**
+ * **A rotating arm**: a limb anchored on a body that lies still while it is
+ * read and then sweeps a circle, cutting everything along its length.
+ *
+ * It is the one threat in the game whose safe place is *a direction to be
+ * going in*. A ring says "be in a gap", a rift says "be off this line", a
+ * shockwave says "dash the band" — an arm turning at a fixed rate says "run
+ * the way it is turning, or dash through it", and that is footwork: the
+ * answer changes every frame with where the arm is now.
+ *
+ * The anchor follows its owner, so an arm on a walking boss drags the whole
+ * threatened disc around with it and standing still is never the answer.
+ */
+export interface Arm {
+  alive: boolean;
+  /** The body it grows out of; the anchor is kept on it each step. */
+  owner: number;
+  x: number;
+  y: number;
+  /** Where the limb points now, in radians. */
+  angle: number;
+  /** Radians per second, signed: which way it turns. */
+  spin: number;
+  /** The limb runs from `inner` to `length` out of the anchor. */
+  inner: number;
+  length: number;
+  width: number;
+  /** Lying still, drawn at full length, before it starts to turn. */
+  teleMs: number;
+  teleMaxMs: number;
+  /** Turning. Once this is spent the limb withdraws. */
+  activeMs: number;
+  activeMaxMs: number;
+  /** In hearts. */
+  damage: number;
+  /**
+   * After a hit the limb cannot hit again until this is spent, so a player
+   * caught by it is not shredded by the same sweep frame after frame — they
+   * pay once and have their mercy frames to get out.
+   */
+  hitCooldownMs: number;
 }
 
 /** The warden's fire-shot, rolling out from its muzzle; see `stepFlame`. */
@@ -449,6 +819,24 @@ export interface Flame {
   hit: boolean;
 }
 
+/** One cell of grass: whole until fire reaches it, burning for a while, then burnt for good. */
+export interface GrassCell {
+  readonly x: number;
+  readonly y: number;
+  /**
+   * `catching` is the beat between a flame touching the grass and the grass
+   * going up (`GRASS_CATCH_MS`): nothing burns yet, so a body that crosses
+   * the grass as it is lit, or dashes through, is past it when it catches.
+   */
+  state: "grass" | "catching" | "burning" | "burnt";
+  /** Time in its current state. */
+  ms: number;
+  /** Whoever lit it owns its fire, and the fire it spreads — for the kill's credit only. */
+  owner: "player" | "enemy";
+  /** Whether it has passed its fire on to its neighbours yet. */
+  spread: boolean;
+}
+
 export interface Fire {
   /**
    * Who lit it. A fire burns everything that is not its owner: the summoner's
@@ -457,6 +845,18 @@ export interface Fire {
    * a self-burning fire spell is a fire spell that cannot be used.
    */
   owner: "player" | "enemy";
+  /**
+   * **What the ground does** (doc 006, the `field` shape): `fire` burns what
+   * stands in it, as every patch always has; `poison` is a cloud that
+   * poisons and slows what stands in it and burns nothing — it lights no
+   * grass, feeds no cinderling and leaves no scorch.
+   */
+  element: "fire" | "poison";
+  /**
+   * A fire the grass lit. It does not light grass itself: the grass spreads on
+   * its own clock. It burns **everyone**, the player who lit the grass too.
+   */
+  fromGrass: boolean;
   alive: boolean;
   x: number;
   y: number;
@@ -466,6 +866,16 @@ export interface Fire {
   /** Per-patch damage clock, so two overlapping patches do not double-tick. */
   tickMs: number;
   damage: number;
+  /**
+   * Every element it carries, by gauge-filling power. `element` above is only
+   * the loudest of these, for the renderer; this is what feeds the statuses.
+   * See `ElementPowers`.
+   */
+  powers: ElementPowers;
+  /** The damage multiplier of the build that made it; see `Enemy.statusMult`. */
+  /** What one of these is worth to on-hit effects; see `Bullet.proc`. */
+  proc: number;
+  statusMult: number;
 }
 
 /**
@@ -498,6 +908,12 @@ export interface Enemy {
   radius: number;
   speed: number;
   affixes: readonly EliteAffix[];
+  /**
+   * Another body put this one on the floor: a summoner's minion, a brooder's
+   * hatchling. It pays no experience, because a tap that never runs dry is a
+   * tap a run could farm levels out of (`run/levels.ts`).
+   */
+  summoned?: true;
   /** Pattern clock, in ms since the enemy became active. */
   patternMs: number;
   /**
@@ -515,14 +931,68 @@ export interface Enemy {
   phase: number;
   /**
    * The boss's signature move in progress: a slam (a shockwave ring with a
-   * safe centre) or a leap (up, over, and down on a marked spot). While one
-   * runs the boss neither walks, swings nor shoots. See `stepBoss` in world.
+   * safe centre), a leap (up, over, and down on a marked spot), a quake (the
+   * sword into the floor and cracks out along the compass) or a hook (the
+   * chain out, and the player reeled onto the greatsword). While one runs the
+   * boss neither walks, swings nor shoots. See `stepBoss` in world.
    */
-  bossCast: "none" | "slam" | "leap";
+  /**
+   * How long this boss has been fighting, in ms: the fight's **beat clock**
+   * (doc 020). It runs through hitstop, so it is real time since the fight
+   * began, which is the time the music plays in. Nothing he does climbs with it.
+   */
+  bossFightMs: number;
+  bossCast: "none" | "slam" | "leap" | "quake" | "hook" | "storm";
+  /** Time left in the current move, rederived every step from `bossCastEndAt` so hitstop cannot delay it. */
   bossCastMs: number;
-  /** Counts down to the next signature move. */
+  /** On `bossFightMs`: when the current move ends. */
+  bossCastEndAt: number;
+  /** On `bossFightMs`: when the current move's chain commits — the hook's throw. */
+  bossCommitAt: number;
+  /** On `bossFightMs`: when the blade being wound up comes down. */
+  bossBladeAt: number;
+  /**
+   * On `bossFightMs`: when the next move, `bossNext`, is to be started so it
+   * commits on the grid; -1 while none is queued. Absolute, because hitstop
+   * advances the clock in jumps and a countdown would step over its window.
+   */
+  bossStartAt: number;
+  bossNext: "none" | "slam" | "leap" | "quake" | "hook" | "storm";
+  /** The blows still to come in the blade string in hand (`BossPhase.strings`). */
+  bossString: import("../encounters/enemies.ts").BossBlow[];
+  /** On `bossFightMs`: when the string's opening blow landed, which its blows are laid from; -1 before. */
+  bossStringAt0: number;
+  /** How many blows the string in hand has in all, the opening one included. */
+  bossStringN: number;
+  /** Whether the blade being wound up follows another in a string, and which blow of it. */
+  bossLinked: boolean;
+  bossLinkedBlow: import("../encounters/enemies.ts").BossBlow | null;
+  /** Whether his hook has caught the player: when the drag ends, the slash it set up is wound up at once. */
+  bossHooked: boolean;
+  /** How many bolts of the storm in hand he has called down so far. */
+  bossBolts: number;
+  /**
+   * Whether the string in hand is drawn mirrored, fixed by its opening cut:
+   * the whole combination faces one way (the front and return sweeps
+   * between them carry the sword back and forth), never a flip per blow.
+   */
+  bossComboFlip: boolean;
+  /**
+   * The rest between his turns: counts down to the moment he chooses the next
+   * one (`chooseBossAct` in world.ts). Set when a turn ends, of whatever kind.
+   */
   bossMoveMs: number;
   bossMoveIndex: number;
+  /** The blade he has chosen and is walking in to throw; null when his turn is something else, or over. */
+  bossBlade: MeleeKind | null;
+  /** How long he has walked after `bossBlade` without reaching the player; past a limit he chooses again. */
+  bossPlanMs: number;
+  /** A volley turn: how much of it is left. He fires only inside one. */
+  bossVolleyMs: number;
+  /** What his last turn was, so the next is never the same one twice running. */
+  bossLastAct: string;
+  /** Whether he was in a turn last step: the edge out of one is where the rest starts. */
+  bossBusy: boolean;
   /** The last phase whose adds have been called. */
   bossAddsPhase: number;
   /** Where a leap comes down, fixed when it is marked. */
@@ -530,6 +1000,15 @@ export interface Enemy {
   bossTargetY: number;
   /** In the air during a leap: nothing hits it, and it is not drawn on the floor. */
   airborne: boolean;
+  /**
+   * The leap's arc: where it left the floor, and how high it is right now in
+   * px. The renderer lifts the sprite by `bossLift` and leaves the shadow on
+   * the floor at the interpolated ground position, so the body **travels**
+   * instead of blinking from one tile to another.
+   */
+  bossFromX: number;
+  bossFromY: number;
+  bossLift: number;
   /** Distance to the player last step, for choices that depend on range. */
   gapPx: number;
   /**
@@ -558,6 +1037,12 @@ export interface Enemy {
   /** Counts down while winded, when the retreat budget has run out. */
   windedMs: number;
   /** Set while a summoner is between minions. */
+  /**
+   * What this body's hits cost the player, as a multiple (doc 019). 1 for
+   * everything but an elite, which is `ELITE_DAMAGE`: an elite is the same
+   * fight, and only the price of getting it wrong moves.
+   */
+  damageMult: number;
   summonMs: number;
   minions: number;
   /**
@@ -577,6 +1062,75 @@ export interface Enemy {
   strikesCast: number;
   /** The attack chosen at windup, held until it resolves; see `meleeSpec`. */
   meleeKind: MeleeKind | null;
+  /**
+   * The rhythm of the turn in hand (doc 005, "Rhythm per archetype").
+   *
+   * `windupMs` is how long *this* windup runs, which is the attack's own
+   * figure scaled by the archetype's tempo and jittered a little. It is held
+   * on the body rather than read back off the spec because the spec no longer
+   * knows: the whole point is that two rushers do not wind up on the same
+   * beat, and the tracking window is measured from the windup that is
+   * actually running.
+   */
+  windupMs: number;
+  /**
+   * What an **unaware** body is doing, for the renderer to draw and for a
+   * test to assert on. A room of bodies that have not noticed the player yet
+   * is most of what the player sees before a fight starts, and a statue reads
+   * as a prop or as a bug — so every idle role has something it is visibly
+   * busy with, and this names it.
+   *
+   * - `still` — standing, between actions.
+   * - `shift` — a sleeper turning over: the facing swings and the body nudges.
+   * - `scan` — a guard sweeping its look across its post.
+   * - `step` — a guard walking a tile or two off its post and back.
+   * - `gather` — two unaware bodies drifting together to stand as a pair.
+   * - `stir` — a sleeper with its head up, looking at something it half
+   *   heard; it either settles or wakes when `stirMs` runs out.
+   *
+   * It is `still` for every awake body, whatever that body is doing.
+   */
+  idleAction: "still" | "shift" | "scan" | "step" | "gather" | "stir";
+  /**
+   * Counts down while a sleeper has its head up (`idleAction` of `stir`), and
+   * runs negative afterwards as the cooldown before it may lift it again.
+   *
+   * The stir is a **stealth beat**: one readable moment between "it has not
+   * seen me" and "it has", which a body that goes from asleep to charging in
+   * a single frame does not give.
+   */
+  stirMs: number;
+  /**
+   * Set while a string is running, so an attack that is **always** a pair —
+   * the claw — asks for its second blow once rather than on every blow of it,
+   * which would be a body clawing forever.
+   */
+  strung: boolean;
+  /** Attacks left in the string this body is in the middle of; see `COMBO`. */
+  comboLeft: number;
+  /**
+   * A **sidestep**: a short lateral burst when the player commits to a swing
+   * or a dash nearby. It is what makes a body read as reacting to the player
+   * rather than as walking a line at them.
+   */
+  jukeMs: number;
+  jukeX: number;
+  jukeY: number;
+  jukeCooldownMs: number;
+  /**
+   * **Planted to shoot.** A ranged body stops where it stands for its aim,
+   * its shot and a beat afterwards, and moves for none of it.
+   *
+   * This replaces a rule that read well and played as nothing: a body inside
+   * four tiles was allowed to shoot *only while standing still*, and every
+   * ranged archetype in the roster strafes, so measured in a mixed room an
+   * orbiter fired twice in thirty seconds and a summoner once. They were
+   * cancelling themselves. Planting says the same thing the old rule meant to
+   * — an archer may not shoot and reposition at once — as an action the body
+   * takes rather than as a shot it silently loses, and the tail of the plant
+   * is the window the player has been closing for.
+   */
+  plantMs: number;
   /** Burn, poison and slow, applied by elements. */
   burnMs: number;
   burnSources: number;
@@ -584,10 +1138,29 @@ export interface Enemy {
   /** Fire and poison gauges, 0..1: filled by hits, the status's clock once it runs. */
   burnBuild: number;
   poisonBuild: number;
+  /** The clock of a body standing in lava: it burns on each tick (`stepLava`). */
+  lavaMs: number;
+  /**
+   * **One burning-ground toll at a time**, however many patches the body is
+   * standing in. Counts down from `FIRE_TICK_MS` after a patch bills it; see
+   * `resolveFires`.
+   */
+  groundBurnMs: number;
+  /** The same toll for the player's poison clouds, on its own clock so a cloud and a fire both bill. */
+  groundPoisonMs: number;
   /** The ice gauge, 0..1: hits fill it and slow the body; full, it freezes. */
   chillBuild: number;
   /** Frozen solid: it cannot move or act. Counts down; the gauge is its clock. */
   frozenMs: number;
+  /**
+   * **How hard the build that lit it burns or poisons**: the damage multiplier
+   * of the spell whose hit filled the gauge (its level, and any affix that
+   * multiplies damage). A status used to tick a flat `BURN_DPS` whatever lit
+   * it, so a levelled, affixed damage-over-time spell ticked exactly as hard
+   * as a level-one one and only its mana cost went up — levelling a dot spell
+   * made it *worse*. See `applyElementTo` in `world.ts`.
+   */
+  statusMult: number;
   /** Holds the gauges a moment after a hit before they drain. */
   buildFedMs: number;
   /** Status damage not yet reported as a number, and the clock that reports it. */
@@ -598,8 +1171,26 @@ export interface Enemy {
   spawnFadeMs: number;
   /** Counts down after damage so the renderer can flash the sprite. */
   hitFlashMs: number;
+  /** The last eruption line (`Eruption.castId`) that hit it; a line hits a body once. */
+  eruptionCastId: number;
   /** Carrying a `brand`. The next branded hit detonates it. */
   marked: boolean;
+  /**
+   * A `doom` mark (doc 006): how long until it bursts, what the burst deals,
+   * how wide, and which key's spell laid it. While `doomMs` runs the body
+   * cannot be marked again — a second hit is a hit, not a second payoff —
+   * and a body that dies first hands the mark to `World.dooms`.
+   */
+  doomMs: number;
+  doomDamage: number;
+  doomRadius: number;
+  doomSpell: number;
+  /**
+   * Carrying `contagion` (doc 006): the most bodies its poison jumps to when
+   * it dies, and how far; 0 for none. Lasts while its poison does.
+   */
+  contagion: number;
+  contagionReach: number;
   /**
    * Hit stun. While it runs the body does not move and its attack does not
    * advance; landing a hit **cancels** whatever it was doing.
@@ -612,6 +1203,36 @@ export interface Enemy {
    * interrupts enemy attacks and movements, and that is what this is.
    */
   staggerMs: number;
+  /**
+   * Counts down after a **spell** has staggered this body, and refuses the
+   * next one while it runs.
+   *
+   * A heavy spell's stagger is meant to be the payoff for a slow, expensive
+   * cast; without a window it is a lock, because the cast can come round
+   * again before the body has recovered and one key holds a body still for as
+   * long as there is mana. The sword is exempt: its stagger is already paid
+   * for by being in reach.
+   */
+  staggerImmuneMs: number;
+  /**
+   * How long this body has gone without attacking or making a **visible
+   * threat move** — a sidestep, a step of the ring, a walk to a
+   * fresh firing angle.
+   *
+   * A room holds a fixed number of attack turns, so most of its bodies are
+   * not attacking at any moment and that is the design (doc 005). What is not
+   * the design is that they look like they have forgotten the fight:
+   * measured, an awake body spent 57% of its time waiting for a turn, and it
+   * spent it hovering. Nothing awake may sit above `THREAT_CAP_MS` without
+   * doing *something* the player can read.
+   */
+  threatMs: number;
+  /** Where a ranged body is walking to take its next shot from, and when it re-picks. */
+  postX: number;
+  postY: number;
+  postMs: number;
+  /** How long it may still spend walking to that post before it simply stands. */
+  relocateMs: number;
   /**
    * Armour: an outer pool that absorbs damage and, while it lasts, makes the
    * body immune to hit stun.
@@ -770,6 +1391,12 @@ export interface Enemy {
    * the wind-up is when the player is being asked to move.
    */
   hasFireToken: boolean;
+  /**
+   * How long a ranged cast — a strike, a flame, a musket, a rift, a hook —
+   * keeps its firing turn: through its own wind-up, which is when the player
+   * is being asked to move, as a volley's turn covers its aim.
+   */
+  fireTokenMs: number;
   /** Set after an attack, so the same body does not immediately re-commit. */
   attackCooldownMs: number;
   /**
@@ -813,6 +1440,14 @@ export interface Enemy {
   casts: number;
   /** Armour granted by a ward, on top of the body's own; removed when the ward goes. */
   wardArmour: number;
+  /**
+   * How long this body is still hurried by a bell's ringing (`HasteField`).
+   *
+   * Set from the field each step it stands in one and counted down outside
+   * it, so the cue on the body has a moment of fall-off rather than blinking
+   * off at the edge. The renderer reads it; the movement reads it.
+   */
+  hastedMs: number;
   /**
    * The delver's cycle: on the surface, going under, travelling as a mound,
    * or coming up. Under and going under are untargetable (`airborne`).
@@ -919,11 +1554,33 @@ export interface Player {
   mods: PlayerMods;
   invulnMs: number;
   mana: number;
-  /** Index into the parsed cast tree's units. */
-  castIndex: number;
-  castTimerMs: number;
-  cooldownMs: number;
-  firing: boolean;
+  /**
+   * A spell being wound up: the key it was pressed on (-1 for none), until it
+   * leaves, and what it cost. Then the **recovery** runs: no other cast, and
+   * movement at `castMoveScale` through both (`castTiming`).
+   */
+  castPending: number;
+  castWindupMs: number;
+  castCost: number;
+  castRecoverMs: number;
+  castMoveScale: number;
+  /**
+   * A `charge` spell being held (doc 006): the key (-1 for none) and how long
+   * it has been held. Nothing is paid until the key comes up; a dash or a
+   * stun puts the charge out at no cost. Movement runs at `castMoveScale`
+   * for as long as it is held.
+   */
+  chargeKey: number;
+  chargeMs: number;
+  /**
+   * The key whose charge was put out (a dash, a stun), ignored until it comes
+   * up; -1 for none. Without it the key still held through the dash started
+   * a fresh charge on the next step, and letting go then fired a tap the
+   * player never asked for, at a whole cast's price.
+   */
+  chargeVoid: number;
+  /** The ring a `land` dash comes down in, while it is in the air; see `Landing`. */
+  landing: Landing | null;
   aim: Vec;
   facing: number;
   /** Remaining dash, and the direction it committed to when it started. */
@@ -990,6 +1647,13 @@ export interface Player {
   strikeMs: number;
   strikeDamage: number;
   strikeRadius: number;
+  /** The elements the dash cuts with, and the build behind it; see `Vortex`. */
+  strikeElement: Element;
+  strikeElementPower: number;
+  strikePowers: ElementPowers;
+  /** What a dash hit is worth to on-hit effects; see `Bullet.proc`. */
+  strikeProc: number;
+  strikeStatusMult: number;
   strikeHits: number[];
   /**
    * How long the player is still sliding, in ms.
@@ -1022,8 +1686,6 @@ export interface Player {
   dragMs: number;
   dragX: number;
   dragY: number;
-  /** Standing in a slow field this step; read by the movement. */
-  slowed: boolean;
   slipMs: number;
   /** Carried velocity while sliding, in px/s. */
   slideX: number;
@@ -1035,6 +1697,85 @@ export interface Player {
   swingMs: number;
   /** The facing the swing locked when it started; it does not track. */
   swingFacing: number;
+  /** Whether the player has swung yet: the first swing of all is never a chain's. */
+  swung: boolean;
+  /** What is left of the window in which the next swing continues the chain. */
+  chainMs: number;
+  /** A `trail` spell running on the caster (doc 006), or null; see `Trail`. */
+  trail: Trail | null;
+  /** An `enchant` spell running on the sword, or null; see `Enchant`. */
+  enchant: Enchant | null;
+  /** A `stance` being held, or null; see `Stance`. */
+  stance: Stance | null;
+}
+
+/**
+ * **A `trail`** (doc 006): for `ms` more, a patch of the spell's ground is
+ * dropped every `dropPx` of the caster's travel. Travel, not time: the
+ * distance walked since the last patch is carried in `carriedPx`, measured
+ * from `lastX, lastY`, so standing still drops nothing and a dash drops a
+ * line of them. What each patch is, is `patch`.
+ */
+export interface Trail {
+  ms: number;
+  maxMs: number;
+  dropPx: number;
+  carriedPx: number;
+  lastX: number;
+  lastY: number;
+  patch: {
+    readonly radius: number; readonly lifeMs: number; readonly damage: number;
+    readonly statusMult: number; readonly powers: ElementPowers; readonly proc: number;
+    /** A poison spell's trail is a line of cloud, every other a line of fire; see `Fire.element`. */
+    readonly element: "fire" | "poison";
+  };
+  spellIndex: number;
+}
+
+/**
+ * **An `enchant`** (doc 006): for `ms` more, every sword swing also throws a
+ * wave along the swing's facing — a `wave` bullet of these figures, reaching
+ * `reachPx` and passing through every body — and the sword's own numbers do
+ * not change. A recast renews it.
+ */
+export interface Enchant {
+  ms: number;
+  maxMs: number;
+  damage: number;
+  radius: number;
+  speed: number;
+  reachPx: number;
+  weight: number;
+  element: Element;
+  elementPower: number;
+  powers: ElementPowers;
+  proc: number;
+  statusMult: number;
+  affixes: readonly AttachedAffix[];
+  spellIndex: number;
+  manaSpent: number;
+}
+
+/**
+ * **A `stance`** (doc 006): for `ms` more the caster is slowed to
+ * `moveScale` and cannot swing. The first enemy hit that would land is
+ * cancelled and answered with a spin slash of `damage` within `radius` of
+ * the caster; if nothing lands, it answers anyway at `expireShare` of it as
+ * it ends. See `answerStance` in `world.ts`.
+ */
+export interface Stance {
+  ms: number;
+  maxMs: number;
+  damage: number;
+  radius: number;
+  expireShare: number;
+  moveScale: number;
+  weight: number;
+  element: Element;
+  powers: ElementPowers;
+  proc: number;
+  statusMult: number;
+  spellIndex: number;
 }
 
 export interface Particle {
@@ -1060,7 +1801,38 @@ export type WorldEventKind =
    */
   | "bullet_wall"
   /** An enemy shot that ran out of life in the air. */
-  | "bullet_spent";
+  | "bullet_spent"
+  /** A cell of erupting ground went off: `what` is earth or fire. */
+  | "eruption"
+  /**
+   * Experience from a kill, at the body it came off: `amount` is the points.
+   * Published rather than left as a number on the world so a renderer can
+   * make the bar jump by the right amount without diffing a total.
+   */
+  | "xp"
+  /** A level was reached. `amount` is the new level. See `run/levels.ts`. */
+  | "level_up"
+  /**
+   * A spell key was pressed and nothing came out. `what` is why —
+   * `mana`, `cooldown`, `busy` or `empty`, as `SpellStep.refused` says it —
+   * and `amount` is which of the three keys it was.
+   *
+   * Announced because **the player pressed a key**. The refusal was known
+   * inside `stepSpells` and thrown away by `stepWorld`, so the bar sitting a
+   * point or two under the cost looked exactly like a dropped input.
+   */
+  | "cast_refused"
+  /**
+   * **A spell shape doing something that is not a hit** (doc 006), for the
+   * renderer and the mixer: `what` is `orb` (an orb cast), `orb_strike` (an
+   * orb's blow, from the orb at `x, y` to the body it struck), `boomerang_turn`,
+   * `boomerang_caught`, `trail` and `enchant` (started or renewed on the
+   * caster), `wave` (an enchant's wave thrown), `stance` (a guard raised),
+   * `stance_guard` (a hit cancelled by it) and `stance_answer` (the spin slash;
+   * `amount` is the share of the spell's damage it answered at, 1 or the
+   * expiry share).
+   */
+  | "spell";
 
 export interface WorldEvent {
   kind: WorldEventKind;
@@ -1082,7 +1854,6 @@ export interface Input {
   readonly moveY: number;
   readonly aimX: number;
   readonly aimY: number;
-  readonly fire: boolean;
   readonly dash?: boolean;
   /**
    * Which spell key went down this frame, or null. An index rather than three
@@ -1109,14 +1880,59 @@ export interface Input {
   readonly interact?: boolean;
 }
 
-export const NO_INPUT: Input = { moveX: 0, moveY: 0, aimX: 0, aimY: 0, fire: false };
+export const NO_INPUT: Input = { moveX: 0, moveY: 0, aimX: 0, aimY: 0 };
 
+/**
+ * What the room **measured**, as against what a simulator predicted about it
+ * (design docs 002 and 011: the state Jev reads is facts, not verdicts).
+ *
+ * Every field here is a count or a duration of something that happened while
+ * the player was playing. The labels the Director reads are buckets of these
+ * and of nothing else (`run/observed.ts`), which is why they live on the world
+ * rather than in the harness: the browser and the harness must measure the
+ * same things in the same place or the two arms are not comparable.
+ */
 export interface WorldStats {
+  /** Bodies this room has put on the floor, for the fight-room floor (doc 005). */
+  enemiesSpawned: number;
   heartsLost: number;
   damageDealt: number;
   shotsFired: number;
   nearMisses: number;
   elapsedMs: number;
+  /**
+   * Spell keys **pressed** — counted on the key going down, not on every step
+   * it is held — and how many of those presses the mana bar refused.
+   */
+  castPresses: number;
+  castRefusedMana: number;
+  /** Time the bar spent under the **cheapest** keyed spell's cost, in ms. */
+  manaBelowKeyMs: number;
+  /** Player projectiles that struck a body, against `shotsFired`. */
+  shotHits: number;
+  /** Of `damageDealt`, the share the blade did: what "fights close" measures. */
+  swordDamage: number;
+  /** Health lost by family, as `player_hit` names the cause. */
+  hurtByRanged: number;
+  hurtByMelee: number;
+  hurtByHazard: number;
+  /**
+   * Health lost **per body**, keyed by the archetype the cause names
+   * (`melee:tank`, `bullet:shooter`) or by the hazard's feature id.
+   *
+   * The three families above say what kind of thing took the health; this says
+   * which one. A designer reading a run back wants "the tanks took two hearts
+   * and everything else took one" rather than "melee took three", because the
+   * first names a body to change and the second names a category.
+   */
+  hurtByEnemy: Record<string, number>;
+  /**
+   * The lowest the health bar reached this room. `heartsLost` is a total, so a
+   * room the player finished at four hearts having passed through one reads
+   * the same as a steady grind — and the close call is the thing a designer
+   * most wants to know about.
+   */
+  heartsLow: number;
 }
 
 export interface World {
@@ -1125,7 +1941,6 @@ export interface World {
   player: Player;
   staff: Staff;
   slots: readonly (ItemInstance | null)[];
-  tree: CastTree;
   /**
    * The three keyed spells (doc 013). Mutable in place because the cooldowns
    * live on them, and fixed at `SPELL_SLOTS` long so a key always maps to an
@@ -1151,6 +1966,31 @@ export interface World {
   /** Coins collected this room, for the run to bank when it ends. */
   gold: number;
   /**
+   * **The run's experience and the level it has reached** (`run/levels.ts`).
+   *
+   * Carried in at `createWorld` and carried out by the run, exactly as gold
+   * and rage are, because the world is rebuilt every room and would otherwise
+   * forget it. The level is derived from `xp` and kept beside it only so a
+   * renderer and the level-up check do not each have to walk the table.
+   */
+  xp: number;
+  level: number;
+  /**
+   * The staff's mana cap **before** the run's modifiers, so a level reached
+   * mid-fight can re-derive the cap rather than multiply the already-modified
+   * one and drift a point a level.
+   */
+  staffManaBase: number;
+  /**
+   * The modifiers the **stat cards** have given, without the level's share.
+   *
+   * `player.mods` is these plus the level (`withLevels`), recomputed on every
+   * level-up. Keeping the card half separately is what stops a level being
+   * applied twice: the run hands in what the cards did, and the level's
+   * contribution is derived from a number rather than accumulated.
+   */
+  baseMods: PlayerMods;
+  /**
    * True from the moment the room clears until the offer is answered.
    *
    * The simulation holds only the **gate**: while this is set nothing can
@@ -1168,6 +2008,8 @@ export interface World {
   rewardDrop: RewardDrop | null;
   /** The ways out. Placed at room start, shut until the offer is answered. */
   portals: Portal[];
+  /** The doors this room offers, made into `portals` when the way out opens. */
+  portalSpecs: readonly PortalSpec[];
   /**
    * The portal the player walked into, or null. The scene reads it and loads
    * the next room; the simulation does not know what a next room is.
@@ -1181,14 +2023,41 @@ export interface World {
   offer: RoomOffer | null;
   /** Burning ground, from the thrown-flame attack kind. */
   fires: Fire[];
+  /**
+   * The room's grass, a cell each (`stepGrass`): whole, burning, or burnt.
+   * It burns once, and fire runs through it cell to cell.
+   */
+  grass: GrassCell[];
+  /**
+   * The grid bodies route on: the room's own, with lava as wall, so they go
+   * round a channel rather than wading it. Sight lines and collision use the
+   * room's grid; a body knocked into lava still burns.
+   */
+  pathGrid: Uint8Array;
   /** Spell vortices: pull points that drag bodies inward and tick on them. */
   vortices: Vortex[];
+  /** Ground eruptions: the cells of a stone or fire line going off in turn. */
+  eruptions: Eruption[];
   /** Summoned companions that follow the player and shoot. */
   pets: Pet[];
+  /** Orbs cast by `orb` spells, pooled; see `Orb`. */
+  orbs: Orb[];
   /** Runes left by the `ward` affix, which stop enemy projectiles. */
   wards: Ward[];
-  /** A normal room's stray elite's affixes, empty for none; see `strayEliteFor`. */
-  strayElite: readonly EliteAffix[];
+  /**
+   * How hard this room presses (doc 019): the Director's pacing answer, as
+   * the two knobs that decide it. The caps that make a fight safe are not
+   * here — they stay in code, where an answer cannot reach them.
+   */
+  pacing: { readonly preRelease: number; readonly gapMs: number };
+  /**
+   * How many elites a **normal** room hides (doc 019): the Director's
+   * `elite_presence`, converted and capped by `normalEliteCount`. An elite
+   * room uses `affixes` instead — its door already promised it.
+   */
+  normalElites: number;
+  /** What the affix draw is filtered against: the charter's caps and shares. */
+  affixCtx: AffixContext;
   /** Bodies spawned as elites so far this room. */
   elitesPlaced: number;
   /** Bodies spawned this room carrying each affix, for the per-room caps in `AFFIXES`. */
@@ -1201,6 +2070,40 @@ export interface World {
   takenMult: number;
   /** A testing setting: the player loses no health at all, from anything. */
   invincible: boolean;
+  /**
+   * A testing setting, for the boss lab (the debug panel's BOSS tab): which of
+   * the boss's own decisions are held. A held move rotation, blade or volley
+   * is not started by the boss; `queueBossMove` and `forceBossBlade` start
+   * one on demand, and it then plays exactly as it does in a fight. Absent in
+   * every run, the harness and the bench.
+   */
+  bossHold?: { moves: boolean; blades: boolean; volleys: boolean };
+  /**
+   * Set while the boss has yet to enter — the king's entrance, when he is only
+   * the throne's drawing (doc 020): the room is empty of bodies but not clear.
+   */
+  awaitingBoss?: boolean;
+  /**
+   * Half the camera's view, px: what the player can see. A body fires only
+   * from wholly inside it, and closes slower further off (`firePresence`).
+   * Set by the camera; a default otherwise.
+   */
+  viewHalf: { x: number; y: number };
+  /**
+   * Where the camera's view is centred, px, or null to take it as centred on
+   * the player. The camera trails the player and stops at the room's edge,
+   * so the two part near a wall and during a dash, and a body measured from
+   * the player could be off the screen and still count as in view.
+   */
+  viewCentre: { x: number; y: number } | null;
+  /**
+   * How the encounter reaches the floor: `waves`, released over the fight at
+   * the spawn groups, or `camps`, all of it placed when the room starts, in a
+   * few groups spread away from the entry, unaware, each waking as one
+   * (`placeCamps`).
+   */
+  placement: "waves" | "camps";
+
   /** Sword hits counted toward each spell's `resonance` cast. */
   resonance: number[];
   /**
@@ -1210,7 +2113,17 @@ export interface World {
    * — it doubled the damage and was invisible. "Casts twice" has to be seen
    * twice.
    */
-  echoes: { slot: number; delayMs: number }[];
+  /**
+   * `repeat` echoes owed: the slot, when, and which copy (1 is the first).
+   * `charge` and `volley` are the press's own figures — how far a `charge`
+   * spell was held and how many shots a `charges` spell loosed — so an echo
+   * is the cast that was made, not a fresh full one.
+   */
+  echoes: { slot: number; delayMs: number; n?: number; charge?: number; volley?: number }[];
+  /** Dash cuts cast free, waiting for the next step; see `FreeStrike`. */
+  freeStrikes: FreeStrike[];
+  /** `doom` marks whose bodies died first, still counting down; see `LooseDoom`. */
+  dooms: LooseDoom[];
   /** Marks left where fire burned out or lightning landed. */
   scorches: Scorch[];
   /** The expansion's attack kinds (`attacks.ts`). Small, so plain arrays pruned each step. */
@@ -1218,13 +2131,18 @@ export interface World {
   mines: Mine[];
   tethers: Tether[];
   lobs: Lob[];
-  slowFields: SlowField[];
+  hasteFields: HasteField[];
+  shockwaves: Shockwave[];
+  /** Rotating limbs, anchored on the bodies that grew them; see `Arm`. */
+  arms: Arm[];
   flames: Flame[];
   /** Spikes growing out of bodies that just died, before they fly; see `DeathBurst`. */
   deathBursts: DeathBurst[];
   /** Kills in the current streak, and how long it stays open; see `killPays`. */
   streak: number;
   streakMs: number;
+  /** True while a sword blow is landing, so a kill knows the sword made it; see `killPays`. */
+  swordBlow: boolean;
   /** How long the room has held only unaware bodies; see `stepQuiet`. */
   quietMs: number;
   /** Waves not yet released, in schedule order. */
@@ -1234,6 +2152,10 @@ export interface World {
   stats: WorldStats;
   rng: Rng;
   nextEnemyId: number;
+  /** Numbers each eruption line (`Eruption.castId`); starts at 1. */
+  nextEruptionCast: number;
+  /** The spell key held last step, so a press is counted when it goes down (`castPresses`). */
+  lastSpellKey: number | null;
   cleared: boolean;
   /**
    * Impact freeze, in ms. While positive the whole simulation holds still.
@@ -1308,6 +2230,19 @@ export interface World {
    * noise.
    */
   fireTokens: number;
+  /** The base firing-turn budget, before the scaling by awake bodies. */
+  fireTokenCap: number;
+  /** Where in the run this room is (1-based), for the ramp (doc 005). */
+  roomIndex: number;
+  /** The early economy's multiplier on a kill's coin drop; see `createWorld`. */
+  coinBoost: number;
+  /**
+   * How many enemy bullets may be in the air before no body is given a turn
+   * to fire. The turns cap how many bodies are shooting; this caps what they
+   * have already shot, which a slow volley keeps in the room for seconds
+   * after its turn is over.
+   */
+  flightBudget: number;
   /** Hazards tick on a shared clock that belongs to the world, not the module. */
   hazardTimerMs: number;
   /** Shared path to the player, recomputed when the player changes tile. */

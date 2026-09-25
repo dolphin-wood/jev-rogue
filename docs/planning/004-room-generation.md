@@ -25,7 +25,33 @@ Why not per-tile or per-chunk Jev decisions: Jev has no spatial reasoning and ev
 
 ## Round 1: space parameters (Jev)
 
-Requested when the player enters the room, before the room exists (003). State: `room_type`, `run_progress`, `tension` (from the door plan), `hazard_cap`, `health`, `movement_pressure_recent`, `build_range`, `last_shapes`.
+Requested when the player enters the room, before the room exists (003). State: `room_type`, `run_progress`, `tension_cap`, `hazard_cap`, `health`, `recent_damage`, `clear_speed`, `movement_pressure_recent`, `keys_lean`, `intent_preset`, `last_shapes`, and the observed facts of the last two fights (`mana_refused`, `mana_short_time`, `hits_per_shot`, `cast_rate`, `damage_rate`, `sword_share`, `hurt_by` — doc 010).
+
+### The room's intensity is decided here, not before it
+
+`next_tension` is a round-1 question. It used to be a request of its own, made
+as the player left the previous room so the portals could be labelled, which
+cost every combat room a third sequential call before the fight. It reads
+exactly the state round 1 already carries, so it is asked here and a room costs
+two requests (002's schedule).
+
+The consequence for every other round-1 question: **none of them may name the
+tension.** Doc 002 answers the questions of one request independently, so a
+room question grounded on "fits when tension is peak" would be matching a label
+its own request is deciding, and the round-1 state deliberately does not carry
+`tension` at all — only `tension_cap`, the range the answer must fall inside.
+`space`, `symmetry`, `size` and the three mood questions are therefore grounded
+on the labels `next_tension` itself reads: `health`, `recent_damage`,
+`clear_speed`, `run_progress` and `room_type`. The room and its pitch are
+decided from the same evidence rather than one from the other, and they agree
+because the evidence agrees.
+
+The control's weights follow the same rule: its `size`, `symmetry` and mood
+rows read `hurt` and `pressing` — the tests `next_tension` makes — rather than
+a tension it cannot see.
+
+Round 2 is a later request and *is* given the decided tension, which is why the
+encounter questions (005) still name it.
 
 Shape, openness and cover are **not** three independent questions: their product contains combinations the generator cannot satisfy (a tight corridor with dense cover leaves no 3-tile path). Code instead offers twelve **space archetypes**, each a feasible triple the harness has validated across seeds, and Jev picks one. This is the coupled-parameter convention of 002.
 
@@ -50,9 +76,14 @@ Corridor and ring archetypes support **east and west doors only**. A corridor's 
 
 | Question | Options | Instruction gist | Temperature |
 |---|---|---|---|
+| next_tension | the tensions `tension_cap` permits + fallback | how hard this room should be, from health, recent damage and clear speed | 0.6 |
 | space | the twelve archetypes + fallback | vary against last_spaces; corridors and rings suit long-range builds, open arenas suit short range | 0.8 |
-| symmetry | mirrored / asymmetric / fallback | mirrored reads faster; asymmetric for variety at release | 0.9 |
+| symmetry | mirrored / asymmetric / fallback | mirrored reads faster under pressure; asymmetric for variety when the player is coping | 0.9 |
+| size | compact / standard / vast + fallback | how much floor the fight is spread over (017) | 0.8 |
 | temperature, brightness, particle_intensity | see 008 | room mood; derived palette, not layout | 0.9 |
+
+A single permitted tension is not a decision, so `next_tension` is not asked
+when `tension_cap` leaves one.
 
 Code filters options before the request: `space` drops the archetypes used in the last two rooms. `hazard_cap` is applied in round 2, where hazards are decided per slot, so it removes nothing here. `space` and `symmetry` are jointly feasible for every pair by construction, and mood never touches layout. Any remaining relaxation is reported as the relax rate in 011; a parameter that relaxes above 10% is folded into the archetype table.
 
@@ -85,7 +116,7 @@ Post-filter: two zones that picked features sharing a `resource` keep the higher
 
 ## Feature library (hazards and fixtures)
 
-Six features fill zones. Examples:
+Eight features fill zones. Examples:
 
 ```json
 {
@@ -99,7 +130,7 @@ Six features fill zones. Examples:
 }
 ```
 
-Others: `poison_pool` (slow tick, resource floor_hazard; it poisons ground enemies standing in it too), `ice_patch` (slip, no damage, resource floor_hazard), `crumble_floor` (collapses 3 s after it is stood on, so crossing it is free), `brazier` (a solid pillar that blocks bodies and bullets both ways and breaks when shot), `turret_mount` (turrets in the encounter spawn on its cells; the plinth itself does not hurt). Each feature names a `hazard_effect` — `contact`, `slow_tick`, `slip`, `collapse` or `none` — and that is what the simulation applies: `hazard_budget` is a cost against the room's cap, not a statement that something hurts. The sum of `hazard_budget` must stay under the `hazard_cap` band; code trims the lowest-probability zone to `none` if exceeded.
+Others: `poison_pool` (slow tick, resource floor_hazard; it poisons ground enemies standing in it too), `ice_patch` (slip, no damage, resource floor_hazard), `lava_channel` (withheld from rooms until its tiles are drawn — the simulation has it; resource floor_hazard: a line of molten rock **one tile thick** along the zone's long axis through its middle, never a pool, so the 64 px dash always clears it and there is floor round it — it splits a space without closing it; walking over it burns and costs a heart on the contact clock, dashing costs nothing; bodies route round it, since the flow field treats it as wall, and one knocked into it burns), `grass_patch` (no resource: harmless until any fire reaches it — a spell, the player's own trail or field, a cinderling's trail, a burning shot — then each touched cell smoulders for a beat (`GRASS_CATCH_MS`, 0.3 s) before it goes up, burns once, passes to its neighbours a quarter second after that, and is char after; burning grass hurts **everyone** in it whoever lit it, the player included, so the player can burn a pack standing in it, has to be out of the grass when it goes up, and burns if an enemy lights it under them; the catch is what lets a player walk or dash across grass as it is lit), `brazier` (a solid pillar that blocks bodies and bullets both ways and breaks when shot), `turret_mount` (turrets in the encounter spawn on its cells; the plinth itself does not hurt). Each feature names a `hazard_effect` — `contact`, `slow_tick`, `slip`, `lava` or `none` — and that is what the simulation applies: `hazard_budget` is a cost against the room's cap, not a statement that something hurts. The sum of `hazard_budget` must stay under the `hazard_cap` band; code trims the lowest-probability zone to `none` if exceeded.
 
 Solids are one list: a feature's `fixture` field names the prop it stands (`brazier` is the only one), and the simulation writes it into the grid like a crate, so movement, bullets, sight and the flow field agree about it. A feature with a fixture is never offered for a zone slot in the middle third of the arena — cover belongs at the edge of a fight, not in it — and a compact slot stands one fixture at its centre, a long one a pair at its ends.
 

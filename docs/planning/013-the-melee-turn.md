@@ -105,9 +105,11 @@ Aim assist survives for casts and is deliberately small for the sword. A swing
 is aimed with the body, so it gets a hair's correction inside a 14 degree cone;
 a keyed spell is pressed while the left hand is steering and the facing is
 whatever the last step left it at, so it gets a wider 52 degree **seeking**
-cone — the shot still launches along the facing and curves in over its flight,
-so a badly aimed cast is a slow arc rather than a shot that teleports onto a
-body.
+cone. A single shot leaves toward the body it picked there and corrects in
+flight at its own rate, which is what tells the kinds apart: **lightning**
+holds on hard (Shock Arc 480°/s, Arc Lance 420), a **bolt** barely (Magic Bolt
+90, Frost Needle 60, Stone Shard 30), so a body that moves steps out of it,
+and a **spread** keeps the facing and does not seek at all.
 
 ### Targeting follows delivery
 
@@ -329,79 +331,52 @@ left half the runs dead at the boss and 120 was no better.
 
 ## Spells
 
-The player holds **three spells, bound to `U`, `I` and `O`**, each parsed
-**alone**, so a spell's behaviour never depends on what sits beside it. Doc
-006's tree is the opposite by design — a boost modifies whatever follows it and
-the order of the slots is the build — which is a fine wand-building game and a
-bad fit for three keys, because **a player cannot press a relationship**.
+The player holds **three spells, bound to `U`, `I` and `O`**. A key holds one
+spell and a spell is **self-contained**: its behaviour never depends on what sits
+on the other keys, nothing modifies "the next attack", and no spell captures or
+repeats another. The pool, its shapes and its rules are doc 006.
 
-An item is only offered as a spell if it **can work alone**: a multicast parsed
-by itself yields a unit with no children, so the key would spend no mana, fire
-nothing and report no refusal. The rule is a property of the pool and is
-checked in the simulation rather than at the offer, because the offer is not
-the only thing that hands out items — the merchant does too. Multicasting is
-therefore an affix (`repeat`), attached to a spell the player named, which is
-the shape it always wanted.
-
-Astral Ascent instead puts four spells in a **rotation**: one cast button, and
-casting a spell disables it until the other three have each been cast. That
-arrangement has one virtue worth naming, because this design gives it up — it
-makes every slot matter all the time. With independently bound keys the player
-finds their best spell and presses it, so what has to make the third slot
-matter is the investment in it rather than the input scheme. That is the affix
-slots' job.
+The run starts with one spell, the chosen style's starter, and the other two
+keys fill from rewards. With independently bound keys the player finds their
+best spell and presses it, so what makes the third key matter is the
+investment in it — its level and its affixes — rather than an input scheme
+that forces rotation (Astral Ascent disables a cast spell until the others have
+been cast; this design gives that up).
 
 ### Spell shapes
 
 Thirteen projectiles that differ in speed, count and colour are one spell. The
-difference between spells in Astral Ascent and in Magicraft's wand system is
-the **shape** — what the spell is, and the decision it asks — not the numbers.
-Six shapes that a projectile cannot be are in the pool, each filling a role the
-auto-seeking shot leaves empty:
-
-- **Orbit** (`spirit_blades`): bodies circle the caster for a few seconds,
-  hitting what they pass through about twice a second. Damage that follows the
-  body, so standing in a rush is a decision rather than a mistake.
-- **Field** (`wildfire_field`): a patch of burning ground under the nearest
-  enemy, or ahead of the hand. Denies floor for a while, which is the answer to
-  summoners and spawn floods; the caster's own fire never burns the caster and
-  is drawn cooler than the enemy's.
-- **Pillar** (`stone_ward`): a solid raised between the caster and what they
-  face, blocking bodies and bullets both ways until it is worn down or crumbles
-  on its own clock. Cover placed where the player wants it, which is the
-  counter to shooters and turrets that a seeking shot is not.
-- **Dash strike** (`blink_strike`): the caster is thrown forward through
-  whatever stands in the way, cutting each body once, untouchable for the
-  travel and a moment after. The one spell that buys safety, which is what
-  makes mana a survival resource and not only a damage one.
-- **Vortex** (`void_maw`): a pull under the nearest enemy that drags every
-  mobile body within reach inward for a few seconds and nicks what it holds.
-  The only spell that changes where the enemies *are*; it makes the clump the
-  sword and the area spells want.
-- **Summon** (`spirit_ally`): a companion that follows a step behind and fires
-  at the nearest body in range on its own clock for eight seconds; one at a
-  time, a recast renews it. Damage that keeps coming while the caster is busy
-  staying alive.
-
-A shape is a param on the item (`shape: bolt | orbit | field | pillar | dash |
-vortex | summon`); the cast dispatches on it, and the spell check knows where
-each shape's dummy has to stand and that a pillar does no damage.
+difference between spells in Astral Ascent and Magicraft is the **shape** — what
+the spell is, and the decision it asks — not the numbers. A shape is a param on
+the item; the cast dispatches on it, and the spell check knows where each
+shape's dummy has to stand. Doc 006 lists the thirteen shapes (bolt, orbit,
+field, pillar, dash, vortex, summon, eruption, boomerang, orb, trail, enchant,
+stance) and the rules of each.
 
 **Weight and speed.** Projectiles differ in how they travel and land, not only
-in numbers: light spells fly fast (Shock Arc 900, Arc Lance 880, Frost Needle
-760, Spark Spray 680) and heavy ones slow and large (Stone Shard 340 at radius
-6, Glacier Spike 420, Void Orb 300). A heavy shot carries a `weight` — Stone
-Shard 2.2, Glacier Spike 1.8, Void Orb 1.6 — that multiplies its knockback,
-lengthens the hit freeze, shakes the room and throws a larger burst, so a slow
-shot is felt when it lands.
+in numbers: light spells fly fast and heavy ones slow and large. Every shot
+carries a `weight`, its mass: light ones below 1 (a seeker 0.3, a spark 0.4, a
+pellet 0.5), the bolt 1, heavy ones above. It multiplies the knockback, and a
+shot of 1.2 or more **staggers** what it hits for its weight times the sword's
+stagger, interrupting a windup as a swing does; a heavy one also lengthens the
+hit freeze, shakes the room and throws a larger burst. A light shot only
+pushes. A spell may scale its own cooldown (`cooldown_scale`), so a slow, heavy
+shot is thrown seldom whatever it costs.
+
+**Enchant and the sword.** "The sword never gains behaviour" is a rule about
+the sword's own progression: stats give it reach, speed, damage and crit, and
+nothing else. An `enchant` spell is a spell, paid for in mana and on its own
+cooldown, that for a few seconds makes each swing throw a wave; when it ends
+the sword is the plain sword again.
 
 ### Levels
 
-**A spell has a level, 1 to 3, and a level is damage only** — plus 40% a level
-— so it never changes what a spell is. A level comes from an elite door, whose
-spell card arrives at the door's grade, or from the blacksmith for gold, and it
-survives the room like the affixes do. The character screen shows each key's
-level and the damage it adds; the HUD shows it as a numeral after the name.
+**A spell has a level, 1 to 5, and a level is damage only** — plus 20% a level,
+for plus 10% mana a level — so it never changes what a spell is. A level comes
+from an elite door, whose spell card arrives at the door's grade, or from the
+blacksmith for gold, and it survives the room like the affixes do. The
+character screen shows each key's level and the damage it adds; the HUD shows
+it as a numeral after the name.
 
 ## Affixes
 
@@ -460,9 +435,9 @@ pool from a wishlist:
 | `dash` | the player dashes |
 | `swing` | a sword hit connects |
 
-`firePayloadChild` already fires an effect at a position — the payload
-mechanism generalised — so an affix is a *use* of existing machinery rather
-than a request for new machinery.
+The simulation already fires a spell's effect at a position and at a body, so
+an affix is a *use* of existing machinery rather than a request for new
+machinery.
 
 ### An affix fits some shapes and not others
 
@@ -476,12 +451,24 @@ dead draw dressed as a choice is worse than a smaller pool.
 
 | affix | hook | fits |
 |---|---|---|
-| Fork, Shatter, Repeat | hit / wall / cast | bolt |
-| Chain, Brand, Harvest, Echo, Bloom | hit / kill / expire | bolt, orbit |
-| Scatter | cast | bolt, field, pillar |
-| Retort, Slipstream | hurt / dash | bolt, field, vortex |
-| Ward | cast | any spell |
-| Resonance | swing | any spell: every fifth, fourth or third connecting sword hit casts the spell at the body struck, free — the melee build's affix |
+| Fork, Shatter, Pierce, Seek, Ricochet | hit / wall / cast | bolt |
+| Chain, Brand, Harvest, Echo, Haste | hit / kill | bolt, orbit, boomerang, orb, enchant |
+| Bloom | expire | bolt, orbit, enchant |
+| Repeat | cast | bolt, eruption, boomerang |
+| Scatter | cast | bolt, field, pillar, vortex, dash, eruption, boomerang |
+| Ward, Kindle, Rime, Blight | cast | any spell |
+| Retort, Slipstream | hurt / dash | any spell |
+| Resonance | swing | any spell but a stance, which forbids the swing it counts: every fifth, fourth or third connecting sword hit casts the spell at the body struck, free — the melee build's affix |
+
+A spell cast by an affix — a `scatter` side cast, a `retort`, a `slipstream`,
+a `resonance` — is **the spell's own shape**, fired from the caster toward the
+body the hook names: a field or a pull opens under that body, a line of spikes
+runs toward it, a ring or a ring of blades renews at the caster, a pillar
+rises between the two, and a dash spell cuts that body once **without moving
+the player**, because a sword hit must never throw the caster across the room.
+Each list above is what a test measured: `affix-shapes.test.ts` casts every
+affix on a spell of every shape it lists and asserts the effect is visible, so
+a shape is added to a list by adding the behaviour, never by editing the list.
 
 Attaching to a specific named spell is also a better decision than attaching to
 an abstract slot, because the player knows what each of their three spells does
@@ -489,18 +476,21 @@ and can therefore predict the result. "Fork on my homing bolt" is a plan.
 
 Four things the composition of the pool is doing deliberately:
 
-- **`repeat` carries the multicast**, attached to a spell the player named
-  rather than being a spell of its own with nothing to repeat.
+- **`repeat` is the only way a spell casts more than once**, attached to a
+  spell the player named rather than being a spell of its own with nothing to
+  repeat.
 - **Two of them fire when the player is losing** (`retort`, `slipstream`). A
   pool that only pays out while winning is a pool that widens every gap it is
   meant to close.
 - **`shatter` makes a cluttered room better than an open one**, which is the
   only thing in the build system that argues with doc 015's geometry rather
   than agreeing with it. That tension is wanted.
-- **Thirteen affixes against nine slots is thin on purpose.** Duplicates are
-  supposed to be common, because a duplicate is an upgrade; a pool much larger
-  than the slots would make duplicates rare and turn the ladder back into a
-  stat screen.
+- **The pool a build can draw from stays close to its slots.** There are
+  twenty affixes, but an offer deals only those a held spell can take, so a
+  build of three spells draws from roughly ten to fourteen against its nine
+  slots. Duplicates are supposed to be common, because a duplicate is an
+  upgrade; a pool much larger than the slots would make duplicates rare and
+  turn the ladder back into a stat screen.
 
 The implementation follows the same rule. A spell's affixes ride the cast scope
 onto every projectile it fires, so a bullet knows what it carries when it hits,
@@ -583,13 +573,15 @@ amount, for the same scale-invariance reason mana has: a flat figure goes
 proportionally worthless as the stat it adds to grows, so the last one the
 player finds would be the one that matters least. `Fleet` has the smallest step
 in the pool because movement speed improves every part of the game at once.
-`Vigour` is the run's healing. `Wrath` reads "+1 spin charge", which is what it
+`Vigour` is the run's healing on the card screen; the other half is the
+fountain (003), which restores 50% of maximum health for a fight's reward
+rather than for the other two cards. `Wrath` reads "+1 spin charge", which is what it
 is. Every card reaches what it names: the mana cap when the room is built and
 at once when the card is taken, regeneration and hit-to-earn when they happen,
 and the sword's damage, reach and recovery when it swings — the last as the
 tail of the recovery being cancellable into the next swing.
 
-## Gold: dismantling, and the two vendors
+## Gold: dismantling, and the stop before the boss
 
 Breaking a destructible pays mana, and four pots in five also drop one to three
 coins. Gold otherwise comes from the gold door, which shows no cards and
@@ -644,12 +636,18 @@ genre precisely because its Mirror is meta-progression rather than an in-run
 economy; an in-run conversion charges. Sunk investment is still what makes a
 slot matter, because dismantling costs real value rather than refunding it.
 
-### The merchant and the blacksmith
+### The merchant, the blacksmith and the fountain
 
 The room before the boss holds a **merchant**, who sells one card of each kind
 gold can buy — a stat for 20, an affix for 30, a spell for 45 — and a
 **blacksmith**, who raises a spell's level for 35 and then 60. Both take gold,
 and a rare mid-run vendor room holds one of the two alone.
+
+It also holds a **fountain**, which takes nothing: one drink restores 50% of
+maximum health, and it is then dry (003). It stands in front of the two of them,
+so the free thing is met on the way in rather than found after the gold is
+spent, and the heal is something the player does rather than a number the room
+applied while it was still fading in.
 
 Two vendors rather than one shop, because it turns a single currency into a real
 allocation problem: **breadth or power.** More affixes across the three spells,
