@@ -77,6 +77,58 @@ export interface PlaytestRoom {
   castPresses: number;
   castRefusedMana: number;
   manaShortMs: number;
+  /**
+   * **What the Director decided for this room, every answer of it**: the
+   * room's own questions, the doors out and what each promised, the cards
+   * offered and the one taken. Without these the log said how a room went
+   * and nothing about why it was that room — whether Jev or the rule table
+   * chose it, over which options, how sure it was.
+   */
+  decisions?: PlaytestDecision[];
+  /** The doors out of this room: `spell:storm`, `stat:mana`, `npc:fountain`, `gold`. */
+  doors?: string[];
+  /** Each card offer: its kind (or shelf) and the card ids shown. */
+  offers?: { label: string; ids: readonly string[] }[];
+  /** The card taken, if one was. */
+  picked?: string;
+}
+
+/**
+ * One Director answer, as the log keeps it. `purpose` is the request it came
+ * in (`room`, `offer`, `doors`); `p` its distribution to two places, options
+ * at nothing left out; `fallback` how it reached the rule table if it did.
+ */
+export interface PlaytestDecision {
+  purpose: string;
+  question: string;
+  choice: string;
+  source: string;
+  confidence?: number;
+  fallback?: string;
+  p: Record<string, number>;
+}
+
+/** The shape of a Director decision this log reads, without a dependency on the director package. */
+interface DecisionLike {
+  readonly choice: string;
+  readonly probabilities: Readonly<Record<string, number>>;
+  readonly confidence: number | null;
+  readonly source: string;
+  readonly fallback_path?: unknown;
+  readonly question?: string;
+}
+
+/** A Director plan's decisions as the log keeps them. */
+export function logDecisions(purpose: string, decisions: readonly DecisionLike[]): PlaytestDecision[] {
+  return decisions.map((d) => {
+    const p: Record<string, number> = {};
+    for (const [k, v] of Object.entries(d.probabilities)) if (v >= 0.005) p[k] = Math.round(v * 100) / 100;
+    return {
+      purpose, question: d.question ?? "?", choice: d.choice, source: d.source, p,
+      ...(d.confidence !== null ? { confidence: Math.round(d.confidence * 100) / 100 } : {}),
+      ...(d.fallback_path ? { fallback: String(d.fallback_path) } : {}),
+    };
+  });
 }
 
 /** A heart is ten HP, as the HUD draws it, and as a person reports it. */
@@ -85,15 +137,29 @@ const HP_PER_HEART = 10;
 const NEAR_BULLET_PX = 90;
 /** Where the log lives between sessions. One key, one browser. */
 const LOG_KEY = "jr-playtest-log";
+/** The run the log is of: which Director, and the style and words the player gave it. */
+const META_KEY = "jr-playtest-run";
 /**
- * How many rooms are kept. A run is at most sixteen, so this is several
- * sessions — enough to send, small enough that a browser will hold it.
+ * How many rooms are kept: a safety net only. The log is cleared at the start
+ * of every run (`startRun`), so it is one run, at most sixteen rooms and a
+ * few retries of the boss; it used to keep several runs back to back, which
+ * a log that now carries every Director answer cannot afford.
  */
-const LOG_LIMIT = 200;
+const LOG_LIMIT = 40;
+
+/** Who planned the run the log is of. */
+export interface PlaytestRun {
+  director: string;
+  style: string;
+  words?: string;
+}
 
 export class PlaytestRecorder {
   private rooms: PlaytestRoom[] = [];
   private live: PlaytestRoom | null = null;
+  private run: PlaytestRun | null = null;
+  /** Additions for a room not begun yet: its doors' pacing is decided while leaving the room before. */
+  private pending = new Map<number, ((r: PlaytestRoom) => void)[]>();
   private seed = "";
   /** The player state this recorder last saw, for counting the starts of things. */
   private was = { swingMs: 0, dashMs: 0, shotsFired: 0 };
@@ -104,6 +170,8 @@ export class PlaytestRecorder {
       if (saved) {
         const parsed: unknown = JSON.parse(saved);
         if (Array.isArray(parsed)) this.rooms = parsed as PlaytestRoom[];
+        const run = localStorage.getItem(META_KEY);
+        if (run) this.run = JSON.parse(run) as PlaytestRun;
       }
     } catch { /* private window, blocked, or a log from an older shape */ }
   }
@@ -118,6 +186,27 @@ export class PlaytestRecorder {
       castPresses: 0, castRefusedMana: 0, manaShortMs: 0,
     };
     this.was = { swingMs: 0, dashMs: 0, shotsFired: 0 };
+    for (const add of this.pending.get(index) ?? []) add(this.live);
+    this.pending.clear();
+  }
+
+  /** A new run: the log starts over, headed by who plans it. */
+  startRun(run: PlaytestRun): void {
+    this.clear();
+    this.run = run;
+    try { localStorage.setItem(META_KEY, JSON.stringify(run)); } catch { /* the session still records */ }
+  }
+
+  /** Adds to room `index`'s record: now if it is the room being played, else when it begins. */
+  attach(index: number, add: (r: PlaytestRoom) => void): void {
+    if (this.live && this.live.index === index) { add(this.live); return; }
+    this.pending.set(index, [...(this.pending.get(index) ?? []), add]);
+  }
+
+  /** Adds a plan's decisions to room `index`'s record. */
+  decide(index: number, purpose: string, decisions: readonly DecisionLike[]): void {
+    if (decisions.length === 0) return;
+    this.attach(index, (r) => { r.decisions = [...(r.decisions ?? []), ...logDecisions(purpose, decisions)]; });
   }
 
   /**
@@ -174,7 +263,8 @@ export class PlaytestRecorder {
   flush(): void {
     if (!this.live) return;
     this.live.ms = Math.round(this.live.ms);
-    this.rooms.push(this.live);
+    // A room no step was simulated in — the title's backdrop, replaced the moment a run starts — is not a room played.
+    if (this.live.ms > 0) this.rooms.push(this.live);
     this.live = null;
     if (this.rooms.length > LOG_LIMIT) this.rooms = this.rooms.slice(-LOG_LIMIT);
     try { localStorage.setItem(LOG_KEY, JSON.stringify(this.rooms)); } catch { /* the session still records */ }
@@ -184,7 +274,7 @@ export class PlaytestRecorder {
   json(): string {
     this.flush();
     return JSON.stringify({
-      source: "game", seed: this.seed, at: new Date().toISOString(), rooms: this.rooms,
+      source: "game", seed: this.seed, at: new Date().toISOString(), ...(this.run ? { run: this.run } : {}), rooms: this.rooms,
     }, null, 2);
   }
 
@@ -195,7 +285,9 @@ export class PlaytestRecorder {
   clear(): void {
     this.rooms = [];
     this.live = null;
-    try { localStorage.removeItem(LOG_KEY); } catch { /* nothing to forget */ }
+    this.run = null;
+    this.pending.clear();
+    try { localStorage.removeItem(LOG_KEY); localStorage.removeItem(META_KEY); } catch { /* nothing to forget */ }
   }
 }
 

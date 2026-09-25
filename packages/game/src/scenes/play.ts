@@ -2166,7 +2166,10 @@ export class PlayScene extends Phaser.Scene {
       ? await this.director.planRoom(ctx, { room_index: index, door_slot: 0, room_type: roomType }, this.tension, ask.request)
       : null;
     this.planned = planned;
-    if (planned) this.planRecords.set("room", { decisions: planned.decisions });
+    if (planned) {
+      this.planRecords.set("room", { decisions: planned.decisions });
+      playtestLog.decide(index, "room", planned.decisions);
+    }
     const room: RoomPlan = planned ? planned.plan : fixedRoom(stage === "boss" ? "boss" : "shop", src.stream("room"));
     const encounter = planned?.plan.encounter ?? null;
     const mood: Mood = room.params.mood;
@@ -2366,6 +2369,8 @@ export class PlayScene extends Phaser.Scene {
        */
       const purpose = answered ? "room" : "offer";
       const record = (decisions: readonly Decision[], offer?: OfferRecord) => {
+        playtestLog.decide(run.roomIndex, purpose, decisions);
+        if (offer) playtestLog.attach(run.roomIndex, (r) => { r.offers = [...(r.offers ?? []), { label: offer.label, ids: offer.ids }]; });
         const prev = this.planRecords.get(purpose);
         this.planRecords.set(purpose, {
           decisions: [...(prev?.decisions ?? []), ...decisions],
@@ -2388,6 +2393,9 @@ export class PlayScene extends Phaser.Scene {
           : doorSpecs(ruleDoors(run, src.stream("offer")), run.roomIndex));
       // Counted where the list is made, so a declined vendor still spends one
       // of the run's `NPC_OFFERS_MAX`.
+      playtestLog.attach(run.roomIndex, (r) => {
+        r.doors = doors.map((d) => d.npc ? `npc:${d.npc}` : `${d.reward}${d.school ? `:${d.school}` : d.family ? `:${d.family}` : ""}${d.onward ? " (onward)" : ""}`);
+      });
       if (doors.some((d) => d.npc && d.npc !== "fountain")) this.npcOffers++;
       if (doors.some((d) => d.npc === "fountain")) this.fountainOffers++;
       let cards: OfferCard[] = [];
@@ -4183,6 +4191,8 @@ export class PlayScene extends Phaser.Scene {
     if (!ui) return;
     const text = ui.text.trim();
     this.intent = { preset: STYLES[ui.selected]!.id, ...(text ? { free_text: text } : {}) };
+    // The playtest log is of this run alone, and says who planned it.
+    playtestLog.startRun({ director: directorArm(), style: this.intent.preset, ...(text ? { words: text } : {}) });
     this.hideIntent();
     this.showTransition();
     this.clearDirectorLog();
@@ -8512,6 +8522,8 @@ export class PlayScene extends Phaser.Scene {
     this.doorPlanMs = performance.now() - doorStart;
     this.doorPlan = doors;
     this.planRecords.set("doors", { decisions: doors.decisions });
+    // Decided on the way out, for the room the door leads to.
+    playtestLog.decide(this.roomIndex + 1, "doors", doors.decisions);
     this.tension = doors.tension;
     await this.enterRoom(this.roomIndex + 1, this.world.player.hearts, portal);
     // The plan is in: lay it out and wait, or start at once if the player
@@ -10429,6 +10441,8 @@ export class PlayScene extends Phaser.Scene {
     // player is actually making, as against the one they asked for.
     this.pickTags.push([...cardStyleTags(ITEMS, card.kind, card.itemId)]);
     this.pickedThisRoom = card.itemId || card.kind;
+    const taken = this.pickedThisRoom;
+    playtestLog.attach(this.roomIndex, (r) => { r.picked = taken; });
 
     if (card.kind === "gold") {
       this.runGold += GOLD_CARD_VALUE * (card.grade ?? 1);
