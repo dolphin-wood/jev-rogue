@@ -1396,7 +1396,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
           // A missing answer must not land outside the ramp either, so the
           // default is the first density this room is allowed rather than a
           // fixed one — `dense` is not offered before room 3.
-          density: densitiesFor(door.room_index)[0]!,
+          density: densitiesOffered(ctx, door.room_index)[0]!,
           anchor: anchorsFor(door.room_index, tension === "peak" || door.room_type === "elite")[0]!,
         }, ctx.history.profiles.at(-1)?.anchor),
         rounds: roundsFor(door.room_type, tension),
@@ -2204,7 +2204,7 @@ function encounterQuestions(
         + "the room above says how many rounds it plays and how many bodies it may hold in all. This is the "
         + "room's total rather than its crowd: how many stand on the floor together is fixed for this room "
         + "and stated with it, so a larger count is a longer fight rather than a thicker one.",
-      options: densitiesFor(roomIndex).map((d) => ({ ...opt(d, DENSITY[d]!), spec: DENSITY_SPEC[d]! })),
+      options: densitiesOffered(ctx, roomIndex).map((d) => ({ ...opt(d, DENSITY[d]!), spec: DENSITY_SPEC[d]! })),
       style,
     }),
     wave_structure: choiceQuestion({
@@ -2333,6 +2333,27 @@ function encounterQuestions(
   for (const [name, q] of Object.entries(questions))
     if (offeredKeys(q).length < 2) delete questions[name];
   return questions;
+}
+
+/**
+ * **Easing off runs at most `SPARSE_RUN_MAX` rooms.** The densities offered,
+ * less `sparse` once that many fights running have been sparse. A player who
+ * kept getting hurt was answered with a sparse room after almost every fight
+ * — four of the last five before the king, five and four bodies each, a
+ * quarter-minute long — and the run's climb went flat where it should rise.
+ * Both arms read "hurt" the same way and neither can see a run of answers,
+ * so the run is capped in code (finding 5), as the doors' streaks are. When
+ * only one density is left the question is not asked and that one is the
+ * room's.
+ */
+const SPARSE_RUN_MAX = 2;
+
+function densitiesOffered(ctx: RunContext, roomIndex: number): Density[] {
+  const all = densitiesFor(roomIndex);
+  const recent = ctx.history.profiles.slice(-SPARSE_RUN_MAX);
+  if (recent.length < SPARSE_RUN_MAX || recent.some((p) => p.density !== "sparse")) return all;
+  const kept = all.filter((d) => d !== "sparse");
+  return kept.length > 0 ? kept : all;
 }
 
 /** The densities this point in the run allows, in the question's order. */
