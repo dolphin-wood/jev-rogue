@@ -1753,17 +1753,30 @@ function advanceMelee(e: Enemy, world: World, dtMs: number): void {
       if (e.archetype === "boss" && (e.meleeKind === "greatsweep" || e.meleeKind === "greatcleave")) {
         const cleave = e.meleeKind === "greatcleave";
         const half = cleave ? BOSS_WAVE_CLEAVE_HALF : ((spec.sweepDeg + spec.bladeDeg) * Math.PI) / 360;
-        let facing = e.swing.facing;
-        if (cleave) {
-          const turn = angleDeltaRad(facing, Math.atan2(world.player.y - e.y, world.player.x - e.x));
-          facing += Math.max(-BOSS_WAVE_CLEAVE_TURN, Math.min(BOSS_WAVE_CLEAVE_TURN, turn));
-        }
         const hearts = bossStringHearts(e.bossStringN - 1 - e.bossString.length, e.bossStringN) * BOSS_WAVE_SHARE;
-        castShockwave(world, e.x, e.y, {
-          chargeMs: 0, inner: TILE_PX * spec.reachTiles, thickness: BOSS_WAVE_THICK_PX,
-          speed: BOSS_WAVE_SPEED, maxRadius: TILE_PX * 10,
-          damage: hearts * e.damageMult, facing, half,
-        });
+        if (cleave) {
+          /*
+           * The cleave's point goes into the floor, so its wave comes out of
+           * the floor there: born at the point, at nothing, and spreading
+           * from it at the player — not a slice of a ring round his body
+           * that appeared out past the blade already three tiles wide.
+           */
+          const tip = cleaveTip(world, e, TILE_PX * spec.reachTiles);
+          let facing = e.swing.facing;
+          const turn = angleDeltaRad(facing, Math.atan2(world.player.y - tip.y, world.player.x - tip.x));
+          facing += Math.max(-BOSS_WAVE_CLEAVE_TURN, Math.min(BOSS_WAVE_CLEAVE_TURN, turn));
+          castShockwave(world, tip.x, tip.y, {
+            chargeMs: 0, inner: 0, thickness: BOSS_WAVE_THICK_PX,
+            speed: BOSS_WAVE_SPEED, maxRadius: TILE_PX * 8,
+            damage: hearts * e.damageMult, facing, half,
+          });
+        } else {
+          castShockwave(world, e.x, e.y, {
+            chargeMs: 0, inner: TILE_PX * spec.reachTiles, thickness: BOSS_WAVE_THICK_PX,
+            speed: BOSS_WAVE_SPEED, maxRadius: TILE_PX * 10,
+            damage: hearts * e.damageMult, facing: e.swing.facing, half,
+          });
+        }
       }
       // Shock Cleave: the elite tank's chop cracks the floor ahead of it.
       if (e.meleeKind === "cleave" && e.archetype === "breaker") {
@@ -2164,7 +2177,18 @@ const PHASE_CHANGE_PAUSE_MS = 800;
 const BOSS_WAVE_SHARE = 0.5;
 const BOSS_WAVE_THICK_PX = 20;
 const BOSS_WAVE_SPEED = 300;
-const BOSS_WAVE_CLEAVE_HALF = (24 * Math.PI) / 180;
+/** Wider than the 24° it was, because it now spreads from the point rather than from his body: about as wide as before by the far wall. */
+const BOSS_WAVE_CLEAVE_HALF = (36 * Math.PI) / 180;
+
+/** Where the cleave's point meets the floor: its reach along the cut, short of any wall between. */
+function cleaveTip(world: World, e: Enemy, reach: number): { x: number; y: number } {
+  const dx = Math.cos(e.swing.facing), dy = Math.sin(e.swing.facing);
+  for (let r = reach; r > 0; r -= 4) {
+    const x = e.x + dx * r, y = e.y + dy * r;
+    if (!circleHitsWall(world.room.grid, x, y, 2) && hasLineOfSight(world.room.grid, e.x, e.y, x, y)) return { x, y };
+  }
+  return { x: e.x, y: e.y };
+}
 /** How far the cleave's wave may be turned from the line it struck, toward the player, as it is thrown. */
 const BOSS_WAVE_CLEAVE_TURN = (30 * Math.PI) / 180;
 /** The freeze the king's cleave costs the frame, ms: three frames, as a greatsword into stone should. */

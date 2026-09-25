@@ -16,6 +16,7 @@ import {
 import type { Enemy, EnemyId, ItemInstance, Mood, World } from "@jr/core";
 import { fillSubspecies } from "@jr/core";
 import { referenceInput } from "../play/player-model.ts";
+import { cellHash } from "../../../game/src/scenes/cell-hash.ts";
 
 const ART_SCALE = 2;
 const DIR = join(process.cwd(), "assets");
@@ -132,9 +133,8 @@ export type { World };
  * and the room reads as a sewer grid. Wear (1 and 2) scatters; drains are
  * placed, two per room, at hashed floor cells.
  */
-function hash2(x: number, y: number): number {
-  return ((x * 73856093) ^ (y * 19349663)) >>> 0;
-}
+// The game's own cell hash, so a frame here lays the floor the game does.
+const hash2 = cellHash;
 
 function floorFrame(x: number, y: number, drains: ReadonlySet<number>): string {
   if (drains.has(y * GRID_W + x)) return "tile_floor_3";

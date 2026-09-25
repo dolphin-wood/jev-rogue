@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { GRID_H, GRID_W, TILE_PX, Tile } from "@jr/core";
 import { ART_SCALE } from "./telegraph.ts";
+import { cellHash } from "./cell-hash.ts";
 
 type Hall = "boss" | "shop";
 
@@ -69,7 +70,7 @@ export function drawHallArt(scene: Phaser.Scene, group: Phaser.GameObjects.Group
     const cell = grid[y * GRID_W + x];
     // Under the breakable props too (the columns, the candelabra), which are floor once broken.
     if (cell !== Tile.Floor && cell !== Tile.Pillar && cell !== Tile.Prop) continue;
-    add(scene, group, floor, ((x * 73856093) ^ (y * 19349663)) >>> 0 & 3, x * TILE_PX, y * TILE_PX, 0.02);
+    add(scene, group, floor, cellHash(x, y) & 3, x * TILE_PX, y * TILE_PX, 0.02);
   }
   if (throne) {
     // The runner, three cells wide on the centre line (cells 10–12), from under the dais (row 3) to the door (row 11).

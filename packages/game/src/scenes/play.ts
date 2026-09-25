@@ -73,6 +73,7 @@ import { equipKeepingOthers } from "./equip-keys.ts";
 import { SHADOW_INK, drawLeapShadow, drawMeteorShadow } from "./spell-marks.ts";
 import { FireFx } from "./fire-fx.ts";
 import { drawHallArt } from "./hall-art.ts";
+import { cellHash } from "./cell-hash.ts";
 import { fillKeyLine, KeyPrompt, keyLine, setCoinArt } from "../ui/keycap.ts";
 import type { ProjectileLook } from "./projectiles.ts";
 import { drawArms, drawHasteCue, drawShockwaves, drawTollPulse } from "./ground.ts";
@@ -17204,8 +17205,9 @@ function featureArt(feature: string): FeatureArt {
  * and the room reads as a sewer grid. Wear (1 and 2) scatters; drains are
  * placed, two per room, at hashed floor cells.
  */
+/** See `cellHash`: the old product hash tiled every four cells. */
 function hash2(x: number, y: number): number {
-  return ((x * 73856093) ^ (y * 19349663)) >>> 0;
+  return cellHash(x, y);
 }
 
 function floorFrame(x: number, y: number, drains: ReadonlySet<number>): string {

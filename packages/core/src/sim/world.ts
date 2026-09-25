@@ -2500,11 +2500,10 @@ export const BOSS_SLAM_MS = beats(3);
  * dash itself: it reaches everywhere in the arena eventually, so distance is
  * only a delay, and crossing it needs the i-frames rather than a gap.
  *
- * It starts at the safe radius the bullet ring already used, so the "get in
- * close" answer the slam taught is still true for the first beat of it, and
- * then it stops being true, which is the fight escalating inside one move.
- * Phase III sends a second band a beat behind the first, into the ground the
- * player used to dodge the first.
+ * It comes out of the floor where the sword went in, at his feet, so there
+ * is no ground near him it has not already crossed. Phase III sends a second
+ * band a beat behind the first, into the ground the player used to dodge the
+ * first.
  */
 const BOSS_SHOCK_SPEED: Readonly<Record<number, number>> = { 1: 230, 2: 260, 3: 290 };
 /** The phase III second band, a beat and a half behind the first: on the off-beat. */
@@ -2630,7 +2629,12 @@ const BOSS_ADDS: Readonly<Record<number, readonly EnemyId[]>> = {
  * the ground the player is standing on when they close is safe for the beat
  * it takes them to commit, and killed off past the arena's diagonal.
  */
-function bossShock(w: World, e: Enemy, inner = BOSS_SLAM_IMPACT_PX): void {
+/*
+ * The slam's band is born at his feet, where the sword goes in, at nothing —
+ * not at the edge of the struck ground, where it appeared already a ring two
+ * tiles across. The leap's landing keeps its own radius.
+ */
+function bossShock(w: World, e: Enemy, inner = 0): void {
   castShockwave(w, e.x, e.y, {
     chargeMs: 0,
     inner,
