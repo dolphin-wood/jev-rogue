@@ -115,7 +115,7 @@ The game is a static bundle and the proxy is a Cloudflare Worker; the two are de
 
    The deployed Worker is always gated: without `INVITE_CODES` it admits nobody, and strangers who find the page play the rule Director on nothing of yours.
 
-2. **Game (Vercel).** Import the repository; `vercel.json` sets the build (`pnpm build`) and the output (`dist`). Add one environment variable, `VITE_DECIDE_URL`, set to the Worker's URL with `/decide`, such as `https://jev-rogue-proxy.<you>.workers.dev/decide`. It is read at build time, so redeploy after changing it.
+2. **Game (Vercel).** Import the repository; Vercel detects Vite and runs the `build` script into `dist`. Add one environment variable, `VITE_DECIDE_URL`, set to the Worker's URL with `/decide`, such as `https://jev-rogue-proxy.<you>.workers.dev/decide`. It is read at build time, so redeploy after changing it.
 
 3. Send each friend the link and a code. They enter it under **Invitation code** in the title menu and turn **Jev Director** on. Revoke a code by removing it from `INVITE_CODES`.
 

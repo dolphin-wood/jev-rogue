@@ -115,7 +115,7 @@ pnpm dev
 
    部署后的 Worker 一定有门槛：没设 `INVITE_CODES` 时谁都进不来，陌生人打开页面只会玩规则版 Director，不会花你的额度。
 
-2. **游戏本体（Vercel）**：导入这个仓库，`vercel.json` 已设好构建命令（`pnpm build`）和输出目录（`dist`）。只需加一个环境变量 `VITE_DECIDE_URL`，值是 Worker 地址加 `/decide`，例如 `https://jev-rogue-proxy.<you>.workers.dev/decide`。它在构建时读取，改了之后要重新部署。
+2. **游戏本体（Vercel）**：导入这个仓库，Vercel 会识别为 Vite 项目，执行 `build` 脚本并输出到 `dist`。只需加一个环境变量 `VITE_DECIDE_URL`，值是 Worker 地址加 `/decide`，例如 `https://jev-rogue-proxy.<you>.workers.dev/decide`。它在构建时读取，改了之后要重新部署。
 
 3. 把链接和邀请码发给朋友。他们在标题菜单的 **邀请码** 里填入，再打开 **Jev Director**。要收回某个码，从 `INVITE_CODES` 里删掉即可。
 

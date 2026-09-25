@@ -45,7 +45,7 @@ The *Jev Director* row (`jr.director`; `?director=` overrides it) can be on only
 | Build | Vite, pnpm workspaces | fast, dev proxy built in |
 | Validation | zod | content schemas, API responses |
 | Tests | vitest | everything in core and director runs headless |
-| Hosting | any static host for the game (GitHub Pages, Vercel via `vercel.json`), Cloudflare Worker for the proxy | free, static, shareable URL; the Worker keeps its global rate limit |
+| Hosting | any static host for the game (GitHub Pages, Vercel), Cloudflare Worker for the proxy | free, static, shareable URL; the Worker keeps its global rate limit |
 
 ## Repository layout
 

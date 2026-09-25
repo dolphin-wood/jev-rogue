@@ -115,7 +115,7 @@ pnpm dev
 
    デプロイした Worker は常に招待制です。`INVITE_CODES` が未設定なら誰も通さず、ページを見つけた第三者はルール版 Director で遊ぶだけで、あなたの枠は使われません。
 
-2. **ゲーム本体（Vercel）：**リポジトリをインポートします。`vercel.json` がビルド（`pnpm build`）と出力先（`dist`）を設定済みです。環境変数 `VITE_DECIDE_URL` を一つだけ追加し、Worker の URL に `/decide` を付けた値（例：`https://jev-rogue-proxy.<you>.workers.dev/decide`）にします。ビルド時に読まれるため、変更後は再デプロイしてください。
+2. **ゲーム本体（Vercel）：**リポジトリをインポートします。Vercel が Vite を検出し、`build` スクリプトで `dist` に出力します。環境変数 `VITE_DECIDE_URL` を一つだけ追加し、Worker の URL に `/decide` を付けた値（例：`https://jev-rogue-proxy.<you>.workers.dev/decide`）にします。ビルド時に読まれるため、変更後は再デプロイしてください。
 
 3. 友人にリンクと招待コードを送ります。タイトルメニューの **招待コード** に入力し、**Jev Director** をオンにしてもらいます。コードを取り消すには `INVITE_CODES` から削除します。
 
