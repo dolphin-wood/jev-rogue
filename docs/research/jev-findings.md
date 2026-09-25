@@ -990,10 +990,13 @@ Director's first pick named the door. For a `spam` player that pick is usually
 a level for the held storm spell, so a played run read "storm" on 6 of 9 spell
 doors over offers that were mostly something else.
 
-**Now:** a door names every school (every family, on a stat door) among its
-cards, once each, in the Director's order: "Storm · Void · Stone". More than
-one stands one to a line under the arch, so a row of doors cannot run their
-names into each other.
+**Now:** a door shows every school (every family, on a stat door) among its
+cards, once each, in the Director's order — as a row of marks under its badge
+(a gem in each school's colour, a stat's icon for each family, a star for each
+grade above the first), with the names in the prompt for the door the player
+stands by: "[E] storm · void · stone spell". Written out under each door, the
+names ran into the next door's badge whenever a room stood its doors in a
+column.
 
 **Rule:** a summary of three things is one of them; show the three.
 
