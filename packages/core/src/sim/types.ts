@@ -666,6 +666,14 @@ export interface Tether {
   y1: number;
   phase: "aim" | "fly" | "hold" | "drag" | "live";
   ms: number;
+  /**
+   * The king's hook only: when on his fight clock (`Enemy.bossFightMs`) it
+   * leaves the floor. The aim counts down in steps, and a step frozen by
+   * hitstop is not counted while his clock — the music's — runs on, so a
+   * freeze inside the aim threw the chain late and off the beat. It is set
+   * from this before every step instead.
+   */
+  dueAt?: number;
   /** How long the player has stood in a ward line, toward cutting it. */
   cutMs: number;
   damage: number;
@@ -760,6 +768,13 @@ export interface Shockwave {
    */
   facing?: number;
   half?: number;
+  /**
+   * A wave that is a **straight edge** rather than an arc — the greatcleave's,
+   * a vertical cut seen from above — this many px across, running along
+   * `facing`: it hits a band `thickness` long and `width` wide that travels
+   * out from (x, y), and does not widen as it goes.
+   */
+  width?: number;
 }
 
 /**

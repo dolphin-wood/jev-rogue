@@ -284,11 +284,11 @@ describe("the boss", () => {
       // A commit due inside a freeze lands as the freeze ends: the body is frozen, so that is when it can.
       let frozeBefore = false;
       const tol = (): number => (frozeBefore ? 50 : 0) + STEP_MS * 1.01;
-      // A minute: he takes a turn, then rests (`chooseBossAct`), so half a minute is only a handful of turns.
-      for (let i = 0; i < 60 * 60; i++) {
-        // The player circles him, in close and out at blade's length by turns, so the fight uses every move it has.
+      // Two minutes: he takes a turn, then rests (`chooseBossAct`), and the ground strikes are drawn seldom.
+      for (let i = 0; i < 60 * 120; i++) {
+        // The player circles him, in close, at blade's length and across the hall by turns, so the fight uses every move it has.
         const a = i / 90;
-        const r = Math.floor(i / 300) % 2 === 0 ? 120 : 64;
+        const r = [120, 64, 210][Math.floor(i / 300) % 3]!;
         w.player.x = b.x + Math.cos(a) * r;
         w.player.y = b.y + Math.sin(a) * r;
         w.player.hearts = 6;
@@ -355,7 +355,7 @@ describe("the boss", () => {
     expect(b.meleeKind).toBe("cleave");
   });
 
-  it("slams: a ring of shots out from beyond its body", () => {
+  it("slams: the band comes out of the floor at his feet, and no ring of shots with it", () => {
     const w = world();
     const b = boss(w);
     onGrid(b, BOSS_SLAM_MS);
@@ -363,7 +363,13 @@ describe("the boss", () => {
     step(w, NO_INPUT);
     expect(b.bossCast).toBe("slam");
     for (let i = 0; i < Math.ceil(BOSS_SLAM_MS / 16) + 3; i++) step(w, NO_INPUT);
-    expect(w.enemyBullets.filter((x) => x.alive).length).toBeGreaterThanOrEqual(10);
+    const band = w.shockwaves.find((x) => x.alive);
+    expect(band).toBeDefined();
+    expect(Math.hypot(band!.x - b.x, band!.y - b.y)).toBeLessThan(1);
+    // Born at nothing: three steps out it has run a few px, not the struck ground's 56.
+    expect(band!.inner).toBeLessThan(30);
+    // A dash through the band came out of its i-frames into the ring, so there is no ring.
+    expect(w.enemyBullets.filter((x) => x.alive).length).toBe(0);
   });
 
   it("leaps in phase two: it travels, is untouchable in the air, and the landing throws the band", () => {
@@ -568,9 +574,9 @@ describe("the boss", () => {
       close.add(nextTurn(world(), null, 0, 60, n));
       behind.add(nextTurn(world(), null, 0, -60, n));
     }
-    expect([...far].every((a) => ["leap", "dashcut", "hook", "storm", "volley", "quake"].includes(a))).toBe(true);
+    expect([...far].every((a) => ["leap", "dashcut", "hook", "storm", "volley", "quake", "greatslash"].includes(a))).toBe(true);
     expect(far.has("leap")).toBe(true);
-    expect([...close].every((a) => ["greatsweep", "slam", "greatslash", "greatcleave"].includes(a))).toBe(true);
+    expect([...close].every((a) => ["greatsweep", "slam", "greatslash", "greatcleave", "maul"].includes(a))).toBe(true);
     expect([...behind].every((a) => ["maul", "slam"].includes(a))).toBe(true);
     // Never one answer to a range.
     for (const set of [far, close, behind]) expect(set.size).toBeGreaterThanOrEqual(2);

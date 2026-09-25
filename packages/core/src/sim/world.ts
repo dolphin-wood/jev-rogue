@@ -683,6 +683,12 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   resolveSwing(w, dtMs);
   resolveFires(w, dtMs);
   resolveStrikes(w, dtMs);
+  // The king's chain leaves the floor on his clock, not on the steps (`Tether.dueAt`).
+  for (const t of w.tethers) {
+    if (!t.alive || t.phase !== "aim" || t.dueAt === undefined) continue;
+    const king = w.enemies.find((x) => x.id === t.from);
+    if (king) t.ms = t.dueAt - king.bossFightMs + dtMs;
+  }
   // The expansion's rifts, mines, tethers, lobs, fields and discs.
   stepAttacks(w, dtMs, attackHooks(w));
   // A travelling band — the slam's, a sword wave — breaks the stone it runs into, once a wave each.
@@ -2427,12 +2433,13 @@ const BOSS_FAR_PX = 176;
 /** A volley turn: two bars, fired standing. */
 export const BOSS_VOLLEY_MS = beats(8);
 /** How long he walks after a blade he chose before giving it up for another turn. */
-const BOSS_BLADE_CHASE_MS = 2600;
+// 3.5 s where it was 2.6: a blade given up for a turn that fits the range was a blade traded for a wave.
+const BOSS_BLADE_CHASE_MS = 3500;
 /** The rest after a turn, in beats, by phase; and up to this many more, drawn. */
 const BOSS_REST_BEATS: Readonly<Record<number, number>> = { 1: 7, 2: 6, 3: 5 };
 const BOSS_REST_JITTER_BEATS = 2;
 /** After a heavy turn — a leap, a slam, a quake, a string of three — this many beats more: the big opening. */
-const BOSS_HEAVY_REST_BEATS = 2;
+const BOSS_HEAVY_REST_BEATS = 4;
 const BOSS_HEAVY_ACTS: ReadonlySet<string> = new Set(["leap", "slam", "quake", "storm"]);
 
 /** The rest after the turn that has just ended, ms. */
@@ -2450,25 +2457,31 @@ function chooseBossAct(w: World, e: Enemy): BossAct | null {
   // Where they are now, not where his last glance put them: he has walked since.
   const level = bossLevel(e, p);
   const opts: [BossAct, number][] = [];
+  /*
+   * **The sword first, the ground strikes seldom.** Measured with a player
+   * holding each range, the mid and far bands were three parts in four
+   * waves, cracks, bands and lightning, and the sword's own blows — which are
+   * the fight's rhythm and the cheaper hits — were a quarter; the backhand
+   * never came at all, since it is only for a player behind him. The heavy
+   * moves (`BOSS_HEAVY_ACTS`) are now drawn about half as often and rest
+   * longer after, and the blades he walks into are in every band.
+   */
   if (d < BOSS_CLOSE_PX) {
     // At his feet the side matters: his sweeps go out of his front only, so beside him is the cleave's, behind him the backhand's.
-    if (bossBehind(e, p)) opts.push(["maul", 4], ["slam", 2]);
-    else if (level) opts.push(["greatcleave", 4], ["slam", 2]);
-    else {
-      opts.push(["greatsweep", 3], ["slam", 2], ["greatcleave", 2]);
-      if (ph >= 2) opts.push(["greatslash", 3]);
-    }
+    if (bossBehind(e, p)) opts.push(["maul", 4], ["slam", 1]);
+    else if (level) opts.push(["greatcleave", 3], ["maul", 2], ["slam", 1]);
+    else opts.push(["greatsweep", 3], ["greatslash", 3], ["maul", 2], ["greatcleave", 1.5], ["slam", 1]);
   } else if (d < BOSS_FAR_PX) {
-    opts.push(["quake", 2], ["storm", 2]);
-    if (ph >= 2) opts.push(["hook", 2]);
+    opts.push(["quake", 1], ["storm", 1]);
+    if (ph >= 2) opts.push(["hook", 1.5]);
     // The cleave comes down along a line at them, level or in front; behind him it cannot.
-    opts.push(bossBehind(e, p) ? ["greatsweep", 1] : ["greatcleave", 3]);
-    if (ph >= 2) opts.push(["greatslash", 2]);
+    opts.push(bossBehind(e, p) ? ["maul", 2] : ["greatcleave", 2]);
+    opts.push(["greatslash", 3], ["greatsweep", 2]);
     opts.push(["volley", 1]);
   } else {
-    opts.push(["leap", 4], ["storm", 3], ["volley", 2], ["quake", 1]);
-    if (ph >= 2 && level) opts.push(["dashcut", 3]);
-    if (ph >= 2) opts.push(["hook", 3]);
+    opts.push(["leap", 2], ["storm", 1.5], ["volley", 1.5], ["quake", 0.5], ["greatslash", 2]);
+    if (level) opts.push(["dashcut", ph >= 2 ? 3 : 2]);
+    if (ph >= 2) opts.push(["hook", 2]);
   }
   const held = w.bossHold;
   const allowed = opts.filter(([a]) => {
@@ -2506,9 +2519,27 @@ export const BOSS_SLAM_MS = beats(3);
  * first.
  */
 const BOSS_SHOCK_SPEED: Readonly<Record<number, number>> = { 1: 230, 2: 260, 3: 290 };
-/** The phase III second band, a beat and a half behind the first: on the off-beat. */
-const BOSS_SHOCK_SECOND_MS = beats(1.5);
-export const BOSS_SHOCK_DAMAGE = 1;
+/**
+ * The phase III second band, two beats behind the first. It was a beat and a
+ * half — 536 ms, which is the dash's own recovery (110 + 420 ms) to within a
+ * frame, so the second band could only be dashed by a player who had pressed
+ * on the first frame both times.
+ */
+const BOSS_SHOCK_SECOND_MS = beats(2);
+/**
+ * Half a heart — ten health at the boss's power — where it was a whole one:
+ * a band that reaches the whole hall and is answered only by a timed dash
+ * cost as much as a blow of the sword it takes a mistake to stand in.
+ */
+export const BOSS_SHOCK_DAMAGE = 0.5;
+/**
+ * How deep the band is, px: 22 where every other shockwave is 34
+ * (`SHOCK_THICKNESS`). At 34 it took 165 ms to pass over a body standing
+ * still, most of the dash's 200 ms of i-frames, so only a dash into it on the
+ * right frame got through; at 22 it passes in under 140, and a dash any way
+ * through it inside the right fifth of a second does.
+ */
+const BOSS_SHOCK_THICK_PX = 22;
 /** A crack of the quake, and the leap's landing on a player under it, in hearts (see `BOSS_POWER`). */
 const BOSS_QUAKE_DAMAGE = 1;
 const BOSS_LAND_DAMAGE = 1;
@@ -2638,6 +2669,7 @@ function bossShock(w: World, e: Enemy, inner = 0): void {
   castShockwave(w, e.x, e.y, {
     chargeMs: 0,
     inner,
+    thickness: BOSS_SHOCK_THICK_PX,
     speed: BOSS_SHOCK_SPEED[e.phase] ?? 260,
     maxRadius: Math.hypot(GRID_W * TILE_PX, GRID_H * TILE_PX),
     damage: BOSS_SHOCK_DAMAGE * e.damageMult,
@@ -2849,7 +2881,7 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
        * enough to be seen under everything else the boss has in the air.
        */
       const chain = w.tethers.find((t) => t.alive && t.kind === "hook" && t.from === e.id && t.phase === "aim");
-      if (chain) chain.ms = BOSS_HOOK_AIM_MS - trim;
+      if (chain) { chain.ms = BOSS_HOOK_AIM_MS - trim; chain.dueAt = e.bossFightMs + chain.ms; }
       e.poseMs = BOSS_HOOK_AIM_MS - trim;
       // The pose owns the timing from here; the cast is over as far as the
       // move list is concerned once the chain is in the air.
@@ -2867,21 +2899,22 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
   keepBossOnBeat(w, e);
   if (e.bossCast === "slam") {
     /*
-     * Phase III: a second band a beat behind the first, and the bullet ring
-     * offset into the first's gaps. Two bands is the one place the slam asks
-     * for a second dash rather than a longer one.
+     * Phase III: a second band behind the first. Two bands is the one place
+     * the slam asks for a second dash rather than a longer one.
+     *
+     * **No bullet ring.** The slam threw one with each band, and the dash
+     * that crossed the band came out of its i-frames into the bullets: two
+     * questions whose answers cancel, which read as "dodged it and got hit
+     * anyway". The band is the move.
      */
-    if (e.phase >= 3 && before > -BOSS_SHOCK_SECOND_MS && e.bossCastMs <= -BOSS_SHOCK_SECOND_MS) {
+    if (e.phase >= 3 && before > -BOSS_SHOCK_SECOND_MS && e.bossCastMs <= -BOSS_SHOCK_SECOND_MS)
       bossShock(w, e);
-      bossRing(w, e, 12, 115, 15);
-    }
     if (before > 0 && e.bossCastMs <= 0) {
       // The sword into the floor at his feet: the ground round them is struck.
       if (Math.hypot(w.player.x - e.x, w.player.y - e.y) <= BOSS_SLAM_IMPACT_PX + PLAYER_RADIUS)
         hurtPlayer(w, e.x, e.y, "melee:boss", 0, BOSS_SLAM_IMPACT_DAMAGE * e.damageMult);
       bossStrikesProps(w, (q) => Math.hypot(q.x - e.x, q.y - e.y) <= BOSS_SLAM_IMPACT_PX + q.radius, []);
       bossShock(w, e);
-      bossRing(w, e, e.phase >= 2 ? 14 : 12, 120, 0);
       // A greatsword driven into stone: a long freeze and the room shaking, so it lands like one.
       impact(w, BOSS_STRIKE_STOP_MS, BOSS_STRIKE_TRAUMA);
       w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "boss_slam" });

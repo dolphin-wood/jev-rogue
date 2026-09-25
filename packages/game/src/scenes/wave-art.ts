@@ -193,3 +193,87 @@ export const SPELL_FX_FRAMES: readonly string[] = [
   ]).flat(),
   "vfx_arc_cap_0", "vfx_arc_cap_1", "vfx_contagion_glob_0", "vfx_contagion_glob_1",
 ];
+
+/**
+ * **A straight edge of force** — the king's greatcleave (doc 020): a vertical
+ * cut, so its wave is a blade of light standing on the floor and running
+ * along the line of the cut, not a crescent lying on it.
+ *
+ * The view is three-quarter, so what stands up is drawn up the screen: a
+ * sheet rising from the edge's footprint, tallest toward the front, with its
+ * top edge white-hot and its foot dark. Seen side-on it is a standing blade;
+ * running straight at the camera it narrows to a bright column, which is also
+ * what a vertical blade coming at you looks like. The footprint — the band
+ * that hits — is drawn on the floor under it in the danger colour.
+ */
+export interface EdgeWave {
+  /** Where it started, which way it runs, and its front and back along that line. */
+  readonly x: number;
+  readonly y: number;
+  readonly facing: number;
+  readonly back: number;
+  readonly front: number;
+  /** Width of the footprint across the line, world px. */
+  readonly width: number;
+  /** Height of the standing sheet at its tallest, world px up the screen. */
+  readonly rise: number;
+  readonly life: number;
+  readonly tick: number;
+  readonly seed: number;
+  readonly palette: WavePalette;
+}
+
+export function drawEdgeWave(pen: Pen, o: EdgeWave, alpha = 1): void {
+  const life = Math.max(0, Math.min(1, o.life));
+  if (life <= 0 || alpha <= 0) return;
+  const P = TELE_PIX;
+  const c = Math.cos(o.facing), s = Math.sin(o.facing);
+  const rise = o.rise * (0.4 + 0.6 * life);
+  const len = Math.max(P, o.front - o.back);
+  const cells = new Map<number, number>();
+  const put = (x: number, y: number, band: number): void => {
+    const i = Math.floor(x / P), j = Math.floor(y / P);
+    const k = j * 100000 + i;
+    if ((cells.get(k) ?? 0) < band) cells.set(k, band);
+  };
+  const flick = (o.tick >> 1) + o.seed * 31;
+  // The floor under it: the band that hits, in the danger colour, edged dark, with a hot seam down the cut.
+  const halfW = (o.width / 2) * (0.6 + 0.4 * life);
+  for (let a = 0; a <= len; a += P / 2)
+    for (let b = -halfW; b <= halfW; b += P / 2) {
+      const gx = o.x + c * (o.back + a) - s * b, gy = o.y + s * (o.back + a) + c * b;
+      put(gx, gy, Math.abs(b) < P / 2 ? 4 : Math.abs(b) > halfW - P ? 1 : 2);
+    }
+  // The standing sheet: a column up the screen at every step along the line,
+  // faint at its foot, brighter as it rises, white-hot along its top edge.
+  for (let a = 0; a <= len; a += P / 2) {
+    const t = a / len;
+    const h = rise * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.55) * 0.92), 0.8);
+    if (h < P) continue;
+    const gx = o.x + c * (o.back + a), gy = o.y + s * (o.back + a);
+    const top = h - (hash(Math.floor(a / P), flick, 7) < 0.3 ? P : 0);
+    for (let z = 0; z <= top; z += P / 2) {
+      const u = z / Math.max(P, top);
+      const band = top - z < P ? 5 : u > 0.7 ? 4 : u > 0.35 ? 3 : 2;
+      put(gx, gy - z, band);
+      // A wedge in section: as wide as the band at its foot, drawn to the edge at the top — so a blade
+      // coming straight at the camera, which is the cleave's usual line, still reads as a blade.
+      const wedge = halfW * (1 - u) * 0.8;
+      for (let b = P / 2; b <= wedge; b += P / 2) {
+        put(gx - s * b, gy + c * b - z, Math.min(band, 3));
+        put(gx + s * b, gy - c * b - z, Math.min(band, 3));
+      }
+    }
+  }
+  const look: readonly (readonly [number, number])[] = [
+    [0, 0], [o.palette.lip, 0.55], [o.palette.aura, 0.3], [o.palette.aura, 0.6], [o.palette.mid, 0.9], [o.palette.core, 1],
+  ];
+  for (let band = 1; band <= 5; band++) {
+    pen.fillStyle(look[band]![0], alpha * look[band]![1]);
+    for (const [k, v] of cells) {
+      if (v !== band) continue;
+      const j = Math.floor(k / 100000), i = k - j * 100000;
+      pen.fillRect(i * P, j * P, P, P);
+    }
+  }
+}

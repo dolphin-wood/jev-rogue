@@ -136,6 +136,8 @@ export function castShockwave(
     speed?: number; maxRadius?: number; damage?: number;
     /** Only the stretch of the ring facing this way, `half` radians either side. */
     facing?: number; half?: number;
+    /** A straight edge this wide travelling along `facing`, instead of an arc (`Shockwave.width`). */
+    width?: number;
   } = {},
 ): Shockwave {
   const s: Shockwave = {
@@ -149,6 +151,7 @@ export function castShockwave(
     damage: opts.damage ?? 1,
     struck: false,
     ...(opts.facing !== undefined && opts.half !== undefined ? { facing: opts.facing, half: opts.half } : {}),
+    ...(opts.facing !== undefined && opts.width !== undefined ? { facing: opts.facing, width: opts.width } : {}),
   };
   w.shockwaves.push(s);
   // A band with a charge is a promise, and is cued; one born at once is part of a blow that has its own sound
@@ -160,6 +163,12 @@ export function castShockwave(
 /** Whether a body of `radius` at (x, y) is standing in the live band. */
 export function shockwaveHits(s: Shockwave, x: number, y: number, radius: number): boolean {
   if (s.chargeMs > 0) return false;
+  if (s.width !== undefined && s.facing !== undefined) {
+    const dx = x - s.x, dy = y - s.y;
+    const along = dx * Math.cos(s.facing) + dy * Math.sin(s.facing);
+    const across = -dx * Math.sin(s.facing) + dy * Math.cos(s.facing);
+    return along >= s.inner - radius && along <= s.inner + s.thickness + radius && Math.abs(across) <= s.width / 2 + radius;
+  }
   const d = Math.hypot(x - s.x, y - s.y);
   if (d < s.inner - radius || d > s.inner + s.thickness + radius) return false;
   if (s.facing === undefined || s.half === undefined) return true;

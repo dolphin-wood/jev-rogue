@@ -1181,7 +1181,10 @@ describe("enemy behaviour", () => {
     b.alertMs = 0;
     w.enemies.push(b);
     let bullets = 0;
-    for (let i = 0; i < 600; i++) {
+    // A minute: the sword is most of his turns now, and a volley is one of several at this range.
+    for (let i = 0; i < 3600 && bullets === 0; i++) {
+      // Held across the hall, where a volley is one of his turns.
+      w.player.x = b.x - 220; w.player.y = b.y; w.player.invulnMs = 1e9;
       step(w, NO_INPUT);
       bullets = Math.max(bullets, w.enemyBullets.filter((x) => x.alive).length);
     }

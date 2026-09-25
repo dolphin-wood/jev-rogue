@@ -1752,23 +1752,24 @@ function advanceMelee(e: Enemy, world: World, dtMs: number): void {
        */
       if (e.archetype === "boss" && (e.meleeKind === "greatsweep" || e.meleeKind === "greatcleave")) {
         const cleave = e.meleeKind === "greatcleave";
-        const half = cleave ? BOSS_WAVE_CLEAVE_HALF : ((spec.sweepDeg + spec.bladeDeg) * Math.PI) / 360;
+        const half = ((spec.sweepDeg + spec.bladeDeg) * Math.PI) / 360;
         const hearts = bossStringHearts(e.bossStringN - 1 - e.bossString.length, e.bossStringN) * BOSS_WAVE_SHARE;
         if (cleave) {
           /*
            * The cleave's point goes into the floor, so its wave comes out of
-           * the floor there: born at the point, at nothing, and spreading
-           * from it at the player — not a slice of a ring round his body
-           * that appeared out past the blade already three tiles wide.
+           * the floor there, and it is the cut's own shape: a **vertical**
+           * edge, which from above is a straight line running along the cut
+           * and no wider than a body (`Shockwave.width`) — not a crescent,
+           * which is a horizontal sweep's. One step aside answers it.
            */
           const tip = cleaveTip(world, e, TILE_PX * spec.reachTiles);
           let facing = e.swing.facing;
           const turn = angleDeltaRad(facing, Math.atan2(world.player.y - tip.y, world.player.x - tip.x));
           facing += Math.max(-BOSS_WAVE_CLEAVE_TURN, Math.min(BOSS_WAVE_CLEAVE_TURN, turn));
           castShockwave(world, tip.x, tip.y, {
-            chargeMs: 0, inner: 0, thickness: BOSS_WAVE_THICK_PX,
+            chargeMs: 0, inner: 0, thickness: BOSS_CLEAVE_EDGE_LONG_PX,
             speed: BOSS_WAVE_SPEED, maxRadius: TILE_PX * 8,
-            damage: hearts * e.damageMult, facing, half,
+            damage: hearts * e.damageMult, facing, width: BOSS_CLEAVE_EDGE_WIDE_PX,
           });
         } else {
           castShockwave(world, e.x, e.y, {
@@ -2177,8 +2178,9 @@ const PHASE_CHANGE_PAUSE_MS = 800;
 const BOSS_WAVE_SHARE = 0.5;
 const BOSS_WAVE_THICK_PX = 20;
 const BOSS_WAVE_SPEED = 300;
-/** Wider than the 24° it was, because it now spreads from the point rather than from his body: about as wide as before by the far wall. */
-const BOSS_WAVE_CLEAVE_HALF = (36 * Math.PI) / 180;
+/** The cleave's edge: how far it runs along the cut, and how wide it is across it. */
+const BOSS_CLEAVE_EDGE_LONG_PX = 30;
+const BOSS_CLEAVE_EDGE_WIDE_PX = 18;
 
 /** Where the cleave's point meets the floor: its reach along the cut, short of any wall between. */
 function cleaveTip(world: World, e: Enemy, reach: number): { x: number; y: number } {

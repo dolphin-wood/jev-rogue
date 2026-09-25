@@ -67,7 +67,7 @@ import { bodyFeel, weightOf } from "./body-feel.ts";
 import { heldStaff, staffSpriteCentre, swingStaff, type HeldStaff } from "./blade.ts";
 import type { BodyFeel } from "./body-feel.ts";
 import { BOSS_CRESCENT, drawCrescent, ENEMY_CRESCENT, PLAYER_CRESCENT } from "./crescent.ts";
-import { drawCrescentWave, impactFrame, mix, wavePalette, waveTrailPoints } from "./wave-art.ts";
+import { drawCrescentWave, drawEdgeWave, impactFrame, mix, wavePalette, waveTrailPoints } from "./wave-art.ts";
 import { drawCrackle, drawProjectile } from "./projectiles.ts";
 import { equipKeepingOthers } from "./equip-keys.ts";
 import { SHADOW_INK, drawLeapShadow, drawMeteorShadow } from "./spell-marks.ts";
@@ -12739,6 +12739,15 @@ export class PlayScene extends Phaser.Scene {
      * geometry and timing are the simulation's.
      */
     for (const s of w.shockwaves) {
+      if (s.alive && s.facing !== undefined && s.width !== undefined) {
+        // The greatcleave's edge: a blade standing on the floor, running along the cut (`drawEdgeWave`).
+        drawEdgeWave(this.soilGfx, {
+          x: s.x, y: s.y, facing: s.facing, back: s.inner, front: s.inner + s.thickness, width: s.width,
+          rise: 26, life: Math.max(0, Math.min(1, (s.maxRadius - s.inner) / (TILE_PX * 3))),
+          tick: w.tick, seed: Math.round(s.x + s.y) % 97, palette: KING_WAVE,
+        });
+        continue;
+      }
       if (!s.alive || s.facing === undefined || s.half === undefined) continue;
       const wave = {
         x: s.x, y: s.y, radius: s.inner + s.thickness, facing: s.facing, half: s.half,
