@@ -45,7 +45,7 @@ The *Jev Director* row (`jr.director`; `?director=` overrides it) can be on only
 | Build | Vite, pnpm workspaces | fast, dev proxy built in |
 | Validation | zod | content schemas, API responses |
 | Tests | vitest | everything in core and director runs headless |
-| Hosting | GitHub Pages for the game, Cloudflare Worker for the proxy | free, static, shareable URL |
+| Hosting | any static host for the game (GitHub Pages, Vercel via `vercel.json`), Cloudflare Worker for the proxy | free, static, shareable URL; the Worker keeps its global rate limit |
 
 ## Repository layout
 
@@ -159,7 +159,7 @@ Traces go to a `TraceSink`; a console sink and an in-memory sink exist, and the 
 | TYPESAFE_API_KEY | Worker secret / `.env.local` for the dev proxy and harness | the deployer's TypeSafe key; never in a client bundle |
 | INVITE_CODES | Worker secret | comma-separated codes that may spend the key; unset admits nobody |
 | INVITE_RATE_LIMIT | Worker binding, optional | per-IP limit on `/invite/verify` (`[[ratelimits]]`); absent, an in-isolate counter stands in |
-| ALLOWED_ORIGIN | proxy | the game's origin for CORS, e.g. `https://<user>.github.io` |
+| ALLOWED_ORIGIN | proxy | the game's origin for CORS, e.g. `https://<user>.github.io` or `https://<project>.vercel.app` |
 | VITE_BASE | client build | base path for the static bundle |
 | VITE_DECIDE_URL | client build | the hosted proxy's URL for the Jev arm; `/api/decide` when unset |
 

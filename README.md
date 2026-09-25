@@ -100,6 +100,25 @@ pnpm dev
 
 The local Vite server exposes the stateless proxy at `/api/decide`, so the key stays outside client code. The game uses the rule Director by default. `?director=jev` and `?director=random` select other arms; `?seed=...` fixes the run seed for reproduction.
 
+## Deploy for friends
+
+The game is a static bundle and the proxy is a Cloudflare Worker; the two are deployed separately.
+
+1. **Proxy (Cloudflare Worker).** In `server/`, set `ALLOWED_ORIGIN` in `wrangler.toml` to the game's origin (for example `https://jev-rogue.vercel.app`, no trailing slash), then:
+
+   ```sh
+   cd server
+   npx wrangler secret put TYPESAFE_API_KEY
+   npx wrangler secret put INVITE_CODES   # e.g. code-for-alice,code-for-bob
+   npx wrangler deploy
+   ```
+
+   The deployed Worker is always gated: without `INVITE_CODES` it admits nobody, and strangers who find the page play the rule Director on nothing of yours.
+
+2. **Game (Vercel).** Import the repository; `vercel.json` sets the build (`pnpm build`) and the output (`dist`). Add one environment variable, `VITE_DECIDE_URL`, set to the Worker's URL with `/decide`, such as `https://jev-rogue-proxy.<you>.workers.dev/decide`. It is read at build time, so redeploy after changing it.
+
+3. Send each friend the link and a code. They enter it under **Invitation code** in the title menu and turn **Jev Director** on. Revoke a code by removing it from `INVITE_CODES`.
+
 ## Evidence and verification
 
 ### Transferable Jev findings

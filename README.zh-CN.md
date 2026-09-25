@@ -100,6 +100,25 @@ pnpm dev
 
 本地 Vite 通过 `/api/decide` 提供无状态代理，key 不会进入客户端代码。默认使用规则版 Director；`?director=jev` 和 `?director=random` 可指定其他版本，`?seed=...` 可固定种子以复现战局。
 
+## 部署给朋友玩
+
+游戏是静态包，代理是 Cloudflare Worker，两者分开部署。
+
+1. **代理（Cloudflare Worker）**：在 `server/wrangler.toml` 里把 `ALLOWED_ORIGIN` 改成游戏的域名（例如 `https://jev-rogue.vercel.app`，末尾不带斜杠），然后：
+
+   ```sh
+   cd server
+   npx wrangler secret put TYPESAFE_API_KEY
+   npx wrangler secret put INVITE_CODES   # 例如 code-for-alice,code-for-bob
+   npx wrangler deploy
+   ```
+
+   部署后的 Worker 一定有门槛：没设 `INVITE_CODES` 时谁都进不来，陌生人打开页面只会玩规则版 Director，不会花你的额度。
+
+2. **游戏本体（Vercel）**：导入这个仓库，`vercel.json` 已设好构建命令（`pnpm build`）和输出目录（`dist`）。只需加一个环境变量 `VITE_DECIDE_URL`，值是 Worker 地址加 `/decide`，例如 `https://jev-rogue-proxy.<you>.workers.dev/decide`。它在构建时读取，改了之后要重新部署。
+
+3. 把链接和邀请码发给朋友。他们在标题菜单的 **邀请码** 里填入，再打开 **Jev Director**。要收回某个码，从 `INVITE_CODES` 里删掉即可。
+
 ## 对比记录与验证
 
 ### 可迁移到其他 Jev 项目的发现

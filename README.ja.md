@@ -100,6 +100,25 @@ pnpm dev
 
 ローカルの Vite サーバーは `/api/decide` でステートレスプロキシを提供するため、キーはクライアントコードに入りません。既定ではルール版 Director を使用します。`?director=jev` と `?director=random` で他のモードを選び、`?seed=...` でランのシードを固定して再現できます。
 
+## 友人向けにデプロイする
+
+ゲームは静的バンドル、プロキシは Cloudflare Worker で、別々にデプロイします。
+
+1. **プロキシ（Cloudflare Worker）：**`server/wrangler.toml` の `ALLOWED_ORIGIN` をゲームのオリジン（例：`https://jev-rogue.vercel.app`、末尾のスラッシュなし）にして、次を実行します。
+
+   ```sh
+   cd server
+   npx wrangler secret put TYPESAFE_API_KEY
+   npx wrangler secret put INVITE_CODES   # 例：code-for-alice,code-for-bob
+   npx wrangler deploy
+   ```
+
+   デプロイした Worker は常に招待制です。`INVITE_CODES` が未設定なら誰も通さず、ページを見つけた第三者はルール版 Director で遊ぶだけで、あなたの枠は使われません。
+
+2. **ゲーム本体（Vercel）：**リポジトリをインポートします。`vercel.json` がビルド（`pnpm build`）と出力先（`dist`）を設定済みです。環境変数 `VITE_DECIDE_URL` を一つだけ追加し、Worker の URL に `/decide` を付けた値（例：`https://jev-rogue-proxy.<you>.workers.dev/decide`）にします。ビルド時に読まれるため、変更後は再デプロイしてください。
+
+3. 友人にリンクと招待コードを送ります。タイトルメニューの **招待コード** に入力し、**Jev Director** をオンにしてもらいます。コードを取り消すには `INVITE_CODES` から削除します。
+
 ## 比較記録と検証
 
 ### 他の Jev プロジェクトにも使える知見

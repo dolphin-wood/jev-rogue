@@ -7,7 +7,8 @@ main = "worker.ts"
 compatibility_date = "2026-09-01"
 
 [vars]
-# The origin your build of the game is served from.
+# The origin your build of the game is served from, e.g.
+# https://jev-rogue.vercel.app (no trailing slash).
 ALLOWED_ORIGIN = "https://example.github.io"
 
 # Per-IP limit on POST /invite/verify, the endpoint that tells the game whether

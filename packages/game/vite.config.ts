@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from "vite";
 import type { Plugin } from "vite";
+import { existsSync, readdirSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { handle } from "../../server/worker.ts";
 
@@ -41,21 +42,44 @@ function decideProxy(key: string | undefined): Plugin {
   };
 }
 
+/**
+ * Build only: `publicDir` is the whole of `assets/`, and most of
+ * `assets/source/` is art the asset scripts build *from* (tens of MB the game
+ * never loads). The hall sheets are the one part the game reads at runtime
+ * (`scenes/hall-art.ts`), so they stay and the rest leaves the bundle.
+ */
+const SHIPPED_SOURCE = new Set(["halls"]);
+
+function pruneSourceArt(outDir: string): Plugin {
+  return {
+    name: "jr-prune-source-art",
+    apply: "build",
+    closeBundle() {
+      const dir = resolve(outDir, "source");
+      if (!existsSync(dir)) return;
+      for (const entry of readdirSync(dir)) {
+        if (!SHIPPED_SOURCE.has(entry)) rmSync(resolve(dir, entry), { recursive: true, force: true });
+      }
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   // The repository root holds `.env.local`; the Vite root is the game package.
   const env = loadEnv(mode, root, "");
+  const outDir = resolve(root, "dist");
   return {
     root: resolve(root, "packages/game"),
     envDir: root,
     publicDir: resolve(root, "assets"),
     base: process.env.VITE_BASE ?? "/",
-    plugins: [decideProxy(env["TYPESAFE_API_KEY"])],
+    plugins: [decideProxy(env["TYPESAFE_API_KEY"]), pruneSourceArt(outDir)],
     resolve: {
       alias: {
         "@jr/core": resolve(root, "packages/core/src/index.ts"),
         "@jr/director": resolve(root, "packages/director/src/index.ts"),
       },
     },
-    build: { outDir: resolve(root, "dist"), emptyOutDir: true, target: "es2022" },
+    build: { outDir, emptyOutDir: true, target: "es2022" },
   };
 });
