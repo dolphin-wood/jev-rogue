@@ -334,6 +334,17 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
    * already held, and nothing in either could see the run of them.
    */
   const recentSchools: SpellSchool[] = [];
+  /*
+   * **The run caps are the rule arm's, not Jev's.** The school and the
+   * sparse-room caps were written because neither arm could see a run of
+   * its own answers. Jev now can — the briefing carries every room's answers
+   * (`RunJournalEntry.decided`) — and a cap in code overrides it whatever it
+   * would have answered, which is the Director deciding less. So they hold
+   * for the rule and random arms, whose tables cannot read the record, and
+   * Jev is left to read it. The door-kind streak cap stays on every arm: it
+   * was measured, and the record is the same one it would read.
+   */
+  const capRuns = mode !== "jev";
   /** The questions in an answer that the rule table filled because Jev declined them. */
   const declinedIn = new WeakMap<Record<string, Distribution>, ReadonlySet<string>>();
   /** Questions answered by the rule table without being asked, and why (`no_history`). */
@@ -527,7 +538,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
     choices = { ...choices, kinds: choices.kinds.filter((k) => !withheld.has(k)) };
     // A school a recent spell door promised sits the next ones out, while three are left to choose from.
     const fresh = choices.schools.filter((sc) => !recentSchools.includes(sc));
-    if (fresh.length >= 3) choices = { ...choices, schools: fresh };
+    if (capRuns && fresh.length >= 3) choices = { ...choices, schools: fresh };
     const needOptions = [
       ...choices.kinds.map((k) => ({ ...opt(k, KIND_CLAUSE[k] ?? k), ...(KIND_SPEC[k] ? { spec: KIND_SPEC[k]! } : {}) })),
       ...choices.npcKinds.map((k) => ({ ...opt(k, NPC_CLAUSE[k]!), ...(NPC_SPEC[k] ? { spec: NPC_SPEC[k]! } : {}) })),
@@ -1355,7 +1366,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
           zones: base.zones, extent: base.extent, hazard_cap: pacing.hazard_cap,
           state: state2, labels: ctx.labels, style,
         }),
-        ...encounterQuestions(ctx, base, tension, door.room_index, style),
+        ...encounterQuestions(ctx, base, tension, door.room_index, style, capRuns),
         ...(offerStage?.questions ?? {}),
       };
       const meta2: RequestMeta = { ...meta1, round: 2 };
@@ -1396,7 +1407,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
           // A missing answer must not land outside the ramp either, so the
           // default is the first density this room is allowed rather than a
           // fixed one — `dense` is not offered before room 3.
-          density: densitiesOffered(ctx, door.room_index)[0]!,
+          density: densitiesOffered(ctx, door.room_index, capRuns)[0]!,
           anchor: anchorsFor(door.room_index, tension === "peak" || door.room_type === "elite")[0]!,
         }, ctx.history.profiles.at(-1)?.anchor),
         rounds: roundsFor(door.room_type, tension),
@@ -1898,7 +1909,7 @@ function featureResource(id: string): string | undefined {
 }
 
 function encounterQuestions(
-  ctx: RunContext, room: RoomPlan, tension: Tension, roomIndex: number, style?: QuestionStyle,
+  ctx: RunContext, room: RoomPlan, tension: Tension, roomIndex: number, style?: QuestionStyle, capRuns = true,
 ): Record<string, ChoiceQuestion> {
   if (!needsEncounter(room.room_type)) return {};
   const labels = labelSet(ctx.labels as unknown as Record<string, unknown>);
@@ -2204,7 +2215,7 @@ function encounterQuestions(
         + "the room above says how many rounds it plays and how many bodies it may hold in all. This is the "
         + "room's total rather than its crowd: how many stand on the floor together is fixed for this room "
         + "and stated with it, so a larger count is a longer fight rather than a thicker one.",
-      options: densitiesOffered(ctx, roomIndex).map((d) => ({ ...opt(d, DENSITY[d]!), spec: DENSITY_SPEC[d]! })),
+      options: densitiesOffered(ctx, roomIndex, capRuns).map((d) => ({ ...opt(d, DENSITY[d]!), spec: DENSITY_SPEC[d]! })),
       style,
     }),
     wave_structure: choiceQuestion({
@@ -2348,8 +2359,9 @@ function encounterQuestions(
  */
 const SPARSE_RUN_MAX = 2;
 
-function densitiesOffered(ctx: RunContext, roomIndex: number): Density[] {
+function densitiesOffered(ctx: RunContext, roomIndex: number, capRuns = true): Density[] {
   const all = densitiesFor(roomIndex);
+  if (!capRuns) return all;
   const recent = ctx.history.profiles.slice(-SPARSE_RUN_MAX);
   if (recent.length < SPARSE_RUN_MAX || recent.some((p) => p.density !== "sparse")) return all;
   const kept = all.filter((d) => d !== "sparse");

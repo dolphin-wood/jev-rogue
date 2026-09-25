@@ -21,7 +21,7 @@ import type {
   Archetype, ItemInstance, RoomType, RunContext, RunHistory, RunJournalEntry, Staff, Tension, World,
   PlayerMods, RewardCardKind, DoorOffer, OfferCard, AttachedAffix,
 } from "@jr/core";
-import { createDirector } from "@jr/director";
+import { createDirector, decidedOf } from "@jr/director";
 import type { CardRequest, DirectorArm, DirectorDeps, OfferRequest } from "@jr/director";
 import { referenceInput, lastDecision, lastPlan } from "./player-model.ts";
 import { SKILL_PROFILES } from "./skill.ts";
@@ -756,6 +756,9 @@ export async function playRun(
       // `door_taken` is the door out of *this* room, which is chosen at the
       // bottom of the loop; the entry is patched there.
       journal_.push({
+        decided: decidedOf([
+          ...(planned?.decisions ?? []), ...(answered?.portals?.decisions ?? []),
+        ]),
         index, type: door.npc ?? roomType, tension: builtTension,
         space: plan.params.space, symmetry: plan.params.symmetry, mood: plan.params.mood,
         health_lost: result.heartsLost * HP_PER_HEART,

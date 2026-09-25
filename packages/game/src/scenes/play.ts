@@ -26,7 +26,7 @@ import type {
   PlayerMods, RewardCardKind, RoomPlan, RoomType, RunHistory, World, AttachedAffix,
   Element, Tension, RunContext, RunJournalEntry, Staff, SpellSlot, MeleeKind, MusicState,
 } from "@jr/core";
-import { createDirector, createEvaluator, EvaluatorError } from "@jr/director";
+import { createDirector, createEvaluator, decidedOf, EvaluatorError } from "@jr/director";
 import type {
   Decision, Director, DirectorArm, RoomPlanResult, DoorPlan, PortalPlan, CardPlan, CardRequest, ObservedRequest, OfferPlan, OfferRequest,
 } from "@jr/director";
@@ -8460,6 +8460,7 @@ export class PlayScene extends Phaser.Scene {
       ...(this.pickedThisRoom ? { picked: [this.pickedThisRoom] } : {}),
       passed_over: offered.filter((id) => id !== this.pickedThisRoom),
       ...(this.pickedThisRoom === "gold" ? { took_gold_instead: true } : {}),
+      decided: decidedOf([...this.planRecords.values()].flatMap((r) => r.decisions)),
     };
   }
 

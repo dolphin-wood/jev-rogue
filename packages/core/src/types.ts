@@ -549,6 +549,13 @@ export interface RunJournalEntry {
   readonly passed_over?: readonly string[];
   /** A room whose reward was a purse rather than a card. */
   readonly took_gold_instead?: boolean;
+  /**
+   * **What the Director answered for this room**, question by question: the
+   * room's shape, its encounter, the doors out and what they promised. Given
+   * back to Jev in the briefing (`yourAnswers`), so it can see the run of its
+   * own answers rather than having each room's question arrive as the first.
+   */
+  readonly decided?: Readonly<Record<string, string>>;
 }
 
 export interface RunHistory {

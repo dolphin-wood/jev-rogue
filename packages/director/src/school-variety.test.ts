@@ -1,8 +1,9 @@
 /**
- * **A school sits out the spell doors after it is promised** (finding 5: a
- * sequence rule is code's). A player who took a storm spell was offered storm
- * on door after door: the rule arm puts half its mass on the style's two
- * schools, Jev leans on the schools already held, and neither can see a run.
+ * **A school sits out the spell doors after it is promised**, on the rule arm.
+ * A player who took a storm spell was offered storm on door after door: the
+ * rule arm puts half its mass on the style's two schools and its table cannot
+ * read the run. Jev can — its briefing carries its own answers — so it is not
+ * capped.
  */
 import { describe, expect, it } from "vitest";
 import { SPELL_SCHOOLS, STAT_FAMILIES, emptyHistory, runStaff } from "@jr/core";
@@ -56,12 +57,15 @@ async function schools(arm: "rule" | "jev"): Promise<string[]> {
 }
 
 describe("the school a spell door promises", () => {
-  for (const arm of ["rule", "jev"] as const) {
-    it(`never repeats inside three spell doors (${arm})`, async () => {
-      const seen = await schools(arm);
-      expect(seen.length).toBeGreaterThanOrEqual(10);
-      for (let i = 0; i < seen.length; i++)
-        expect(seen.slice(Math.max(0, i - 2), i), `door ${i}: ${seen.join(" ")}`).not.toContain(seen[i]);
-    });
-  }
+  it("never repeats inside three spell doors on the rule arm", async () => {
+    const seen = await schools("rule");
+    expect(seen.length).toBeGreaterThanOrEqual(10);
+    for (let i = 0; i < seen.length; i++)
+      expect(seen.slice(Math.max(0, i - 2), i), `door ${i}: ${seen.join(" ")}`).not.toContain(seen[i]);
+  });
+
+  it("is not capped for Jev, which reads its own answers in the briefing instead", async () => {
+    // A Jev that answers storm every time gets storm every time: no option is taken away from it.
+    expect(new Set(await schools("jev"))).toEqual(new Set(["storm"]));
+  });
 });

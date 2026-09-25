@@ -677,6 +677,23 @@ function runLines(rooms: readonly RunJournalEntry[], maxHealth: number): string[
   out.push(`- Fights since the run last let up (a release room, or a room with no fight in it): ${
     trailingRun(rooms, (r) => r.tension !== undefined && r.tension !== "release")}`);
   /*
+   * **The Director's own answers, room by room** (`RunJournalEntry.decided`).
+   *
+   * Each request is answered on its own, so without these every room's
+   * questions arrived as if they were the run's first: six ranged-heavy
+   * rosters running for a sword player, a sparse room after most fights,
+   * the same school on door after door — none of it visible from inside
+   * any one answer. They are given as the record they are, one object a
+   * room, and with nothing said about what to make of them: a sentence
+   * asking for variety measured as *more* streaking (finding 5), and a
+   * verdict in the state decides the answer before Jev does (finding 16).
+   */
+  const answered = rooms.filter((r) => r.decided && Object.keys(r.decided).length > 0);
+  if (answered.length) {
+    out.push("- The Director's answers for each room so far, oldest first, one JSON object a room:");
+    for (const r of answered) out.push(`  ${JSON.stringify({ room: r.index, ...r.decided })}`);
+  }
+  /*
    * **The look of the rooms, as a run of rooms.**
    *
    * It is in each room's line as three words among eleven others. Measured,
@@ -1101,6 +1118,25 @@ export interface BriefingExtra {
   readonly room?: BriefingRoomNow;
   readonly cards?: readonly BriefingCardPool[];
   readonly roomType?: string;
+}
+
+/**
+ * The questions whose answers are kept in a room's journal entry (`decided`)
+ * and read back to Jev: what the room was and what it held and promised. Not
+ * the card draws (a card offer's blend is not an answer anyone reads back) nor
+ * the floor features, which are many and say little about the run's shape.
+ */
+const DECIDED_KEPT: ReadonlySet<string> = new Set([
+  "next_tension", "space", "size", "symmetry", "mood_temperature", "mood_brightness", "mood_particles",
+  "composition", "density", "wave_structure", "anchor", "entry", "subspecies_weight", "subspecies",
+  "elite_presence", "portal_need", "elite_portal", "spell_school", "stat_family", "affix_intent", "variety",
+]);
+
+/** A room's Director decisions as the journal keeps them: each kept question and its answer. */
+export function decidedOf(decisions: readonly { readonly question?: string; readonly choice: string }[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const d of decisions) if (d.question && DECIDED_KEPT.has(d.question)) out[d.question] = d.choice;
+  return out;
 }
 
 export function briefingFrom(ctx: RunContext, extra: BriefingExtra): string {

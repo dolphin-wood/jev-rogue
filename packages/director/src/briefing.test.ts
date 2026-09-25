@@ -935,6 +935,30 @@ describe("the facts the offer's shape is read off", () => {
     expect(text).toMatch(/- Last 3 cards kept, oldest first: Shock Arc \(tagged spam\); Fleet \(tagged [a-z, ]+\); Kindle \(tagged [a-z, ]+\)/);
   });
 
+  it("gives Jev its own answers for each room so far, one JSON object a room, and no verdict on them", () => {
+    const ctx: RunContext = {
+      ...minimalContext(),
+      history: {
+        ...emptyHistory(),
+        journal: [
+          room(1, { decided: { composition: "ranged_heavy", density: "sparse", spell_school: "spirit" } }),
+          room(2, { decided: { composition: "ranged_heavy", density: "normal" } }),
+          room(3, {}),
+        ],
+      },
+    };
+    const text = briefingFrom(ctx, { deciding: [] });
+    expect(text).toContain("- The Director's answers for each room so far, oldest first, one JSON object a room:");
+    expect(text).toContain('  {"room":1,"composition":"ranged_heavy","density":"sparse","spell_school":"spirit"}');
+    expect(text).toContain('  {"room":2,"composition":"ranged_heavy","density":"normal"}');
+    // A room with nothing decided is not a line, and nothing tells Jev what to make of the record.
+    expect(text).not.toContain('"room":3');
+    const lines = text.split("\n");
+    const at = lines.findIndex((l) => l.startsWith("- The Director's answers"));
+    const section = lines.slice(at, at + 3).join("\n");
+    expect(section).not.toMatch(/vary|variety|repeat|again|same/i);
+  });
+
   it("says, for a spell offer with an empty key, where a new spell and a copy go", () => {
     const text = briefing(input({
       cards: [{ kind: "spell", candidates: [

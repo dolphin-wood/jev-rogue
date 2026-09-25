@@ -18,6 +18,11 @@
  *
  * Run: `pnpm jev-run <seeds> <budget> [arm] [log] [intent-free-text]`
  *   (the rule and random arms ignore the budget and make no request)
+ *
+ * The state goes as the **briefing**, as the game sends it by default; it went
+ * as the label table, so a harness Jev and the browser's were two different
+ * players. `JEV_STATE=labels` sends the table, and `JEV_STYLE=melee` (or any
+ * style) sets the stated style, which is `spam` otherwise.
  */
 import { ITEMS, SCHOOL_OF, STAT_UPGRADES, STYLE_SCHOOLS } from "@jr/core";
 import type { Archetype, Distribution } from "@jr/core";
@@ -30,7 +35,8 @@ const seeds = Number(process.argv[2] ?? 1);
 const budget = Number(process.argv[3] ?? 4);
 const arm = (process.argv[4] ?? "jev") as DirectorArm;
 const logFile = process.argv[5] ?? `${process.env["TMPDIR"] ?? "/tmp"}/jev-run.jsonl`;
-const preset: Archetype = "spam";
+const preset = (process.env["JEV_STYLE"] ?? "spam") as Archetype;
+const stateFormat = process.env["JEV_STATE"] === "labels" ? "labels" as const : "briefing" as const;
 /** The player's typed intent, so style adherence can be measured against words. */
 const freeText = process.argv[6];
 
@@ -73,6 +79,7 @@ const runs: RunOutcome[] = [];
 for (let i = 0; i < seeds; i++) {
   const out = await playRun(`seed-${i}`, arm, preset, {
     ...(ledgerOf.evaluate ? { evaluate: ledgerOf.evaluate } : {}),
+    state_format: stateFormat,
     observe: (r) => {
       const key = `${r.meta.purpose.split(":")[0]}#${r.meta.round}`;
       const path = `${key} ${r.fallback_path ?? ""}`.trim();
