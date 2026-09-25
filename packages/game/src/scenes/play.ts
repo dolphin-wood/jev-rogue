@@ -7842,8 +7842,17 @@ export class PlayScene extends Phaser.Scene {
   private musicStateNow(): MusicState {
     if (this.titleUi || this.intentUi || this.gameOverUi || this.victoryUi || this.pauseUi) return "title";
     if (this.world.enemies.some((e) => e.hp > 0 && e.archetype === "boss")) return "boss";
-    // The theme comes in with the goblet, before he is on his feet.
-    if (this.kingIntro && (this.kingIntro.phase === "throw" || this.kingIntro.phase === "rise")) return "boss";
+    /*
+     * The boss piece from the first step into the hall, under the hush
+     * (`tickKingIntro` holds the music until the goblet). Switched at the
+     * goblet instead, the room theme's 1.6 s fade-out played in the open as
+     * the hush lifted — a few bars of the old music as the entrance ended —
+     * and the boss stems, fetched the first time they are wanted, were
+     * still downloading. Now the room theme fades and the boss stems load
+     * while nothing is heard, and the goblet starts the boss clock, which
+     * seats the piece at its top (`StemMusic.holdBossOnClock`).
+     */
+    if (this.kingIntro) return "boss";
     // Awake, not merely present: a room of sleepers is the quiet before the
     // fight, and it is the beat the explore layer exists for.
     return this.world.enemies.some((e) => e.hp > 0 && e.awake) ? "fight" : "explore";
