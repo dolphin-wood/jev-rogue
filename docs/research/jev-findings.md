@@ -16,6 +16,8 @@ answered on its own.
 
 ## Findings
 
+<a id="finding-0"></a>
+
 ### 0. The escape option is how "none of these" can be said at all
 Jev always returns a full distribution that sums to 1, so even when every
 option is wrong for the state, one of them still comes out on top, and a
@@ -83,6 +85,8 @@ mana trouble. A zone instruction saying "`none` is a real answer" argued for
 `none`.
 **Now:** instructions state principles even-handedly; no sentence makes one
 option's case.
+
+<a id="finding-5"></a>
 
 ### 5. Asking for variety concentrates the answer
 Jev cannot see that it keeps giving the same door: each call is a fresh
@@ -217,6 +221,8 @@ The look and the anchor are the clean case: **deleting the prose moved
 nothing** (`anchor` 85% → 87%), and the code term moved it at once. The rule
 is finding 5, and the cost of ignoring it is paid twice — once in the answer
 and once in the tokens spent asking.
+
+<a id="finding-16"></a>
 
 ### 16. Neutralising the state moved the questions it was not aimed at
 Applying finding 5a's rule — plain counts, no intensifiers, no sentence built
@@ -571,6 +577,8 @@ it cost nothing here, and it is a sentence a later edit could make decisive.
 Measure a wording change as an A/B over logged requests (same state, one field
 varied), not across two runs, whose rosters and seeds differ in everything else.
 
+<a id="finding-29"></a>
+
 ### 29. Heavy's early deaths were the hands, not the Director; one starting spell on the Jev arm (2026-09-25)
 Entry 28's two early Heavy deaths were read as the Director's thin lean. The
 rule arm, measured before touching anything (`route-review`'s players, 40
@@ -628,6 +636,8 @@ redesigned at the time and is not this entry's number. Two things it showed:
 hands did with the keys — `pnpm play` prints each held spell's casts a
 minute (`SPELL_USE`). A key the reference player never presses turns an offer
 question into a harness bug that looks like one.
+
+<a id="finding-30"></a>
 
 ### 30. A count printed the wrong way round is read backwards; the rest was the hands again (2026-09-25)
 Four changes, measured separately where they could be. The run numbers are 10
