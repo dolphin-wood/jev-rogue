@@ -193,10 +193,37 @@ interface PortalAsk {
  * first answer about one time in four, a dozen decisions a room, and the plan
  * page read as a reroll on every other line. Variety that has to exist is
  * code's (`LOOK_REPEAT_PENALTY`, the card novelty term), not the sampler's.
+ *
+ * These now hold for the rule and random arms only. A question Jev answers is
+ * read by its confidence instead (`JEV_CONFIDENT`, in `decide`): a temperature
+ * below one re-reads Jev's second option as weaker than Jev said it was, and
+ * measured with the run principle in the school's instruction, that turned
+ * Jev's own 0.46 on the last school back into a repeat 78% of the time.
  */
 const TEMPERATURE = {
   next_tension: 0.4, encounter: 0.4, reward: 0.9, portal: 0.4,
 } as const;
+
+/**
+ * **At or above this, Jev's own `choice` is taken; below it, its distribution
+ * is drawn from as given.** TypeSafe's suggested floor for "genuinely unsure".
+ */
+export const JEV_CONFIDENT = 0.5;
+
+/** TypeSafe's confidence for a Choice: 1 on a single peak, 0 on a flat spread. */
+export function choiceConfidence(dist: Distribution): number {
+  const values = Object.values(dist);
+  if (values.length < 2) return 1;
+  const peak = Math.max(...values);
+  return Math.max(0, Math.min(1, (values.length * peak - 1) / (values.length - 1)));
+}
+
+/** The option with the most mass; the first of a tie, in the distribution's order. */
+function topOf(dist: Distribution): string {
+  let best = "", mass = -1;
+  for (const [k, v] of Object.entries(dist)) if (v > mass) { best = k; mass = v; }
+  return best;
+}
 
 /** Blend weight on style rather than needs, by run progress (doc 007). */
 const STYLE_WEIGHT: Record<string, number> = { early: 0.35, mid: 0.25, late: 0.15, pre_boss: 0.15 };
@@ -436,6 +463,22 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
     if (!dist) throw new Error(`no distribution for "${name}"`);
     if (declinedIn.get(dists)?.has(name)) { source = fallback.kind; path = "declined"; }
     else if (unaskedIn.get(dists)?.has(name)) { source = fallback.kind; path = "no_history"; }
+    if (source === "jev") {
+      /*
+       * **Jev's answer, read the way TypeSafe documents it**: its `choice`
+       * when it is confident, and when it is not — when it says two or more
+       * answers are each defensible — its distribution as given, with no
+       * temperature re-reading the second option's share. The confidence is
+       * TypeSafe's own statistic, taken over the distribution actually drawn
+       * from (after code filtered the options and any repeat penalty).
+       */
+      const confidence = choiceConfidence(dist);
+      const choice = confidence >= JEV_CONFIDENT ? topOf(dist) : sampleOne(dist, rng);
+      return {
+        choice, probabilities: dist, confidence, source, question: name,
+        ...(path ? { fallback_path: path as Decision["fallback_path"] } : {}),
+      };
+    }
     const tuned = withTemperature(dist, temperature);
     const choice = sampleOne(tuned, rng);
     return {
@@ -804,8 +847,10 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
               "One of the portals out of this room offers a spell. Which school should it promise? Weigh the " +
               "player's stated style and their own words, which way the keys lean, the schools already on the " +
               "keys (held schools) and what the last fights measured. Before any fight has been measured, the " +
-              "stated style and the player's own words are the evidence. A run is travelled through: over a " +
-              "run, the schools its spell doors promise should not settle into one.",
+              "stated style and the player's own words are the evidence. The spell doors earlier in this run, " +
+              "and the school each promised, are in the state. A run whose doors have kept promising one school " +
+              "has settled into it, which a run should not; where no spell door has promised a school yet, this " +
+              "weighs nothing.",
             options: choices.schools.map((sc) => ({
               ...opt(sc, schoolText(sc)),
               spec: schoolSpec(sc, schoolSpells(sc).split(", "), SCHOOL_STYLES[sc] ?? []),
@@ -2195,7 +2240,8 @@ function encounterQuestions(
         "Choose the enemy mix for this room, from its tension and from how the player fights: how much of " +
         "the damage the sword does (sword share), what has been taking their health (hurt by) and which way " +
         "the keys lean. A mix can press the way the player fights, or play into it; either is an answer. " +
-        "A run is travelled through: over a run, the mixes its fights are built on should not settle into one.",
+        "The recent fights, and the mix each was built on, are in the state. A run whose fights have kept " +
+        "being built on one mix has settled into it, which a run should not; before any fight, this weighs nothing.",
       options: (compositions.length ? compositions : (["mixed"] as const))
         .map((c) => ({ ...opt(c, COMPOSITION[c]!), spec: COMPOSITION_SPEC[c]! })),
       style,
