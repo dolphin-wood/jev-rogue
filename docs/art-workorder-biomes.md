@@ -63,8 +63,8 @@ telegraph range — cool it or darken it.
 
 The first sconces were drawn from the side, as lamps hung on a wall face, and the walls here are
 seen from above with no face, so in a room they lay on the wall tops like fallen lanterns. A lamp
-drawn from overhead in code read no better. The game draws no lamp for now, only the pool of light
-on the floor below the wall; a redrawn sconce is not needed until a lamp fits the view.
+drawn from overhead in code read no better. The game draws no wall light at all for now; a redrawn
+sconce is not needed until a lamp fits the view.
 
 Deliver each set as a sheet of named cells in `assets/source/biomes/<id>.png` with its list in the
 delivery notes, and pack it into the atlas under the names above. The game picks each name up the

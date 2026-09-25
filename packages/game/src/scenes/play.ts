@@ -6347,12 +6347,13 @@ export class PlayScene extends Phaser.Scene {
       }
 
     /*
-     * **A depth's floor patches and wall lights** (art order
+     * **A depth's floor patches** (art order
      * `docs/art-workorder-biomes.md`), where its sheet has them. A patch is a
      * 2 × 2 piece of floor with a story — a spread of bones, a pool, a scorch —
      * laid flat on open floor, clear of the doors and of each other, two at
      * most to a room, so the floor has places in it rather than a pattern.
-     * Along the north walls, every few cells, a warm pool of light on the floor.
+     * No wall lights: the painted sconces are side views of a lamp on a wall
+     * face, and the walls here are seen from above with no face.
      */
     if (biome) {
       const patches = Array.from({ length: BIOME_PATCH_VARIANTS }, (_, i) => `patch_${biome}_${i}`).filter((n) => this.atlas.has(n));
@@ -6368,20 +6369,6 @@ export class PlayScene extends Phaser.Scene {
         this.tiles.add(this.add.image(x * TILE_PX, y * TILE_PX, this.textureKey, patches[hash2(x, y) % patches.length]!)
           .setOrigin(0).setScale(1 / ART_SCALE).setAlpha(0.8).setDepth(0.25));
       }
-      /*
-       * The light only: a warm pool on the floor below the north wall, every
-       * few cells. The painted `prop_<id>_sconce` is a side view of a lamp on
-       * a wall face, and the walls here are seen from above with no face, so
-       * it lay on the wall tops like a fallen lantern; a lamp drawn from
-       * overhead read no better, so none is drawn.
-       */
-      const glow = biome === "flooded" ? 0x6ad07a : 0xffb070;
-      for (let y = 0; y < GRID_H - 1; y++)
-        for (let x = 1; x < GRID_W - 1; x++) {
-          if (grid[y * GRID_W + x] !== Tile.Wall || grid[(y + 1) * GRID_W + x] !== Tile.Floor || x % 5 !== 2) continue;
-          this.tiles.add(this.add.ellipse((x + 0.5) * TILE_PX, (y + 1.5) * TILE_PX, 72, 30, glow, 0.1)
-            .setBlendMode(Phaser.BlendModes.ADD).setDepth(0.3));
-        }
     }
 
     this.lavaTiles = [];
