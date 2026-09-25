@@ -2,7 +2,7 @@
 
 **English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
 
-A top-down, bullet-hell room roguelike directed by [Jev](https://docs.typesafe.ai/), TypeSafe AI's choice model. Jev decides which of the game's *legal* design options fit the current run. The game still generates its own rooms, encounters, rewards, and combat.
+A top-down action room roguelike directed by [Jev](https://docs.typesafe.ai/), TypeSafe AI's choice model. Jev decides which of the game's *legal* design options fit the current run. The game still generates its own rooms, encounters, rewards, and combat.
 
 ## Why Jev?
 

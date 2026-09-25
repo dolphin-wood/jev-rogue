@@ -2,7 +2,7 @@
 
 [English](README.md) · **简体中文** · [日本語](README.ja.md)
 
-一款俯视角弹幕式房间 Roguelike 游戏，由 TypeSafe AI 的选择模型 [Jev](https://docs.typesafe.ai/) 担任「导演」。Jev 从游戏预先给出的**合法选项**中判断什么适合当前战局；房间、遭遇、奖励和战斗仍由游戏代码生成与执行。
+一款俯视角动作房间 Roguelike 游戏，由 TypeSafe AI 的选择模型 [Jev](https://docs.typesafe.ai/) 担任「导演」。Jev 从游戏预先给出的**合法选项**中判断什么适合当前战局；房间、遭遇、奖励和战斗仍由游戏代码生成与执行。
 
 ## 为什么用 Jev？
 
