@@ -1577,6 +1577,8 @@ export class PlayScene extends Phaser.Scene {
     floor?: number;
     /** The Begin plate's own rectangle, which nothing may be drawn under. */
     plate?: Phaser.Geom.Rectangle;
+    /** The room the door taken leads to, when a door was taken. */
+    to?: number;
   } | null = null;
   /** Settings: show the plan before a room starts (on), or start it as soon as it is ready. */
   /** How long the Director took over the last room's plan, doors included. */
@@ -7881,8 +7883,12 @@ export class PlayScene extends Phaser.Scene {
     this.accumulator += Math.min(delta, 100) * this.labSpeed;
     if (this.labSteps > 0) { this.accumulator += STEP_MS * this.labSteps; this.labSteps = 0; }
     if (this.labOn) this.labTick();
-    this.tickKingIntro(Math.min(delta, 100) * this.labSpeed);
-    this.tickBossCine(Math.min(delta, 100) * this.labSpeed);
+    // Not behind the plan page: the entrance ran on its clock while the page was read, and the
+    // goblet was thrown — and the boss theme came in — over a page the player had not closed.
+    if (!this.transitionUi) {
+      this.tickKingIntro(Math.min(delta, 100) * this.labSpeed);
+      this.tickBossCine(Math.min(delta, 100) * this.labSpeed);
+    }
     if (this.debug.bossLabShown()) this.debug.bossFrame(this.bossLabFrame());
     if (this.spellLab) { this.spellLab.frame(); this.debug.spellFrame(); }
     let stepped = false;
@@ -8488,6 +8494,7 @@ export class PlayScene extends Phaser.Scene {
      */
     const staff = this.world.staff;
     this.showTransition();
+    if (this.transitionUi) this.transitionUi.to = this.roomIndex + 1;
     this.clearDirectorLog();
     const doorStart = performance.now();
     const doors = await this.director.planDoors(
@@ -8519,6 +8526,14 @@ export class PlayScene extends Phaser.Scene {
     const tu = this.transitionUi;
     if (!tu) return;
     tu.ms += delta;
+    /*
+     * **Silence on the way to the king.** From the door to the plan page's
+     * last key the music is held: the room before's theme played on through
+     * the page, and the hall is meant to be walked into in silence, the
+     * theme coming in with the goblet (`tickKingIntro`). By where the door
+     * leads (`to`), which is known before the room is.
+     */
+    if (tu.to !== undefined && stageFor(tu.to) === "boss") this.sfx.setMusicHeld(true);
     if (tu.phase === "generating" && tu.dots) {
       const n = Math.floor(tu.ms / 300) % 4;
       // After a second, say how long: a Director waiting on Jev is slow, not stuck.
