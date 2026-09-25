@@ -127,6 +127,8 @@ const TUNED = ART_SCALE / TUNED_SCALE;
 const FRAME_PX = 32 * ART_SCALE;
 /** Texels per world px of the textures baked at boot (`fx/sheets.ts`), whatever the art's scale. */
 const FX_TEXEL = 2;
+/** How far above its foot the throne hall candelabrum's flames stand, in world pixels. */
+const CANDELABRUM_FLAMES_PX = 48;
 /**
  * Bullet art is a half-tile frame. Drawn honestly a bullet would span exactly its
  * own hitbox; a small margin keeps a radius-3 bolt visible without lying about
@@ -1397,6 +1399,8 @@ export class PlayScene extends Phaser.Scene {
    * Standing features with a light in them, so the flame or the glow has two
    * frames rather than one. Rebuilt per room with the tile layer.
    */
+  /** The room's wall lamps, each flickering on its own beat. */
+  private lampTiles: { img: Phaser.GameObjects.Image; sheet: string; phase: number }[] = [];
   /** The room's lava cells: all on one frame, so a channel flows as one. */
   private lavaTiles: { img: Phaser.GameObjects.Image; sheet: string }[] = [];
   /** The room's grass cells by grid index, and which of the two drawings each is. */
@@ -2872,7 +2876,22 @@ export class PlayScene extends Phaser.Scene {
       img.setScale((column ? 1.6 : 0.9) / ART_SCALE).setDepth(0.38).setAlpha(0.9);
       this.sprites.add(img);
       return;
-    } else img = this.add.image(p.x, foot, column ? "hall_throne_column" : "hall_throne_candelabra", column ? undefined : 0);
+    } else {
+      // Standing, a candelabrum's flame has its two frames and throws a warm pool round its foot.
+      const flicker = column ? undefined : ((this.world.tick >> 3) + Math.round(p.x)) & 1;
+      img = this.add.image(p.x, foot, column ? "hall_throne_column" : "hall_throne_candelabra", flicker);
+      if (!column) {
+        // The pool on the floor round its foot, and a halo round the three flames at its head.
+        // Each a wide faint layer under a smaller one, so the light fades out rather than stopping at an edge.
+        const lift = flicker ? 1 : 0;
+        for (const [k, a] of [[1, 0.08], [0.6, 0.1]] as const) {
+          this.sprites.add(this.add.ellipse(p.x, foot - 2, 72 * k, 28 * k, 0xff9a40, a + lift * 0.02)
+            .setBlendMode(Phaser.BlendModes.ADD).setDepth(0.3));
+          this.sprites.add(this.add.circle(p.x, foot - CANDELABRUM_FLAMES_PX, (16 + lift) * k, 0xffa848, a + 0.02)
+            .setBlendMode(Phaser.BlendModes.ADD).setDepth(bodyDepth(foot, 0) + 0.001));
+        }
+      }
+    }
     // Fallen masonry lies on the floor; body-depth sorting would let its tall
     // transparent image cover a player walking through the former column.
     img.setOrigin(0.5, 1).setScale(1 / ART_SCALE).setDepth(state === "broken" ? 0.38 : bodyDepth(foot, 0));
@@ -6338,6 +6357,7 @@ export class PlayScene extends Phaser.Scene {
      * The lights hang on the north walls, every few cells, each throwing a
      * warm pool on the floor below it.
      */
+    this.lampTiles = [];
     if (biome) {
       const patches = Array.from({ length: BIOME_PATCH_VARIANTS }, (_, i) => `patch_${biome}_${i}`).filter((n) => this.atlas.has(n));
       const laid: { x: number; y: number }[] = [];
@@ -6352,14 +6372,23 @@ export class PlayScene extends Phaser.Scene {
         this.tiles.add(this.add.image(x * TILE_PX, y * TILE_PX, this.textureKey, patches[hash2(x, y) % patches.length]!)
           .setOrigin(0).setScale(1 / ART_SCALE).setAlpha(0.8).setDepth(0.25));
       }
-      const sconce = `prop_${biome}_sconce`;
-      if (this.atlas.has(sconce))
+      /*
+       * The lamp is drawn from overhead in code (`lamp_<id>` in fx/sheets.ts),
+       * hung just off the wall's foot. The painted `prop_<id>_sconce` is a side
+       * view of a lamp on a wall face, and the walls here are seen from above
+       * with no face, so it lay on the wall tops like a fallen lantern.
+       */
+      const lamp = `lamp_${biome}`;
+      const glow = biome === "flooded" ? 0x6ad07a : 0xffb070;
+      if (this.fxSheets.has(lamp))
         for (let y = 0; y < GRID_H - 1; y++)
           for (let x = 1; x < GRID_W - 1; x++) {
             if (grid[y * GRID_W + x] !== Tile.Wall || grid[(y + 1) * GRID_W + x] !== Tile.Floor || x % 5 !== 2) continue;
-            this.tiles.add(this.add.image((x + 0.5) * TILE_PX, (y + 1) * TILE_PX, this.textureKey, sconce)
-              .setOrigin(0.5, 1).setScale(1 / ART_SCALE).setDepth(0.4));
-            this.tiles.add(this.add.ellipse((x + 0.5) * TILE_PX, (y + 1.5) * TILE_PX, 72, 30, 0xffb070, 0.1)
+            const img = this.add.image((x + 0.5) * TILE_PX, (y + 1.2) * TILE_PX, FX_TEXTURE, `${lamp}_0`)
+              .setOrigin(0.5).setScale(1 / FX_TEXEL).setDepth(0.4);
+            this.tiles.add(img);
+            this.lampTiles.push({ img, sheet: lamp, phase: x });
+            this.tiles.add(this.add.ellipse((x + 0.5) * TILE_PX, (y + 1.5) * TILE_PX, 72, 30, glow, 0.1)
               .setBlendMode(Phaser.BlendModes.ADD).setDepth(0.3));
           }
     }
@@ -13188,6 +13217,7 @@ export class PlayScene extends Phaser.Scene {
   private updateGround(): void {
     const frame = (this.world.tick >> 3) % LAVA_FRAMES;
     for (const l of this.lavaTiles) l.img.setFrame(`${l.sheet}_${frame}`);
+    for (const l of this.lampTiles) l.img.setFrame(`${l.sheet}_${((this.world.tick >> 3) + l.phase) & 1}`);
     for (const c of this.world.grass) {
       const t = this.grassTiles.get(c.y * GRID_W + c.x);
       if (!t) continue;
