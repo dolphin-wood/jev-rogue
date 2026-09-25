@@ -1477,6 +1477,10 @@ export class PlayScene extends Phaser.Scene {
     checking: number;
     closing: boolean;
     onResize: () => void;
+    /** Takes the focus back for the field; see `showInvite`. */
+    onRefocus: () => void;
+    /** Keys that reached the page instead of the field; see `showInvite`. */
+    onStrayKey: (e: KeyboardEvent) => void;
   } | null = null;
   /** A code taken out of the URL in `create`, waiting for the title to be up. */
   private claimedInvite = "";
@@ -4912,6 +4916,15 @@ export class PlayScene extends Phaser.Scene {
       objects: [] as Phaser.GameObjects.GameObject[], field, action: 0,
       status: (autoVerify ? "checking" : "idle") as InviteStatus,
       checking: 0, closing: false, onResize: () => this.renderInvite(),
+      onRefocus: () => {
+        // After the click's own focus change, which would otherwise undo this.
+        setTimeout(() => { if (this.inviteUi === ui && !ui.closing) field.focus(); }, 0);
+      },
+      onStrayKey: (e: KeyboardEvent) => {
+        if (this.inviteUi !== ui || e.target === field) return;
+        this.readInviteKey(e);
+        ui.onRefocus();
+      },
     };
     this.inviteUi = ui;
 
@@ -4940,6 +4953,17 @@ export class PlayScene extends Phaser.Scene {
       }, 0);
     });
     window.addEventListener("resize", ui.onResize);
+    /*
+     * The blur handler above leaves a blur alone when the whole window went
+     * away — copying the code from a chat, say. Coming back then left the
+     * focus on the page, where no key reached the field and the game's own
+     * keyboard was off: Escape did nothing and the dialog could not be left.
+     * So the focus comes back with the window and with any click on the page,
+     * and a key that still lands on the page is read as the dialog's.
+     */
+    window.addEventListener("focus", ui.onRefocus);
+    document.addEventListener("pointerdown", ui.onRefocus);
+    document.addEventListener("keydown", ui.onStrayKey);
     field.focus();
     field.select();
     this.renderInvite();
@@ -4952,6 +4976,9 @@ export class PlayScene extends Phaser.Scene {
     ui.closing = true;
     for (const g of ui.objects) { this.tweens.killTweensOf(g); g.destroy(); }
     window.removeEventListener("resize", ui.onResize);
+    window.removeEventListener("focus", ui.onRefocus);
+    document.removeEventListener("pointerdown", ui.onRefocus);
+    document.removeEventListener("keydown", ui.onStrayKey);
     ui.field.remove();
     this.inviteUi = null;
     const kb = this.input.keyboard;
