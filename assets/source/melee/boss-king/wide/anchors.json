@@ -4,23 +4,23 @@
     336,
     336
   ],
-  "coordinateSpace": "top-left of unflipped 336×336 art-pixel frame",
+  "coordinateSpace": "top-left of each unflipped art-pixel frame (336×336 cuts; 384×384 storm)",
   "pivot": [
     168,
     272
   ],
   "mirrorX": "x becomes 335 - x; pivot x also mirrors",
-  "status": "drawn source frames; not yet packed or mapped by gameplay",
+  "status": "packed gameplay frames",
   "frames": {
     "boss_p1_cleave_front_cut": {
       "source": "assets/source/melee/boss-king/wide/p1/cleave_front_cut.png",
       "tip": [
-        289,
-        240
+        173,
+        253
       ],
       "hand_l": [
-        183,
-        174
+        168,
+        159
       ],
       "pivot": [
         168,
@@ -30,12 +30,12 @@
     "boss_p1_cleave_front_fall": {
       "source": "assets/source/melee/boss-king/wide/p1/cleave_front_fall.png",
       "tip": [
-        275,
-        16
+        173,
+        205
       ],
       "hand_l": [
-        194,
-        95
+        168,
+        104
       ],
       "pivot": [
         168,
@@ -45,12 +45,12 @@
     "boss_p1_cleave_front_follow": {
       "source": "assets/source/melee/boss-king/wide/p1/cleave_front_follow.png",
       "tip": [
-        322,
-        147
+        166,
+        264
       ],
       "hand_l": [
-        195,
-        179
+        168,
+        184
       ],
       "pivot": [
         168,
@@ -72,15 +72,30 @@
         272
       ]
     },
+    "boss_p1_storm": {
+      "source": "assets/source/melee/boss-king/wide/p1/storm.png",
+      "tip": [
+        192,
+        30
+      ],
+      "hand_l": [
+        192,
+        128
+      ],
+      "pivot": [
+        192,
+        312
+      ]
+    },
     "boss_p2_cleave_front_cut": {
       "source": "assets/source/melee/boss-king/wide/p2/cleave_front_cut.png",
       "tip": [
-        284,
-        245
+        172,
+        255
       ],
       "hand_l": [
-        181,
-        175
+        168,
+        158
       ],
       "pivot": [
         168,
@@ -90,12 +105,12 @@
     "boss_p2_cleave_front_fall": {
       "source": "assets/source/melee/boss-king/wide/p2/cleave_front_fall.png",
       "tip": [
-        266,
-        26
+        171,
+        214
       ],
       "hand_l": [
-        194,
-        94
+        168,
+        106
       ],
       "pivot": [
         168,
@@ -105,12 +120,12 @@
     "boss_p2_cleave_front_follow": {
       "source": "assets/source/melee/boss-king/wide/p2/cleave_front_follow.png",
       "tip": [
-        309,
-        153
+        168,
+        261
       ],
       "hand_l": [
-        188,
-        181
+        168,
+        182
       ],
       "pivot": [
         168,
@@ -130,6 +145,21 @@
       "pivot": [
         168,
         272
+      ]
+    },
+    "boss_p2_storm": {
+      "source": "assets/source/melee/boss-king/wide/p2/storm.png",
+      "tip": [
+        192,
+        30
+      ],
+      "hand_l": [
+        192,
+        128
+      ],
+      "pivot": [
+        192,
+        312
       ]
     },
     "boss_p2_sweep_back_cross": {
@@ -240,12 +270,12 @@
     "boss_p3_cleave_front_cut": {
       "source": "assets/source/melee/boss-king/wide/p3/cleave_front_cut.png",
       "tip": [
-        273,
-        252
+        171,
+        253
       ],
       "hand_l": [
-        181,
-        176
+        168,
+        160
       ],
       "pivot": [
         168,
@@ -255,12 +285,12 @@
     "boss_p3_cleave_front_fall": {
       "source": "assets/source/melee/boss-king/wide/p3/cleave_front_fall.png",
       "tip": [
-        253,
-        48
+        168,
+        221
       ],
       "hand_l": [
-        190,
-        88
+        168,
+        107
       ],
       "pivot": [
         168,
@@ -270,12 +300,12 @@
     "boss_p3_cleave_front_follow": {
       "source": "assets/source/melee/boss-king/wide/p3/cleave_front_follow.png",
       "tip": [
-        296,
-        158
+        166,
+        261
       ],
       "hand_l": [
-        188,
-        182
+        168,
+        183
       ],
       "pivot": [
         168,
@@ -295,6 +325,21 @@
       "pivot": [
         168,
         272
+      ]
+    },
+    "boss_p3_storm": {
+      "source": "assets/source/melee/boss-king/wide/p3/storm.png",
+      "tip": [
+        192,
+        30
+      ],
+      "hand_l": [
+        192,
+        128
+      ],
+      "pivot": [
+        192,
+        312
       ]
     },
     "boss_p3_sweep_back_cross": {

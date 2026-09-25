@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { PlayScene, DPR, VIEW_W, VIEW_H, worldZoom, presentScale } from "./scenes/play.ts";
+import { BootScene } from "./scenes/boot.ts";
 import { BASE_PALETTE } from "@jr/core";
-import { getLang, loadFont } from "./i18n/index.ts";
 
 /**
  * The canvas: the **viewport**, a fixed 16 x 9 tiles of the world (doc 008),
@@ -17,9 +17,6 @@ function canvasSize(): { css: [number, number]; px: [number, number]; shown: num
   const shown = presentScale();
   return { css: [(px[0] * shown) / DPR, (px[1] * shown) / DPR], px, shown };
 }
-
-// The first frame is drawn in the language's own font, not the fallback.
-await loadFont(getLang());
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -37,7 +34,7 @@ const game = new Phaser.Game({
   // parent before layout settles and left the canvas at its backing size,
   // overflowing the window and clipping the HUD.
   scale: { mode: Phaser.Scale.NONE, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: PlayScene,
+  scene: [BootScene, PlayScene],
 });
 
 // Exposed for debugging from the browser console and from automated checks.

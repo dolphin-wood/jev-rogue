@@ -100,7 +100,7 @@ function sourceFor(name: string): Recipe {
     source: { file: `originals/boss-king-p${bossIdentity[1]}.png`, crop: [0, 0, 1, 1], fractional: true },
     motion: "none",
   };
-  const wideBoss = /^boss_p([123])_((?:sweep_(?:front|back)|cleave_front)_[a-z]+)$/.exec(name);
+  const wideBoss = /^boss_p([123])_((?:(?:sweep_(?:front|back)|cleave_front)_[a-z]+)|storm)$/.exec(name);
   if (wideBoss) return {
     source: { file: `melee/boss-king/wide/p${wideBoss[1]}/${wideBoss[2]}.png`, crop: [0, 0, 1, 1], fractional: true },
     motion: "none",

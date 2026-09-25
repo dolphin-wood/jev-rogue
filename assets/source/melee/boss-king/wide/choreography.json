@@ -32,5 +32,5 @@
       "greatsweep": ["frontCut", "returnCut", "verticalFinisher"]
     }
   },
-  "integrationStatus": "Source art and 336px anchors delivered. Atlas packaging, renderer size class and gameplay beat timing are pending CC integration."
+  "integrationStatus": "336px cut frames and anchors packed; phase II/III front, return and vertical-finisher strings mapped in gameplay."
 }

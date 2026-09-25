@@ -17,6 +17,9 @@ export const ZH: Table = {
   ...ZH_TERMS,
 
   /* ------------------------------- menus -------------------------------- */
+  "boot.loading": "正在加载",
+  "boot.preparing": "正在准备标题画面",
+  "boot.failed": "无法加载 {file}，请刷新页面重试。",
   "menu.newGame": "开始游戏",
   "menu.settings": "设置",
   "menu.controls": "操作",

@@ -425,7 +425,7 @@ new attack frame.
 | Action | Hand and blade path | Landing |
 |---|---|---|
 | `greatcleave` (the sword-string finisher) | Front-facing, two-handed Japanese kendo-style vertical cut. Hands travel in an arc from above the brow to forward of the chest; elbows, shoulders, torso and lead foot visibly follow through. Show the cutting edge toward the player. The blade retains its full apparent length. | The sword does **not** enter the floor. Its point passes in front of the king and the sword wave continues the cut. A static central grip with a blade pointing down is a ground spell, not this cut. |
-| `slam` and `quake` | Still front-facing, lift the whole sword a short distance **in front of the body**, with the point down, then drive both hands and the point straight into the floor. This is a lift and plunge, not the overhead kendo windup. | Sword point is embedded in the floor; the ground spell starts at the sword-tip anchor. Distinguish slam from quake with code effects, not a different hand path. |
+| `slam` and `quake` | Still front-facing, lift the whole sword a short distance **in front of the body**, with the point down, then drive both hands and the point straight into the floor. Keep the broad back of the blade facing the player in lift, drive, and held impact; never turn a narrow cutting edge into the broad back between frames. This is a lift and plunge, not the overhead kendo windup. | Sword point is embedded in the floor; the ground spell starts at the sword-tip anchor. Distinguish slam from quake with code effects, not a different hand path. |
 | Future lightning invocation | Keep the separate front-facing sword-aloft ritual drawing. | This is neither a cleave nor a ground plunge. CC will add the spell later. |
 
 ### Connected horizontal cuts in phases II and III
@@ -497,7 +497,15 @@ lightning pose is retained as `assets/source/melee/boss-king-lightning-p{phase}-
 for CC's future lightning spell; it is not packed as a ground-strike or cleave
 frame. It still needs a dedicated canvas fit before gameplay use.
 
-**Integration remaining with CC:** add a 336 art px atlas/renderer size class
-that preserves art-pixel-to-world scale, read the wide pivot and anchors,
-select the named frames for each attack beat, and time the contact and recovery
-windows. The 336 frames are source art and data, not yet live atlas frames.
+**2026-09-25 facing correction:** The three phases' `cleave_front_fall`,
+`cleave_front_cut`, and `cleave_front_follow` have been redrawn and repacked
+with the sword's narrow cutting edge on the front-facing centre line; the
+formerly diagonal side-facing cuts are retired. The full raise → fall → cut →
+follow sequence now reads as a two-handed vertical swing. The tip remains
+above the foot pivot through contact and recovery, without planting in the
+floor. All three phases' `slam_lift` and `slam_drive` have also been redrawn
+and repacked with the broad blade back facing forward, matching the held
+`slam` frame. Both anchor JSON files contain the revised sword-tip and hand
+positions. The 336 px cells are now in the live atlas at the original art-pixel
+scale, and the game selects the named cleave poses. CC owns the attack timing,
+wave direction, and effect placement in gameplay.

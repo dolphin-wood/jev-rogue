@@ -72,7 +72,7 @@ import { drawCrackle, drawProjectile } from "./projectiles.ts";
 import { equipKeepingOthers } from "./equip-keys.ts";
 import { SHADOW_INK, drawLeapShadow, drawMeteorShadow } from "./spell-marks.ts";
 import { FireFx } from "./fire-fx.ts";
-import { drawHallArt, preloadHallArt } from "./hall-art.ts";
+import { drawHallArt } from "./hall-art.ts";
 import { fillKeyLine, KeyPrompt, keyLine, setCoinArt } from "../ui/keycap.ts";
 import type { ProjectileLook } from "./projectiles.ts";
 import { drawArms, drawHasteCue, drawShockwaves, drawTollPulse } from "./ground.ts";
@@ -89,7 +89,7 @@ import { SpellLab, spellLabAsked } from "../spell-lab.ts";
 import type { LabKey, SpellLabHost } from "../spell-lab.ts";
 import type { CrescentOptions } from "./crescent.ts";
 import type { FrameChoice } from "./enemy-frames.ts";
-import { SOUND_STYLES, Sfx, preloadSfx } from "../audio.ts";
+import { SOUND_STYLES, Sfx } from "../audio.ts";
 import type { SfxName, SoundStyle } from "../audio.ts";
 import {
   contentDescription, contentName, fontFamily, fontPx, getLang, LANG_NAMES, LANGS,
@@ -808,6 +808,8 @@ export class PlayScene extends Phaser.Scene {
   private labBeat = -1;
   /** A short replacement drawing while armour pieces leave the phase body. */
   private bossUnbind = new Map<number, { frame: string; until: number }>();
+  /** Final three-frame collapse, held until the victory card replaces the fight. */
+  private bossDeath: { x: number; y: number; startedAt: number } | null = null;
   private sfx!: Sfx;
   private swingGfx!: Phaser.GameObjects.Graphics;
   /** The enchant's waves, drawn in code (`drawCrescentWave`) and redrawn every frame. */
@@ -1701,14 +1703,6 @@ export class PlayScene extends Phaser.Scene {
     super("play");
   }
 
-  preload(): void {
-    this.load.image("sheet", "sprites.png");
-    this.load.image("gameLogo", "logo.png");
-    this.load.json("atlasJson", "sprites.json");
-    preloadHallArt(this);
-    preloadSfx(this);
-  }
-
   create(): void {
     // Before anything reads the setting: an invite arriving in the URL is
     // taken and the address bar wiped, so it is not in the first screenshot.
@@ -2053,6 +2047,7 @@ export class PlayScene extends Phaser.Scene {
    */
   private async enterRoom(index: number, hearts?: number, through?: Portal): Promise<void> {
     this.entering = true;
+    this.bossDeath = null;
     this.roomIndex = index;
     // A new room, a new reward screen: what was kept in the last one belongs
     // to the last one's journal entry, which has already been written.
@@ -2851,16 +2846,18 @@ export class PlayScene extends Phaser.Scene {
       // The plinth left standing and a stub of the shaft over it, floor to walk over: the column cropped to its foot.
       img = this.add.image(p.x, foot, "hall_throne_column").setOrigin(0.5, 1).setScale(1 / ART_SCALE);
       const h = img.frame.height;
-      img.setCrop(0, h - COLUMN_STUMP_PX, img.frame.width, COLUMN_STUMP_PX).setTint(0x8a8490).setDepth(bodyDepth(foot, 0) - 0.5);
+      img.setCrop(0, h - COLUMN_STUMP_PX, img.frame.width, COLUMN_STUMP_PX).setTint(0x8a8490).setDepth(0.38);
       this.sprites.add(img);
       return;
     } else if (state === "broken") {
       img = this.add.image(p.x, p.y, this.textureKey, safeFrame(this.atlas, "prop_break_urn_2", "prop_break_crate_0"));
-      img.setScale((column ? 1.6 : 0.9) / ART_SCALE).setDepth(1).setAlpha(0.9);
+      img.setScale((column ? 1.6 : 0.9) / ART_SCALE).setDepth(0.38).setAlpha(0.9);
       this.sprites.add(img);
       return;
     } else img = this.add.image(p.x, foot, column ? "hall_throne_column" : "hall_throne_candelabra", column ? undefined : 0);
-    img.setOrigin(0.5, 1).setScale(1 / ART_SCALE).setDepth(bodyDepth(foot, 0));
+    // Fallen masonry lies on the floor; body-depth sorting would let its tall
+    // transparent image cover a player walking through the former column.
+    img.setOrigin(0.5, 1).setScale(1 / ART_SCALE).setDepth(state === "broken" ? 0.38 : bodyDepth(foot, 0));
     if (state === "cracked") img.setTint(0x9a93a0);
     if (p.hitFlashMs > 0) {
       img.x += ((this.world.tick >> 1) & 1 ? 1 : -1) * 1.2;
@@ -8174,6 +8171,8 @@ export class PlayScene extends Phaser.Scene {
           });
         }
         if (ev.kind === "enemy_killed") {
+          if (ev.what === "boss" && this.atlas.has("boss_death0"))
+            this.bossDeath = { x: ev.x, y: ev.y, startedAt: this.time.now };
           this.impacts.push({ x: ev.x, y: ev.y, ms: IMPACT_MS, scale: 1.15 });
           if (!ev.what?.startsWith("prop:")) {
             // A kill is a burst: a flash, two rings at two speeds, and a spray.
@@ -13988,10 +13987,17 @@ export class PlayScene extends Phaser.Scene {
     const label = (k: string, x: number, y: number, t: string, st: Phaser.Types.GameObjects.Text.TextStyle) => this.ftext(k, x, y, t, st);
     this.drawKingGoblet(this.game.loop.delta * this.labSpeed);
     for (const e of w.enemies) {
+      if (e.archetype === "boss" && e.hp <= 0) continue;
       const unbind = this.bossUnbind.get(e.id);
       if (unbind && unbind.until <= this.time.now) this.bossUnbind.delete(e.id);
       drawEnemy(this, w, e, this.textureKey, this.atlas, this.sprites, label, this.subspecies,
         unbind && unbind.until > this.time.now ? unbind.frame : undefined);
+    }
+    if (this.bossDeath) {
+      const { x, y, startedAt } = this.bossDeath;
+      const frame = `boss_death${Math.min(2, Math.floor((this.time.now - startedAt) / 400))}`;
+      if (this.atlas.has(frame)) this.sprites.add(this.add.image(x, y - BOSS_DRAW_RISE_PX, this.textureKey, frame)
+        .setOrigin(0.5).setScale(1 / ART_SCALE).setDepth(bodyDepth(y + BOSS_FOOT_PX, 0)));
     }
     for (const b of w.enemyBullets) {
       if (!b.alive) continue;
@@ -14922,6 +14928,10 @@ function specialPose(w: World, e: Enemy): string | null {
         // Every phase has the pair (art order B8); a sheet without it falls back to the idle (`safeFrame`).
         return ((w.tick / 48) | 0) % 2 === 0 ? "ceremony0" : "ceremony1";
       }
+      // The heart volley is a separate Boss turn, not a `bossCast`; show its
+      // delivered lit-core pair for the whole volley instead of the walk.
+      if (e.bossVolleyMs > 0)
+        return ((w.tick / 24) | 0) % 2 === 0 ? "tele" : "tele1";
       // Lifted through the raise (`slam_lift`), driven in on the commit (`slam_drive`), knelt on while it rings out (`slam`).
       if (e.bossCast === "slam" || e.bossCast === "quake")
         return e.bossCastMs > 0 ? "slam_lift" : -e.bossCastMs < BOSS_DRIVE_MS ? "slam_drive" : "slam";

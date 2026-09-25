@@ -17,6 +17,9 @@ export const EN = {
   ...EN_TERMS,
 
   /* ------------------------------- menus -------------------------------- */
+  "boot.loading": "Loading",
+  "boot.preparing": "Preparing title",
+  "boot.failed": "Could not load {file}. Reload to retry.",
   "menu.newGame": "New Game",
   "menu.settings": "Settings",
   "menu.controls": "Controls",

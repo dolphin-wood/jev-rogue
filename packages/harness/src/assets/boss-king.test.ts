@@ -68,6 +68,21 @@ describe("Crypt King key poses", () => {
       expect(planted).toBeDefined();
       expect(planted![1] - raised![1]).toBeGreaterThanOrEqual(18);
       expect(Math.abs(raised![0] - planted![0])).toBeLessThanOrEqual(8);
+      // The ground plunge shows the broad back of the blade throughout.
+      // Its earlier edge-on drawings were only two or three bright pixels
+      // across, then abruptly turned broad in the held `slam` frame.
+      for (const pose of ["slam_lift", "slam_drive"] as const) {
+        const image = frame(phase, pose);
+        const y = anchors.frames[`boss_p${phase}_${pose}`]!.tip[1] - 30;
+        let brightBladePixels = 0;
+        for (let x = 106; x <= 150; x++) {
+          const i = ((y * 4) * 1024 + x * 4) * 4;
+          const r = image.data[i]!, g = image.data[i + 1]!, b = image.data[i + 2]!;
+          if (image.data[i + 3]! >= 128 && r > 145 && g > 130 && b > 95 && r > b)
+            brightBladePixels++;
+        }
+        expect(brightBladePixels, `p${phase}/${pose} blade face`).toBeGreaterThanOrEqual(7);
+      }
     });
     it(`phase ${phase} keeps its breathing and attacks legible`, () => {
       const pair = (a: string, b: string) => distance(frame(phase, a), frame(phase, b));
@@ -92,13 +107,36 @@ describe("Crypt King key poses", () => {
     });
   }
 
+  it("keeps the kendo finisher on the centre line and its sword above the ground", () => {
+    const anchors = JSON.parse(readFileSync(join(root, "wide/anchors.json"), "utf8")) as {
+      frames: Record<string, { tip: [number, number]; source: string }>;
+    };
+    for (const phase of [1, 2, 3]) {
+      const raised = anchors.frames[`boss_p${phase}_cleave_front_raise`]!.tip;
+      const falling = anchors.frames[`boss_p${phase}_cleave_front_fall`]!.tip;
+      const contact = anchors.frames[`boss_p${phase}_cleave_front_cut`]!.tip;
+      const follow = anchors.frames[`boss_p${phase}_cleave_front_follow`]!.tip;
+      expect(raised[1], `p${phase} raised sword`).toBeLessThan(50);
+      expect(falling[1] - raised[1], `p${phase} sword travels down`).toBeGreaterThan(150);
+      expect(contact[1] - falling[1], `p${phase} cut reaches forward`).toBeGreaterThan(25);
+      for (const [pose, point] of [["fall", falling], ["cut", contact], ["follow", follow]] as const) {
+        expect(Math.abs(point[0] - 168), `p${phase}/${pose} central cut`).toBeLessThanOrEqual(12);
+        expect(272 - point[1], `p${phase}/${pose} does not plunge into floor`).toBeGreaterThanOrEqual(6);
+      }
+    }
+  });
+
   it("keeps plate seams opaque in every source while the ceremonial guard stays packed", () => {
     const manifest = JSON.parse(readFileSync(new URL("../../../../assets/sprites.json", import.meta.url), "utf8")) as {
       frames: Record<string, unknown>;
+      bossAnchors: Record<string, unknown>;
     };
     for (const phase of [1, 2, 3]) {
       expect(manifest.frames[`boss_p${phase}_ceremony0`]).toBeDefined();
       expect(manifest.frames[`boss_p${phase}_ceremony1`]).toBeDefined();
+      expect(manifest.frames[`boss_p${phase}_tele`]).toBeDefined();
+      expect(manifest.frames[`boss_p${phase}_tele1`]).toBeDefined();
+      expect(manifest.bossAnchors[`boss_p${phase}_tele1`]).toBeDefined();
       for (const file of readdirSync(join(root, `p${phase}`)).filter((name) => name.endsWith(".png"))) {
         const image = frame(phase, file.slice(0, -4));
         const opaque = new Uint8Array(256 * 256);

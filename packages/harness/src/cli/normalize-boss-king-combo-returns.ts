@@ -1,5 +1,5 @@
 /** Prepare the independently drawn reverse-cut keys on the 256 px boss art grid. */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
@@ -48,7 +48,7 @@ function bodyStats(png: PNG): { x: number; area: number } {
   return { x: sumX / count, area: count };
 }
 
-function normalizeWide(src: PNG, phase: number): { art: PNG; scale: number; margin: number; bodyArea: number; sourceBodyX: number; sourceFloorY: number } {
+function normalizeWide(src: PNG, phase: number, size = 336, pivot: [number, number] = [168, 272]): { art: PNG; scale: number; margin: number; bodyArea: number; sourceBodyX: number; sourceFloorY: number } {
   const [x0, y0, x1, y1] = box(src);
   const idle = PNG.sync.read(readFileSync(join(source, `p${phase}/idle0.png`)));
   // The idle body area is counted on its 256px art grid, not the 4x delivery file.
@@ -61,18 +61,18 @@ function normalizeWide(src: PNG, phase: number): { art: PNG; scale: number; marg
   }
   const body = bodyStats(src);
   const scale = Math.sqrt(idleArea / body.area);
-  const art = new PNG({ width: 336, height: 336 }); art.data.fill(0);
-  for (let y = 0; y < 336; y++) for (let x = 0; x < 336; x++) {
-    const sx = Math.floor(body.x + (x - 168 + .5) / scale);
-    const sy = Math.floor(y1 + (y - 272 + .5) / scale);
+  const art = new PNG({ width: size, height: size }); art.data.fill(0);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const sx = Math.floor(body.x + (x - pivot[0] + .5) / scale);
+    const sy = Math.floor(y1 + (y - pivot[1] + .5) / scale);
     if (sx < 0 || sx >= src.width || sy < 0 || sy >= src.height) continue;
     const si = (sy * src.width + sx) * 4;
     if (src.data[si + 3]! < 200) continue;
     const c = nearest(src.data[si]!, src.data[si + 1]!, src.data[si + 2]!);
-    art.data.set([c[0]!, c[1]!, c[2]!, 255], (y * 336 + x) * 4);
+    art.data.set([c[0]!, c[1]!, c[2]!, 255], (y * size + x) * 4);
   }
-  const margin = Math.min(168 + (x0 - body.x) * scale, 336 - (168 + (x1 - body.x) * scale),
-    272 + (y0 - y1) * scale, 336 - 272);
+  const margin = Math.min(pivot[0] + (x0 - body.x) * scale, size - (pivot[0] + (x1 - body.x) * scale),
+    pivot[1] + (y0 - y1) * scale, size - pivot[1]);
   return { art, scale, margin, bodyArea: bodyStats(art).area, sourceBodyX: body.x, sourceFloorY: y1 };
 }
 
@@ -118,12 +118,19 @@ function cropFor256(wide: PNG): PNG {
   return out;
 }
 
-for (const phase of [1, 2, 3]) for (const pose of [
+const selectedPhase = Number(process.argv.find((arg) => arg.startsWith("--phase="))?.slice(8) ?? 0);
+for (const phase of [1, 2, 3].filter((p) => !process.argv.includes("--hook-only") && (!selectedPhase || p === selectedPhase))) for (const pose of [
   ...(phase > 1 ? ["sweep_back_wind", "sweep_back_cross", "sweep_back_cut"] : []),
   "cleave_front_raise", "cleave_front_fall", "cleave_front_cut", "cleave_front_follow",
   "slam_lift", "slam_drive",
 ]) {
-  const draftName = pose.startsWith("slam_") && process.argv.includes("--use-back-facing-slam")
+  const edgeDraft = `p${phase}_${pose}_edge_v1.png`;
+  const draftName = phase === 3 && process.argv.includes("--use-bare-p3")
+      && ["cleave_front_fall", "cleave_front_cut", "cleave_front_follow"].includes(pose)
+    ? `p3_${pose}_bare_v1.png`
+    : pose.startsWith("cleave_front_") && process.argv.includes("--use-edge-cleave")
+      && pose !== "cleave_front_raise" && existsSync(join(drafts, edgeDraft)) ? edgeDraft
+    : pose.startsWith("slam_") && process.argv.includes("--use-back-facing-slam")
     ? `p${phase}_${pose}_back_v1.png`
     : `p${phase}_${pose}.png`;
   const src = PNG.sync.read(readFileSync(join(drafts, draftName)));
@@ -135,7 +142,8 @@ for (const phase of [1, 2, 3]) for (const pose of [
   const wideTarget = join(review, `p${phase}_${pose}_336.png`);
   writeFileSync(wideTarget, PNG.sync.write(upscale(wide.art)));
   console.log(`${wideTarget}: body ${wide.bodyArea}, margin ${wide.margin.toFixed(1)}, scale ${(wide.scale * 100).toFixed(1)}%`);
-  if (process.argv.includes("--write-wide") && !pose.startsWith("slam_")) {
+  if (process.argv.includes("--write-wide") && !pose.startsWith("slam_")
+    && (!process.argv.includes("--use-edge-cleave") || pose.startsWith("cleave_front_") && pose !== "cleave_front_raise")) {
     const wideDir = join(source, `wide/p${phase}`);
     mkdirSync(wideDir, { recursive: true });
     writeFileSync(join(wideDir, `${pose}.png`), PNG.sync.write(upscale(wide.art)));
@@ -147,6 +155,50 @@ for (const phase of [1, 2, 3]) for (const pose of [
     if (process.argv.includes("--write"))
       writeFileSync(join(source, `p${phase}/${pose}.png`), PNG.sync.write(fitted));
   }
+}
+
+// The lightning invocation has a full-height sword. A 384 px cell preserves
+// the idle body's scale and leaves headroom for its tip; the old 256 px draft
+// visibly shrank the body, and the 336 px fit clipped the sword at the top.
+if (process.argv.includes("--write-storm")) for (const phase of [1, 2, 3]) {
+  const src = PNG.sync.read(readFileSync(join(drafts, `p${phase}_lightning_invoke.png`)));
+  const fitted = normalizeWide(src, phase, 384, [192, 312]);
+  const path = join(source, `wide/p${phase}/storm.png`);
+  writeFileSync(path, PNG.sync.write(upscale(fitted.art)));
+  console.log(`${path}: body ${fitted.bodyArea}, margin ${fitted.margin.toFixed(1)}, scale ${(fitted.scale * 100).toFixed(1)}%`);
+}
+
+// The hook art originally carried a whole outgoing chain and hook. Gameplay
+// draws that chain toward its actual target, so bake only the boss pose here.
+// These inpainted drafts retain the source canvas composition; resample the
+// entire canvas instead of fitting its remaining silhouette and enlarging it.
+if (process.argv.includes("--write-hook")) for (const phase of [1, 2, 3]) {
+  const src = PNG.sync.read(readFileSync(join(drafts, `p${phase}_hook_no_projectile_v1.png`)));
+  const art = new PNG({ width: 256, height: 256 }); art.data.fill(0);
+  for (let y = 0; y < 256; y++) for (let x = 0; x < 256; x++) {
+    const sx = Math.floor((x + .5) * src.width / 256);
+    const sy = Math.floor((y + .5) * src.height / 256);
+    const si = (sy * src.width + sx) * 4;
+    if (src.data[si + 3]! < 200) continue;
+    const c = nearest(src.data[si]!, src.data[si + 1]!, src.data[si + 2]!);
+    art.data.set([c[0]!, c[1]!, c[2]!, 255], (y * 256 + x) * 4);
+  }
+  // Sampling the inpainted outline can open isolated one-pixel seams.
+  for (let changed = true; changed;) {
+    changed = false;
+    for (let y = 1; y < 255; y++) for (let x = 1; x < 255; x++) {
+      const i = (y * 256 + x) * 4;
+      if (art.data[i + 3]) continue;
+      const neighbours = [i - 4, i + 4, i - 256 * 4, i + 256 * 4];
+      if (neighbours.filter((j) => art.data[j + 3]! === 255).length >= 3) {
+        art.data.set([8, 7, 13, 255], i);
+        changed = true;
+      }
+    }
+  }
+  const target = join(source, `p${phase}/hook.png`);
+  writeFileSync(target, PNG.sync.write(upscale(art)));
+  console.log(`${target}: outgoing chain removed at original frame scale`);
 }
 
 // Carry the already illustrated first leftward cut onto the same wide art grid

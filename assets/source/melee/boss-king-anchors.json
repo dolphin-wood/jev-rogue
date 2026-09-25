@@ -110,6 +110,17 @@
         65
       ]
     },
+    "boss_p1_tele1": {
+      "source": "assets/source/melee/boss-king/p1/tele1.png",
+      "tip": [
+        88,
+        221
+      ],
+      "hand_l": [
+        179,
+        65
+      ]
+    },
     "boss_p1_windup": {
       "source": "assets/source/melee/boss-king/p1/windup.png",
       "tip": [
@@ -367,7 +378,7 @@
       "source": "assets/source/melee/boss-king/p1/slam_lift.png",
       "tip": [
         127,
-        182
+        200
       ],
       "hand_l": [
         128,
@@ -377,8 +388,8 @@
     "boss_p1_slam_drive": {
       "source": "assets/source/melee/boss-king/p1/slam_drive.png",
       "tip": [
-        126,
-        216
+        124,
+        221
       ],
       "hand_l": [
         128,
@@ -596,6 +607,17 @@
     },
     "boss_p2_tele": {
       "source": "assets/source/melee/boss-king/p2/tele.png",
+      "tip": [
+        110,
+        225
+      ],
+      "hand_l": [
+        181,
+        61
+      ]
+    },
+    "boss_p2_tele1": {
+      "source": "assets/source/melee/boss-king/p2/tele1.png",
       "tip": [
         110,
         225
@@ -862,18 +884,18 @@
       "source": "assets/source/melee/boss-king/p2/slam_lift.png",
       "tip": [
         127,
-        194
+        192
       ],
       "hand_l": [
         128,
-        91
+        66
       ]
     },
     "boss_p2_slam_drive": {
       "source": "assets/source/melee/boss-king/p2/slam_drive.png",
       "tip": [
-        127,
-        215
+        126,
+        220
       ],
       "hand_l": [
         128,
@@ -1091,6 +1113,17 @@
     },
     "boss_p3_tele": {
       "source": "assets/source/melee/boss-king/p3/tele.png",
+      "tip": [
+        106,
+        231
+      ],
+      "hand_l": [
+        126,
+        93
+      ]
+    },
+    "boss_p3_tele1": {
+      "source": "assets/source/melee/boss-king/p3/tele1.png",
       "tip": [
         106,
         231
@@ -1356,23 +1389,23 @@
     "boss_p3_slam_lift": {
       "source": "assets/source/melee/boss-king/p3/slam_lift.png",
       "tip": [
-        128,
-        190
+        127,
+        198
       ],
       "hand_l": [
-        130,
-        101
+        128,
+        102
       ]
     },
     "boss_p3_slam_drive": {
       "source": "assets/source/melee/boss-king/p3/slam_drive.png",
       "tip": [
-        123,
-        215
+        122,
+        220
       ],
       "hand_l": [
-        128,
-        101
+        126,
+        104
       ]
     },
     "boss_p3_hook": {
@@ -1382,8 +1415,8 @@
         20
       ],
       "hand_l": [
-        85,
-        87
+        158,
+        67
       ]
     },
     "boss_p3_backhand": {

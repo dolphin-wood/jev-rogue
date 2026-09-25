@@ -16,6 +16,9 @@ export const JA: Table = {
   ...JA_TERMS,
 
   /* ------------------------------- menus -------------------------------- */
+  "boot.loading": "読み込み中",
+  "boot.preparing": "タイトルを準備中",
+  "boot.failed": "{file} を読み込めませんでした。再読み込みしてください。",
   "menu.newGame": "ニューゲーム",
   "menu.settings": "設定",
   "menu.controls": "操作",

@@ -351,8 +351,8 @@ export const MANIFEST: FrameSpec[] = (() => {
   for (const d of ["crack_0", "crack_1", "drain_0", "drain_1", "stain_0", "stain_1", "rubble_0", "rubble_1", "moss_0", "moss_1", "scorch", "bones"])
     out.push(frame(`deco_${d}`, "s64", false));
 
-  for (const p of [1, 2, 3]) for (const pose of ["idle0", "idle1", "ceremony0", "ceremony1", "tele"])
-    out.push(frame(`boss_p${p}_${pose}`, "s256", true, pose === "tele"));
+  for (const p of [1, 2, 3]) for (const pose of ["idle0", "idle1", "ceremony0", "ceremony1", "tele", "tele1"])
+    out.push(frame(`boss_p${p}_${pose}`, "s256", true, pose.startsWith("tele")));
   for (const p of [1, 2, 3]) for (const pose of [
     "windup", "commit", "follow", "hit0", "hit1", "leap_gather", "leap_air",
     "slam", "slam_lift", "slam_drive", "hook", "backhand",
@@ -376,6 +376,9 @@ export const MANIFEST: FrameSpec[] = (() => {
     ...(p >= 2 ? ["sweep_front_wind", "sweep_front_enter", "sweep_front_mid", "sweep_front_cut", "sweep_back_wind", "sweep_back_cross", "sweep_back_cut"] : []),
     "cleave_front_raise", "cleave_front_fall", "cleave_front_cut", "cleave_front_follow",
   ]) out.push(frame(`boss_p${p}_${pose}`, "s256", true, false, [336, 336]));
+  // Lightning invocation needs a taller cell to keep the raised sword at the
+  // same body scale as the other Boss poses.
+  for (const p of [1, 2, 3]) out.push(frame(`boss_p${p}_storm`, "s256", true, false, [384, 384]));
   out.push(frame("boss_unbind_1", "s256", false), frame("boss_unbind_2", "s256", false));
   for (const piece of ["pauldron_l", "pauldron_r", "helm", "breastplate_l", "breastplate_r", "cape"])
     out.push(frame(`boss_debris_${piece}`, "s64", false));
