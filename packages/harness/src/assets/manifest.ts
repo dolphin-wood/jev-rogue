@@ -438,6 +438,9 @@ export const MANIFEST: FrameSpec[] = (() => {
     "deep_well", "quickening", "leeching_edge", "keen_edge", "long_reach", "swift_hand",
   ]) out.push(frame(`icon_stat_${id}`, "s32", true, false, [16, 16]));
   out.push(frame("icon_stat_wrath", "s32", true, false, [16, 16]));
+  // The spell schools, drawn as text: the marks a spell door wears for the cards behind it.
+  for (const id of ["flame", "frost", "venom", "storm", "void", "spirit", "stone"])
+    out.push(frame(`icon_school_${id}`, "s32", true, false, [16, 16]));
   for (const kind of ["stat", "spell", "affix", "gold"])
     out.push(frame(`icon_reward_${kind}`, "s32", true, false, [16, 16]));
   out.push(frame("ui_elite_badge", "s32", true, false, [16, 16]));

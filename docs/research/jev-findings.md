@@ -992,9 +992,11 @@ doors over offers that were mostly something else.
 
 **Now:** a door shows every school (every family, on a stat door) among its
 cards, once each, in the Director's order — as a row of marks under its badge
-(a gem in each school's colour, a stat's icon for each family, a star for each
-grade above the first), with the names in the prompt for the door the player
-stands by: "[E] storm · void · stone spell". Written out under each door, the
+(each school's icon, drawn for the purpose as text in `assets/icons/school_*`;
+a stat's icon for each family), with the names in the prompt for the door the
+player stands by: "[E] storm · void · stone spell". An elite door's grade is
+its elite marks, one per step above the first; a star in the row read as one
+more school. Written out under each door, the
 names ran into the next door's badge whenever a room stood its doors in a
 column.
 

@@ -3075,18 +3075,28 @@ export class PlayScene extends Phaser.Scene {
        * instead of it; a red badge would say one thing where two are meant.
        */
       if (portal.elite) {
-        const mark = this.atlas.has("ui_elite_badge")
-          ? this.add.image(portal.x, portal.y - TILE_PX * 1.72, this.crispTextureKey, "ui_elite_badge")
-            .setOrigin(0.5).setScale(1 / TUNED).setDepth(8.6)
-          : this.add.text(
-            portal.x, portal.y - TILE_PX * 1.75, t("roomType.elite"),
-            { fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(7, ZOOM) * ZOOM)}px`, color: "#ff8877" },
-          ).setOrigin(0.5).setScale(1 / ZOOM).setDepth(8.6);
-        // Hidden with its portal; see `updateExits`. It was created visible
-        // and never touched again, so the badge stood on bare floor for the
-        // whole fight, over a portal that had not risen yet.
-        mark.setVisible(false);
-        this.eliteMarks.push({ portal, mark });
+        /*
+         * **One elite mark per step the reward is graded up**: an elite door
+         * is graded 2 or 3, and shows one mark or two, side by side. The
+         * grade was a star beside the door's schools, which read as one more
+         * of them.
+         */
+        const count = Math.max(1, (portal.grade ?? 2) - 1);
+        for (let k = 0; k < count; k++) {
+          const mark = this.atlas.has("ui_elite_badge")
+            ? this.add.image(portal.x, portal.y - TILE_PX * 1.72, this.crispTextureKey, "ui_elite_badge")
+              .setOrigin(0.5).setScale(1 / TUNED).setDepth(8.6)
+            : this.add.text(
+              portal.x, portal.y - TILE_PX * 1.75, t("roomType.elite"),
+              { fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(7, ZOOM) * ZOOM)}px`, color: "#ff8877" },
+            ).setOrigin(0.5).setScale(1 / ZOOM).setDepth(8.6);
+          mark.setX(portal.x + (k - (count - 1) / 2) * (mark.displayWidth + 1));
+          // Hidden with its portal; see `updateExits`. It was created visible
+          // and never touched again, so the badge stood on bare floor for the
+          // whole fight, over a portal that had not risen yet.
+          mark.setVisible(false);
+          this.eliteMarks.push({ portal, mark });
+        }
       }
       /*
        * The promise, under the badge: a spell door's school in its colour, a
@@ -3108,39 +3118,27 @@ export class PlayScene extends Phaser.Scene {
        * **Marks, not words.** A door's school or family was a label, then a
        * list, and a list under each door of a column ran into the next door's
        * badge. What is behind the door is now a row of marks under its badge —
-       * a gem in each school's colour, a stat's own icon for each family, a
-       * star for each grade above the first — and the words are the prompt's,
-       * shown for the door the player stands by (`updateExits`).
+       * each school's icon, a stat's own icon for each family — and the words
+       * are the prompt's, shown for the door the player stands by
+       * (`updateExits`). The grade is not here: it is the elite marks above.
        */
-      const grade = portal.grade ?? 1;
       const types = portal.schools ?? portal.families ?? [];
       const marks: Phaser.GameObjects.GameObject[] = [];
-      const count = types.length + Math.max(0, grade - 1);
-      const gap = 8;
-      let mx = -((count - 1) * gap) / 2;
+      const gap = 9;
+      let mx = -((types.length - 1) * gap) / 2;
       for (const kind of types) {
-        if (portal.schools) {
+        const frame = portal.schools ? `icon_school_${kind}` : FAMILY_ICON[kind] ?? "";
+        if (this.atlas.has(frame)) {
+          const back = this.add.circle(mx, 0, 4.6, 0x0d0b1f, 1);
+          const icon = this.add.image(mx, 0, this.crispTextureKey, frame).setOrigin(0.5);
+          icon.setScale(8 / Math.max(icon.width, icon.height));
+          marks.push(back, icon);
+        } else if (portal.schools) {
+          // No icon in the sheet: a gem in the school's colour.
           const hex = (SCHOOL_COLOUR as Record<string, string>)[kind] ?? "#e8e3d8";
-          const gem = this.add.graphics();
-          const r = 3.2;
-          const pts = [{ x: mx, y: -r }, { x: mx + r, y: 0 }, { x: mx, y: r }, { x: mx - r, y: 0 }];
-          gem.fillStyle(0x0d0b1f, 1).fillCircle(mx, 0, r + 1.2);
-          gem.fillStyle(Phaser.Display.Color.HexStringToColor(hex).color, 1).fillPoints(pts, true);
-          marks.push(gem);
-        } else {
-          const frame = FAMILY_ICON[kind] ?? "";
-          if (this.atlas.has(frame)) {
-            const back = this.add.circle(mx, 0, 4.4, 0x0d0b1f, 1);
-            const icon = this.add.image(mx, 0, this.crispTextureKey, frame).setOrigin(0.5);
-            icon.setScale(7 / Math.max(icon.width, icon.height));
-            marks.push(back, icon);
-          }
+          marks.push(this.add.circle(mx, 0, 3, Phaser.Display.Color.HexStringToColor(hex).color, 1).setStrokeStyle(1, 0x0d0b1f));
         }
         mx += gap;
-      }
-      for (let k = 1; k < grade; k++, mx += gap) {
-        const star = this.add.star(mx, 0, 5, 1.6, 3.6, 0xffd45e).setStrokeStyle(0.8, 0x0d0b1f);
-        marks.push(star);
       }
       const tag = marks.length
         ? this.add.container(portal.x, portal.y - 21, marks).setDepth(8.6).setVisible(false)
@@ -10160,7 +10158,14 @@ export class PlayScene extends Phaser.Scene {
       const school = schoolOf(slot.item.base);
       if (school) {
         const tag = text(rightX - panelW / 2 + 10, cy - 117, t("char.school"), 6, "#5a5f7a").setOrigin(0, 0.5);
-        text(rightX - panelW / 2 + 10 + tag.width / ZOOM + 5, cy - 117,
+        // The school's icon before its name: the mark a spell door wears for it.
+        let nameX = rightX - panelW / 2 + 10 + tag.width / ZOOM + 5;
+        if (this.atlas.has(`icon_school_${school}`)) {
+          add(this.add.image(nameX + 4.5, cy - 117, this.crispTextureKey, `icon_school_${school}`)
+            .setOrigin(0.5).setDisplaySize(9, 9).setDepth(211));
+          nameX += 12;
+        }
+        text(nameX, cy - 117,
           term(school, "spell_school").toUpperCase(), 6,
           (SCHOOL_COLOUR as Record<string, string>)[school] ?? "#c9cfe8").setOrigin(0, 0.5);
       }
@@ -10741,7 +10746,12 @@ export class PlayScene extends Phaser.Scene {
   private updateExits(): void {
     if (this.portalGfx.length !== this.world.portals.length) this.buildPortalGfx();
     for (const { portal, body, badge, plate, tag } of this.portalGfx) {
-      const eliteMark = this.eliteMarks.find((m) => m.portal === portal)?.mark;
+      // A door graded up twice carries two elite marks; they show and fade together.
+      const own = this.eliteMarks.filter((m) => m.portal === portal).map((m) => m.mark);
+      const eliteMark = own.length ? {
+        setVisible: (v: boolean) => { for (const m of own) m.setVisible(v); },
+        setAlpha: (a: number) => { for (const m of own) m.setAlpha(a); },
+      } : undefined;
       if (!portal.open) {
         body.setVisible(false);
         plate.setVisible(false);
