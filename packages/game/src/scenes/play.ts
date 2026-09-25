@@ -788,6 +788,11 @@ const ENEMY_FRAME: Record<EnemyId, string> = fillSubspecies<string>({
   boss: "boss_p1",
 });
 
+/** A stat family's mark on a door: the icon of its first stat card. */
+const FAMILY_ICON: Readonly<Record<string, string>> = {
+  movement: "icon_stat_fleet", survival: "icon_stat_vigour", mana: "icon_stat_deep_well", sword: "icon_stat_keen_edge",
+};
+
 /**
  * **Every school, or family, behind a door**, in the reader's words and the
  * Director's order: "Storm · Void · Stone". Null for a door whose cards have
@@ -1338,8 +1343,8 @@ export class PlayScene extends Phaser.Scene {
   private portalGfx: {
     portal: Portal; body: Phaser.GameObjects.Image;
     badge: Phaser.GameObjects.Image; plate: Phaser.GameObjects.Image;
-    /** What the badge promises beyond the kind: school or family, and grade. */
-    tag: Phaser.GameObjects.Text | null;
+    /** What is behind the door beyond its kind, as marks: a gem a school, a stat's icon a family, a star a grade. */
+    tag: Phaser.GameObjects.Container | null;
   }[] = [];
   /** The offer screen. Null whenever there is nothing to choose. */
   private offerUi: {
@@ -3099,32 +3104,46 @@ export class PlayScene extends Phaser.Scene {
        * there is one, because it is the sharper promise; the reward kind is
        * the fallback, which is what the badge was always trying to say.
        */
-      const grade = portal.grade ?? 1;
-      const pips = grade > 1 ? ` ${"★".repeat(grade - 1)}` : "";
-      const named = (id: string) => contentName(id, titleOfId(id));
-      const label = portal.onward ? roomTypeName(portal.type)
-        : portal.npc ? roomTypeName(NPC_ROOM_ID[portal.npc])
-        // Several schools stand one to a line (see the tag below); one reads as it always did.
-        : doorTypes(portal) ? `${(portal.schools ?? portal.families ?? []).map((x) => term(x, portal.schools ? "spell_school" : "stat_family")).join("\n")}${pips}`
-        // A plain door promises a kind — spell, affix, stat, gold — and the
-        // kinds are ids like everything else.
-        : `${term(portal.reward ?? portal.type ?? "", "reward_kind")}${pips}`;
-      // One school is drawn in its colour; several share the plain label colour rather than the first one's.
-      const oneSchool = portal.schools?.length === 1 ? portal.schools[0]! : null;
-      const colour = oneSchool ? (SCHOOL_COLOUR as Record<string, string>)[oneSchool] ?? "#e8e3d8"
-        : portal.schools?.length ? "#e8e3d8" : grade > 1 ? "#ffd45e" : "#c9cfe8";
       /*
-       * **A list goes under the door.** A door with cards of three schools
-       * named them on one line, and a row of such doors ran their names into
-       * each other; one to a line, under the arch, where nothing else is drawn,
-       * a door stays as wide as its name.
+       * **Marks, not words.** A door's school or family was a label, then a
+       * list, and a list under each door of a column ran into the next door's
+       * badge. What is behind the door is now a row of marks under its badge —
+       * a gem in each school's colour, a stat's own icon for each family, a
+       * star for each grade above the first — and the words are the prompt's,
+       * shown for the door the player stands by (`updateExits`).
        */
-      const listed = label.includes("\n");
-      const tag = label
-        ? this.add.text(portal.x, portal.y + (listed ? TILE_PX * 0.55 : -TILE_PX * 0.55), label, {
-          fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(7, ZOOM) * ZOOM)}px`, color: colour,
-          backgroundColor: "#0d0b1fcc", padding: { x: 2 * ZOOM, y: 1 * ZOOM }, align: "center",
-        }).setOrigin(0.5, listed ? 0 : 0.5).setScale(1 / ZOOM).setDepth(8.6).setVisible(false)
+      const grade = portal.grade ?? 1;
+      const types = portal.schools ?? portal.families ?? [];
+      const marks: Phaser.GameObjects.GameObject[] = [];
+      const count = types.length + Math.max(0, grade - 1);
+      const gap = 8;
+      let mx = -((count - 1) * gap) / 2;
+      for (const kind of types) {
+        if (portal.schools) {
+          const hex = (SCHOOL_COLOUR as Record<string, string>)[kind] ?? "#e8e3d8";
+          const gem = this.add.graphics();
+          const r = 3.2;
+          const pts = [{ x: mx, y: -r }, { x: mx + r, y: 0 }, { x: mx, y: r }, { x: mx - r, y: 0 }];
+          gem.fillStyle(0x0d0b1f, 1).fillCircle(mx, 0, r + 1.2);
+          gem.fillStyle(Phaser.Display.Color.HexStringToColor(hex).color, 1).fillPoints(pts, true);
+          marks.push(gem);
+        } else {
+          const frame = FAMILY_ICON[kind] ?? "";
+          if (this.atlas.has(frame)) {
+            const back = this.add.circle(mx, 0, 4.4, 0x0d0b1f, 1);
+            const icon = this.add.image(mx, 0, this.crispTextureKey, frame).setOrigin(0.5);
+            icon.setScale(7 / Math.max(icon.width, icon.height));
+            marks.push(back, icon);
+          }
+        }
+        mx += gap;
+      }
+      for (let k = 1; k < grade; k++, mx += gap) {
+        const star = this.add.star(mx, 0, 5, 1.6, 3.6, 0xffd45e).setStrokeStyle(0.8, 0x0d0b1f);
+        marks.push(star);
+      }
+      const tag = marks.length
+        ? this.add.container(portal.x, portal.y - 21, marks).setDepth(8.6).setVisible(false)
         : null;
       this.portalGfx.push({ portal, body, badge, plate, tag });
     }
