@@ -226,12 +226,12 @@ describe("spell levels and affix tiers", () => {
 });
 
 describe("doors promise more than a kind", () => {
-  it("grades an elite door up and names a spell door's school", () => {
+  it("grades an elite door up, and names no school: a badge is read off the cards behind it", () => {
     for (let i = 0; i < 20; i++) {
       for (const d of ruleDoors({ roomIndex: 5, lastWasElite: false, critical: false }, src.stream("d", i), 3)) {
         if (d.difficulty === "elite") expect(d.grade).toBeGreaterThanOrEqual(2);
-        if (d.reward === "spell") expect(d.school).toBeTruthy();
-        if (d.reward === "stat") expect(d.family).toBeTruthy();
+        expect(d.schools).toBeUndefined();
+        expect(d.families).toBeUndefined();
       }
     }
   });

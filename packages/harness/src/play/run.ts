@@ -15,7 +15,7 @@ import {
   levelAt, withLevels,
   observedFigures,
   bucketConsistency, cardStyleTags, measureOf, observedLabels, UNMEASURED,
-  makeEnemy, GRID_W, GRID_H, TILE_PX, runStaff, SPELL_LEVEL_MAX, slotCost, affixFitsSpell, spellAffixById, journalDoor, mainTypeOf,
+  makeEnemy, GRID_W, GRID_H, TILE_PX, runStaff, SPELL_LEVEL_MAX, slotCost, affixFitsSpell, spellAffixById, journalDoor, cardTypesOf,
 } from "@jr/core";
 import type {
   Archetype, ItemInstance, RoomType, JournalDoor, RunContext, RunHistory, RunJournalEntry, Staff, Tension, World,
@@ -213,8 +213,8 @@ export function doorWord(d: DoorOffer): string {
   // A door the run's shape fixed promises the room ahead, not a currency.
   if (d.onward) return "onward";
   if (d.npc) return d.npc;
-  const promise = d.school ?? d.family ?? "";
-  return `${d.difficulty === "elite" ? "ELITE " : ""}${d.reward}${promise ? `:${promise}` : ""}${(d.grade ?? 1) > 1 ? `x${d.grade}` : ""}`;
+  const types = (d.schools ?? d.families ?? []).join("/");
+  return `${d.difficulty === "elite" ? "ELITE " : ""}${d.reward}${types ? `:${types}` : ""}${(d.grade ?? 1) > 1 ? `x${d.grade}` : ""}`;
 }
 
 export interface RunOutcome {
@@ -411,8 +411,8 @@ export async function playRun(
    * **The doors out of a room, decided once its reward is taken**, as the
    * scene decides them while the portals turn: one request carries the
    * portal questions and, for each kind a portal could be, the cards the room
-   * behind it will offer. A door keeps its kind's cards and is badged with the
-   * school or family most of them are (`mainTypeOf`); the rest are unused.
+   * behind it will offer. A door keeps its kind's cards and is badged with
+   * every school or family among them (`cardTypesOf`); the rest are unused.
    */
   async function openPortals(index: number, elite: boolean): Promise<DoorOffer[]> {
     const ctx = contextNow(index);
@@ -447,7 +447,7 @@ export async function playRun(
     return (plan.portals?.doors ?? []).map((d) => {
       if (d.npc || d.reward === "gold") return d;
       const ids = plan.cards[kinds.indexOf(d.reward as (typeof kinds)[number])]?.ids ?? [];
-      return ids.length ? { ...d, ...mainTypeOf(d.reward, ids), cards: ids } : d;
+      return ids.length ? { ...d, ...cardTypesOf(d.reward, ids), cards: ids } : d;
     });
   }
 

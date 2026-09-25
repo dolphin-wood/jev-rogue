@@ -571,8 +571,9 @@ export interface RunJournalEntry {
 export interface JournalDoor {
   /** The reward kind, or the vendor's room the door leads to. */
   readonly kind: string;
-  readonly school?: string;
-  readonly family?: string;
+  /** Every school, or family, among the door's cards, in the Director's order. */
+  readonly schools?: readonly string[];
+  readonly families?: readonly string[];
   readonly elite?: boolean;
   /** 1 ordinarily; 2 or 3 is a reward graded up. */
   readonly grade?: number;
@@ -580,14 +581,14 @@ export interface JournalDoor {
 
 /** A door as the journal keeps it, from either shape a door is held in. */
 export function journalDoor(d: {
-  readonly reward: string; readonly npc?: string; readonly school?: string; readonly family?: string;
+  readonly reward: string; readonly npc?: string; readonly schools?: readonly string[]; readonly families?: readonly string[];
   readonly grade?: number; readonly elite?: boolean; readonly difficulty?: string;
 }): JournalDoor {
   const elite = d.elite ?? d.difficulty === "elite";
   return {
     kind: d.npc ?? d.reward,
-    ...(!d.npc && d.school ? { school: d.school } : {}),
-    ...(!d.npc && d.family ? { family: d.family } : {}),
+    ...(!d.npc && d.schools?.length ? { schools: d.schools } : {}),
+    ...(!d.npc && d.families?.length ? { families: d.families } : {}),
     ...(elite ? { elite: true } : {}),
     ...(!d.npc && d.grade && d.grade > 1 ? { grade: d.grade } : {}),
   };

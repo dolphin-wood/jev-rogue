@@ -183,8 +183,9 @@ export interface Portal {
   readonly elite: boolean;
   /** The stage of the run, for the two rooms that are not fights. */
   readonly type: RoomType;
-  readonly school?: string;
-  readonly family?: string;
+  /** What the cards behind it are; see `DoorOffer.schools`. */
+  readonly schools?: readonly string[];
+  readonly families?: readonly string[];
   readonly grade?: number;
   /** A vendor's room rather than a fight; see `DoorOffer.npc`. */
   readonly npc?: "merchant" | "smith" | "fountain";
@@ -443,9 +444,9 @@ export interface PortalSpec {
   readonly reward: RewardCardKind;
   readonly elite: boolean;
   readonly type: RoomType;
-  /** A spell door's school, a stat door's family; see `DoorOffer`. */
-  readonly school?: string;
-  readonly family?: string;
+  /** Every school, or family, among the cards behind it; see `DoorOffer`. */
+  readonly schools?: readonly string[];
+  readonly families?: readonly string[];
   /** The reward's grade, 1 to 3: a spell's level, an affix's tier, a stat or gold multiple. */
   readonly grade?: number;
   readonly npc?: "merchant" | "smith" | "fountain";
@@ -475,8 +476,8 @@ export function makePortal(spec: PortalSpec, x: number, y: number): Portal {
     type: spec.type,
     ...(spec.boss ? { boss: true } : {}),
     ...(spec.onward ? { onward: true } : {}),
-    ...(spec.school ? { school: spec.school } : {}),
-    ...(spec.family ? { family: spec.family } : {}),
+    ...(spec.schools ? { schools: spec.schools } : {}),
+    ...(spec.families ? { families: spec.families } : {}),
     grade: spec.grade ?? 1,
     ...(spec.npc ? { npc: spec.npc } : {}),
     ...(spec.cards ? { cards: spec.cards } : {}),

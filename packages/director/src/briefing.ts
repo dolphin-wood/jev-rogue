@@ -750,14 +750,14 @@ const ENTRY_WORDS: Readonly<Record<string, string>> = {
 };
 
 /**
- * A door and what was behind it: "spell (mostly storm)", "stat (mostly
- * movement; elite, grade 2)". The school or family is the one most of the
- * door's cards were (`mainTypeOf`), not a promise the cards were held to.
+ * A door and what was behind it: "spell (storm, void)", "stat (movement;
+ * elite, grade 2)" — every school or family among the door's cards, in the
+ * Director's order (`cardTypesOf`), not a promise the cards were held to.
  */
 function doorWords(d: JournalDoor): string {
-  const main = d.school ?? d.family;
+  const types = d.schools ?? d.families ?? [];
   const marks = [d.elite ? "elite" : null, d.grade && d.grade > 1 ? `grade ${d.grade}` : null].filter(Boolean);
-  const inside = [main ? `mostly ${main}` : null, marks.length ? marks.join(", ") : null].filter(Boolean);
+  const inside = [types.length ? types.join(", ") : null, marks.length ? marks.join(", ") : null].filter(Boolean);
   return `${d.kind}${inside.length ? ` (${inside.join("; ")})` : ""}`;
 }
 
@@ -768,13 +768,13 @@ function doorWords(d: JournalDoor): string {
  */
 function promisesRolledUp(rooms: readonly RunJournalEntry[]): string | null {
   const doors = rooms.flatMap((r) => r.doors ?? []);
-  const schools = doors.flatMap((d) => (d.kind === "spell" && d.school ? [d.school] : []));
-  const families = doors.flatMap((d) => (d.kind === "stat" && d.family ? [d.family] : []));
+  const schools = doors.flatMap((d) => (d.kind === "spell" ? d.schools ?? [] : []));
+  const families = doors.flatMap((d) => (d.kind === "stat" ? d.families ?? [] : []));
   const elite = doors.filter((d) => d.elite).map((d) => d.kind);
   if (doors.length === 0) return null;
   return [
-    schools.length ? `spell doors mostly ${counted(schools)}` : null,
-    families.length ? `stat doors mostly ${counted(families)}` : null,
+    schools.length ? `spell doors held ${counted(schools)}` : null,
+    families.length ? `stat doors held ${counted(families)}` : null,
     elite.length ? `elite doors: ${counted(elite)}` : "no elite doors",
   ].filter(Boolean).join("; ");
 }

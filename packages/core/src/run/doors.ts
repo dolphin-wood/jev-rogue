@@ -33,14 +33,14 @@ export interface DoorOffer {
   readonly reward: RewardCardKind;
   readonly difficulty: Difficulty;
   /**
-   * What the badge names beyond the kind: the school most of a spell door's
-   * cards belong to, the family most of a stat door's do (`mainTypeOf`) —
-   * read off the cards, not promised ahead of them — and every door a
-   * **grade**: 1 ordinarily, 2 or 3 behind an elite, occasionally 2 late in
-   * the run.
+   * What the badge names beyond the kind: every school a spell door's cards
+   * belong to, every family a stat door's do, in the Director's order
+   * (`cardTypesOf`) — read off the cards, not promised ahead of them — and
+   * every door a **grade**: 1 ordinarily, 2 or 3 behind an elite,
+   * occasionally 2 late in the run.
    */
-  readonly school?: SpellSchool;
-  readonly family?: StatFamily;
+  readonly schools?: readonly SpellSchool[];
+  readonly families?: readonly StatFamily[];
   readonly grade: number;
   /**
    * **The cards behind the door**, decided when the door opened, by id and in
@@ -98,16 +98,13 @@ function gradeFor(elite: boolean, roomIndex: number, rng: Rng): number {
   return roomIndex >= 8 && rng.next() < 0.25 ? 2 : 1;
 }
 
-function dressDoor(reward: RewardCardKind, difficulty: Difficulty, roomIndex: number, rng: Rng, style?: string): DoorOffer {
-  const grade = gradeFor(difficulty === "elite", roomIndex, rng);
-  if (reward === "spell") {
-    // Half the time, a school that holds a spell of the player's style.
-    const leaning = style ? STYLE_SCHOOLS[style] ?? [] : [];
-    const pool = leaning.length > 0 && rng.next() < 0.5 ? leaning : SPELL_SCHOOLS;
-    return { reward, difficulty, grade, school: pool[rng.int(pool.length)]! };
-  }
-  if (reward === "stat") return { reward, difficulty, grade, family: STAT_FAMILIES[rng.int(STAT_FAMILIES.length)]! };
-  return { reward, difficulty, grade };
+/**
+ * A rule door's kind, difficulty and grade. It names no school or family: a
+ * badge names what the cards behind it are (`cardTypesOf`), and a rule door's
+ * cards are only drawn when its room is entered.
+ */
+function dressDoor(reward: RewardCardKind, difficulty: Difficulty, roomIndex: number, rng: Rng, _style?: string): DoorOffer {
+  return { reward, difficulty, grade: gradeFor(difficulty === "elite", roomIndex, rng) };
 }
 
 export const REWARD_KINDS: readonly RewardCardKind[] = ["stat", "spell", "affix", "gold"];
@@ -526,23 +523,22 @@ export function assemblePortals(a: PortalAnswers): DoorOffer[] {
 /**
  * **What a door shows is what is behind it.**
  *
- * The door's cards are decided when it opens, and its badge names the kind of
- * thing most of them are: the school most of a spell offer's cards belong to,
- * the family most of a stat offer's do, the first card breaking a tie (the
- * offer's order is the Director's). It used to be a promise decided on its
- * own — a school asked for each spell door, which the cards were then forced
- * to keep — and a promise decided apart from the cards repeats whenever the
- * Director's taste is steady, however varied the cards themselves are.
+ * The door's cards are decided when it opens, and its badge names every
+ * school among a spell offer's cards (every family among a stat offer's), once
+ * each, in the offer's order — which is the Director's. It named only the
+ * commonest, the first card breaking a tie, and with three schools in three
+ * cards that was one card of three: a spam player's doors read "storm" door
+ * after door over offers that were two thirds something else. Before that it
+ * was a promise decided on its own and forced onto the cards, which repeats
+ * whenever the Director's taste is steady however varied the cards are.
  */
-export function mainTypeOf(kind: RewardCardKind, ids: readonly string[]): { school?: SpellSchool; family?: StatFamily } {
+export function cardTypesOf(kind: RewardCardKind, ids: readonly string[]): { schools?: SpellSchool[]; families?: StatFamily[] } {
   const of = (id: string): string | undefined => kind === "spell" ? schoolOf(id) ?? undefined
     : kind === "stat" ? STAT_UPGRADES.find((u) => u.id === id)?.family : undefined;
-  const counts = new Map<string, number>();
-  for (const id of ids) { const t = of(id); if (t) counts.set(t, (counts.get(t) ?? 0) + 1); }
-  let best: string | undefined, most = 0;
-  for (const [t, n] of counts) if (n > most) { best = t; most = n; }
-  if (!best) return {};
-  return kind === "spell" ? { school: best as SpellSchool } : { family: best as StatFamily };
+  const seen: string[] = [];
+  for (const id of ids) { const t = of(id); if (t && !seen.includes(t)) seen.push(t); }
+  if (seen.length === 0) return {};
+  return kind === "spell" ? { schools: seen as SpellSchool[] } : { families: seen as StatFamily[] };
 }
 
 /**
@@ -598,8 +594,8 @@ export function doorSpecs(doors: readonly DoorOffer[], roomIndex: number): Porta
   return doors.map((d) => ({
     reward: d.reward,
     elite: d.difficulty === "elite",
-    ...(d.school ? { school: d.school } : {}),
-    ...(d.family ? { family: d.family } : {}),
+    ...(d.schools ? { schools: d.schools } : {}),
+    ...(d.families ? { families: d.families } : {}),
     ...(d.npc ? { npc: d.npc } : {}),
     ...(d.cards ? { cards: d.cards } : {}),
     grade: d.grade,

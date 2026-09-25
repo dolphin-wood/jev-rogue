@@ -15,7 +15,7 @@ import {
   affixFits, affixFitsPart, affixTierKey, affixFitsSpell, itemShape,
   spikesOut, featureCells, fillSubspecies,
   heldDominantTags, STYLE_START, bucketClearSpeed, bucketGold, bucketMovementPressure, bucketRunProgress,
-  portalInReach, pendingPortalNear, pendingDoors, resolvePortals, mainTypeOf, answerOffer, PORTAL_RISE_MS, bucketHealth, bucketRecentDamage,
+  portalInReach, pendingPortalNear, pendingDoors, resolvePortals, cardTypesOf, answerOffer, PORTAL_RISE_MS, bucketHealth, bucketRecentDamage,
   rewardInReach, REWARD_RISE_MS, NO_INPUT, tetherEnds, TOLL_PULSE_MS, ALERT_MS, MINE_BLAST, MINE_PRIME_MS, MINE_BURST_MS,
   MUSKET_RANGE, MUSKET_SPREAD_DEG, MUSKET_WINDUP_MS, FLAME_ROLL_MS, FLAME_LIFE_MS, flameRays, muzzleOf,
   ELEMENT_TINT, spellLookOf,
@@ -789,6 +789,17 @@ const ENEMY_FRAME: Record<EnemyId, string> = fillSubspecies<string>({
 });
 
 /**
+ * **Every school, or family, behind a door**, in the reader's words and the
+ * Director's order: "Storm · Void · Stone". Null for a door whose cards have
+ * neither (affix, gold) or that carries no cards.
+ */
+function doorTypes(d: { readonly schools?: readonly string[]; readonly families?: readonly string[] }): string | null {
+  if (d.schools?.length) return d.schools.map((x) => term(x, "spell_school")).join(" · ");
+  if (d.families?.length) return d.families.map((x) => term(x, "stat_family")).join(" · ");
+  return null;
+}
+
+/**
  * **The run as it stands inside a room**: the facts `leaveThrough` folds into
  * the run when the player walks out, taken early, so the doors can be decided
  * the moment the reward is taken (`openDoors`) rather than a room late.
@@ -1304,7 +1315,7 @@ export class PlayScene extends Phaser.Scene {
   /** The same bar, over a modal screen rather than over the room. */
   private modalHoldGfx!: Phaser.GameObjects.Graphics;
   /** What the portal this room was entered through promised. */
-  private roomPromise: { school?: string; family?: string; grade: number } = { grade: 1 };
+  private roomPromise: { schools?: readonly string[]; families?: readonly string[]; grade: number } = { grade: 1 };
   /** The cards this room offers, decided when the door into it opened (`openDoors`); null when they were not. */
   private roomCards: readonly string[] | null = null;
   /** The run's shape at this room's entry, and how many doors it will open with (`openDoors`). */
@@ -2086,7 +2097,11 @@ export class PlayScene extends Phaser.Scene {
     this.pickedThisRoom = null;
     this.roomReward = through?.reward ?? "spell";
     // What the door showed — the school or family most of its cards are — and the cards themselves.
-    this.roomPromise = { school: through?.school, family: through?.family, grade: through?.grade ?? 1 };
+    this.roomPromise = {
+      ...(through?.schools ? { schools: through.schools } : {}),
+      ...(through?.families ? { families: through.families } : {}),
+      grade: through?.grade ?? 1,
+    };
     this.roomCards = through?.cards ?? null;
     this.doorsOpening = false;
     this.lastWasElite = this.elite;
@@ -2616,7 +2631,7 @@ export class PlayScene extends Phaser.Scene {
           portalsBy: this.portalPlan ? `Director (${this.portalPlan.source})` : this.offer.doors.length ? "rule code (the merchant's doors to the boss)" : "no portals",
           portals: this.offer.doors.map((d) => ({
             reward: d.npc ? `${d.npc} (no fight)` : d.reward, elite: d.elite, type: d.type,
-            promise: [d.school, d.family, (d.grade ?? 1) > 1 ? `grade ${d.grade}` : ""].filter(Boolean).join(" · "),
+            promise: [...(d.schools ?? d.families ?? []), (d.grade ?? 1) > 1 ? `grade ${d.grade}` : ""].filter(Boolean).join(" · "),
           })),
         }
         : null,
@@ -3089,17 +3104,27 @@ export class PlayScene extends Phaser.Scene {
       const named = (id: string) => contentName(id, titleOfId(id));
       const label = portal.onward ? roomTypeName(portal.type)
         : portal.npc ? roomTypeName(NPC_ROOM_ID[portal.npc])
-        : portal.school ? `${term(portal.school, "spell_school")}${pips}`
-        : portal.family ? `${term(portal.family, "stat_family")}${pips}`
+        // Several schools stand one to a line (see the tag below); one reads as it always did.
+        : doorTypes(portal) ? `${(portal.schools ?? portal.families ?? []).map((x) => term(x, portal.schools ? "spell_school" : "stat_family")).join("\n")}${pips}`
         // A plain door promises a kind — spell, affix, stat, gold — and the
         // kinds are ids like everything else.
         : `${term(portal.reward ?? portal.type ?? "", "reward_kind")}${pips}`;
-      const colour = portal.school ? (SCHOOL_COLOUR as Record<string, string>)[portal.school] ?? "#e8e3d8" : grade > 1 ? "#ffd45e" : "#c9cfe8";
+      // One school is drawn in its colour; several share the plain label colour rather than the first one's.
+      const oneSchool = portal.schools?.length === 1 ? portal.schools[0]! : null;
+      const colour = oneSchool ? (SCHOOL_COLOUR as Record<string, string>)[oneSchool] ?? "#e8e3d8"
+        : portal.schools?.length ? "#e8e3d8" : grade > 1 ? "#ffd45e" : "#c9cfe8";
+      /*
+       * **A list goes under the door.** A door with cards of three schools
+       * named them on one line, and a row of such doors ran their names into
+       * each other; one to a line, under the arch, where nothing else is drawn,
+       * a door stays as wide as its name.
+       */
+      const listed = label.includes("\n");
       const tag = label
-        ? this.add.text(portal.x, portal.y - TILE_PX * 0.55, label, {
+        ? this.add.text(portal.x, portal.y + (listed ? TILE_PX * 0.55 : -TILE_PX * 0.55), label, {
           fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(7, ZOOM) * ZOOM)}px`, color: colour,
-          backgroundColor: "#0d0b1fcc", padding: { x: 2 * ZOOM, y: 1 * ZOOM },
-        }).setOrigin(0.5).setScale(1 / ZOOM).setDepth(8.6).setVisible(false)
+          backgroundColor: "#0d0b1fcc", padding: { x: 2 * ZOOM, y: 1 * ZOOM }, align: "center",
+        }).setOrigin(0.5, listed ? 0 : 0.5).setScale(1 / ZOOM).setDepth(8.6).setVisible(false)
         : null;
       this.portalGfx.push({ portal, body, badge, plate, tag });
     }
@@ -8736,11 +8761,9 @@ export class PlayScene extends Phaser.Scene {
      * that goes to Jev is untouched by it (doc 002).
      */
     const grade = (n: number) => (n > 1 ? `  ${t("plan.grade", { n })}` : "");
-    const reward = (promise.school ?? promise.family)
-      ? t("plan.rewardPromise", {
-        kind: term(this.roomReward, "reward_kind"),
-        promise: promise.school ? term(promise.school, "spell_school") : term(promise.family ?? "", "stat_family"),
-      }) + grade(promise.grade)
+    const types = doorTypes(promise);
+    const reward = types
+      ? t("plan.rewardPromise", { kind: term(this.roomReward, "reward_kind"), promise: types }) + grade(promise.grade)
       : term(this.roomReward, "reward_kind") + grade(promise.grade);
     const m = r.measured;
     const fmt = (v: number) => (Number.isInteger(v) ? `${v}` : v.toFixed(2));
@@ -8799,9 +8822,7 @@ export class PlayScene extends Phaser.Scene {
       })));
     list(term("portals"), (this.offer?.doors ?? []).map((d) => {
       if (d.npc) return d.npc === "fountain" ? term("fountain") : t("plan.npcRoom", { npc: term(NPC_ROOM_ID[d.npc]) });
-      const named = d.school ? term(d.school, "spell_school")
-        : d.family ? term(d.family, "stat_family")
-          : term(d.reward ?? "", "reward_kind");
+      const named = doorTypes(d) ?? term(d.reward ?? "", "reward_kind");
       return (d.elite ? t("plan.elitePortal", { reward: named }) : named) + grade(d.grade ?? 1);
     }));
 
@@ -10603,8 +10624,8 @@ export class PlayScene extends Phaser.Scene {
    * as the room began, so a player who walked in whole and out on one heart
    * was offered doors chosen for the player who walked in.
    *
-   * Each door keeps its kind's cards and is badged with the school or family
-   * most of them are (`mainTypeOf`). The request waits as long as any Jev
+   * Each door keeps its kind's cards and is badged with every school or
+   * family among them (`cardTypesOf`). The request waits as long as any Jev
    * call does, and its failures fall to the rule table as theirs do; if
    * nothing answers at all, the rule doors open and their rooms ask for their
    * own cards on entry.
@@ -10646,7 +10667,7 @@ export class PlayScene extends Phaser.Scene {
       doors = (plan.portals?.doors ?? ruleDoors(run, src.stream("offer"), this.portalCount)).map((d) => {
         if (d.npc || d.reward === "gold") return d;
         const ids = plan.cards[kinds.indexOf(d.reward as (typeof kinds)[number])]?.ids ?? [];
-        return ids.length ? { ...d, ...mainTypeOf(d.reward, ids), cards: ids } : d;
+        return ids.length ? { ...d, ...cardTypesOf(d.reward, ids), cards: ids } : d;
       });
     } catch {
       doors = ruleDoors(run, src.stream("offer"), this.portalCount);
@@ -10655,7 +10676,7 @@ export class PlayScene extends Phaser.Scene {
     if (this.world !== world || this.roomIndex !== index) return;
     const specs = doorSpecs(doors, index);
     playtestLog.attach(index, (r) => {
-      r.doors = specs.map((d) => d.npc ? `npc:${d.npc}` : `${d.reward}${d.school ? `:${d.school}` : d.family ? `:${d.family}` : ""}${d.onward ? " (onward)" : ""}`);
+      r.doors = specs.map((d) => d.npc ? `npc:${d.npc}` : `${d.reward}${(d.schools ?? d.families)?.length ? `:${(d.schools ?? d.families)!.join("/")}` : ""}${d.onward ? " (onward)" : ""}`);
     });
     // Counted where the list is made, so a declined vendor still spends one of the run's `NPC_OFFERS_MAX`.
     if (specs.some((d) => d.npc && d.npc !== "fountain")) this.npcOffers++;
@@ -10940,8 +10961,8 @@ export class PlayScene extends Phaser.Scene {
         ? t(near.npc === "merchant" ? "prompt.theMerchant"
           : near.npc === "fountain" ? "prompt.theFountain"
           : "prompt.theBlacksmith")
-        : near.school ? t("prompt.schoolSpell", { school: term(near.school, "spell_school") })
-          : near.family ? t("prompt.familyStat", { family: term(near.family, "stat_family") })
+        : near.schools?.length ? t("prompt.schoolSpell", { school: doorTypes(near)! })
+          : near.families?.length ? t("prompt.familyStat", { family: doorTypes(near)! })
             : term(near.reward ?? "", "reward_kind");
       const mark = near.onward || !near.elite ? "" : `${t("roomType.elite")} `;
       const pips = near.onward || (near.grade ?? 1) <= 1 ? "" : ` ${"★".repeat((near.grade ?? 1) - 1)}`;

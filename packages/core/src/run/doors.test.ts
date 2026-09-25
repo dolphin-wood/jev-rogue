@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { RngSource } from "../rng.ts";
 import {
   RUN_BOSS_ROOM, RUN_COMBAT_ROOMS, REWARD_KINDS, RUN_SHOP_ROOM,
-  bossExit, fixedExit, legalDifficulties, mainTypeOf, NPC_OFFERS_MAX, portalChoices, ruleDoors, shopExit, stageFor,
+  bossExit, fixedExit, legalDifficulties, cardTypesOf, NPC_OFFERS_MAX, portalChoices, ruleDoors, shopExit, stageFor,
 } from "./doors.ts";
 
 const rng = (seed = "d"): ReturnType<RngSource["stream"]> => new RngSource(seed).stream("doors");
@@ -153,14 +153,14 @@ describe("the portals offered", () => {
 });
 
 describe("what a door's badge names", () => {
-  it("is the school or family most of its cards are, the first card breaking a tie", () => {
-    expect(mainTypeOf("spell", ["shock_arc", "ember_dart", "spark_spray"])).toEqual({ school: "storm" });
-    expect(mainTypeOf("spell", ["ember_dart", "shock_arc", "frost_needle"])).toEqual({ school: "flame" });
-    expect(mainTypeOf("stat", ["vigour", "fleet"]).family).toBeTruthy();
+  it("is every school or family among its cards, once each, in the offer's order", () => {
+    expect(cardTypesOf("spell", ["shock_arc", "ember_dart", "spark_spray"])).toEqual({ schools: ["storm", "flame"] });
+    expect(cardTypesOf("spell", ["ember_dart", "shock_arc", "frost_needle"])).toEqual({ schools: ["flame", "storm", "frost"] });
+    expect(cardTypesOf("stat", ["vigour", "fleet"]).families?.length).toBeGreaterThan(0);
   });
 
   it("names nothing for a kind whose cards have no school or family", () => {
-    expect(mainTypeOf("affix", ["chain", "pierce", "fork"])).toEqual({});
-    expect(mainTypeOf("spell", [])).toEqual({});
+    expect(cardTypesOf("affix", ["chain", "pierce", "fork"])).toEqual({});
+    expect(cardTypesOf("spell", [])).toEqual({});
   });
 });

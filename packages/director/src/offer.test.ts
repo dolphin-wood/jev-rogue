@@ -52,8 +52,8 @@ describe("the Director's portals (doc 003)", () => {
       if (plan.doors.length > 1) expect(plan.doors[0]!.difficulty).toBe("normal");
       for (const x of plan.doors) {
         // A door promises nothing beyond its kind; its badge is read off its cards later.
-        expect(x.school).toBeUndefined();
-        expect(x.family).toBeUndefined();
+        expect(x.schools).toBeUndefined();
+        expect(x.families).toBeUndefined();
         expect([1, 2, 3]).toContain(x.grade);
         if (x.difficulty === "elite") expect(x.grade).toBeGreaterThanOrEqual(2);
       }
