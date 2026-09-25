@@ -1,0 +1,18 @@
+# Toxic Cloud
+1=#1f6a2a 2=#4fbf3a 3=#6fdc5a 4=#e8ffd4
+..........o3o...
+.oooo.....o3ooo.
+.o33o.....oo44o.
+.o33oooooooo44o.
+.o33oo44433oooo.
+.ooooo4w332oo...
+..o443333222o...
+.oo4w3232221ooo.
+oo433212221433oo
+o44321122143322o
+o43322233433222o
+o33222132332221o
+oo222111111221oo
+.o111111111111o.
+.oooo222111oooo.
+....oooooooo....

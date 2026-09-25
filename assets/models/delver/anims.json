@@ -1,0 +1,41 @@
+{
+  "facings": [
+    "s",
+    "n",
+    "w"
+  ],
+  "frames": {
+    "enemy_delver_{f}_idle0": "idle0",
+    "enemy_delver_{f}_idle1": "idle1",
+    "enemy_delver_{f}_idle2": "idle2",
+    "enemy_delver_{f}_idle3": "idle3",
+    "enemy_delver_{f}_watch0": "watch0",
+    "enemy_delver_{f}_watch1": "watch1",
+    "enemy_delver_{f}_watch2": "watch2",
+    "enemy_delver_{f}_watch3": "watch3",
+    "enemy_delver_{f}_walk0": "walk0",
+    "enemy_delver_{f}_walk1": "walk1",
+    "enemy_delver_{f}_walk2": "walk2",
+    "enemy_delver_{f}_walk3": "walk3",
+    "enemy_delver_{f}_walk4": "walk4",
+    "enemy_delver_{f}_walk5": "walk5",
+    "enemy_delver_{f}_walk6": "walk6",
+    "enemy_delver_{f}_walk7": "walk7",
+    "enemy_delver_{f}_windup": "windup",
+    "enemy_delver_{f}_lunge": "lunge",
+    "enemy_delver_{f}_follow": "follow",
+    "enemy_delver_{f}_recover": "recover",
+    "enemy_delver_{f}_hit0": "hit0",
+    "enemy_delver_{f}_hit1": "hit1",
+    "enemy_delver_{f}_stir": "stir",
+    "enemy_delver_{f}_dormant0": "dormant0",
+    "enemy_delver_{f}_dormant1": "dormant1",
+    "enemy_delver_{f}_dormant2": "dormant2",
+    "enemy_delver_{f}_dormant3": "dormant3",
+    "enemy_delver_{f}_dormant": "dormant0",
+    "enemy_delver_{f}_burrow0": "dig0",
+    "enemy_delver_{f}_burrow1": "dig1",
+    "enemy_delver_{f}_emerge0": "rise0",
+    "enemy_delver_{f}_emerge1": "rise1"
+  }
+}

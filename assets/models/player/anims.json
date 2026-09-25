@@ -1,0 +1,53 @@
+{
+  "facings": [
+    "s",
+    "n",
+    "w"
+  ],
+  "meta": {
+    "s": {
+      "bladeAngleDeg": -115,
+      "staffAngleDeg": -90,
+      "staffGripPx": 20,
+      "staffDepth": 1
+    },
+    "n": {
+      "bladeAngleDeg": -65,
+      "staffAngleDeg": -90,
+      "staffGripPx": 15,
+      "staffDepth": 1
+    },
+    "w": {
+      "bladeAngleDeg": 180,
+      "staffAngleDeg": -90,
+      "staffGripPx": 20,
+      "staffDepth": 1
+    }
+  },
+  "frames": {
+    "player_{f}_idle0": "idle0",
+    "player_{f}_idle1": "idle1",
+    "player_{f}_idle2": "idle2",
+    "player_{f}_idle3": "idle3",
+    "player_{f}_walk0": "walk0",
+    "player_{f}_walk1": "walk1",
+    "player_{f}_walk2": "walk2",
+    "player_{f}_walk3": "walk3",
+    "player_{f}_walk4": "walk4",
+    "player_{f}_walk5": "walk5",
+    "player_{f}_walk6": "walk6",
+    "player_{f}_walk7": "walk7",
+    "player_{f}_windup": "swing_windup",
+    "player_{f}_strike": "strike",
+    "player_{f}_follow": "swing_follow",
+    "player_{f}_recover": "recover",
+    "player_{f}_cast": "cast",
+    "player_{f}_dash": "dash",
+    "player_{f}_hurt0": "hurt0",
+    "player_{f}_hurt1": "hurt1",
+    "player_{f}_slash": "slash",
+    "player_{f}_cast_gather": "cast_gather",
+    "player_{f}_cast_release": "cast_release",
+    "player_{f}_cast_recover": "cast_recover"
+  }
+}

@@ -1,0 +1,1103 @@
+{
+  "s": {
+    "stand": {
+      "parts": {
+        "core": "stand",
+        "tent_l": "stand",
+        "tent_r": "stand",
+        "horn_l": "stand",
+        "horn_r": "stand"
+      }
+    },
+    "sleep": {
+      "parts": {
+        "core": "sleep",
+        "tent_l": "sleep",
+        "tent_r": "sleep",
+        "horn_l": "sleep",
+        "horn_r": "sleep"
+      }
+    },
+    "glow": {
+      "parts": {
+        "core": "glow",
+        "tent_l": "glow",
+        "tent_r": "glow",
+        "horn_l": "glow",
+        "horn_r": "glow"
+      }
+    },
+    "idle0": {
+      "base": "stand"
+    },
+    "idle1": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "idle2": {
+      "base": "stand"
+    },
+    "idle3": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "watch0": {
+      "base": "stand"
+    },
+    "watch1": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            1,
+            0
+          ]
+        }
+      }
+    },
+    "watch2": {
+      "base": "stand"
+    },
+    "watch3": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            -1,
+            0
+          ]
+        }
+      }
+    },
+    "walk0": {
+      "base": "stand",
+      "parts": {
+        "tent_l": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "tent_r": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "walk1": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "tent_l": {
+          "at": [
+            1,
+            3
+          ]
+        },
+        "tent_r": {
+          "at": [
+            -1,
+            3
+          ]
+        }
+      }
+    },
+    "walk2": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "tent_l": {
+          "at": [
+            2,
+            3
+          ]
+        },
+        "tent_r": {
+          "at": [
+            -2,
+            3
+          ]
+        }
+      }
+    },
+    "walk3": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "tent_l": {
+          "at": [
+            1,
+            1
+          ]
+        },
+        "tent_r": {
+          "at": [
+            -1,
+            1
+          ]
+        }
+      }
+    },
+    "walk4": {
+      "base": "stand",
+      "parts": {
+        "tent_l": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "tent_r": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "walk5": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "tent_l": {
+          "at": [
+            -1,
+            -3
+          ]
+        },
+        "tent_r": {
+          "at": [
+            1,
+            -3
+          ]
+        }
+      }
+    },
+    "walk6": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            3
+          ]
+        },
+        "tent_l": {
+          "at": [
+            -2,
+            -3
+          ]
+        },
+        "tent_r": {
+          "at": [
+            2,
+            -3
+          ]
+        }
+      }
+    },
+    "walk7": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "tent_l": {
+          "at": [
+            -1,
+            -1
+          ]
+        },
+        "tent_r": {
+          "at": [
+            1,
+            -1
+          ]
+        }
+      }
+    },
+    "windup": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -7
+          ]
+        }
+      }
+    },
+    "lunge": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            4
+          ]
+        }
+      }
+    },
+    "follow": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            8
+          ]
+        }
+      }
+    },
+    "recover": {
+      "between": [
+        "follow",
+        "stand"
+      ],
+      "t": 0.5
+    },
+    "hit0": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -4
+          ]
+        }
+      }
+    },
+    "hit1": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -3
+          ]
+        }
+      }
+    },
+    "dormant0": {
+      "base": "sleep"
+    },
+    "dormant1": {
+      "base": "sleep",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "dormant2": {
+      "base": "sleep"
+    },
+    "dormant3": {
+      "base": "sleep",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "stir": {
+      "base": "sleep",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -1
+          ]
+        }
+      }
+    },
+    "glow1": {
+      "base": "glow",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -1
+          ]
+        }
+      }
+    }
+  },
+  "n": {
+    "stand": {
+      "parts": {
+        "core": "stand",
+        "tent_l": "stand",
+        "tent_r": "stand",
+        "horn_l": "stand",
+        "horn_r": "stand"
+      }
+    },
+    "sleep": {
+      "parts": {
+        "core": "sleep",
+        "tent_l": "sleep",
+        "tent_r": "sleep",
+        "horn_l": "sleep",
+        "horn_r": "sleep"
+      }
+    },
+    "glow": {
+      "parts": {
+        "core": "glow",
+        "tent_l": "glow",
+        "tent_r": "glow",
+        "horn_l": "glow",
+        "horn_r": "glow"
+      }
+    },
+    "idle0": {
+      "base": "stand"
+    },
+    "idle1": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "idle2": {
+      "base": "stand"
+    },
+    "idle3": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "watch0": {
+      "base": "stand"
+    },
+    "watch1": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            1,
+            0
+          ]
+        }
+      }
+    },
+    "watch2": {
+      "base": "stand"
+    },
+    "watch3": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            -1,
+            0
+          ]
+        }
+      }
+    },
+    "walk0": {
+      "base": "stand",
+      "parts": {
+        "tent_l": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "tent_r": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "walk1": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "tent_l": {
+          "at": [
+            1,
+            3
+          ]
+        },
+        "tent_r": {
+          "at": [
+            -1,
+            3
+          ]
+        }
+      }
+    },
+    "walk2": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "tent_l": {
+          "at": [
+            2,
+            3
+          ]
+        },
+        "tent_r": {
+          "at": [
+            -2,
+            3
+          ]
+        }
+      }
+    },
+    "walk3": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "tent_l": {
+          "at": [
+            1,
+            1
+          ]
+        },
+        "tent_r": {
+          "at": [
+            -1,
+            1
+          ]
+        }
+      }
+    },
+    "walk4": {
+      "base": "stand",
+      "parts": {
+        "tent_l": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "tent_r": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "walk5": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "tent_l": {
+          "at": [
+            -1,
+            -3
+          ]
+        },
+        "tent_r": {
+          "at": [
+            1,
+            -3
+          ]
+        }
+      }
+    },
+    "walk6": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            3
+          ]
+        },
+        "tent_l": {
+          "at": [
+            -2,
+            -3
+          ]
+        },
+        "tent_r": {
+          "at": [
+            2,
+            -3
+          ]
+        }
+      }
+    },
+    "walk7": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "tent_l": {
+          "at": [
+            -1,
+            -1
+          ]
+        },
+        "tent_r": {
+          "at": [
+            1,
+            -1
+          ]
+        }
+      }
+    },
+    "windup": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            7
+          ]
+        }
+      }
+    },
+    "lunge": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -4
+          ]
+        }
+      }
+    },
+    "follow": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -8
+          ]
+        }
+      }
+    },
+    "recover": {
+      "between": [
+        "follow",
+        "stand"
+      ],
+      "t": 0.5
+    },
+    "hit0": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            4
+          ]
+        }
+      }
+    },
+    "hit1": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            1
+          ]
+        }
+      }
+    },
+    "dormant0": {
+      "base": "sleep"
+    },
+    "dormant1": {
+      "base": "sleep",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "dormant2": {
+      "base": "sleep"
+    },
+    "dormant3": {
+      "base": "sleep",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "stir": {
+      "base": "sleep",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -1
+          ]
+        }
+      }
+    },
+    "glow1": {
+      "base": "glow",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -1
+          ]
+        }
+      }
+    }
+  },
+  "w": {
+    "stand": {
+      "parts": {
+        "core": "stand",
+        "tent_l": "stand",
+        "tent_r": "stand"
+      }
+    },
+    "sleep": {
+      "parts": {
+        "core": "sleep",
+        "tent_l": "sleep",
+        "tent_r": "sleep"
+      }
+    },
+    "glow": {
+      "parts": {
+        "core": "glow",
+        "tent_l": "glow",
+        "tent_r": "glow"
+      }
+    },
+    "idle0": {
+      "base": "stand"
+    },
+    "idle1": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "idle2": {
+      "base": "stand"
+    },
+    "idle3": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "watch0": {
+      "base": "stand"
+    },
+    "watch1": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            1,
+            0
+          ]
+        }
+      }
+    },
+    "watch2": {
+      "base": "stand"
+    },
+    "watch3": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            -1,
+            0
+          ]
+        }
+      }
+    },
+    "walk0": {
+      "base": "stand",
+      "parts": {
+        "tent_l": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "tent_r": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "walk1": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "tent_l": {
+          "at": [
+            1,
+            3
+          ]
+        },
+        "tent_r": {
+          "at": [
+            -1,
+            3
+          ]
+        }
+      }
+    },
+    "walk2": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "tent_l": {
+          "at": [
+            2,
+            3
+          ]
+        },
+        "tent_r": {
+          "at": [
+            -2,
+            3
+          ]
+        }
+      }
+    },
+    "walk3": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "tent_l": {
+          "at": [
+            1,
+            1
+          ]
+        },
+        "tent_r": {
+          "at": [
+            -1,
+            1
+          ]
+        }
+      }
+    },
+    "walk4": {
+      "base": "stand",
+      "parts": {
+        "tent_l": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "tent_r": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "walk5": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "tent_l": {
+          "at": [
+            -1,
+            -3
+          ]
+        },
+        "tent_r": {
+          "at": [
+            1,
+            -3
+          ]
+        }
+      }
+    },
+    "walk6": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            3
+          ]
+        },
+        "tent_l": {
+          "at": [
+            -2,
+            -3
+          ]
+        },
+        "tent_r": {
+          "at": [
+            2,
+            -3
+          ]
+        }
+      }
+    },
+    "walk7": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "tent_l": {
+          "at": [
+            -1,
+            -1
+          ]
+        },
+        "tent_r": {
+          "at": [
+            1,
+            -1
+          ]
+        }
+      }
+    },
+    "windup": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            7,
+            0
+          ]
+        }
+      }
+    },
+    "lunge": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            -4,
+            0
+          ]
+        }
+      }
+    },
+    "follow": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            -8,
+            0
+          ]
+        }
+      }
+    },
+    "recover": {
+      "between": [
+        "follow",
+        "stand"
+      ],
+      "t": 0.5
+    },
+    "hit0": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            4,
+            0
+          ]
+        }
+      }
+    },
+    "hit1": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            2,
+            -1
+          ]
+        }
+      }
+    },
+    "dormant0": {
+      "base": "sleep"
+    },
+    "dormant1": {
+      "base": "sleep",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "dormant2": {
+      "base": "sleep"
+    },
+    "dormant3": {
+      "base": "sleep",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "stir": {
+      "base": "sleep",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -1
+          ]
+        }
+      }
+    },
+    "glow1": {
+      "base": "glow",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -1
+          ]
+        }
+      }
+    }
+  }
+}

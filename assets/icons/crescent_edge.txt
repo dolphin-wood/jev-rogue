@@ -1,0 +1,18 @@
+# Crescent Edge
+1=#3a2f6b 2=#7d6ad0 3=#b9a7ff 4=#f4f0ff
+......ooooo.....
+......o444ooo...
+......o44443oo..
+......ooo4333oo.
+........oo3332o.
+.........o3322oo
+......ooooo2222o
+.....oo44oo2222o
+....oo444oo2221o
+...oo444oo2221oo
+oooo444ooo2211o.
+o2o444ooo2211oo.
+oo214oo22211oo..
+o112ooo221ooo...
+o11o2oooooo.....
+oooooo..........

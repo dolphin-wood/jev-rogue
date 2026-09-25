@@ -1,0 +1,18 @@
+# Frost Nova
+1=#1d5a86 2=#4f9fd8 3=#7fd0ff 4=#f2fbff
+......oooo......
+......ow2o......
+.ooo..o31o..ooo.
+.o3oooo31oooo2o.
+.oo32oo31oo41oo.
+..oo1oo31oo1oo..
+oooooo4322oooooo
+o42oo432221oo42o
+o21oo322211oo21o
+oooooo2211oooooo
+..oo3oo31oo3oo..
+.oo31oo31oo21oo.
+.o2oooo31oooo1o.
+.ooo..o31o..ooo.
+......o21o......
+......oooo......

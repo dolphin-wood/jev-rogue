@@ -1,0 +1,369 @@
+{
+  "rules": [
+    {
+      "material": "eye",
+      "shades": 3,
+      "hue": [
+        160,
+        205
+      ],
+      "sat": [
+        0.35,
+        1
+      ],
+      "light": [
+        0.2,
+        1
+      ]
+    },
+    {
+      "material": "bone",
+      "shades": 5,
+      "sat": [
+        0,
+        0.3
+      ],
+      "light": [
+        0.5,
+        1
+      ]
+    },
+    {
+      "material": "shell",
+      "shades": 7,
+      "hue": [
+        200,
+        285
+      ],
+      "sat": [
+        0.05,
+        1
+      ],
+      "light": [
+        0.12,
+        0.88
+      ]
+    },
+    {
+      "material": "dusk",
+      "shades": 3,
+      "light": [
+        0.03,
+        0.5
+      ]
+    }
+  ],
+  "outlineLuma": 24,
+  "paletteFrames": [
+    "enemy_rusher_s_idle0",
+    "enemy_rusher_s_windup",
+    "enemy_rusher_s_lunge",
+    "enemy_rusher_w_idle0",
+    "enemy_rusher_w_windup",
+    "enemy_rusher_w_lunge",
+    "enemy_rusher_n_idle0",
+    "enemy_rusher_n_windup",
+    "enemy_rusher_n_lunge",
+    "enemy_rusher_s_dormant",
+    "enemy_rusher_n_dormant",
+    "enemy_rusher_w_dormant"
+  ],
+  "letters": {
+    "shell": "s",
+    "head": "h",
+    "leg_l": "l",
+    "leg_r": "r"
+  },
+  "rest": "shell",
+  "fillFrom": {
+    "shell": [
+      "shell"
+    ],
+    "head": [
+      "shell",
+      "dusk"
+    ],
+    "leg_l": [
+      "shell"
+    ],
+    "leg_r": [
+      "shell"
+    ]
+  },
+  "fillRadius": {
+    "shell": 10,
+    "head": 4,
+    "leg_l": 4,
+    "leg_r": 4
+  },
+  "claimsFrac": {
+    "s": {
+      "leg_l": [
+        [
+          0,
+          0.32,
+          0.22,
+          1
+        ]
+      ],
+      "leg_r": [
+        [
+          0.78,
+          0.32,
+          1,
+          1
+        ]
+      ],
+      "head": [
+        [
+          0.27,
+          0.74,
+          0.73,
+          1
+        ]
+      ]
+    },
+    "w": {
+      "head": [
+        [
+          0,
+          0.45,
+          0.22,
+          0.92
+        ]
+      ],
+      "leg_l": [
+        [
+          0.19,
+          0.74,
+          0.47,
+          1
+        ]
+      ],
+      "leg_r": [
+        [
+          0.6,
+          0.74,
+          0.88,
+          1
+        ]
+      ]
+    },
+    "n": {
+      "leg_l": [
+        [
+          0,
+          0.6,
+          0.27,
+          1
+        ]
+      ],
+      "leg_r": [
+        [
+          0.73,
+          0.6,
+          1,
+          1
+        ]
+      ]
+    }
+  },
+  "jointsFrac": {
+    "s": {
+      "neck": [
+        0.5,
+        0.74
+      ],
+      "hip_l": [
+        0.2,
+        0.55
+      ],
+      "hip_r": [
+        0.8,
+        0.55
+      ]
+    },
+    "w": {
+      "neck": [
+        0.2,
+        0.52
+      ],
+      "hip_l": [
+        0.32,
+        0.76
+      ],
+      "hip_r": [
+        0.72,
+        0.76
+      ]
+    },
+    "n": {
+      "hip_l": [
+        0.16,
+        0.66
+      ],
+      "hip_r": [
+        0.84,
+        0.66
+      ]
+    }
+  },
+  "anchorsOn": {},
+  "rig": {
+    "size": [
+      64,
+      64
+    ],
+    "outline": 2,
+    "feet": [
+      "leg_l",
+      "leg_r"
+    ],
+    "facings": {
+      "s": {
+        "origin": [
+          32,
+          32
+        ],
+        "parts": [
+          {
+            "name": "leg_l",
+            "parent": "shell",
+            "joint": "hip_l",
+            "depth": 1.5
+          },
+          {
+            "name": "leg_r",
+            "parent": "shell",
+            "joint": "hip_r",
+            "depth": 1.5
+          },
+          {
+            "name": "shell",
+            "parent": null,
+            "depth": 1
+          },
+          {
+            "name": "head",
+            "parent": "shell",
+            "joint": "neck",
+            "depth": 2
+          }
+        ]
+      },
+      "w": {
+        "origin": [
+          32,
+          32
+        ],
+        "parts": [
+          {
+            "name": "leg_r",
+            "parent": "shell",
+            "joint": "hip_r",
+            "depth": 1.5
+          },
+          {
+            "name": "shell",
+            "parent": null,
+            "depth": 1
+          },
+          {
+            "name": "head",
+            "parent": "shell",
+            "joint": "neck",
+            "depth": 2
+          },
+          {
+            "name": "leg_l",
+            "parent": "shell",
+            "joint": "hip_l",
+            "depth": 1.5
+          }
+        ]
+      },
+      "n": {
+        "origin": [
+          32,
+          32
+        ],
+        "parts": [
+          {
+            "name": "leg_l",
+            "parent": "shell",
+            "joint": "hip_l",
+            "depth": 1.5
+          },
+          {
+            "name": "leg_r",
+            "parent": "shell",
+            "joint": "hip_r",
+            "depth": 1.5
+          },
+          {
+            "name": "shell",
+            "parent": null,
+            "depth": 1
+          }
+        ]
+      }
+    }
+  },
+  "facings": {
+    "s": [
+      {
+        "variant": "stand",
+        "frame": "enemy_rusher_s_idle0"
+      },
+      {
+        "variant": "crouch",
+        "frame": "enemy_rusher_s_windup"
+      },
+      {
+        "variant": "pounce",
+        "frame": "enemy_rusher_s_lunge"
+      },
+      {
+        "variant": "sleep",
+        "frame": "enemy_rusher_s_dormant"
+      }
+    ],
+    "w": [
+      {
+        "variant": "stand",
+        "frame": "enemy_rusher_w_idle0"
+      },
+      {
+        "variant": "crouch",
+        "frame": "enemy_rusher_w_windup"
+      },
+      {
+        "variant": "pounce",
+        "frame": "enemy_rusher_w_lunge"
+      },
+      {
+        "variant": "sleep",
+        "frame": "enemy_rusher_w_dormant"
+      }
+    ],
+    "n": [
+      {
+        "variant": "stand",
+        "frame": "enemy_rusher_n_idle0"
+      },
+      {
+        "variant": "crouch",
+        "frame": "enemy_rusher_n_windup"
+      },
+      {
+        "variant": "pounce",
+        "frame": "enemy_rusher_n_lunge"
+      },
+      {
+        "variant": "sleep",
+        "frame": "enemy_rusher_n_dormant"
+      }
+    ]
+  },
+  "lift": 1.0
+}

@@ -1,0 +1,1544 @@
+{
+  "schemaVersion": 1,
+  "coordinateSpace": "top-left of each unflipped 256×256 atlas frame, in art pixels",
+  "frameSize": [
+    256,
+    256
+  ],
+  "handedness": "Boss right hand grips the sword; hand_l is the left-hand chain release point, except Phase III where it is the exposed heart core.",
+  "mirrorX": "For a horizontally mirrored frame, x becomes 255 - x for both anchors.",
+  "sequences": {
+    "greatsweep": {
+      "windup": [
+        "sweep_wind"
+      ],
+      "strike": [
+        "sweep_enter",
+        "sweep_cross",
+        "sweep_mid",
+        "sweep_cut"
+      ],
+      "recovery": [
+        "sweep_recover",
+        "sweep_reset",
+        "recover"
+      ],
+      "direction": "Sword tip travels screen-right → lower-right → down → lower-left → screen-left; mirror the complete sequence for the opposite side."
+    },
+    "greatcleave": {
+      "windup": [
+        "windup",
+        "cleave_raise"
+      ],
+      "strike": [
+        "cleave_fall",
+        "cleave_cut"
+      ],
+      "recovery": [
+        "cleave_hold",
+        "recover"
+      ],
+      "direction": "Sword tip travels upper-right → screen-right → lower-right ground; mirror the complete sequence for the opposite side."
+    },
+    "dashcut": {
+      "windup": [
+        "leap_gather"
+      ],
+      "strike": [
+        "dash_cut"
+      ],
+      "recovery": [
+        "dash_skid",
+        "recover"
+      ],
+      "direction": "Boss lunges screen-right with a level blade, then brakes with the blade trailing lower-left; mirror the complete sequence for the opposite side."
+    }
+  },
+  "frames": {
+    "boss_p1_idle0": {
+      "source": "assets/source/melee/boss-king/p1/idle0.png",
+      "tip": [
+        217,
+        16
+      ],
+      "hand_l": [
+        101,
+        121
+      ]
+    },
+    "boss_p1_idle1": {
+      "source": "assets/source/melee/boss-king/p1/idle1.png",
+      "tip": [
+        217,
+        16
+      ],
+      "hand_l": [
+        101,
+        121
+      ]
+    },
+    "boss_p1_ceremony0": {
+      "source": "assets/source/melee/boss-king/p1/ceremony0.png",
+      "tip": [
+        126,
+        234
+      ],
+      "hand_l": [
+        128,
+        112
+      ]
+    },
+    "boss_p1_ceremony1": {
+      "source": "assets/source/melee/boss-king/p1/ceremony1.png",
+      "tip": [
+        126,
+        234
+      ],
+      "hand_l": [
+        128,
+        112
+      ]
+    },
+    "boss_p1_tele": {
+      "source": "assets/source/melee/boss-king/p1/tele.png",
+      "tip": [
+        88,
+        221
+      ],
+      "hand_l": [
+        179,
+        65
+      ]
+    },
+    "boss_p1_windup": {
+      "source": "assets/source/melee/boss-king/p1/windup.png",
+      "tip": [
+        213,
+        31
+      ],
+      "hand_l": [
+        89,
+        79
+      ]
+    },
+    "boss_p1_sweep_wind": {
+      "source": "assets/source/melee/boss-king/p1/sweep_wind.png",
+      "tip": [
+        216,
+        141
+      ],
+      "hand_l": [
+        82,
+        109
+      ]
+    },
+    "boss_p1_sweep_enter": {
+      "source": "assets/source/melee/boss-king/p1/sweep_enter.png",
+      "tip": [
+        236,
+        209
+      ],
+      "hand_l": [
+        125,
+        143
+      ]
+    },
+    "boss_p1_sweep_cross": {
+      "source": "assets/source/melee/boss-king/p1/sweep_cross.png",
+      "tip": [
+        118,
+        223
+      ],
+      "hand_l": [
+        113,
+        102
+      ]
+    },
+    "boss_p1_sweep_mid": {
+      "source": "assets/source/melee/boss-king/p1/sweep_mid.png",
+      "tip": [
+        9,
+        185
+      ],
+      "hand_l": [
+        129,
+        137
+      ]
+    },
+    "boss_p1_sweep_cut": {
+      "source": "assets/source/melee/boss-king/p1/sweep_cut.png",
+      "tip": [
+        9,
+        98
+      ],
+      "hand_l": [
+        129,
+        118
+      ]
+    },
+    "boss_p1_sweep_recover": {
+      "source": "assets/source/melee/boss-king/p1/sweep_recover.png",
+      "tip": [
+        224,
+        198
+      ],
+      "hand_l": [
+        136,
+        140
+      ]
+    },
+    "boss_p1_sweep_reset": {
+      "source": "assets/source/melee/boss-king/p1/sweep_reset.png",
+      "tip": [
+        182,
+        221
+      ],
+      "hand_l": [
+        123,
+        126
+      ]
+    },
+    "boss_p1_cleave_raise": {
+      "source": "assets/source/melee/boss-king/p1/cleave_raise.png",
+      "tip": [
+        224,
+        17
+      ],
+      "hand_l": [
+        116,
+        85
+      ]
+    },
+    "boss_p1_cleave_fall": {
+      "source": "assets/source/melee/boss-king/p1/cleave_fall.png",
+      "tip": [
+        245,
+        96
+      ],
+      "hand_l": [
+        111,
+        105
+      ]
+    },
+    "boss_p1_cleave_cut": {
+      "source": "assets/source/melee/boss-king/p1/cleave_cut.png",
+      "tip": [
+        234,
+        223
+      ],
+      "hand_l": [
+        143,
+        129
+      ]
+    },
+    "boss_p1_cleave_hold": {
+      "source": "assets/source/melee/boss-king/p1/cleave_hold.png",
+      "tip": [
+        236,
+        223
+      ],
+      "hand_l": [
+        136,
+        138
+      ]
+    },
+    "boss_p1_cleave_stuck": {
+      "source": "assets/source/melee/boss-king/p1/cleave_stuck.png",
+      "tip": [
+        132,
+        215
+      ],
+      "hand_l": [
+        128,
+        115
+      ]
+    },
+    "boss_p1_dash_cut": {
+      "source": "assets/source/melee/boss-king/p1/dash_cut.png",
+      "tip": [
+        244,
+        144
+      ],
+      "hand_l": [
+        126,
+        130
+      ]
+    },
+    "boss_p1_dash_skid": {
+      "source": "assets/source/melee/boss-king/p1/dash_skid.png",
+      "tip": [
+        9,
+        221
+      ],
+      "hand_l": [
+        124,
+        139
+      ]
+    },
+    "boss_p1_recover": {
+      "source": "assets/source/melee/boss-king/p1/recover.png",
+      "tip": [
+        217,
+        16
+      ],
+      "hand_l": [
+        101,
+        121
+      ]
+    },
+    "boss_p1_commit": {
+      "source": "assets/source/melee/boss-king/p1/commit.png",
+      "tip": [
+        207,
+        189
+      ],
+      "hand_l": [
+        113,
+        114
+      ]
+    },
+    "boss_p1_follow": {
+      "source": "assets/source/melee/boss-king/p1/follow.png",
+      "tip": [
+        73,
+        223
+      ],
+      "hand_l": [
+        133,
+        132
+      ]
+    },
+    "boss_p1_hit0": {
+      "source": "assets/source/melee/boss-king/p1/hit0.png",
+      "tip": [
+        27,
+        46
+      ],
+      "hand_l": [
+        177,
+        143
+      ]
+    },
+    "boss_p1_hit1": {
+      "source": "assets/source/melee/boss-king/p1/hit1.png",
+      "tip": [
+        34,
+        47
+      ],
+      "hand_l": [
+        177,
+        143
+      ]
+    },
+    "boss_p1_leap_gather": {
+      "source": "assets/source/melee/boss-king/p1/leap_gather.png",
+      "tip": [
+        12,
+        59
+      ],
+      "hand_l": [
+        211,
+        195
+      ]
+    },
+    "boss_p1_leap_air": {
+      "source": "assets/source/melee/boss-king/p1/leap_air.png",
+      "tip": [
+        219,
+        76
+      ],
+      "hand_l": [
+        127,
+        45
+      ]
+    },
+    "boss_p1_slam": {
+      "source": "assets/source/melee/boss-king/p1/slam.png",
+      "tip": [
+        128,
+        216
+      ],
+      "hand_l": [
+        125,
+        119
+      ]
+    },
+    "boss_p1_slam_lift": {
+      "source": "assets/source/melee/boss-king/p1/slam_lift.png",
+      "tip": [
+        127,
+        182
+      ],
+      "hand_l": [
+        128,
+        80
+      ]
+    },
+    "boss_p1_slam_drive": {
+      "source": "assets/source/melee/boss-king/p1/slam_drive.png",
+      "tip": [
+        126,
+        216
+      ],
+      "hand_l": [
+        128,
+        125
+      ]
+    },
+    "boss_p1_hook": {
+      "source": "assets/source/melee/boss-king/p1/hook.png",
+      "tip": [
+        16,
+        123
+      ],
+      "hand_l": [
+        157,
+        94
+      ]
+    },
+    "boss_p1_backhand": {
+      "source": "assets/source/melee/boss-king/p1/backhand.png",
+      "tip": [
+        244,
+        108
+      ],
+      "hand_l": [
+        112,
+        150
+      ]
+    },
+    "boss_p1_walk0": {
+      "source": "assets/source/melee/boss-king/p1/walk0.png",
+      "tip": [
+        38,
+        212
+      ],
+      "hand_l": [
+        181,
+        145
+      ]
+    },
+    "boss_p1_walk1": {
+      "source": "assets/source/melee/boss-king/p1/walk1.png",
+      "tip": [
+        37,
+        212
+      ],
+      "hand_l": [
+        181,
+        144
+      ]
+    },
+    "boss_p1_walk2": {
+      "source": "assets/source/melee/boss-king/p1/walk2.png",
+      "tip": [
+        34,
+        212
+      ],
+      "hand_l": [
+        181,
+        143
+      ]
+    },
+    "boss_p1_walk3": {
+      "source": "assets/source/melee/boss-king/p1/walk3.png",
+      "tip": [
+        35,
+        212
+      ],
+      "hand_l": [
+        183,
+        151
+      ]
+    },
+    "boss_p1_walk4": {
+      "source": "assets/source/melee/boss-king/p1/walk4.png",
+      "tip": [
+        33,
+        211
+      ],
+      "hand_l": [
+        183,
+        150
+      ]
+    },
+    "boss_p1_walk5": {
+      "source": "assets/source/melee/boss-king/p1/walk5.png",
+      "tip": [
+        35,
+        212
+      ],
+      "hand_l": [
+        183,
+        149
+      ]
+    },
+    "boss_p1_chain_wind": {
+      "source": "assets/source/melee/boss-king/p1/chain_wind.png",
+      "tip": [
+        230,
+        23
+      ],
+      "hand_l": [
+        105,
+        79
+      ]
+    },
+    "boss_p1_chain_cast": {
+      "source": "assets/source/melee/boss-king/p1/chain_cast.png",
+      "tip": [
+        18,
+        27
+      ],
+      "hand_l": [
+        202,
+        100
+      ]
+    },
+    "boss_p1_chain_follow": {
+      "source": "assets/source/melee/boss-king/p1/chain_follow.png",
+      "tip": [
+        21,
+        39
+      ],
+      "hand_l": [
+        134,
+        130
+      ]
+    },
+    "boss_p1_hook_wind": {
+      "source": "assets/source/melee/boss-king/p1/hook_wind.png",
+      "tip": [
+        29,
+        40
+      ],
+      "hand_l": [
+        172,
+        58
+      ]
+    },
+    "boss_p1_hook_reel": {
+      "source": "assets/source/melee/boss-king/p1/hook_reel.png",
+      "tip": [
+        25,
+        46
+      ],
+      "hand_l": [
+        133,
+        106
+      ]
+    },
+    "boss_p1_stagger0": {
+      "source": "assets/source/melee/boss-king/p1/stagger0.png",
+      "tip": [
+        95,
+        217
+      ],
+      "hand_l": [
+        158,
+        158
+      ]
+    },
+    "boss_p1_stagger1": {
+      "source": "assets/source/melee/boss-king/p1/stagger1.png",
+      "tip": [
+        100,
+        217
+      ],
+      "hand_l": [
+        186,
+        204
+      ]
+    },
+    "boss_p2_idle0": {
+      "source": "assets/source/melee/boss-king/p2/idle0.png",
+      "tip": [
+        224,
+        16
+      ],
+      "hand_l": [
+        109,
+        119
+      ]
+    },
+    "boss_p2_idle1": {
+      "source": "assets/source/melee/boss-king/p2/idle1.png",
+      "tip": [
+        224,
+        16
+      ],
+      "hand_l": [
+        109,
+        119
+      ]
+    },
+    "boss_p2_ceremony0": {
+      "source": "assets/source/melee/boss-king/p2/ceremony0.png",
+      "tip": [
+        121,
+        234
+      ],
+      "hand_l": [
+        128,
+        112
+      ]
+    },
+    "boss_p2_ceremony1": {
+      "source": "assets/source/melee/boss-king/p2/ceremony1.png",
+      "tip": [
+        121,
+        234
+      ],
+      "hand_l": [
+        128,
+        112
+      ]
+    },
+    "boss_p2_tele": {
+      "source": "assets/source/melee/boss-king/p2/tele.png",
+      "tip": [
+        110,
+        225
+      ],
+      "hand_l": [
+        181,
+        61
+      ]
+    },
+    "boss_p2_windup": {
+      "source": "assets/source/melee/boss-king/p2/windup.png",
+      "tip": [
+        219,
+        37
+      ],
+      "hand_l": [
+        93,
+        80
+      ]
+    },
+    "boss_p2_sweep_wind": {
+      "source": "assets/source/melee/boss-king/p2/sweep_wind.png",
+      "tip": [
+        246,
+        113
+      ],
+      "hand_l": [
+        118,
+        118
+      ]
+    },
+    "boss_p2_sweep_enter": {
+      "source": "assets/source/melee/boss-king/p2/sweep_enter.png",
+      "tip": [
+        247,
+        219
+      ],
+      "hand_l": [
+        124,
+        139
+      ]
+    },
+    "boss_p2_sweep_cross": {
+      "source": "assets/source/melee/boss-king/p2/sweep_cross.png",
+      "tip": [
+        143,
+        223
+      ],
+      "hand_l": [
+        117,
+        103
+      ]
+    },
+    "boss_p2_sweep_mid": {
+      "source": "assets/source/melee/boss-king/p2/sweep_mid.png",
+      "tip": [
+        9,
+        155
+      ],
+      "hand_l": [
+        132,
+        135
+      ]
+    },
+    "boss_p2_sweep_cut": {
+      "source": "assets/source/melee/boss-king/p2/sweep_cut.png",
+      "tip": [
+        19,
+        105
+      ],
+      "hand_l": [
+        135,
+        116
+      ]
+    },
+    "boss_p2_sweep_recover": {
+      "source": "assets/source/melee/boss-king/p2/sweep_recover.png",
+      "tip": [
+        229,
+        166
+      ],
+      "hand_l": [
+        61,
+        203
+      ]
+    },
+    "boss_p2_sweep_reset": {
+      "source": "assets/source/melee/boss-king/p2/sweep_reset.png",
+      "tip": [
+        214,
+        216
+      ],
+      "hand_l": [
+        126,
+        126
+      ]
+    },
+    "boss_p2_cleave_raise": {
+      "source": "assets/source/melee/boss-king/p2/cleave_raise.png",
+      "tip": [
+        235,
+        16
+      ],
+      "hand_l": [
+        118,
+        83
+      ]
+    },
+    "boss_p2_cleave_fall": {
+      "source": "assets/source/melee/boss-king/p2/cleave_fall.png",
+      "tip": [
+        247,
+        94
+      ],
+      "hand_l": [
+        119,
+        105
+      ]
+    },
+    "boss_p2_cleave_cut": {
+      "source": "assets/source/melee/boss-king/p2/cleave_cut.png",
+      "tip": [
+        241,
+        223
+      ],
+      "hand_l": [
+        148,
+        130
+      ]
+    },
+    "boss_p2_cleave_hold": {
+      "source": "assets/source/melee/boss-king/p2/cleave_hold.png",
+      "tip": [
+        246,
+        223
+      ],
+      "hand_l": [
+        145,
+        138
+      ]
+    },
+    "boss_p2_cleave_stuck": {
+      "source": "assets/source/melee/boss-king/p2/cleave_stuck.png",
+      "tip": [
+        118,
+        214
+      ],
+      "hand_l": [
+        128,
+        115
+      ]
+    },
+    "boss_p2_dash_cut": {
+      "source": "assets/source/melee/boss-king/p2/dash_cut.png",
+      "tip": [
+        247,
+        151
+      ],
+      "hand_l": [
+        122,
+        130
+      ]
+    },
+    "boss_p2_dash_skid": {
+      "source": "assets/source/melee/boss-king/p2/dash_skid.png",
+      "tip": [
+        9,
+        223
+      ],
+      "hand_l": [
+        149,
+        144
+      ]
+    },
+    "boss_p2_recover": {
+      "source": "assets/source/melee/boss-king/p2/recover.png",
+      "tip": [
+        224,
+        16
+      ],
+      "hand_l": [
+        109,
+        119
+      ]
+    },
+    "boss_p2_commit": {
+      "source": "assets/source/melee/boss-king/p2/commit.png",
+      "tip": [
+        200,
+        209
+      ],
+      "hand_l": [
+        114,
+        113
+      ]
+    },
+    "boss_p2_follow": {
+      "source": "assets/source/melee/boss-king/p2/follow.png",
+      "tip": [
+        42,
+        229
+      ],
+      "hand_l": [
+        139,
+        130
+      ]
+    },
+    "boss_p2_hit0": {
+      "source": "assets/source/melee/boss-king/p2/hit0.png",
+      "tip": [
+        91,
+        61
+      ],
+      "hand_l": [
+        168,
+        132
+      ]
+    },
+    "boss_p2_hit1": {
+      "source": "assets/source/melee/boss-king/p2/hit1.png",
+      "tip": [
+        105,
+        79
+      ],
+      "hand_l": [
+        169,
+        132
+      ]
+    },
+    "boss_p2_leap_gather": {
+      "source": "assets/source/melee/boss-king/p2/leap_gather.png",
+      "tip": [
+        11,
+        103
+      ],
+      "hand_l": [
+        184,
+        203
+      ]
+    },
+    "boss_p2_leap_air": {
+      "source": "assets/source/melee/boss-king/p2/leap_air.png",
+      "tip": [
+        220,
+        81
+      ],
+      "hand_l": [
+        123,
+        39
+      ]
+    },
+    "boss_p2_slam": {
+      "source": "assets/source/melee/boss-king/p2/slam.png",
+      "tip": [
+        128,
+        216
+      ],
+      "hand_l": [
+        125,
+        118
+      ]
+    },
+    "boss_p2_slam_lift": {
+      "source": "assets/source/melee/boss-king/p2/slam_lift.png",
+      "tip": [
+        127,
+        194
+      ],
+      "hand_l": [
+        128,
+        91
+      ]
+    },
+    "boss_p2_slam_drive": {
+      "source": "assets/source/melee/boss-king/p2/slam_drive.png",
+      "tip": [
+        127,
+        215
+      ],
+      "hand_l": [
+        128,
+        130
+      ]
+    },
+    "boss_p2_hook": {
+      "source": "assets/source/melee/boss-king/p2/hook.png",
+      "tip": [
+        20,
+        110
+      ],
+      "hand_l": [
+        154,
+        99
+      ]
+    },
+    "boss_p2_backhand": {
+      "source": "assets/source/melee/boss-king/p2/backhand.png",
+      "tip": [
+        246,
+        100
+      ],
+      "hand_l": [
+        112,
+        137
+      ]
+    },
+    "boss_p2_walk0": {
+      "source": "assets/source/melee/boss-king/p2/walk0.png",
+      "tip": [
+        27,
+        211
+      ],
+      "hand_l": [
+        189,
+        143
+      ]
+    },
+    "boss_p2_walk1": {
+      "source": "assets/source/melee/boss-king/p2/walk1.png",
+      "tip": [
+        31,
+        214
+      ],
+      "hand_l": [
+        190,
+        146
+      ]
+    },
+    "boss_p2_walk2": {
+      "source": "assets/source/melee/boss-king/p2/walk2.png",
+      "tip": [
+        37,
+        211
+      ],
+      "hand_l": [
+        190,
+        142
+      ]
+    },
+    "boss_p2_walk3": {
+      "source": "assets/source/melee/boss-king/p2/walk3.png",
+      "tip": [
+        31,
+        209
+      ],
+      "hand_l": [
+        189,
+        153
+      ]
+    },
+    "boss_p2_walk4": {
+      "source": "assets/source/melee/boss-king/p2/walk4.png",
+      "tip": [
+        29,
+        213
+      ],
+      "hand_l": [
+        189,
+        152
+      ]
+    },
+    "boss_p2_walk5": {
+      "source": "assets/source/melee/boss-king/p2/walk5.png",
+      "tip": [
+        36,
+        207
+      ],
+      "hand_l": [
+        190,
+        151
+      ]
+    },
+    "boss_p2_chain_wind": {
+      "source": "assets/source/melee/boss-king/p2/chain_wind.png",
+      "tip": [
+        233,
+        34
+      ],
+      "hand_l": [
+        76,
+        117
+      ]
+    },
+    "boss_p2_chain_cast": {
+      "source": "assets/source/melee/boss-king/p2/chain_cast.png",
+      "tip": [
+        28,
+        96
+      ],
+      "hand_l": [
+        196,
+        104
+      ]
+    },
+    "boss_p2_chain_follow": {
+      "source": "assets/source/melee/boss-king/p2/chain_follow.png",
+      "tip": [
+        26,
+        98
+      ],
+      "hand_l": [
+        129,
+        142
+      ]
+    },
+    "boss_p2_hook_wind": {
+      "source": "assets/source/melee/boss-king/p2/hook_wind.png",
+      "tip": [
+        222,
+        107
+      ],
+      "hand_l": [
+        64,
+        46
+      ]
+    },
+    "boss_p2_hook_reel": {
+      "source": "assets/source/melee/boss-king/p2/hook_reel.png",
+      "tip": [
+        53,
+        35
+      ],
+      "hand_l": [
+        141,
+        78
+      ]
+    },
+    "boss_p2_stagger0": {
+      "source": "assets/source/melee/boss-king/p2/stagger0.png",
+      "tip": [
+        93,
+        217
+      ],
+      "hand_l": [
+        160,
+        158
+      ]
+    },
+    "boss_p2_stagger1": {
+      "source": "assets/source/melee/boss-king/p2/stagger1.png",
+      "tip": [
+        93,
+        213
+      ],
+      "hand_l": [
+        170,
+        213
+      ]
+    },
+    "boss_p3_idle0": {
+      "source": "assets/source/melee/boss-king/p3/idle0.png",
+      "tip": [
+        223,
+        21
+      ],
+      "hand_l": [
+        131,
+        111
+      ]
+    },
+    "boss_p3_idle1": {
+      "source": "assets/source/melee/boss-king/p3/idle1.png",
+      "tip": [
+        223,
+        21
+      ],
+      "hand_l": [
+        131,
+        112
+      ]
+    },
+    "boss_p3_ceremony0": {
+      "source": "assets/source/melee/boss-king/p3/ceremony0.png",
+      "tip": [
+        121,
+        234
+      ],
+      "hand_l": [
+        128,
+        103
+      ]
+    },
+    "boss_p3_ceremony1": {
+      "source": "assets/source/melee/boss-king/p3/ceremony1.png",
+      "tip": [
+        121,
+        234
+      ],
+      "hand_l": [
+        128,
+        101
+      ]
+    },
+    "boss_p3_tele": {
+      "source": "assets/source/melee/boss-king/p3/tele.png",
+      "tip": [
+        106,
+        231
+      ],
+      "hand_l": [
+        126,
+        93
+      ]
+    },
+    "boss_p3_windup": {
+      "source": "assets/source/melee/boss-king/p3/windup.png",
+      "tip": [
+        222,
+        39
+      ],
+      "hand_l": [
+        102,
+        94
+      ]
+    },
+    "boss_p3_sweep_wind": {
+      "source": "assets/source/melee/boss-king/p3/sweep_wind.png",
+      "tip": [
+        247,
+        101
+      ],
+      "hand_l": [
+        125,
+        101
+      ]
+    },
+    "boss_p3_sweep_enter": {
+      "source": "assets/source/melee/boss-king/p3/sweep_enter.png",
+      "tip": [
+        247,
+        219
+      ],
+      "hand_l": [
+        128,
+        103
+      ]
+    },
+    "boss_p3_sweep_cross": {
+      "source": "assets/source/melee/boss-king/p3/sweep_cross.png",
+      "tip": [
+        132,
+        223
+      ],
+      "hand_l": [
+        128,
+        89
+      ]
+    },
+    "boss_p3_sweep_mid": {
+      "source": "assets/source/melee/boss-king/p3/sweep_mid.png",
+      "tip": [
+        8,
+        186
+      ],
+      "hand_l": [
+        145,
+        98
+      ]
+    },
+    "boss_p3_sweep_cut": {
+      "source": "assets/source/melee/boss-king/p3/sweep_cut.png",
+      "tip": [
+        21,
+        94
+      ],
+      "hand_l": [
+        127,
+        103
+      ]
+    },
+    "boss_p3_sweep_recover": {
+      "source": "assets/source/melee/boss-king/p3/sweep_recover.png",
+      "tip": [
+        218,
+        189
+      ],
+      "hand_l": [
+        120,
+        106
+      ]
+    },
+    "boss_p3_sweep_reset": {
+      "source": "assets/source/melee/boss-king/p3/sweep_reset.png",
+      "tip": [
+        221,
+        222
+      ],
+      "hand_l": [
+        128,
+        86
+      ]
+    },
+    "boss_p3_cleave_raise": {
+      "source": "assets/source/melee/boss-king/p3/cleave_raise.png",
+      "tip": [
+        208,
+        16
+      ],
+      "hand_l": [
+        134,
+        113
+      ]
+    },
+    "boss_p3_cleave_fall": {
+      "source": "assets/source/melee/boss-king/p3/cleave_fall.png",
+      "tip": [
+        247,
+        76
+      ],
+      "hand_l": [
+        128,
+        103
+      ]
+    },
+    "boss_p3_cleave_cut": {
+      "source": "assets/source/melee/boss-king/p3/cleave_cut.png",
+      "tip": [
+        246,
+        223
+      ],
+      "hand_l": [
+        128,
+        76
+      ]
+    },
+    "boss_p3_cleave_hold": {
+      "source": "assets/source/melee/boss-king/p3/cleave_hold.png",
+      "tip": [
+        246,
+        223
+      ],
+      "hand_l": [
+        129,
+        81
+      ]
+    },
+    "boss_p3_cleave_stuck": {
+      "source": "assets/source/melee/boss-king/p3/cleave_stuck.png",
+      "tip": [
+        124,
+        211
+      ],
+      "hand_l": [
+        128,
+        97
+      ]
+    },
+    "boss_p3_dash_cut": {
+      "source": "assets/source/melee/boss-king/p3/dash_cut.png",
+      "tip": [
+        247,
+        159
+      ],
+      "hand_l": [
+        140,
+        107
+      ]
+    },
+    "boss_p3_dash_skid": {
+      "source": "assets/source/melee/boss-king/p3/dash_skid.png",
+      "tip": [
+        9,
+        223
+      ],
+      "hand_l": [
+        131,
+        116
+      ]
+    },
+    "boss_p3_recover": {
+      "source": "assets/source/melee/boss-king/p3/recover.png",
+      "tip": [
+        223,
+        21
+      ],
+      "hand_l": [
+        131,
+        111
+      ]
+    },
+    "boss_p3_commit": {
+      "source": "assets/source/melee/boss-king/p3/commit.png",
+      "tip": [
+        210,
+        190
+      ],
+      "hand_l": [
+        127,
+        94
+      ]
+    },
+    "boss_p3_follow": {
+      "source": "assets/source/melee/boss-king/p3/follow.png",
+      "tip": [
+        32,
+        230
+      ],
+      "hand_l": [
+        129,
+        112
+      ]
+    },
+    "boss_p3_hit0": {
+      "source": "assets/source/melee/boss-king/p3/hit0.png",
+      "tip": [
+        188,
+        41
+      ],
+      "hand_l": [
+        126,
+        104
+      ]
+    },
+    "boss_p3_hit1": {
+      "source": "assets/source/melee/boss-king/p3/hit1.png",
+      "tip": [
+        191,
+        45
+      ],
+      "hand_l": [
+        129,
+        103
+      ]
+    },
+    "boss_p3_leap_gather": {
+      "source": "assets/source/melee/boss-king/p3/leap_gather.png",
+      "tip": [
+        19,
+        158
+      ],
+      "hand_l": [
+        153,
+        110
+      ]
+    },
+    "boss_p3_leap_air": {
+      "source": "assets/source/melee/boss-king/p3/leap_air.png",
+      "tip": [
+        230,
+        74
+      ],
+      "hand_l": [
+        109,
+        99
+      ]
+    },
+    "boss_p3_slam": {
+      "source": "assets/source/melee/boss-king/p3/slam.png",
+      "tip": [
+        129,
+        208
+      ],
+      "hand_l": [
+        130,
+        103
+      ]
+    },
+    "boss_p3_slam_lift": {
+      "source": "assets/source/melee/boss-king/p3/slam_lift.png",
+      "tip": [
+        128,
+        190
+      ],
+      "hand_l": [
+        130,
+        101
+      ]
+    },
+    "boss_p3_slam_drive": {
+      "source": "assets/source/melee/boss-king/p3/slam_drive.png",
+      "tip": [
+        123,
+        215
+      ],
+      "hand_l": [
+        128,
+        101
+      ]
+    },
+    "boss_p3_hook": {
+      "source": "assets/source/melee/boss-king/p3/hook.png",
+      "tip": [
+        130,
+        20
+      ],
+      "hand_l": [
+        85,
+        87
+      ]
+    },
+    "boss_p3_backhand": {
+      "source": "assets/source/melee/boss-king/p3/backhand.png",
+      "tip": [
+        244,
+        98
+      ],
+      "hand_l": [
+        127,
+        103
+      ]
+    },
+    "boss_p3_walk0": {
+      "source": "assets/source/melee/boss-king/p3/walk0.png",
+      "tip": [
+        47,
+        211
+      ],
+      "hand_l": [
+        141,
+        105
+      ]
+    },
+    "boss_p3_walk1": {
+      "source": "assets/source/melee/boss-king/p3/walk1.png",
+      "tip": [
+        34,
+        215
+      ],
+      "hand_l": [
+        128,
+        96
+      ]
+    },
+    "boss_p3_walk2": {
+      "source": "assets/source/melee/boss-king/p3/walk2.png",
+      "tip": [
+        42,
+        215
+      ],
+      "hand_l": [
+        134,
+        88
+      ]
+    },
+    "boss_p3_walk3": {
+      "source": "assets/source/melee/boss-king/p3/walk3.png",
+      "tip": [
+        38,
+        210
+      ],
+      "hand_l": [
+        127,
+        88
+      ]
+    },
+    "boss_p3_walk4": {
+      "source": "assets/source/melee/boss-king/p3/walk4.png",
+      "tip": [
+        51,
+        216
+      ],
+      "hand_l": [
+        138,
+        89
+      ]
+    },
+    "boss_p3_walk5": {
+      "source": "assets/source/melee/boss-king/p3/walk5.png",
+      "tip": [
+        48,
+        210
+      ],
+      "hand_l": [
+        141,
+        100
+      ]
+    },
+    "boss_p3_chain_wind": {
+      "source": "assets/source/melee/boss-king/p3/chain_wind.png",
+      "tip": [
+        192,
+        31
+      ],
+      "hand_l": [
+        117,
+        95
+      ]
+    },
+    "boss_p3_chain_cast": {
+      "source": "assets/source/melee/boss-king/p3/chain_cast.png",
+      "tip": [
+        200,
+        75
+      ],
+      "hand_l": [
+        132,
+        101
+      ]
+    },
+    "boss_p3_chain_follow": {
+      "source": "assets/source/melee/boss-king/p3/chain_follow.png",
+      "tip": [
+        188,
+        34
+      ],
+      "hand_l": [
+        127,
+        104
+      ]
+    },
+    "boss_p3_hook_wind": {
+      "source": "assets/source/melee/boss-king/p3/hook_wind.png",
+      "tip": [
+        191,
+        45
+      ],
+      "hand_l": [
+        128,
+        103
+      ]
+    },
+    "boss_p3_hook_reel": {
+      "source": "assets/source/melee/boss-king/p3/hook_reel.png",
+      "tip": [
+        169,
+        29
+      ],
+      "hand_l": [
+        128,
+        103
+      ]
+    },
+    "boss_p3_stagger0": {
+      "source": "assets/source/melee/boss-king/p3/stagger0.png",
+      "tip": [
+        103,
+        216
+      ],
+      "hand_l": [
+        128,
+        95
+      ]
+    },
+    "boss_p3_stagger1": {
+      "source": "assets/source/melee/boss-king/p3/stagger1.png",
+      "tip": [
+        100,
+        206
+      ],
+      "hand_l": [
+        136,
+        103
+      ]
+    }
+  }
+}

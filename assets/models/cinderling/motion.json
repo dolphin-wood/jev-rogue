@@ -1,0 +1,28 @@
+{
+  "base": "enemy_cinderling",
+  "facings": [
+    "s",
+    "n",
+    "w"
+  ],
+  "weight": "light",
+  "gait": "walk",
+  "stand": "stand",
+  "roles": {
+    "torso": "body",
+    "head": "head",
+    "foot_l": "foot_l",
+    "foot_r": "foot_r",
+    "arm_l": "arm_l",
+    "arm_r": "arm_r"
+  },
+  "crouch": "crouch",
+  "strike": "toss",
+  "slump": "sleep",
+  "extra": {
+    "lob": "toss",
+    "burning0": "ember0",
+    "burning1": "ember1",
+    "flare_windup": "flare"
+  }
+}

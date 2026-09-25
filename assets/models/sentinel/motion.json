@@ -1,0 +1,33 @@
+{
+  "base": "enemy_sentinel",
+  "facings": [
+    "s"
+  ],
+  "weight": "mid",
+  "gait": "fixed",
+  "stand": "stand",
+  "roles": {
+    "core": "body",
+    "pod_l": "fin_l",
+    "pod_r": "fin_r"
+  },
+  "slump": "sleep",
+  "flatNames": true,
+  "extra": {
+    "tele": "glow",
+    "tele1": "glow1"
+  },
+  "poses": {
+    "glow1": {
+      "base": "glow",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -1
+          ]
+        }
+      }
+    }
+  }
+}

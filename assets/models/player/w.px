@@ -1,0 +1,789 @@
+# player, facing w. Split from the delivered frames by sprite:split; the parts are now the source.
+# The staff, for this facing.
+# One-handed focus, mirrored across the swing arc for this facing.
+# The crystal remains inside the frame and roots the code-drawn swift sword.
+
+legend outline:k eye:abc gem:def belt:ghij cloth:lmnpqr trim:stuvw umber:xyz
+
+part foot_l.stand pivot 12,-11
+....lmmm
+...lmmmm
+..xnpnml
+.xwwwrmk
+zuwwwvti
+ztttttsh
+
+part foot_r.stand pivot -7,-11
+llkkk
+llmmml
+.lmnpnl
+..mpquvu
+..ztvwwwx
+xtvwwwwu
+yvvvvvtq
+
+part arm_cast.stand pivot -1,0
+joint offhand 2,1
+....xy
+....swz
+...twzyt
+m.zuzztv
+npvwztwu
+ntwwwwv
+nrvwwz
+lyttty
+
+part torso.stand pivot 10,14
+joint shoulder_cast 22,8
+joint waist 12,19
+joint shoulder_sword 4,5
+joint neck 10,0
+..rrrrrupnmkkkuvvtk
+...rrrrrnnlkxtvwwvig
+...llllllkksvwutttjg
+...llllkkxuvvvykkkkjh
+..lllllttvwtykmnnmkg
+..lllllvvvuyklmpppkk
+..lllllyuskkknnpppnl
+..lllllkyzykknnppppnx
+..lllllkzwtlkmnpppvwv
+..lllllkxwtmlkmpqvwwu
+.llllllkgwrmlklnrwwvxll
+.llllllijhhglkkywwvzlmn
+.llll.lhjhggggkyuwtkmmn
+.l....l.hiyxxlmkxwtklmm
+........zwqppnmlxzy..lm
+.......xvtqpfennlk
+......kxvtpeeeenml
+.....llxvtpeeeenml
+.....mkksvrpffppnnm
+..mmmmmmrrrpppppnnmmmm
+..mmmmmmrrrpppppnnmmmmm
+.mmmmmmmrrrpppppnnmmmmmm
+mmmmmmmmrrrpppppnnmmmmmm
+mmmmmmmmrrrpppppnnmmmmmm
+
+part hem.stand pivot 12,0
+..kklmkkzwrpeeppppnlkk
+..kkmlkkywrppppppppmkkk
+.kklnlkkxtvrppqqttrpmkkk
+kktwtklkkywtppruwwvttzkk
+kkuwzlllkkwutuwwvxsvutkk
+..xmmml...vvvvzkkkkkkk
+
+part arm_sword.stand pivot 12,5
+joint hand 3,6
+joint grip 8,8
+..........kkksv
+...x.......kyvu
+..swu......kyts
+xuzzvu.....kkkk
+xwuzzv....kklky
+xwwutsk..yzlmky
+.swwvzkkzwvqmlk
+..swwvylxuwtnlk
+..xvwvrmkswwpkk
+...svupmkkuvmkk
+....sslllkuuxkk
+.......llkkkkkk
+.........kkkk.k
+.........k....k
+
+part head.stand pivot 12,20
+..........npppppl
+.......mnnppppppnl
+.......npppppppppn
+...lppppppppppppppnl
+.surppppppppppppppnl
+.twurpppppppppppppnl
+ltvwuqpppppppppqpnmmm
+.lktwwqppppppppppnnnm
+.kkytwuqppppppppppnnm
+..kkzvwrppppppppppppn
+...kkywwtpppnnppppppnl
+...kkkywvtpppnnppppppml
+...xxkxuvuppppnnppppppm
+...stkkkvwrqpppnnpppppnm
+...bbkkkzwvqpppnnnpppppm
+...aakkkxtwrpppmmnppppnn
+....kkkkkywvppnnmnnnppnn
+.....kkkkywvnpnnnmmmmnmm
+......kkxswunnnnmlllmnml
+......kkzwvmmnnnlkkxmnl
+
+part foot_l.windup pivot 13,-11
+....lmmlllk
+....mmmllk
+...zqpmmmk
+..twwwrmlk
+.twwwwuplk
+swwwwwwzlk
+ztttttzkk
+
+part foot_r.windup pivot -8,-11
+zwuykklllll
+.yy.kllmmmml
+.....klmmmmml
+......klmsuutx
+.......kqvwwwux
+.......yuwwwwwz
+.......ytttttty
+
+part arm_cast.windup pivot 1,4
+joint offhand 3,8
+l
+..xuz
+kkswvkkxyx
+kkswvzzvwz
+kkswwwwwvy
+kkkzwwwvy
+kmlkyyyy
+knnlkk
+lmnnz
+k..l
+
+part torso.windup pivot 10,14
+joint shoulder_cast 20,4
+joint waist 12,19
+joint shoulder_sword 7,5
+joint neck 8,0
+mmmmmmmmmmmmlkkkkk
+mmmmmmmmmmmkxxnnlkk
+lllllllllllktvwwuyk
+.lllllllllllkswwwvn
+.mmmmmmmmmmmlktwwwu
+.mmmmmmmmmmmmkxwwwu
+.nnnnnnnnnnnmlxwwwu
+.mmmmmmmmmmmmlkzwwx
+.mmmmmmmmmmmlkkyvvk
+.mmmmmmmmmmmkkkkxyk
+.lllllmmmmmkkllkkkk
+..lllllmmmmkglggggk
+..llllllmmmghhglglk
+..lllllllmmghhynmmm
+..llllllllmsspqpnmmm
+.kkkklzixkktwrqqpnnnnm
+..kkmnvvxkkxvvqqqqpppnnm
+..kmpuwzklmkvwuqqqqqpppnml
+.ysnrwuxkmddzvwtqqqqqqppprusx
+xuwvvwskmnefkswwrqqqqqqquwwwt
+xssuwvxkmefdkkvwvrqqqqquwwwty
+kkkytskkkdelkkxvwvqqqrvwwusk
+.kkkkkkkkkllkkkswwvqrvwwuxkk
+.lllkkllkkklllkkswwuuwwtxkkk
+.klllllkk........zwwwvtkklll
+
+part arm_sword.windup pivot 15,5
+joint hand 3,10
+joint grip 12,4
+........kkkkytwwrnn
+........kkkxtwwrnmm
+........kkxtwvsllkk
+.........kxwtykkkll
+.........kkxxkkmnnn
+.........kkkkkppppn
+.......x.kkyttqpppp
+.yvvux...kyvwwtqppn
+zwwwwuxkkkxtwwwtpnn
+twwwwwykkmlxtwwwpnn
+twwwwwyklmmlxwwwunm
+zwwwwuxknnnmlywwulk
+.swwvyklnnnmmxwwzkk
+..xxx.kmmmmmlkxxkkl
+.......llllkkkkkxxx
+
+part head.windup pivot 13,20
+..........mmmnmmmm
+.........lpqqqqqqqp
+.......lpqqqqqqqqqqp
+.....lnqqqqqqqqqqqqqm
+....mqqqqqqqqqqqqqqqpm
+...nqqqqqqqqqqqqqpppnmk
+..nqqqqqqqqqqqqqqppnnnl
+.lpqqqqqqqqqqqqqqqpnnnnk
+ywwwvqqqqqqqqqqqqqqpnnnnk
+ywwwwurqqqqqppqqqqqqpnnnm
+xvvvvwvrqqqqqppqqqqqqpnnnl
+kkkkzvwwrqqqqpppqqqqqqpnnl
+.kkkkywwwrqqqqqpppqqppnnnnk
+.kkkkkzwwvrqqqqqpppppnnnnnk
+..kkkkkswwwqqqqppnnnnnnnnmk
+...kaakxuwwuqqqppnnnnnnnnl
+...kbbkkxuwwrppppnnnnnnnl
+...kbbkkkzvwwrpppnnnnnml
+....bbkkkkzwwuppnnnnmmk
+....aakkkkywwupnnnmllkk
+
+part foot_l.follow pivot 15,-11
+....kmmlllkk
+....mmmlllk
+...yrrnmmm
+..swwwtmml
+.zwwwwwrml
+ywwwwwwtmk
+xttttttzk
+
+part foot_r.follow pivot -13,-10
+kllllmmmlk
+..kllmmmmm
+...klmmmnqz
+....klmnuwwy
+.....kmrwwwvy
+......lwwwwwz
+......kwwwwwz
+.......ttttty
+
+part arm_cast.follow pivot 0,3
+joint offhand 9,10
+s
+xkkkyvs
+lmkktwtkxtvy
+nnkktwwtuwwy
+nnlkxvwwwwt
+mnnsxxuwwt
+mntwvykxx
+mntwwvzk
+kkytts
+
+part torso.follow pivot 12,14
+joint shoulder_cast 21,3
+joint waist 14,19
+joint shoulder_sword 6,6
+joint neck 8,0
+nnnnnnnmmmmmnnnnrrrrr
+.ktwwtnmkkkmnnnnrwwwt
+.ywvskkkkmnnnmmnuwwtk
+mmmmmmmmnnnnnklnwwuyl
+.rrrrrrrpnnnnlkxvwslm
+.rrrrrrrppppnnkkysklm
+.rrrrrrwqppnnnmkkkklm
+.rrrrrrwuppnnnmmlkkkl
+.rrrrrrwvqnnnnmmmkkkk
+.rrrrrrswsmnnnnmmxkkk
+.mmmmmmytzyyyyyglgkk
+..mmmmmkghiiihgggglk
+..mmmmmkghhhhhhmymmk
+..mmmmmmmmmmsutnnnmmk
+..llllnnnnpntvvrnnnnnl
+...kklnnppqquwzvqpppnnllllmty
+...kmnpqqqqquwywvqqqqpnnnqvwwx
+...mpqqqqqqquvxtwtqqqqqpquwwtk
+.xtttqqqqqqruwkzwuqqqqqqtwwskk
+.uwwwuuqqqquwwxyvwuqqqqtvwtkkk
+kzsswwwurqquwzkktwuqqqrvwwxkllk
+.kkxssuwwuquwzkkkvwuqquwvykklllk
+.kkkkkztvwuvwzkkkswvqtwvzkklllllk
+.klllkkkzuwwux....twtwwtkkllllllll
+.kmllllkkxuus.....xvwwvxk
+...................yvvx
+....................yy
+
+part arm_sword.follow pivot 15,3
+joint hand 3,6
+joint grip 8,8
+.........kxzzkkx
+..........kkkxzv
+..........kkxvww
+..zzz....xmlkxvw
+.twwwskksurmmkyv
+swwwwwykswwrmlkz
+swwwwwykktwwqmkk
+swwwwvxklzwwvpmk
+.swwvzklmluwwukk
+..zzzklmmlzwwskk
+......mmmlktzkkk
+.......ll..kkkkl
+
+part head.follow pivot 13,20
+..........mmmmmmml
+........lpqqqqqqqnl
+......knqqqqqqqqqqqql
+.....knqqqqqqqqqqqqqpp
+...knpqqqqqqqqqqqqqqqpp
+..lqqqqqqqqqqqqqqqqppnnk
+.lpqqqqqqqqqqqqqqqpnnnl
+xqqqqqqqqqqqqqqqqpnnnnk
+uwwvqqqqqqqqqqqqqpnnnnk
+vwwwurqqqqqqqqqqqqppnnl
+uvvwwvrqqqqqppqqqqqpnnnl
+kkkswwvqqqqqqppqqqqqpnnnmk
+kkkkzwwwqqqqqqpppqqqpppnnn
+.kkkktwwuqqqqqpnnppppppnnn
+..kkkktwwuqqqqqnnnnpppnnml
+..kaakxvwvrqppppnnnpnnnml
+...bbakywwvrppnnnnnnnnllk
+...bbkkkzwwvqpnnnmllkkkkk
+...bbkkkkswwqnnnnlkkkzssy
+...aakkkxuwwpmmlkkkzvwwwvt
+.....kkkuwwtnmkkklmpuwwwwv
+
+part figure.dash pivot 24,24
+joint grip 14,19
+joint offhand 39,20
+...........lpqqqqqqq
+.........lnqqqqqqqqqnn
+........mqqqqqqqqqqqqpp
+.......mqqqqqqqqqqqqppnnll
+......npqqqqqqqqqqpnnnnnmm
+.....mqqqqqqqqqqqqppnnnmmk
+.....uwwwrqqqqqpppqppnmlk
+....xwwwwwurqqqqpppppnnnl
+....xtyyuwwuqqqqqpnnpnnmm.......y
+.....kkkktwwvrqqqqpnnnmmmm.....zwz..x
+.....kkkkkyvwvrqqqppnnmmmkkxx..swtzswt
+......kaakkxvwvrppnnnnmlkkzvwzkzwwwwwt
+.......bbkkkkvwupnnmmlkkkkuwuxlkzvwwt
+.......bbkkkxvwupnmlxxsvzzwwylmlkxxx.............lyy
+........kkkkuwupmmlxtwwuxzwwllmmmlkk..........llnpww
+.........kkswwpmlkzvwvykkxvwsllmmlkk........mnnnpuwt
+.yyy.....kzwwzlkkswvzklmlkswukkkkkkkk.l..mmnnnpprwvx
+yvwwz....kxtzkkkswtxknnnnmkyzxxtxkkklmnnnnnnpppprwvx
+vwwwwx..xxkkkkkmlykmnppnnmxkkllkklmnnnnnpqqqqqqqquwu
+wwwwwkkgwuykxtvqnlknpppnnygxmnnnnnnpppnrtwwwwwwwwwwv
+vwwwtklmwwykywwvpnlklnpnmggnnnnpppppqquwwusssssssssx
+yvwtkkmmwwmmlswwunmkxgklghwurppqqqqqqvwvzxkkkk
+.xx..llswwmmmxuwvmkyttkkkkswwtqqqqqqvwvxkkkkk
+......lvwtlmmlzvzkktsxkklkkyuwurppqtwvyklkkkk
+.......uvs..l.....kzklmllkkkksvwurqwwzkllllkk
+...................klmmlllllkkysvvuwtkkllllllk
+...................lmmlmmmprsxkkyvwwxkllmmmlllll
+...................lmmlmmpvwwz....svx..lmlllmmtus
+........................mpwwwz............klmpvwvx
+.........................xuwwz..............lrwwwy
+..........................yvwz...............yuwwy
+...........................xvz................xwwz
+...............................................zvy
+
+part figure.hurt0 pivot 23,34
+joint grip 13,31
+joint offhand 38,32
+...........lllll
+........klnqqpppmkk
+.......lqqqqqqqrrrrzk
+......mqqqqqquuwwwwvsx
+....kmqqqqqquwwwwwwwwtkk
+....mqqqqqqqwwwyxxxzwwvzk
+...kpqqqqqruwwzkkkkkxzvwzk
+...mqqqqqqrwwskkkkkkkkxvvy
+..kmpqqqqqrwwkkkkkkkkaaksvk
+..mnpqqqqqtwvkkkkkkkabbakvtx
+.knppqqqqrvwykaakkkkkabakywvx
+.knppqqqquwwyabbakkkkkkkkkvwx
+kmnpppqqquwwxkbbakkkkkkkkkvwx
+kmnnpppqruwzkkaaakkkkkkkkzwux
+kmnnppppvwvxkkkkkkkkkkkkkvwxk
+.mmnppppvwukkkkkkkkkkkkktwwxkk
+.lmnnnnnvwvszykkkkkkkkkkuwzkkml
+..lnmmmmuwwwwvsssssxkkksvvxkmnnl
+...lmmmmruwwwwwwwwwtssswwwtzlmnnm
+....kmmmmnyyyyztttvwvuwwwyvtlkmmnl
+.....kmmmkkkkkkkkkzszxuuyxvtnkmnnnl
+......klkklnmmmkkkkzvuxkkxvwrklnnnqx......k
+.......kklpppnnmlmnzvwumnnrwrkkmnswt..x..yvs
+.......klpqqppnmllnntwwsnnpwrkkkzvwukkkkkvwtkkkssx
+.......yuuuqppnmlknpqvwsnmmzylkktwwukkkkkvwvzxuwwx
+......zvwwwvvqpnlkmnprvzlghhggkywwuxkkkkkuwwwvwwvx
+......zwwwwwwwrnlklnngghiiihggkyvvxlmmkkkxuwwwwux
+.......kkkuvwwwzkkkglggiiiihmgkkkkkmmmlxkkkttts
+.......kllkzuwwslkkgghiiihhinpnkkklmmmzwtyxkkk
+.......lmnlkxtvylkkgghhijjyvrnnmkkklmmtwwwtyk
+......lnnnmmkxyklkkgmnprwvxtupnnmkkklntwwwws
+.....kkkmnmmkkklkkmnnpprwvkzwvpnnnkkkktwwvtx
+....yzzkklmkkkllkknnppqrwvkktwvppppmkkkxkkk
+...yvwwskklkkllkkmppppqrwvkkyuwtppqqzkkk
+..xvwwwwtkkkllkkknppppprwvklkyvvrpprvtk
+..ywwwwwukkklkkklpppppprwvkllkywuptwwwt
+..ywwwwwukkkkkklpqqppprvwskllkktwuvvuzy
+..xtwwwwzkkkkkkppppppprwwxkllkkywwvskkk
+...xtwwzkkkkkkmnpppppprwvxklllkywwzkkkk
+.....xx....kkyuuuuurqqrwukkkllkxzykkllk
+............ytwwwwwurrtwvxkkklkkkkkllllk
+............twwtsswwwwwwsk.....kklllllll
+............xyyxkkyzuwwwz........klllllll
+............kkkkkkkkzzzzx.........kllllllk
+............kkllllkkkk............kkllllllk
+............kmmmllllk..............klllllllk
+............lnmmmllk................kllmmmmzsk
+...........xsrrrmmlk.................klmmmrwwwtx
+..........xtwwwvrmlk..................klmpwwwwwtx
+.........xuwwwwwwqlk..................kklvwwwwwwtx
+........ktwwwwwwuml....................llvwwwwwwwy
+........kyyyzzzzykk....................kkyyyyzzzzx
+
+part figure.hurt1 pivot 24,31
+joint grip 14,28
+joint offhand 39,29
+...........mmmmmmml
+.........knqqqqqqppk
+.......kppqqqqqqqqpppk
+.....klpqqqqqqqqqppppmk
+....lnpqqqqqqqqqqppppnmk
+...mqqqqqqqqqqqqqqppppnnk
+..mpqqqqqqqqqqqqqqpppnnnnl
+.lpqqqqqqqqqqqqqqqppnnnnnnk
+xuuuuqqqqqqqqqqqqqppnnnnnmk
+xwwwwtrqqqqqqqqqqqqppnnmlkk
+xwwwwwvqqqqqqppppqqqppnmlkk
+kyyyuwwvqqqqqqpppqqqqpppnnnl
+kkkkxvwwvqqqqqqpppqqqqppnnnl
+.kkkkxuwwvrqqqqppppppppnnnmlkk
+.kkkkkxvwwvqqqqqpnnnnnnnmmlkktz
+..kkkkkxuwwvqqpppnnnnnnnmkkxuws
+...kbbkkxvwwrppppnnnnnnlkklswvz
+...kbbkkkywwvqpppnnnnmklmnpuwukkl
+....bbkkkkzwwtppnnnkkkmnnrvwvxkmnml
+....aakkkkswwtnnmmksttpprwwvxklnpppnlx......stx
+......kkkzwwvrnmkktwwwrrwwvyklnnpppprws....ywwskkyzy
+.......kswwwrmnkkkxtwwwwwuyklnnpppprwwwzkkkywwuxsvws
+........uwuylkkkmmlxzwwwsxklnnnnpprwwwtxkkkyvwwvwwws
+........xxxkkkkyjnnmkzvtkkmnnlmnqqvwwulmplkkyuwwwvs
+.........kkkmnmkzjnnlksutpnnmkkmptwwwzmmnnlxkksssz
+.........klmnnnlkssnnmktvrpnmgxkgvwwslmmnntuykkk
+.........lnppnnmkkiyyygzzzyglggxkyuvxlmnnqwwvtz
+.......xvvqppnnmlkkghhiiiiihgggmlkkkklmmnqwwwwz
+.......uwwvrpnmmlkkghhhhhhhhynnnmlkkkkkllnwwwt
+......kguwwvrnmlkkluugkkhutnppnnnnmmkkkkkkyyxx
+.....kllluwwwqmkkmnvwxldywvrqppppnnnmkkkk
+..xtuzlllyvwwulklmtwskeekswvrqpppppppnxkk
+.xuwwwslmlzwwzkkmrvvxdeedyuwuqpppqqrwwwsk
+.zwwwwwlmlxuykktuvwvkefefkswwrpqqruwwvvvx
+.zwwwwwxl....kywwwwykdefdkktwvrqrwwwuzkkk
+.xtwwwuk......kxyvvxkkdedkkxvwvuwwwtkkkkk
+..xuvux........kkkkkkkkllkkktwwwwvykkklll
+................lkkkllkklkkkkvwwuxkkklllll
+................llllllkkkkkkxwwskkkklllllll
+................lllmllkk.....zz.....llllmmml
+...............kmmmmmkk..............llmmmmml
+...............lmmmmmkk...............kllmmmml
+..............yqqrnmlkk................klmsttty
+.............swwwwtmllk.................lnvwwwtx
+............zvwwwwwtllk..................swwwwwy
+...........ywwwwwwwtllk..................swwwwwx
+...........xssssssslkk...................ysssssx
+
+part hem.sway_l pivot 13,0
+...kklmkkzwrpeeppppnlkk
+...kkmlkkywrppppppppmkkk
+..kklnlkkxtvrppqqttrpmkkk
+kktwtklkkywtppruwwvttzkk
+kkuwzlllkkwutuwwvxsvutkk
+..xmmml...vvvvzkkkkkkk
+
+part hem.sway_r pivot 12,0
+..kklmkkzwrpeeppppnlkk
+..kkmlkkywrppppppppmkkk
+.kklnlkkxtvrppqqttrpmkkk
+.kktwtklkkywtppruwwvttzkk
+.kkuwzlllkkwutuwwvxsvutkk
+...xmmml...vvvvzkkkkkkk
+
+part staff.up pivot 4,23
+joint crystal 4,3
+.k.....k
+ku.....uk
+kv.kfk.vk
+kukefekuk
+.kvefevk
+.kukekuk
+..kuduk
+...kvk
+...kqk
+..kuwuk
+...kpk
+...kpk
+...kqk
+...kqk
+...kpk
+...kpk
+...kqk
+...kqk
+...kpk
+...kpk
+..kuwuk
+...kqk
+...kpk
+...kpk
+...kqk
+...kqk
+...kpk
+...kpk
+...kqk
+..kuwuk
+...kpk
+...kpk
+...kqk
+...kqk
+...kpk
+...kpk
+...kqk
+..kueuk
+....k
+
+part staff.wound pivot 16,28
+joint crystal 5,4
+......kk
+.......vk
+.k...k.uk
+ku.kfekvk
+kvvkefevk
+.kuveekuk
+..kuukdu
+...kkuvk
+......kqkk
+......uwu
+.....kukpk
+.......kpk
+.......kqqk
+........kqk
+........kppk
+.........kqk
+.........kqkk
+..........kpk
+..........kpkkk
+...........uwk
+..........kkqk
+............kpk
+............kpk
+.............kqk
+.............kpk
+.............kkpk
+..............kqkk
+..............kwwk
+..............kkpk
+...............kppk
+................kqk
+................kqkk
+.................kpk
+.................kpk.k
+..................keu
+.................kuk
+
+part staff.k1 pivot 5,14
+joint crystal 4,35
+.....k
+...kueuk
+....kqk
+....kpk
+....kpk
+....kqk
+....kqk
+....kpk
+....kpk
+...kuwuk
+....kqk
+....kpk
+....kpk
+....kqk
+....kqk
+....kpk
+....kpk
+....kqk
+...kuwuk
+....kpk
+....kpk
+....kqk
+....kqk
+....kpk
+....kpk
+....kqk
+....kqk
+....kpk
+....kpk
+..kuwuk
+...kqk
+...kvk
+..kuduk
+.kukekuk
+.kvefevk
+kukefekuk
+kv.kfk.vk
+ku.....uk
+.k.....k
+
+part staff.k2 pivot 7,7
+joint crystal 25,25
+..uk
+.euk
+uuqkk
+kkkpkk
+..kkqkk
+...kkqkk
+....kkpku
+.....kkwkk
+......ukqkk
+.......kkpkk
+........kkqkk
+.........kkpkk
+..........kkpkkk
+...........kkquk
+............kupkk
+............kkkpkk
+..............kkqkk
+...............kkpkk
+................kkqkk
+.................kkqkk
+..................kkpku
+...................kkwkk
+....................ukqkukk
+.....................kkdukvkkk
+......................uueeekvkk
+......................kkefek.u
+......................kveef
+.......................kkk
+.......................kv
+.......................kku
+........................k
+
+part staff.land pivot 7,13
+joint crystal 16,32
+.k.k
+.euu
+kuqk
+.kpk
+..kpk
+..kqk
+...kqk
+...kpk
+....kwuk
+...kuqk
+....kkpk
+.....kpk
+.....kqqk
+......kqk
+......kppk
+.......kpk
+.......kquuk
+.......kuwk
+........kpk
+.........kqk
+.........kqk
+..........kpk
+..........kpk
+...........kqk
+...........kqk
+...........kkpk
+............kpuk
+............uwqk
+.............kvk
+.............kvduuk
+.............kuekvk
+.............ukfeekuk
+............kkvefe.vk
+.............ukkfk..k
+............kvv
+.............ku
+.............kk
+
+part arm_sword.swing_strike pivot 17,4
+joint hand 3,10
+joint grip 3,10
+...............rrrq
+.............rrrqqqq
+...........rrrqqqqppp
+..........rrqqqqppppp
+........rrqqqpppppnnn
+......rrqqqpppppnnnnn
+....wwqqqpppppnnnnmm
+.wwwwwwvpppnnnnnmmm
+wwwwvtvvnnnnmmmm
+wwvvvtuunnmmm
+wvvvututm
+wvuuutt
+.tttt
+
+part arm_sword.swing_follow pivot 10,4
+joint hand 3,18
+joint grip 3,18
+........rqqp
+.......rqqppp
+......rrqqppnn
+......rqqpppnn
+.....rrqpppnnm
+.....rqqppnnmm
+....rrqpppnnm
+....rqqppnnm
+....rqpppnmm
+...rqqppnnm
+...rqppnnm
+...qqppnmm
+..rqppnnm
+..wwvvnm
+.wwwvunm
+.wwwwut
+wwwwvtt
+wwvvvt
+wvvvut
+wvuuut
+.tttt
+
+part arm_sword.swing_recover pivot 5,4
+joint hand 3,9
+joint grip 3,9
+...rqpp
+..rqqppp
+.rrqpppnn
+.rqqpppnm
+.rwwvpnnm
+.wwvvunmm
+.wwwwutm
+wwwwvtm
+wwvvvt
+wvvvut
+wvuuut
+.tttt
+
+part arm_sword.swing_slash pivot 18,4
+joint hand 3,19
+joint grip 3,19
+................rrqq
+...............rrqqqp
+.............rrqqqpppp
+............rrqqqppppn
+...........rqqqqpppnnn
+..........rqqqppppnnnm
+........rrqqqpppnnnmm
+.......rqqppppnnnnmm
+......rqqppnpnnnmm
+......rqppnnnnmm
+.....rqqppnmnmm
+.....qqppnnmm
+....rqppnnm
+...rqqppnm
+...wwvpnmm
+..wwvvunm
+.wwwwvum
+wwwwvtt
+wwvvvtt
+wvvvut
+wvuuut
+.tttt
+
+part arm_sword.swing_windup pivot 4,11
+joint hand 11,3
+joint grip 11,3
+.........wwww
+........wwwwvt
+........wwvvvt
+.......wwvvvut
+......rwwvuuut
+.....rqwvtttt
+...rrqqvvuut
+..rrqqqpvut
+.rrqqqppnnm
+rqqqpppnnm
+qqqpppnnm
+qqpppnnmm
+qpppnnmm
+.ppnnnm
+..nnnm
+
+part fist_overlay.grip pivot 4,4
+joint grip 4,4
+.kkkkkk
+kkwwwwkk
+kwwwwvtk
+kwwvvvtk
+kwvvvutk
+kwvuuutk
+kkttttkk
+.kkkkkk

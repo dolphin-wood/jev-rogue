@@ -1,0 +1,38 @@
+{
+  "base": "enemy_summoner",
+  "facings": [
+    "s",
+    "n",
+    "w"
+  ],
+  "weight": "mid",
+  "gait": "walk",
+  "stand": "stand",
+  "roles": {
+    "torso": "body",
+    "head": "head",
+    "foot_l": "foot_l",
+    "foot_r": "foot_r",
+    "arm_l": "arm_l",
+    "arm_r": "arm_r"
+  },
+  "slump": "sleep",
+  "extra": {
+    "tele": "glow",
+    "tele1": "glow1",
+    "tether": "tether"
+  },
+  "poses": {
+    "glow1": {
+      "base": "glow",
+      "parts": {
+        "torso": {
+          "at": [
+            0,
+            -1
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,2402 @@
+{
+  "s": {
+    "stand": {
+      "parts": {
+        "foot_l": "stand",
+        "foot_r": "stand",
+        "arm_cast": "stand",
+        "torso": "stand",
+        "arm_sword": "stand",
+        "head": "stand",
+        "hem": "stand"
+      }
+    },
+    "idle0": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "hem": "stand"
+      }
+    },
+    "idle1": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "hem": "sway_r"
+      }
+    },
+    "idle2": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "hem": "stand"
+      }
+    },
+    "idle3": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "hem": "sway_l"
+      }
+    },
+    "walk0": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "hem": "stand"
+      }
+    },
+    "walk1": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "hem": "sway_l"
+      }
+    },
+    "walk2": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            0,
+            3
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "hem": "sway_l"
+      }
+    },
+    "walk3": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "hem": "sway_l"
+      }
+    },
+    "walk4": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "hem": "stand"
+      }
+    },
+    "walk5": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "hem": "sway_r"
+      }
+    },
+    "walk6": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            3
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "hem": "sway_r"
+      }
+    },
+    "walk7": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "hem": "sway_r"
+      }
+    },
+    "windup": {
+      "parts": {
+        "foot_l": "windup",
+        "foot_r": "windup",
+        "arm_cast": "windup",
+        "torso": "windup",
+        "arm_sword": "windup",
+        "head": "windup"
+      }
+    },
+    "follow": {
+      "parts": {
+        "foot_l": "follow",
+        "foot_r": "follow",
+        "arm_cast": "follow",
+        "torso": "follow",
+        "arm_sword": "follow",
+        "head": "follow"
+      }
+    },
+    "dash": {
+      "parts": {
+        "figure": "dash"
+      },
+      "meta": {
+        "staffAngleDeg": -150
+      }
+    },
+    "hurt0": {
+      "parts": {
+        "figure": "hurt0"
+      },
+      "meta": {
+        "staffAngleDeg": -110
+      }
+    },
+    "hurt1": {
+      "parts": {
+        "figure": "hurt1"
+      },
+      "meta": {
+        "staffAngleDeg": -70
+      }
+    },
+    "strike": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            3,
+            1
+          ]
+        },
+        "arm_sword": "swing_strike",
+        "head": {
+          "at": [
+            2,
+            1
+          ]
+        },
+        "foot_l": {
+          "at": [
+            2,
+            2
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            1
+          ]
+        }
+      }
+    },
+    "recover": {
+      "base": "stand",
+      "parts": {
+        "arm_sword": {
+          "v": "swing_recover",
+          "at": [
+            1,
+            0
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "foot_l": {
+          "at": [
+            0,
+            0
+          ]
+        }
+      }
+    },
+    "cast": {
+      "base": "stand",
+      "parts": {
+        "arm_cast": {
+          "at": [
+            0,
+            -5
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "hem": "sway_r"
+      }
+    },
+    "swing_windup": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "v": "windup",
+          "at": [
+            -3,
+            -1
+          ]
+        },
+        "arm_sword": {
+          "v": "swing_windup",
+          "z": 2.1
+        },
+        "head": {
+          "v": "windup",
+          "at": [
+            -2,
+            -1
+          ]
+        },
+        "foot_l": {
+          "v": "windup",
+          "at": [
+            -2,
+            -1
+          ]
+        },
+        "foot_r": {
+          "v": "windup",
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_cast": {
+          "v": "windup",
+          "at": [
+            0,
+            0
+          ]
+        }
+      }
+    },
+    "swing_follow": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            -7,
+            2
+          ]
+        },
+        "arm_sword": "swing_follow",
+        "head": {
+          "at": [
+            -6,
+            2
+          ]
+        },
+        "foot_l": {
+          "at": [
+            -5,
+            2
+          ]
+        },
+        "foot_r": {
+          "at": [
+            1,
+            -1
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            -4,
+            2
+          ]
+        },
+        "hem": "sway_l"
+      }
+    },
+    "slash": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            -2,
+            2
+          ]
+        },
+        "arm_sword": "swing_slash",
+        "head": {
+          "at": [
+            -2,
+            1
+          ]
+        },
+        "foot_l": {
+          "at": [
+            -1,
+            2
+          ]
+        },
+        "foot_r": {
+          "at": [
+            1,
+            0
+          ]
+        },
+        "hem": "sway_r",
+        "arm_cast": {
+          "at": [
+            -1,
+            1
+          ]
+        }
+      }
+    },
+    "cast_gather": {
+      "base": "stand",
+      "parts": {
+        "arm_cast": {
+          "at": [
+            0,
+            -8
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            -4
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "foot_l": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "hem": "sway_r"
+      }
+    },
+    "cast_release": {
+      "base": "stand",
+      "parts": {
+        "arm_cast": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "foot_l": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "hem": "sway_l"
+      }
+    },
+    "cast_recover": {
+      "between": [
+        "cast_release",
+        "stand"
+      ],
+      "t": 0.5
+    }
+  },
+  "n": {
+    "stand": {
+      "parts": {
+        "foot_l": "stand",
+        "foot_r": "stand",
+        "arm_cast": "stand",
+        "torso": "stand",
+        "arm_sword": "stand",
+        "head": "stand",
+        "hem": "stand"
+      }
+    },
+    "idle0": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "hem": "stand"
+      }
+    },
+    "idle1": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "hem": "sway_r"
+      }
+    },
+    "idle2": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "hem": "stand"
+      }
+    },
+    "idle3": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "hem": "sway_l"
+      }
+    },
+    "walk0": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "hem": "stand"
+      }
+    },
+    "walk1": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "hem": "sway_l"
+      }
+    },
+    "walk2": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            3
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "hem": "sway_l"
+      }
+    },
+    "walk3": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "hem": "sway_l"
+      }
+    },
+    "walk4": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "hem": "stand"
+      }
+    },
+    "walk5": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "hem": "sway_r"
+      }
+    },
+    "walk6": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            0,
+            3
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "hem": "sway_r"
+      }
+    },
+    "walk7": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "hem": "sway_r"
+      }
+    },
+    "windup": {
+      "parts": {
+        "foot_l": "windup",
+        "foot_r": "windup",
+        "arm_cast": "windup",
+        "torso": "windup",
+        "arm_sword": "windup",
+        "head": "windup"
+      }
+    },
+    "follow": {
+      "parts": {
+        "foot_l": "follow",
+        "foot_r": "follow",
+        "arm_cast": "follow",
+        "torso": "follow",
+        "arm_sword": "follow",
+        "head": "follow"
+      }
+    },
+    "dash": {
+      "parts": {
+        "figure": "dash"
+      },
+      "meta": {
+        "staffAngleDeg": -150
+      }
+    },
+    "hurt0": {
+      "parts": {
+        "figure": "hurt0"
+      },
+      "meta": {
+        "staffAngleDeg": -110
+      }
+    },
+    "hurt1": {
+      "parts": {
+        "figure": "hurt1"
+      },
+      "meta": {
+        "staffAngleDeg": -70
+      }
+    },
+    "strike": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            -3,
+            -3
+          ]
+        },
+        "head": {
+          "at": [
+            -2,
+            -1
+          ]
+        },
+        "foot_l": {
+          "at": [
+            -2,
+            -2
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "arm_sword": "swing_strike"
+      }
+    },
+    "recover": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "foot_l": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_sword": "swing_recover"
+      }
+    },
+    "cast": {
+      "base": "stand",
+      "parts": {
+        "arm_cast": {
+          "at": [
+            0,
+            -5
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "hem": "sway_r"
+      }
+    },
+    "swing_windup": {
+      "base": "windup",
+      "parts": {
+        "torso": {
+          "at": [
+            3,
+            3
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            1
+          ],
+          "v": "swing_windup"
+        },
+        "head": {
+          "at": [
+            2,
+            1
+          ]
+        },
+        "foot_l": {
+          "at": [
+            2,
+            1
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "swing_follow": {
+      "base": "follow",
+      "parts": {
+        "torso": {
+          "at": [
+            -4,
+            -2
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            -2
+          ],
+          "v": "swing_follow"
+        },
+        "foot_l": {
+          "at": [
+            -2,
+            -2
+          ]
+        },
+        "head": {
+          "at": [
+            -3,
+            -2
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "slash": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            -1,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            -1,
+            0
+          ]
+        },
+        "foot_l": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_sword": "swing_slash"
+      }
+    },
+    "cast_gather": {
+      "base": "stand",
+      "parts": {
+        "arm_cast": {
+          "at": [
+            0,
+            -6
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            -4
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            3
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "foot_l": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "hem": "sway_r"
+      }
+    },
+    "cast_release": {
+      "base": "stand",
+      "parts": {
+        "arm_cast": {
+          "at": [
+            0,
+            -5
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "torso": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "foot_l": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "hem": "sway_l"
+      }
+    },
+    "cast_recover": {
+      "between": [
+        "cast_release",
+        "stand"
+      ],
+      "t": 0.5
+    }
+  },
+  "w": {
+    "stand": {
+      "parts": {
+        "foot_l": "stand",
+        "foot_r": "stand",
+        "arm_cast": "stand",
+        "torso": "stand",
+        "arm_sword": "stand",
+        "head": "stand",
+        "hem": "stand"
+      }
+    },
+    "idle0": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "hem": "stand"
+      }
+    },
+    "idle1": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "hem": "sway_r"
+      }
+    },
+    "idle2": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "hem": "stand"
+      }
+    },
+    "idle3": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "hem": "sway_l"
+      }
+    },
+    "walk0": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            0,
+            -4
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "torso": {
+          "at": [
+            -1,
+            -2
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "hem": "stand"
+      }
+    },
+    "walk1": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            -4,
+            -2
+          ]
+        },
+        "foot_r": {
+          "at": [
+            4,
+            0
+          ]
+        },
+        "torso": {
+          "at": [
+            -1,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            -3,
+            -1
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            3,
+            -1
+          ]
+        },
+        "hem": "sway_l"
+      }
+    },
+    "walk2": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            -6,
+            0
+          ]
+        },
+        "foot_r": {
+          "at": [
+            6,
+            0
+          ]
+        },
+        "torso": {
+          "at": [
+            -1,
+            1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            -4,
+            -2
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            4,
+            -2
+          ]
+        },
+        "hem": "sway_l"
+      }
+    },
+    "walk3": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            -4,
+            0
+          ]
+        },
+        "foot_r": {
+          "at": [
+            4,
+            -2
+          ]
+        },
+        "torso": {
+          "at": [
+            -1,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            -3,
+            -1
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            3,
+            -1
+          ]
+        },
+        "hem": "sway_l"
+      }
+    },
+    "walk4": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "foot_r": {
+          "at": [
+            0,
+            -4
+          ]
+        },
+        "torso": {
+          "at": [
+            -1,
+            -2
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            0,
+            0
+          ]
+        },
+        "hem": "stand"
+      }
+    },
+    "walk5": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            4,
+            0
+          ]
+        },
+        "foot_r": {
+          "at": [
+            -4,
+            -2
+          ]
+        },
+        "torso": {
+          "at": [
+            -1,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            3,
+            -1
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            -3,
+            -1
+          ]
+        },
+        "hem": "sway_r"
+      }
+    },
+    "walk6": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            6,
+            0
+          ]
+        },
+        "foot_r": {
+          "at": [
+            -6,
+            0
+          ]
+        },
+        "torso": {
+          "at": [
+            -1,
+            1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            4,
+            -2
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            -4,
+            -2
+          ]
+        },
+        "hem": "sway_r"
+      }
+    },
+    "walk7": {
+      "base": "stand",
+      "parts": {
+        "foot_l": {
+          "at": [
+            4,
+            -2
+          ]
+        },
+        "foot_r": {
+          "at": [
+            -4,
+            0
+          ]
+        },
+        "torso": {
+          "at": [
+            -1,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            3,
+            -1
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            -3,
+            -1
+          ]
+        },
+        "hem": "sway_r"
+      }
+    },
+    "windup": {
+      "parts": {
+        "foot_l": "windup",
+        "foot_r": "windup",
+        "arm_cast": "windup",
+        "torso": "windup",
+        "arm_sword": "windup",
+        "head": "windup"
+      }
+    },
+    "follow": {
+      "parts": {
+        "foot_l": "follow",
+        "foot_r": "follow",
+        "arm_cast": "follow",
+        "torso": "follow",
+        "arm_sword": "follow",
+        "head": "follow"
+      }
+    },
+    "dash": {
+      "parts": {
+        "figure": "dash"
+      },
+      "meta": {
+        "staffAngleDeg": -150
+      }
+    },
+    "hurt0": {
+      "parts": {
+        "figure": "hurt0"
+      },
+      "meta": {
+        "staffAngleDeg": -110
+      }
+    },
+    "hurt1": {
+      "parts": {
+        "figure": "hurt1"
+      },
+      "meta": {
+        "staffAngleDeg": -70
+      }
+    },
+    "strike": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            -3,
+            -1
+          ]
+        },
+        "head": {
+          "at": [
+            -2,
+            0
+          ]
+        },
+        "foot_l": {
+          "at": [
+            -3,
+            0
+          ]
+        },
+        "foot_r": {
+          "at": [
+            2,
+            0
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            -2,
+            0
+          ]
+        },
+        "arm_sword": "swing_strike"
+      }
+    },
+    "recover": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            -1,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            -1,
+            0
+          ]
+        },
+        "foot_l": {
+          "at": [
+            -1,
+            0
+          ]
+        },
+        "arm_sword": "swing_recover"
+      }
+    },
+    "cast": {
+      "base": "stand",
+      "parts": {
+        "arm_cast": {
+          "at": [
+            1,
+            -5
+          ]
+        },
+        "torso": {
+          "at": [
+            2,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            1,
+            0
+          ]
+        },
+        "hem": "sway_r"
+      }
+    },
+    "swing_windup": {
+      "base": "windup",
+      "parts": {
+        "torso": {
+          "at": [
+            3,
+            1
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            2,
+            -1
+          ],
+          "v": "swing_windup"
+        },
+        "head": {
+          "at": [
+            2,
+            0
+          ]
+        },
+        "foot_l": {
+          "at": [
+            2,
+            0
+          ]
+        },
+        "foot_r": {
+          "at": [
+            -1,
+            0
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            2,
+            1
+          ]
+        }
+      }
+    },
+    "swing_follow": {
+      "base": "follow",
+      "parts": {
+        "torso": {
+          "at": [
+            -4,
+            0
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            2,
+            0
+          ],
+          "v": "swing_follow"
+        },
+        "foot_l": {
+          "at": [
+            -4,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            -3,
+            0
+          ]
+        },
+        "foot_r": {
+          "at": [
+            2,
+            0
+          ]
+        },
+        "arm_cast": {
+          "at": [
+            -3,
+            0
+          ]
+        }
+      }
+    },
+    "slash": {
+      "base": "stand",
+      "parts": {
+        "torso": {
+          "at": [
+            -2,
+            1
+          ]
+        },
+        "head": {
+          "v": "follow",
+          "at": [
+            -1,
+            1
+          ]
+        },
+        "foot_l": {
+          "at": [
+            -2,
+            0
+          ]
+        },
+        "foot_r": {
+          "at": [
+            1,
+            0
+          ]
+        },
+        "arm_sword": "swing_slash",
+        "hem": "sway_l"
+      }
+    },
+    "cast_gather": {
+      "base": "stand",
+      "parts": {
+        "arm_cast": {
+          "at": [
+            2,
+            -7
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            1,
+            -4
+          ]
+        },
+        "torso": {
+          "at": [
+            4,
+            1
+          ]
+        },
+        "head": {
+          "at": [
+            2,
+            1
+          ]
+        },
+        "foot_l": {
+          "at": [
+            2,
+            0
+          ]
+        },
+        "hem": "sway_r"
+      }
+    },
+    "cast_release": {
+      "base": "stand",
+      "parts": {
+        "arm_cast": {
+          "at": [
+            -5,
+            -3
+          ]
+        },
+        "arm_sword": {
+          "at": [
+            2,
+            0
+          ]
+        },
+        "torso": {
+          "at": [
+            -3,
+            -1
+          ]
+        },
+        "head": {
+          "at": [
+            -2,
+            0
+          ]
+        },
+        "foot_l": {
+          "at": [
+            -3,
+            0
+          ]
+        },
+        "foot_r": {
+          "at": [
+            2,
+            0
+          ]
+        },
+        "hem": "sway_l"
+      }
+    },
+    "cast_recover": {
+      "between": [
+        "cast_release",
+        "stand"
+      ],
+      "t": 0.5
+    }
+  }
+}

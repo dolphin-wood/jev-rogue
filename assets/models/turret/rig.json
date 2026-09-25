@@ -1,0 +1,44 @@
+{
+  "size": [
+    64,
+    64
+  ],
+  "outline": 2,
+  "facings": {
+    "s": {
+      "origin": [
+        32,
+        32
+      ],
+      "parts": [
+        {
+          "name": "core",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "name": "pod_l",
+          "parent": "core",
+          "joint": "hinge_l",
+          "depth": 0
+        },
+        {
+          "name": "pod_r",
+          "parent": "core",
+          "joint": "hinge_r",
+          "depth": 0
+        }
+      ]
+    }
+  },
+  "anchors": {},
+  "marks": {
+    "mark": {
+      "part": "core",
+      "at": [
+        0,
+        -24
+      ]
+    }
+  }
+}

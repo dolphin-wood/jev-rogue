@@ -1,0 +1,18 @@
+# Void Maw
+1=#1a0b2e 2=#5a34a8 3=#9a7bff 4=#d9c6ff
+......ow333ooo..
+......o212233oo.
+......ooo11221o.
+...oooooooo221oo
+..oo4333332o321o
+..o43111121o321o
+..o311ooo31oo31o
+..o31ooww31oo31o
+..o31ooww21oo31o
+..o31oo2111o431o
+..o322ooooo4311o
+..o3222ooo4311oo
+..oo222333311oo.
+...oo1111111oo..
+....ooooooooo...
+................

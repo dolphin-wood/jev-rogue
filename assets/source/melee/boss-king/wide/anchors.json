@@ -1,0 +1,406 @@
+{
+  "schemaVersion": 1,
+  "frameSize": [
+    336,
+    336
+  ],
+  "coordinateSpace": "top-left of unflipped 336×336 art-pixel frame",
+  "pivot": [
+    168,
+    272
+  ],
+  "mirrorX": "x becomes 335 - x; pivot x also mirrors",
+  "status": "drawn source frames; not yet packed or mapped by gameplay",
+  "frames": {
+    "boss_p1_cleave_front_cut": {
+      "source": "assets/source/melee/boss-king/wide/p1/cleave_front_cut.png",
+      "tip": [
+        289,
+        240
+      ],
+      "hand_l": [
+        183,
+        174
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p1_cleave_front_fall": {
+      "source": "assets/source/melee/boss-king/wide/p1/cleave_front_fall.png",
+      "tip": [
+        275,
+        16
+      ],
+      "hand_l": [
+        194,
+        95
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p1_cleave_front_follow": {
+      "source": "assets/source/melee/boss-king/wide/p1/cleave_front_follow.png",
+      "tip": [
+        322,
+        147
+      ],
+      "hand_l": [
+        195,
+        179
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p1_cleave_front_raise": {
+      "source": "assets/source/melee/boss-king/wide/p1/cleave_front_raise.png",
+      "tip": [
+        158,
+        13
+      ],
+      "hand_l": [
+        169,
+        87
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p2_cleave_front_cut": {
+      "source": "assets/source/melee/boss-king/wide/p2/cleave_front_cut.png",
+      "tip": [
+        284,
+        245
+      ],
+      "hand_l": [
+        181,
+        175
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p2_cleave_front_fall": {
+      "source": "assets/source/melee/boss-king/wide/p2/cleave_front_fall.png",
+      "tip": [
+        266,
+        26
+      ],
+      "hand_l": [
+        194,
+        94
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p2_cleave_front_follow": {
+      "source": "assets/source/melee/boss-king/wide/p2/cleave_front_follow.png",
+      "tip": [
+        309,
+        153
+      ],
+      "hand_l": [
+        188,
+        181
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p2_cleave_front_raise": {
+      "source": "assets/source/melee/boss-king/wide/p2/cleave_front_raise.png",
+      "tip": [
+        165,
+        23
+      ],
+      "hand_l": [
+        165,
+        92
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p2_sweep_back_cross": {
+      "source": "assets/source/melee/boss-king/wide/p2/sweep_back_cross.png",
+      "tip": [
+        288,
+        194
+      ],
+      "hand_l": [
+        155,
+        171
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p2_sweep_back_cut": {
+      "source": "assets/source/melee/boss-king/wide/p2/sweep_back_cut.png",
+      "tip": [
+        310,
+        172
+      ],
+      "hand_l": [
+        202,
+        174
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p2_sweep_back_wind": {
+      "source": "assets/source/melee/boss-king/wide/p2/sweep_back_wind.png",
+      "tip": [
+        29,
+        172
+      ],
+      "hand_l": [
+        181,
+        178
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p2_sweep_front_cut": {
+      "source": "assets/source/melee/boss-king/wide/p2/sweep_front_cut.png",
+      "tip": [
+        42,
+        160
+      ],
+      "hand_l": [
+        156,
+        171
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p2_sweep_front_enter": {
+      "source": "assets/source/melee/boss-king/wide/p2/sweep_front_enter.png",
+      "tip": [
+        276,
+        267
+      ],
+      "hand_l": [
+        155,
+        189
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p2_sweep_front_mid": {
+      "source": "assets/source/melee/boss-king/wide/p2/sweep_front_mid.png",
+      "tip": [
+        44,
+        206
+      ],
+      "hand_l": [
+        162,
+        187
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p2_sweep_front_wind": {
+      "source": "assets/source/melee/boss-king/wide/p2/sweep_front_wind.png",
+      "tip": [
+        301,
+        155
+      ],
+      "hand_l": [
+        166,
+        160
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p3_cleave_front_cut": {
+      "source": "assets/source/melee/boss-king/wide/p3/cleave_front_cut.png",
+      "tip": [
+        273,
+        252
+      ],
+      "hand_l": [
+        181,
+        176
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p3_cleave_front_fall": {
+      "source": "assets/source/melee/boss-king/wide/p3/cleave_front_fall.png",
+      "tip": [
+        253,
+        48
+      ],
+      "hand_l": [
+        190,
+        88
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p3_cleave_front_follow": {
+      "source": "assets/source/melee/boss-king/wide/p3/cleave_front_follow.png",
+      "tip": [
+        296,
+        158
+      ],
+      "hand_l": [
+        188,
+        182
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p3_cleave_front_raise": {
+      "source": "assets/source/melee/boss-king/wide/p3/cleave_front_raise.png",
+      "tip": [
+        161,
+        11
+      ],
+      "hand_l": [
+        167,
+        80
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p3_sweep_back_cross": {
+      "source": "assets/source/melee/boss-king/wide/p3/sweep_back_cross.png",
+      "tip": [
+        278,
+        195
+      ],
+      "hand_l": [
+        150,
+        168
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p3_sweep_back_cut": {
+      "source": "assets/source/melee/boss-king/wide/p3/sweep_back_cut.png",
+      "tip": [
+        290,
+        198
+      ],
+      "hand_l": [
+        195,
+        190
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p3_sweep_back_wind": {
+      "source": "assets/source/melee/boss-king/wide/p3/sweep_back_wind.png",
+      "tip": [
+        42,
+        177
+      ],
+      "hand_l": [
+        186,
+        186
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p3_sweep_front_cut": {
+      "source": "assets/source/melee/boss-king/wide/p3/sweep_front_cut.png",
+      "tip": [
+        50,
+        154
+      ],
+      "hand_l": [
+        151,
+        162
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p3_sweep_front_enter": {
+      "source": "assets/source/melee/boss-king/wide/p3/sweep_front_enter.png",
+      "tip": [
+        297,
+        267
+      ],
+      "hand_l": [
+        176,
+        149
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p3_sweep_front_mid": {
+      "source": "assets/source/melee/boss-king/wide/p3/sweep_front_mid.png",
+      "tip": [
+        38,
+        235
+      ],
+      "hand_l": [
+        176,
+        147
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    },
+    "boss_p3_sweep_front_wind": {
+      "source": "assets/source/melee/boss-king/wide/p3/sweep_front_wind.png",
+      "tip": [
+        320,
+        134
+      ],
+      "hand_l": [
+        184,
+        134
+      ],
+      "pivot": [
+        168,
+        272
+      ]
+    }
+  }
+}

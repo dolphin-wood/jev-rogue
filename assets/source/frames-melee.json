@@ -1,9 +1,9 @@
 {
-  "total": 896,
+  "total": 891,
   "counts": {
     "reuse": 106,
     "rename": 3,
-    "draw": 787
+    "draw": 782
   },
   "retired": [
     "player_n_0",
@@ -14,7 +14,7 @@
     "player_w_1"
   ],
   "drawBySize": {
-    "32px": 84,
+    "32px": 79,
     "64px": 564,
     "96px": 116,
     "256px": 23
@@ -2310,31 +2310,6 @@
     },
     {
       "name": "icon_plague_bloom",
-      "px": "16x16",
-      "status": "draw"
-    },
-    {
-      "name": "icon_impact_carrier",
-      "px": "16x16",
-      "status": "draw"
-    },
-    {
-      "name": "icon_fuse_carrier",
-      "px": "16x16",
-      "status": "draw"
-    },
-    {
-      "name": "icon_wall_carrier",
-      "px": "16x16",
-      "status": "draw"
-    },
-    {
-      "name": "icon_piercing_carrier",
-      "px": "16x16",
-      "status": "draw"
-    },
-    {
-      "name": "icon_mortar_carrier",
       "px": "16x16",
       "status": "draw"
     },

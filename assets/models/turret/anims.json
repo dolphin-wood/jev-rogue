@@ -1,0 +1,29 @@
+{
+  "facings": [
+    "s"
+  ],
+  "frames": {
+    "enemy_turret_idle0": "idle0",
+    "enemy_turret_idle1": "idle1",
+    "enemy_turret_idle2": "idle2",
+    "enemy_turret_idle3": "idle3",
+    "enemy_turret_watch0": "watch0",
+    "enemy_turret_watch1": "watch1",
+    "enemy_turret_watch2": "watch2",
+    "enemy_turret_watch3": "watch3",
+    "enemy_turret_windup": "windup",
+    "enemy_turret_lunge": "lunge",
+    "enemy_turret_follow": "follow",
+    "enemy_turret_recover": "recover",
+    "enemy_turret_hit0": "hit0",
+    "enemy_turret_hit1": "hit1",
+    "enemy_turret_stir": "stir",
+    "enemy_turret_dormant0": "dormant0",
+    "enemy_turret_dormant1": "dormant1",
+    "enemy_turret_dormant2": "dormant2",
+    "enemy_turret_dormant3": "dormant3",
+    "enemy_turret_dormant": "dormant0",
+    "enemy_turret_tele": "glow",
+    "enemy_turret_tele1": "glow1"
+  }
+}

@@ -1,0 +1,396 @@
+{
+  "rules": [
+    {
+      "material": "eye",
+      "shades": 4,
+      "hue": [
+        150,
+        205
+      ],
+      "sat": [
+        0.3,
+        1
+      ]
+    },
+    {
+      "material": "hot",
+      "shades": 3,
+      "hue": [
+        295,
+        355
+      ],
+      "sat": [
+        0.45,
+        1
+      ]
+    },
+    {
+      "material": "warm",
+      "shades": 3,
+      "hue": [
+        15,
+        62
+      ],
+      "sat": [
+        0.45,
+        1
+      ]
+    },
+    {
+      "material": "steel",
+      "shades": 5,
+      "hue": [
+        205,
+        292
+      ],
+      "sat": [
+        0.08,
+        1
+      ],
+      "light": [
+        0.1,
+        0.9
+      ]
+    },
+    {
+      "material": "bone",
+      "shades": 5,
+      "sat": [
+        0,
+        0.32
+      ],
+      "light": [
+        0.32,
+        1
+      ]
+    },
+    {
+      "material": "dusk",
+      "shades": 3,
+      "light": [
+        0,
+        0.55
+      ]
+    }
+  ],
+  "outlineLuma": 24,
+  "lift": 1.0,
+  "paletteFrames": [
+    "enemy_orbiter_s_idle0",
+    "enemy_orbiter_s_dormant",
+    "enemy_orbiter_s_tele",
+    "enemy_orbiter_n_idle0",
+    "enemy_orbiter_n_dormant",
+    "enemy_orbiter_n_tele",
+    "enemy_orbiter_w_idle0",
+    "enemy_orbiter_w_dormant",
+    "enemy_orbiter_w_tele"
+  ],
+  "letters": {
+    "core": "c",
+    "tent_l": "t",
+    "tent_r": "e",
+    "horn_l": "h",
+    "horn_r": "o"
+  },
+  "rest": "core",
+  "fillFrom": {
+    "core": [
+      "steel",
+      "bone",
+      "warm"
+    ]
+  },
+  "fillRadius": {
+    "core": 4
+  },
+  "claimsFrac": {
+    "s": {
+      "horn_l": [
+        [
+          0,
+          0,
+          0.34,
+          0.5
+        ]
+      ],
+      "horn_r": [
+        [
+          0.62,
+          0,
+          1,
+          0.5
+        ]
+      ],
+      "tent_l": [
+        [
+          0,
+          0.5,
+          0.5,
+          1
+        ]
+      ],
+      "tent_r": [
+        [
+          0.5,
+          0.5,
+          1,
+          1
+        ]
+      ]
+    },
+    "n": {
+      "horn_l": [
+        [
+          0,
+          0,
+          0.34,
+          0.5
+        ]
+      ],
+      "horn_r": [
+        [
+          0.62,
+          0,
+          1,
+          0.5
+        ]
+      ],
+      "tent_l": [
+        [
+          0,
+          0.5,
+          0.5,
+          1
+        ]
+      ],
+      "tent_r": [
+        [
+          0.5,
+          0.5,
+          1,
+          1
+        ]
+      ]
+    },
+    "w": {
+      "tent_l": [
+        [
+          0.1,
+          0.55,
+          0.42,
+          1
+        ]
+      ],
+      "tent_r": [
+        [
+          0.42,
+          0.1,
+          1,
+          1
+        ]
+      ]
+    }
+  },
+  "jointsFrac": {
+    "s": {
+      "brow_l": [
+        0.3,
+        0.3
+      ],
+      "brow_r": [
+        0.7,
+        0.3
+      ],
+      "hinge_l": [
+        0.3,
+        0.6
+      ],
+      "hinge_r": [
+        0.7,
+        0.6
+      ]
+    },
+    "n": {
+      "brow_l": [
+        0.3,
+        0.3
+      ],
+      "brow_r": [
+        0.7,
+        0.3
+      ],
+      "hinge_l": [
+        0.3,
+        0.6
+      ],
+      "hinge_r": [
+        0.7,
+        0.6
+      ]
+    },
+    "w": {
+      "hinge_l": [
+        0.28,
+        0.62
+      ],
+      "hinge_r": [
+        0.45,
+        0.45
+      ]
+    }
+  },
+  "anchorsOn": {},
+  "rig": {
+    "size": [
+      64,
+      64
+    ],
+    "outline": 2,
+    "facings": {
+      "s": {
+        "origin": [
+          32,
+          32
+        ],
+        "parts": [
+          {
+            "name": "core",
+            "parent": null,
+            "depth": 1
+          },
+          {
+            "name": "tent_l",
+            "parent": "core",
+            "joint": "hinge_l",
+            "depth": 0
+          },
+          {
+            "name": "tent_r",
+            "parent": "core",
+            "joint": "hinge_r",
+            "depth": 0
+          },
+          {
+            "name": "horn_l",
+            "parent": "core",
+            "joint": "brow_l",
+            "depth": 2
+          },
+          {
+            "name": "horn_r",
+            "parent": "core",
+            "joint": "brow_r",
+            "depth": 2
+          }
+        ]
+      },
+      "n": {
+        "origin": [
+          32,
+          32
+        ],
+        "parts": [
+          {
+            "name": "core",
+            "parent": null,
+            "depth": 1
+          },
+          {
+            "name": "tent_l",
+            "parent": "core",
+            "joint": "hinge_l",
+            "depth": 0
+          },
+          {
+            "name": "tent_r",
+            "parent": "core",
+            "joint": "hinge_r",
+            "depth": 0
+          },
+          {
+            "name": "horn_l",
+            "parent": "core",
+            "joint": "brow_l",
+            "depth": 2
+          },
+          {
+            "name": "horn_r",
+            "parent": "core",
+            "joint": "brow_r",
+            "depth": 2
+          }
+        ]
+      },
+      "w": {
+        "origin": [
+          32,
+          32
+        ],
+        "parts": [
+          {
+            "name": "core",
+            "parent": null,
+            "depth": 1
+          },
+          {
+            "name": "tent_l",
+            "parent": "core",
+            "joint": "hinge_l",
+            "depth": 0
+          },
+          {
+            "name": "tent_r",
+            "parent": "core",
+            "joint": "hinge_r",
+            "depth": 0
+          }
+        ]
+      }
+    }
+  },
+  "facings": {
+    "s": [
+      {
+        "variant": "stand",
+        "frame": "enemy_orbiter_s_idle0"
+      },
+      {
+        "variant": "sleep",
+        "frame": "enemy_orbiter_s_dormant"
+      },
+      {
+        "variant": "glow",
+        "frame": "enemy_orbiter_s_tele"
+      }
+    ],
+    "n": [
+      {
+        "variant": "stand",
+        "frame": "enemy_orbiter_n_idle0"
+      },
+      {
+        "variant": "sleep",
+        "frame": "enemy_orbiter_n_dormant"
+      },
+      {
+        "variant": "glow",
+        "frame": "enemy_orbiter_n_tele"
+      }
+    ],
+    "w": [
+      {
+        "variant": "stand",
+        "frame": "enemy_orbiter_w_idle0"
+      },
+      {
+        "variant": "sleep",
+        "frame": "enemy_orbiter_w_dormant"
+      },
+      {
+        "variant": "glow",
+        "frame": "enemy_orbiter_w_tele"
+      }
+    ]
+  }
+}

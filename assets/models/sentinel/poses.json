@@ -1,0 +1,193 @@
+{
+  "s": {
+    "stand": {
+      "parts": {
+        "core": "stand",
+        "pod_l": "stand",
+        "pod_r": "stand"
+      }
+    },
+    "sleep": {
+      "parts": {
+        "core": "sleep",
+        "pod_l": "sleep",
+        "pod_r": "sleep"
+      }
+    },
+    "glow": {
+      "parts": {
+        "core": "glow",
+        "pod_l": "glow",
+        "pod_r": "glow"
+      }
+    },
+    "idle0": {
+      "base": "stand"
+    },
+    "idle1": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "idle2": {
+      "base": "stand"
+    },
+    "idle3": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "watch0": {
+      "base": "stand"
+    },
+    "watch1": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            1,
+            0
+          ]
+        }
+      }
+    },
+    "watch2": {
+      "base": "stand"
+    },
+    "watch3": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            -1,
+            0
+          ]
+        }
+      }
+    },
+    "windup": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -7
+          ]
+        }
+      }
+    },
+    "lunge": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            4
+          ]
+        }
+      }
+    },
+    "follow": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            8
+          ]
+        }
+      }
+    },
+    "recover": {
+      "between": [
+        "follow",
+        "stand"
+      ],
+      "t": 0.5
+    },
+    "hit0": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -4
+          ]
+        }
+      }
+    },
+    "hit1": {
+      "base": "stand",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -3
+          ]
+        }
+      }
+    },
+    "dormant0": {
+      "base": "sleep"
+    },
+    "dormant1": {
+      "base": "sleep",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "dormant2": {
+      "base": "sleep"
+    },
+    "dormant3": {
+      "base": "sleep",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "stir": {
+      "base": "sleep",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -1
+          ]
+        }
+      }
+    },
+    "glow1": {
+      "base": "glow",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -1
+          ]
+        }
+      }
+    }
+  }
+}

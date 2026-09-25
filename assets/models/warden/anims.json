@@ -1,0 +1,40 @@
+{
+  "facings": [
+    "s",
+    "n",
+    "w"
+  ],
+  "frames": {
+    "enemy_warden_{f}_idle0": "idle0",
+    "enemy_warden_{f}_idle1": "idle1",
+    "enemy_warden_{f}_idle2": "idle2",
+    "enemy_warden_{f}_idle3": "idle3",
+    "enemy_warden_{f}_watch0": "watch0",
+    "enemy_warden_{f}_watch1": "watch1",
+    "enemy_warden_{f}_watch2": "watch2",
+    "enemy_warden_{f}_watch3": "watch3",
+    "enemy_warden_{f}_walk0": "walk0",
+    "enemy_warden_{f}_walk1": "walk1",
+    "enemy_warden_{f}_walk2": "walk2",
+    "enemy_warden_{f}_walk3": "walk3",
+    "enemy_warden_{f}_walk4": "walk4",
+    "enemy_warden_{f}_walk5": "walk5",
+    "enemy_warden_{f}_windup": "windup",
+    "enemy_warden_{f}_lunge": "lunge",
+    "enemy_warden_{f}_follow": "follow",
+    "enemy_warden_{f}_recover": "recover",
+    "enemy_warden_{f}_hit0": "hit0",
+    "enemy_warden_{f}_hit1": "hit1",
+    "enemy_warden_{f}_stir": "stir",
+    "enemy_warden_{f}_dormant0": "dormant0",
+    "enemy_warden_{f}_dormant1": "dormant1",
+    "enemy_warden_{f}_dormant2": "dormant2",
+    "enemy_warden_{f}_dormant3": "dormant3",
+    "enemy_warden_{f}_dormant": "dormant0",
+    "enemy_warden_{f}_plant": "plant",
+    "enemy_warden_{f}_throw_windup": "aim",
+    "enemy_warden_{f}_throw_release": "hurl",
+    "enemy_warden_{f}_idle_bare0": "bare",
+    "enemy_warden_{f}_idle_bare1": "bare1"
+  }
+}

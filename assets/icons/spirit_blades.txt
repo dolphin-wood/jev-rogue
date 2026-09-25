@@ -1,0 +1,18 @@
+# Spirit Blades
+1=#3a2f6b 2=#7d6ad0 3=#b9a7ff 4=#f4f0ff
+......oooo......
+..ooo.ow2o.ooo..
+.oowooo31ooowoo.
+.o431oo31oo431o.
+.o321oo31oo321o.
+.o321oo31oo321o.
+.o321oo31oo321o.
+oo321oo31oo321oo
+o33211o31o33211o
+oo321oo31oo321oo
+.o321oo31oo321o.
+oo321oo31oo321oo
+o31111o21o31111o
+oooooooooooooooo
+................
+................

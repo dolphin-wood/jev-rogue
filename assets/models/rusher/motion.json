@@ -1,0 +1,20 @@
+{
+  "base": "enemy_rusher",
+  "facings": [
+    "s",
+    "n",
+    "w"
+  ],
+  "weight": "light",
+  "gait": "walk",
+  "stand": "stand",
+  "crouch": "crouch",
+  "strike": "pounce",
+  "roles": {
+    "shell": "body",
+    "head": "head",
+    "leg_l": "foot_l",
+    "leg_r": "foot_r"
+  },
+  "slump": "sleep"
+}

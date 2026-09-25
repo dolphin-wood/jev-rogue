@@ -1,0 +1,152 @@
+{
+  "size": [
+    96,
+    96
+  ],
+  "outline": 2,
+  "feet": [
+    "foot_l",
+    "foot_r"
+  ],
+  "facings": {
+    "s": {
+      "origin": [
+        48,
+        48
+      ],
+      "parts": [
+        {
+          "name": "torso",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "name": "foot_l",
+          "parent": "torso",
+          "joint": "hip_l",
+          "depth": 1.5
+        },
+        {
+          "name": "foot_r",
+          "parent": "torso",
+          "joint": "hip_r",
+          "depth": 1.5
+        },
+        {
+          "name": "arm_l",
+          "parent": "torso",
+          "joint": "sh_l",
+          "depth": 2
+        },
+        {
+          "name": "arm_r",
+          "parent": "torso",
+          "joint": "sh_r",
+          "depth": 2
+        },
+        {
+          "name": "head",
+          "parent": "torso",
+          "joint": "neck",
+          "depth": 3
+        }
+      ]
+    },
+    "n": {
+      "origin": [
+        48,
+        48
+      ],
+      "parts": [
+        {
+          "name": "torso",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "name": "foot_l",
+          "parent": "torso",
+          "joint": "hip_l",
+          "depth": 1.5
+        },
+        {
+          "name": "foot_r",
+          "parent": "torso",
+          "joint": "hip_r",
+          "depth": 1.5
+        },
+        {
+          "name": "arm_l",
+          "parent": "torso",
+          "joint": "sh_l",
+          "depth": 2
+        },
+        {
+          "name": "arm_r",
+          "parent": "torso",
+          "joint": "sh_r",
+          "depth": 2
+        },
+        {
+          "name": "head",
+          "parent": "torso",
+          "joint": "neck",
+          "depth": 3
+        }
+      ]
+    },
+    "w": {
+      "origin": [
+        48,
+        48
+      ],
+      "parts": [
+        {
+          "name": "torso",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "name": "foot_l",
+          "parent": "torso",
+          "joint": "hip_l",
+          "depth": 1.5
+        },
+        {
+          "name": "foot_r",
+          "parent": "torso",
+          "joint": "hip_r",
+          "depth": 1.5
+        },
+        {
+          "name": "arm_l",
+          "parent": "torso",
+          "joint": "sh_l",
+          "depth": 2
+        },
+        {
+          "name": "arm_r",
+          "parent": "torso",
+          "joint": "sh_r",
+          "depth": 2
+        },
+        {
+          "name": "head",
+          "parent": "torso",
+          "joint": "neck",
+          "depth": 3
+        }
+      ]
+    }
+  },
+  "anchors": {},
+  "marks": {
+    "mark": {
+      "part": "head",
+      "at": [
+        0,
+        -19
+      ]
+    }
+  }
+}

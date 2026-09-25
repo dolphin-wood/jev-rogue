@@ -1,0 +1,177 @@
+{
+  "size": [
+    64,
+    64
+  ],
+  "outline": 2,
+  "facings": {
+    "s": {
+      "origin": [
+        32,
+        40
+      ],
+      "parts": [
+        {
+          "name": "foot_l",
+          "parent": null,
+          "depth": 0
+        },
+        {
+          "name": "foot_r",
+          "parent": null,
+          "depth": 0
+        },
+        {
+          "name": "arm_cast",
+          "parent": "torso",
+          "joint": "shoulder_cast",
+          "depth": 2
+        },
+        {
+          "name": "torso",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "name": "hem",
+          "parent": "torso",
+          "joint": "waist",
+          "depth": 1.5
+        },
+        {
+          "name": "arm_sword",
+          "parent": "torso",
+          "joint": "shoulder_sword",
+          "depth": 2
+        },
+        {
+          "name": "head",
+          "parent": "torso",
+          "joint": "neck",
+          "depth": 3
+        },
+        {
+          "name": "figure",
+          "parent": null,
+          "depth": 4
+        }
+      ]
+    },
+    "n": {
+      "origin": [
+        34,
+        40
+      ],
+      "parts": [
+        {
+          "name": "foot_l",
+          "parent": null,
+          "depth": 0
+        },
+        {
+          "name": "foot_r",
+          "parent": null,
+          "depth": 0
+        },
+        {
+          "name": "arm_cast",
+          "parent": "torso",
+          "joint": "shoulder_cast",
+          "depth": 2
+        },
+        {
+          "name": "torso",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "name": "hem",
+          "parent": "torso",
+          "joint": "waist",
+          "depth": 1.5
+        },
+        {
+          "name": "arm_sword",
+          "parent": "torso",
+          "joint": "shoulder_sword",
+          "depth": 2
+        },
+        {
+          "name": "head",
+          "parent": "torso",
+          "joint": "neck",
+          "depth": 3
+        },
+        {
+          "name": "figure",
+          "parent": null,
+          "depth": 4
+        }
+      ]
+    },
+    "w": {
+      "origin": [
+        30,
+        40
+      ],
+      "parts": [
+        {
+          "name": "foot_l",
+          "parent": null,
+          "depth": 0
+        },
+        {
+          "name": "foot_r",
+          "parent": null,
+          "depth": 0
+        },
+        {
+          "name": "arm_cast",
+          "parent": "torso",
+          "joint": "shoulder_cast",
+          "depth": 0.5
+        },
+        {
+          "name": "torso",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "name": "hem",
+          "parent": "torso",
+          "joint": "waist",
+          "depth": 1.5
+        },
+        {
+          "name": "arm_sword",
+          "parent": "torso",
+          "joint": "shoulder_sword",
+          "depth": 2
+        },
+        {
+          "name": "head",
+          "parent": "torso",
+          "joint": "neck",
+          "depth": 3
+        },
+        {
+          "name": "figure",
+          "parent": null,
+          "depth": 4
+        }
+      ]
+    }
+  },
+  "feet": [
+    "foot_l",
+    "foot_r"
+  ],
+  "optionalAnchors": [
+    "hand"
+  ],
+  "anchors": {
+    "grip": "grip",
+    "offhand": "offhand",
+    "hand": "hand"
+  }
+}

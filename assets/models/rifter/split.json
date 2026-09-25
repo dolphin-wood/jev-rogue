@@ -1,0 +1,192 @@
+{
+  "rules": [
+    {
+      "material": "eye",
+      "shades": 3,
+      "hue": [
+        150,
+        205
+      ],
+      "sat": [
+        0.3,
+        1
+      ]
+    },
+    {
+      "material": "hot",
+      "shades": 3,
+      "hue": [
+        295,
+        355
+      ],
+      "sat": [
+        0.42,
+        1
+      ]
+    },
+    {
+      "material": "warm",
+      "shades": 4,
+      "hue": [
+        15,
+        62
+      ],
+      "sat": [
+        0.32,
+        1
+      ]
+    },
+    {
+      "material": "steel",
+      "shades": 6,
+      "hue": [
+        200,
+        292
+      ],
+      "sat": [
+        0.05,
+        1
+      ],
+      "light": [
+        0.08,
+        0.92
+      ]
+    },
+    {
+      "material": "bone",
+      "shades": 5,
+      "sat": [
+        0,
+        0.3
+      ],
+      "light": [
+        0.3,
+        1
+      ]
+    },
+    {
+      "material": "dusk",
+      "shades": 3,
+      "light": [
+        0,
+        0.55
+      ]
+    }
+  ],
+  "outlineLuma": 24,
+  "lift": 1.0,
+  "paletteFrames": [
+    "enemy_rifter_idle0",
+    "enemy_rifter_dormant",
+    "enemy_rifter_telegraph",
+    "enemy_rifter_erupt",
+    "enemy_rifter_telegraph_walk"
+  ],
+  "letters": {
+    "core": "c",
+    "pod_l": "p",
+    "pod_r": "o"
+  },
+  "rest": "core",
+  "fillFrom": {
+    "core": [
+      "steel",
+      "bone",
+      "warm"
+    ]
+  },
+  "fillRadius": {
+    "core": 5
+  },
+  "claimsFrac": {
+    "s": {
+      "pod_l": [
+        [
+          0,
+          0.1,
+          0.2,
+          0.9
+        ]
+      ],
+      "pod_r": [
+        [
+          0.8,
+          0.1,
+          1,
+          0.9
+        ]
+      ]
+    }
+  },
+  "jointsFrac": {
+    "s": {
+      "hinge_l": [
+        0.18,
+        0.5
+      ],
+      "hinge_r": [
+        0.82,
+        0.5
+      ]
+    }
+  },
+  "anchorsOn": {},
+  "rig": {
+    "size": [
+      64,
+      64
+    ],
+    "outline": 2,
+    "facings": {
+      "s": {
+        "origin": [
+          32,
+          32
+        ],
+        "parts": [
+          {
+            "name": "core",
+            "parent": null,
+            "depth": 1
+          },
+          {
+            "name": "pod_l",
+            "parent": "core",
+            "joint": "hinge_l",
+            "depth": 0
+          },
+          {
+            "name": "pod_r",
+            "parent": "core",
+            "joint": "hinge_r",
+            "depth": 0
+          }
+        ]
+      }
+    }
+  },
+  "facings": {
+    "s": [
+      {
+        "variant": "stand",
+        "frame": "enemy_rifter_idle0"
+      },
+      {
+        "variant": "sleep",
+        "frame": "enemy_rifter_dormant"
+      },
+      {
+        "variant": "glow",
+        "frame": "enemy_rifter_telegraph"
+      },
+      {
+        "variant": "blast",
+        "frame": "enemy_rifter_erupt"
+      },
+      {
+        "variant": "stride",
+        "frame": "enemy_rifter_telegraph_walk"
+      }
+    ]
+  }
+}

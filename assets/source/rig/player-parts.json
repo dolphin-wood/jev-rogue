@@ -1,0 +1,68 @@
+{
+  "frame": {
+    "w": 64,
+    "h": 64
+  },
+  "parts": [
+    {
+      "name": "head",
+      "x": 0,
+      "pivot": [
+        32,
+        30
+      ],
+      "parent": "torso",
+      "z": 4
+    },
+    {
+      "name": "swordArm",
+      "x": 64,
+      "pivot": [
+        21,
+        30
+      ],
+      "parent": "torso",
+      "z": 5
+    },
+    {
+      "name": "castArm",
+      "x": 128,
+      "pivot": [
+        42,
+        31
+      ],
+      "parent": "torso",
+      "z": 5
+    },
+    {
+      "name": "legL",
+      "x": 192,
+      "pivot": [
+        25,
+        48
+      ],
+      "parent": "pelvis",
+      "z": 1
+    },
+    {
+      "name": "legR",
+      "x": 256,
+      "pivot": [
+        38,
+        48
+      ],
+      "parent": "pelvis",
+      "z": 1
+    },
+    {
+      "name": "torso",
+      "x": 320,
+      "pivot": [
+        32,
+        46
+      ],
+      "parent": "pelvis",
+      "z": 2
+    }
+  ]
+}

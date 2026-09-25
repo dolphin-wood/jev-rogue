@@ -1,0 +1,391 @@
+{
+  "rules": [
+    {
+      "material": "eye",
+      "shades": 3,
+      "hue": [
+        155,
+        205
+      ],
+      "sat": [
+        0.35,
+        1
+      ]
+    },
+    {
+      "material": "hot",
+      "shades": 3,
+      "hue": [
+        295,
+        355
+      ],
+      "sat": [
+        0.45,
+        1
+      ]
+    },
+    {
+      "material": "warm",
+      "shades": 3,
+      "hue": [
+        18,
+        62
+      ],
+      "sat": [
+        0.3,
+        1
+      ]
+    },
+    {
+      "material": "steel",
+      "shades": 5,
+      "hue": [
+        205,
+        270
+      ],
+      "sat": [
+        0.1,
+        1
+      ],
+      "light": [
+        0.1,
+        0.9
+      ]
+    },
+    {
+      "material": "bone",
+      "shades": 5,
+      "sat": [
+        0,
+        0.3
+      ],
+      "light": [
+        0.32,
+        1
+      ]
+    },
+    {
+      "material": "dusk",
+      "shades": 3,
+      "light": [
+        0,
+        0.55
+      ]
+    }
+  ],
+  "outlineLuma": 24,
+  "lift": 1.0,
+  "paletteFrames": [
+    "enemy_shooter_s_idle0",
+    "enemy_shooter_s_dormant",
+    "enemy_shooter_s_tele",
+    "enemy_shooter_s_lob",
+    "enemy_shooter_n_idle0",
+    "enemy_shooter_n_dormant",
+    "enemy_shooter_n_tele",
+    "enemy_shooter_n_lob",
+    "enemy_shooter_w_idle0",
+    "enemy_shooter_w_dormant",
+    "enemy_shooter_w_tele",
+    "enemy_shooter_w_lob"
+  ],
+  "letters": {
+    "core": "c",
+    "fin_l": "f",
+    "fin_r": "i",
+    "shadow": "s"
+  },
+  "rest": "core",
+  "fillFrom": {
+    "core": [
+      "bone",
+      "steel"
+    ]
+  },
+  "fillRadius": {
+    "core": 4
+  },
+  "claimsFrac": {
+    "s": {
+      "fin_l": [
+        [
+          0,
+          0,
+          0.18,
+          0.78
+        ]
+      ],
+      "fin_r": [
+        [
+          0.73,
+          0,
+          1,
+          0.78
+        ]
+      ],
+      "shadow": [
+        [
+          0,
+          0.94,
+          1,
+          1
+        ]
+      ]
+    },
+    "n": {
+      "fin_l": [
+        [
+          0,
+          0,
+          0.18,
+          0.78
+        ]
+      ],
+      "fin_r": [
+        [
+          0.73,
+          0,
+          1,
+          0.78
+        ]
+      ],
+      "shadow": [
+        [
+          0,
+          0.94,
+          1,
+          1
+        ]
+      ]
+    },
+    "w": {
+      "fin_l": [
+        [
+          0,
+          0.38,
+          0.13,
+          0.66
+        ]
+      ],
+      "fin_r": [
+        [
+          0.63,
+          0,
+          0.85,
+          0.28
+        ]
+      ],
+      "shadow": [
+        [
+          0,
+          0.93,
+          1,
+          1
+        ]
+      ]
+    }
+  },
+  "jointsFrac": {
+    "s": {
+      "hinge_l": [
+        0.16,
+        0.45
+      ],
+      "hinge_r": [
+        0.84,
+        0.45
+      ],
+      "under": [
+        0.5,
+        0.9
+      ]
+    },
+    "n": {
+      "hinge_l": [
+        0.16,
+        0.45
+      ],
+      "hinge_r": [
+        0.84,
+        0.45
+      ],
+      "under": [
+        0.5,
+        0.9
+      ]
+    },
+    "w": {
+      "hinge_l": [
+        0.14,
+        0.5
+      ],
+      "hinge_r": [
+        0.7,
+        0.2
+      ],
+      "under": [
+        0.4,
+        0.9
+      ]
+    }
+  },
+  "anchorsOn": {},
+  "rig": {
+    "size": [
+      64,
+      64
+    ],
+    "outline": 2,
+    "detached": [
+      "shadow"
+    ],
+    "facings": {
+      "s": {
+        "origin": [
+          32,
+          32
+        ],
+        "parts": [
+          {
+            "name": "core",
+            "parent": null,
+            "depth": 1
+          },
+          {
+            "name": "fin_l",
+            "parent": "core",
+            "joint": "hinge_l",
+            "depth": 0
+          },
+          {
+            "name": "fin_r",
+            "parent": "core",
+            "joint": "hinge_r",
+            "depth": 0
+          },
+          {
+            "name": "shadow",
+            "parent": null,
+            "depth": -1
+          }
+        ]
+      },
+      "n": {
+        "origin": [
+          32,
+          32
+        ],
+        "parts": [
+          {
+            "name": "core",
+            "parent": null,
+            "depth": 1
+          },
+          {
+            "name": "fin_l",
+            "parent": "core",
+            "joint": "hinge_l",
+            "depth": 0
+          },
+          {
+            "name": "fin_r",
+            "parent": "core",
+            "joint": "hinge_r",
+            "depth": 0
+          },
+          {
+            "name": "shadow",
+            "parent": null,
+            "depth": -1
+          }
+        ]
+      },
+      "w": {
+        "origin": [
+          32,
+          32
+        ],
+        "parts": [
+          {
+            "name": "core",
+            "parent": null,
+            "depth": 1
+          },
+          {
+            "name": "fin_l",
+            "parent": "core",
+            "joint": "hinge_l",
+            "depth": 0
+          },
+          {
+            "name": "fin_r",
+            "parent": "core",
+            "joint": "hinge_r",
+            "depth": 0
+          },
+          {
+            "name": "shadow",
+            "parent": null,
+            "depth": -1
+          }
+        ]
+      }
+    }
+  },
+  "facings": {
+    "s": [
+      {
+        "variant": "stand",
+        "frame": "enemy_shooter_s_idle0"
+      },
+      {
+        "variant": "sleep",
+        "frame": "enemy_shooter_s_dormant"
+      },
+      {
+        "variant": "glow",
+        "frame": "enemy_shooter_s_tele"
+      },
+      {
+        "variant": "lob",
+        "frame": "enemy_shooter_s_lob"
+      }
+    ],
+    "n": [
+      {
+        "variant": "stand",
+        "frame": "enemy_shooter_n_idle0"
+      },
+      {
+        "variant": "sleep",
+        "frame": "enemy_shooter_n_dormant"
+      },
+      {
+        "variant": "glow",
+        "frame": "enemy_shooter_n_tele"
+      },
+      {
+        "variant": "lob",
+        "frame": "enemy_shooter_n_lob"
+      }
+    ],
+    "w": [
+      {
+        "variant": "stand",
+        "frame": "enemy_shooter_w_idle0"
+      },
+      {
+        "variant": "sleep",
+        "frame": "enemy_shooter_w_dormant"
+      },
+      {
+        "variant": "glow",
+        "frame": "enemy_shooter_w_tele"
+      },
+      {
+        "variant": "lob",
+        "frame": "enemy_shooter_w_lob"
+      }
+    ]
+  }
+}

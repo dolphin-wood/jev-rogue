@@ -1,0 +1,362 @@
+{
+  "sword": {
+    "grip": [
+      32,
+      158
+    ],
+    "artSize": [
+      64,
+      192
+    ]
+  },
+  "phases": {
+    "p1": {
+      "identity": {
+        "neck": [
+          128,
+          78
+        ],
+        "shoulders": [
+          128,
+          86
+        ],
+        "waist": [
+          128,
+          129
+        ],
+        "grip": [
+          128,
+          112
+        ],
+        "feet": [
+          128,
+          224
+        ]
+      },
+      "arms": {
+        "grip_stand": {
+          "grip": [
+            128,
+            112
+          ]
+        },
+        "grip_high": {
+          "grip": [
+            128,
+            40
+          ]
+        },
+        "grip_back": {
+          "grip": [
+            190,
+            130
+          ]
+        },
+        "grip_forward": {
+          "grip": [
+            232,
+            118
+          ]
+        },
+        "grip_low": {
+          "grip": [
+            128,
+            162
+          ]
+        },
+        "chain_wind": {
+          "grip": [
+            171,
+            116
+          ]
+        },
+        "chain_cast": {
+          "grip": [
+            169,
+            111
+          ]
+        },
+        "chain_reel": {
+          "grip": [
+            168,
+            84
+          ]
+        },
+        "hurt": {
+          "grip": [
+            128,
+            94
+          ]
+        },
+        "open": {
+          "grip": [
+            128,
+            112
+          ]
+        }
+      },
+      "keys": {
+        "kneel": {
+          "grip": [
+            121,
+            146
+          ]
+        },
+        "crouch": {
+          "grip": [
+            72,
+            132
+          ]
+        },
+        "air": {
+          "grip": [
+            128,
+            23
+          ]
+        },
+        "stagger": {
+          "grip": [
+            174,
+            123
+          ]
+        }
+      },
+      "chain": [
+        91,
+        115
+      ]
+    },
+    "p2": {
+      "identity": {
+        "neck": [
+          128,
+          78
+        ],
+        "shoulders": [
+          128,
+          86
+        ],
+        "waist": [
+          128,
+          129
+        ],
+        "grip": [
+          128,
+          112
+        ],
+        "feet": [
+          128,
+          224
+        ]
+      },
+      "arms": {
+        "grip_stand": {
+          "grip": [
+            128,
+            112
+          ]
+        },
+        "grip_high": {
+          "grip": [
+            128,
+            40
+          ]
+        },
+        "grip_back": {
+          "grip": [
+            197,
+            130
+          ]
+        },
+        "grip_forward": {
+          "grip": [
+            232,
+            119
+          ]
+        },
+        "grip_low": {
+          "grip": [
+            128,
+            166
+          ]
+        },
+        "chain_wind": {
+          "grip": [
+            171,
+            116
+          ]
+        },
+        "chain_cast": {
+          "grip": [
+            169,
+            111
+          ]
+        },
+        "chain_reel": {
+          "grip": [
+            168,
+            84
+          ]
+        },
+        "hurt": {
+          "grip": [
+            128,
+            94
+          ]
+        },
+        "open": {
+          "grip": [
+            128,
+            112
+          ]
+        }
+      },
+      "keys": {
+        "kneel": {
+          "grip": [
+            128,
+            164
+          ]
+        },
+        "crouch": {
+          "grip": [
+            70,
+            128
+          ]
+        },
+        "air": {
+          "grip": [
+            128,
+            22
+          ]
+        },
+        "stagger": {
+          "grip": [
+            144,
+            142
+          ]
+        }
+      },
+      "chain": [
+        91,
+        115
+      ]
+    },
+    "p3": {
+      "identity": {
+        "neck": [
+          128,
+          78
+        ],
+        "shoulders": [
+          128,
+          86
+        ],
+        "waist": [
+          128,
+          129
+        ],
+        "grip": [
+          128,
+          112
+        ],
+        "feet": [
+          128,
+          224
+        ]
+      },
+      "arms": {
+        "grip_stand": {
+          "grip": [
+            128,
+            112
+          ]
+        },
+        "grip_high": {
+          "grip": [
+            128,
+            40
+          ]
+        },
+        "grip_back": {
+          "grip": [
+            194,
+            130
+          ]
+        },
+        "grip_forward": {
+          "grip": [
+            231,
+            120
+          ]
+        },
+        "grip_low": {
+          "grip": [
+            128,
+            159
+          ]
+        },
+        "chain_wind": {
+          "grip": [
+            171,
+            116
+          ]
+        },
+        "chain_cast": {
+          "grip": [
+            169,
+            111
+          ]
+        },
+        "chain_reel": {
+          "grip": [
+            168,
+            84
+          ]
+        },
+        "hurt": {
+          "grip": [
+            128,
+            94
+          ]
+        },
+        "open": {
+          "grip": [
+            128,
+            112
+          ]
+        }
+      },
+      "keys": {
+        "kneel": {
+          "grip": [
+            130,
+            135
+          ]
+        },
+        "crouch": {
+          "grip": [
+            69,
+            119
+          ]
+        },
+        "air": {
+          "grip": [
+            128,
+            24
+          ]
+        },
+        "stagger": {
+          "grip": [
+            112,
+            129
+          ]
+        }
+      },
+      "chain": [
+        128,
+        97
+      ]
+    }
+  }
+}

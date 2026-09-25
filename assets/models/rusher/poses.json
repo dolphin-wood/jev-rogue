@@ -1,0 +1,1537 @@
+{
+  "s": {
+    "stand": {
+      "parts": {
+        "leg_l": "stand",
+        "leg_r": "stand",
+        "shell": "stand",
+        "head": "stand"
+      }
+    },
+    "crouch": {
+      "parts": {
+        "leg_l": "crouch",
+        "leg_r": "crouch",
+        "shell": "crouch",
+        "head": "crouch"
+      }
+    },
+    "pounce": {
+      "parts": {
+        "leg_l": "pounce",
+        "leg_r": "pounce",
+        "shell": "pounce",
+        "head": "pounce"
+      }
+    },
+    "sleep": {
+      "parts": {
+        "leg_l": "sleep",
+        "leg_r": "sleep",
+        "shell": "sleep",
+        "head": "sleep"
+      }
+    },
+    "idle0": {
+      "base": "stand",
+      "parts": {
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "idle1": {
+      "base": "stand",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "leg_l": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "idle2": {
+      "base": "stand",
+      "parts": {
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "idle3": {
+      "base": "stand",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "watch0": {
+      "base": "stand",
+      "parts": {
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "watch1": {
+      "base": "stand",
+      "parts": {
+        "shell": {
+          "at": [
+            1,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            1,
+            0
+          ]
+        },
+        "leg_l": {
+          "at": [
+            -1,
+            0
+          ]
+        },
+        "leg_r": {
+          "at": [
+            -1,
+            0
+          ]
+        }
+      }
+    },
+    "watch2": {
+      "base": "stand",
+      "parts": {
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "watch3": {
+      "base": "stand",
+      "parts": {
+        "shell": {
+          "at": [
+            -1,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            -1,
+            0
+          ]
+        },
+        "leg_l": {
+          "at": [
+            1,
+            0
+          ]
+        },
+        "leg_r": {
+          "at": [
+            1,
+            0
+          ]
+        }
+      }
+    },
+    "walk0": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            3
+          ]
+        },
+        "shell": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            3
+          ]
+        }
+      }
+    },
+    "walk1": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -3
+          ]
+        }
+      }
+    },
+    "walk2": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            0,
+            4
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            -4
+          ]
+        }
+      }
+    },
+    "walk3": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            0,
+            3
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            -4
+          ]
+        }
+      }
+    },
+    "walk4": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            0,
+            3
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "shell": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            3
+          ]
+        }
+      }
+    },
+    "walk5": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -3
+          ]
+        }
+      }
+    },
+    "walk6": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            0,
+            -4
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            4
+          ]
+        }
+      }
+    },
+    "walk7": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            0,
+            -4
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            3
+          ]
+        }
+      }
+    },
+    "windup": {
+      "base": "crouch",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            -4
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -1
+          ]
+        }
+      }
+    },
+    "lunge": {
+      "base": "pounce",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            4
+          ]
+        }
+      }
+    },
+    "follow": {
+      "base": "pounce",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            8
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            1
+          ]
+        }
+      }
+    },
+    "recover": {
+      "between": [
+        "follow",
+        "stand"
+      ],
+      "t": 0.5
+    },
+    "hit0": {
+      "base": "stand",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            -4
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -1
+          ]
+        }
+      }
+    },
+    "hit1": {
+      "base": "stand",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            1
+          ]
+        }
+      }
+    },
+    "dormant0": {
+      "base": "sleep",
+      "parts": {
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "dormant1": {
+      "base": "sleep",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "dormant2": {
+      "base": "sleep",
+      "parts": {
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "dormant3": {
+      "base": "sleep",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "stir": {
+      "base": "sleep",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    }
+  },
+  "w": {
+    "stand": {
+      "parts": {
+        "leg_r": "stand",
+        "shell": "stand",
+        "head": "stand",
+        "leg_l": "stand"
+      }
+    },
+    "crouch": {
+      "parts": {
+        "leg_r": "crouch",
+        "shell": "crouch",
+        "head": "crouch",
+        "leg_l": "crouch"
+      }
+    },
+    "pounce": {
+      "parts": {
+        "leg_r": "pounce",
+        "shell": "pounce",
+        "head": "pounce",
+        "leg_l": "pounce"
+      }
+    },
+    "sleep": {
+      "parts": {
+        "leg_r": "sleep",
+        "shell": "sleep",
+        "head": "sleep",
+        "leg_l": "sleep"
+      }
+    },
+    "idle0": {
+      "base": "stand",
+      "parts": {
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "idle1": {
+      "base": "stand",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "leg_l": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "idle2": {
+      "base": "stand",
+      "parts": {
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "idle3": {
+      "base": "stand",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "watch0": {
+      "base": "stand",
+      "parts": {
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "watch1": {
+      "base": "stand",
+      "parts": {
+        "shell": {
+          "at": [
+            1,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            1,
+            0
+          ]
+        },
+        "leg_l": {
+          "at": [
+            -1,
+            0
+          ]
+        },
+        "leg_r": {
+          "at": [
+            -1,
+            0
+          ]
+        }
+      }
+    },
+    "watch2": {
+      "base": "stand",
+      "parts": {
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "watch3": {
+      "base": "stand",
+      "parts": {
+        "shell": {
+          "at": [
+            -1,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            -1,
+            0
+          ]
+        },
+        "leg_l": {
+          "at": [
+            1,
+            0
+          ]
+        },
+        "leg_r": {
+          "at": [
+            1,
+            0
+          ]
+        }
+      }
+    },
+    "walk0": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "shell": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "walk1": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            -5,
+            -2
+          ]
+        },
+        "leg_r": {
+          "at": [
+            5,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "walk2": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            -7,
+            0
+          ]
+        },
+        "leg_r": {
+          "at": [
+            7,
+            0
+          ]
+        }
+      }
+    },
+    "walk3": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            -5,
+            0
+          ]
+        },
+        "leg_r": {
+          "at": [
+            5,
+            -2
+          ]
+        }
+      }
+    },
+    "walk4": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "shell": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "walk5": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            5,
+            0
+          ]
+        },
+        "leg_r": {
+          "at": [
+            -5,
+            -2
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "walk6": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            7,
+            0
+          ]
+        },
+        "leg_r": {
+          "at": [
+            -7,
+            0
+          ]
+        }
+      }
+    },
+    "walk7": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            5,
+            -2
+          ]
+        },
+        "leg_r": {
+          "at": [
+            -5,
+            0
+          ]
+        }
+      }
+    },
+    "windup": {
+      "base": "crouch",
+      "parts": {
+        "shell": {
+          "at": [
+            4,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            1,
+            0
+          ]
+        }
+      }
+    },
+    "lunge": {
+      "base": "pounce",
+      "parts": {
+        "shell": {
+          "at": [
+            -4,
+            0
+          ]
+        }
+      }
+    },
+    "follow": {
+      "base": "pounce",
+      "parts": {
+        "shell": {
+          "at": [
+            -8,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            -1,
+            0
+          ]
+        }
+      }
+    },
+    "recover": {
+      "between": [
+        "follow",
+        "stand"
+      ],
+      "t": 0.5
+    },
+    "hit0": {
+      "base": "stand",
+      "parts": {
+        "shell": {
+          "at": [
+            4,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            1,
+            0
+          ]
+        }
+      }
+    },
+    "hit1": {
+      "base": "stand",
+      "parts": {
+        "shell": {
+          "at": [
+            2,
+            -1
+          ]
+        },
+        "head": {
+          "at": [
+            -1,
+            0
+          ]
+        }
+      }
+    },
+    "dormant0": {
+      "base": "sleep",
+      "parts": {
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "dormant1": {
+      "base": "sleep",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "dormant2": {
+      "base": "sleep",
+      "parts": {
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "dormant3": {
+      "base": "sleep",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "stir": {
+      "base": "sleep",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    }
+  },
+  "n": {
+    "stand": {
+      "parts": {
+        "leg_l": "stand",
+        "leg_r": "stand",
+        "shell": "stand"
+      }
+    },
+    "crouch": {
+      "parts": {
+        "leg_l": "crouch",
+        "leg_r": "crouch",
+        "shell": "crouch"
+      }
+    },
+    "pounce": {
+      "parts": {
+        "leg_l": "pounce",
+        "leg_r": "pounce",
+        "shell": "pounce"
+      }
+    },
+    "sleep": {
+      "parts": {
+        "leg_l": "sleep",
+        "leg_r": "sleep",
+        "shell": "sleep"
+      }
+    },
+    "idle0": {
+      "base": "stand",
+      "parts": {
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "idle1": {
+      "base": "stand",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "leg_l": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "idle2": {
+      "base": "stand",
+      "parts": {
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "idle3": {
+      "base": "stand",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "watch0": {
+      "base": "stand",
+      "parts": {
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "watch1": {
+      "base": "stand",
+      "parts": {
+        "shell": {
+          "at": [
+            1,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            1,
+            0
+          ]
+        },
+        "leg_l": {
+          "at": [
+            -1,
+            0
+          ]
+        },
+        "leg_r": {
+          "at": [
+            -1,
+            0
+          ]
+        }
+      }
+    },
+    "watch2": {
+      "base": "stand",
+      "parts": {
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "watch3": {
+      "base": "stand",
+      "parts": {
+        "shell": {
+          "at": [
+            -1,
+            0
+          ]
+        },
+        "head": {
+          "at": [
+            -1,
+            0
+          ]
+        },
+        "leg_l": {
+          "at": [
+            1,
+            0
+          ]
+        },
+        "leg_r": {
+          "at": [
+            1,
+            0
+          ]
+        }
+      }
+    },
+    "walk0": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            3
+          ]
+        },
+        "shell": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            3
+          ]
+        }
+      }
+    },
+    "walk1": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            0,
+            -4
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            3
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -3
+          ]
+        }
+      }
+    },
+    "walk2": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            0,
+            -4
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            4
+          ]
+        }
+      }
+    },
+    "walk3": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "walk4": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            0,
+            3
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "shell": {
+          "at": [
+            0,
+            -3
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            3
+          ]
+        }
+      }
+    },
+    "walk5": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            0,
+            3
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            -4
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -3
+          ]
+        }
+      }
+    },
+    "walk6": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            0,
+            4
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            -4
+          ]
+        }
+      }
+    },
+    "walk7": {
+      "base": "stand",
+      "parts": {
+        "leg_l": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "leg_r": {
+          "at": [
+            0,
+            -3
+          ]
+        }
+      }
+    },
+    "windup": {
+      "base": "crouch",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            4
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            1
+          ]
+        }
+      }
+    },
+    "lunge": {
+      "base": "pounce",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            -4
+          ]
+        }
+      }
+    },
+    "follow": {
+      "base": "pounce",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            -8
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -1
+          ]
+        }
+      }
+    },
+    "recover": {
+      "between": [
+        "follow",
+        "stand"
+      ],
+      "t": 0.5
+    },
+    "hit0": {
+      "base": "stand",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            4
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            1
+          ]
+        }
+      }
+    },
+    "hit1": {
+      "base": "stand",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -1
+          ]
+        }
+      }
+    },
+    "dormant0": {
+      "base": "sleep",
+      "parts": {
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "dormant1": {
+      "base": "sleep",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            -2
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            2
+          ]
+        }
+      }
+    },
+    "dormant2": {
+      "base": "sleep",
+      "parts": {
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "dormant3": {
+      "base": "sleep",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            2
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    },
+    "stir": {
+      "base": "sleep",
+      "parts": {
+        "shell": {
+          "at": [
+            0,
+            -1
+          ]
+        },
+        "head": {
+          "at": [
+            0,
+            -2
+          ]
+        }
+      }
+    }
+  }
+}

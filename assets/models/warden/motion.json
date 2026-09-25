@@ -1,0 +1,42 @@
+{
+  "base": "enemy_warden",
+  "facings": [
+    "s",
+    "n",
+    "w"
+  ],
+  "weight": "heavy",
+  "gait": "walk",
+  "stand": "stand",
+  "roles": {
+    "torso": "body",
+    "head": "head",
+    "foot_l": "foot_l",
+    "foot_r": "foot_r",
+    "arm_l": "arm_l",
+    "arm_r": "arm_r"
+  },
+  "crouch": "crouch",
+  "strike": "pounce",
+  "slump": "sleep",
+  "extra": {
+    "plant": "plant",
+    "throw_windup": "aim",
+    "throw_release": "hurl",
+    "idle_bare0": "bare",
+    "idle_bare1": "bare1"
+  },
+  "poses": {
+    "bare1": {
+      "base": "bare",
+      "parts": {
+        "torso": {
+          "at": [
+            0,
+            -1
+          ]
+        }
+      }
+    }
+  }
+}

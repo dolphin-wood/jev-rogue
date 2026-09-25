@@ -1,0 +1,112 @@
+{
+  "size": [
+    64,
+    64
+  ],
+  "outline": 2,
+  "detached": [
+    "shadow"
+  ],
+  "facings": {
+    "s": {
+      "origin": [
+        32,
+        32
+      ],
+      "parts": [
+        {
+          "name": "core",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "name": "fin_l",
+          "parent": "core",
+          "joint": "hinge_l",
+          "depth": 0
+        },
+        {
+          "name": "fin_r",
+          "parent": "core",
+          "joint": "hinge_r",
+          "depth": 0
+        },
+        {
+          "name": "shadow",
+          "parent": null,
+          "depth": -1
+        }
+      ]
+    },
+    "n": {
+      "origin": [
+        32,
+        32
+      ],
+      "parts": [
+        {
+          "name": "core",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "name": "fin_l",
+          "parent": "core",
+          "joint": "hinge_l",
+          "depth": 0
+        },
+        {
+          "name": "fin_r",
+          "parent": "core",
+          "joint": "hinge_r",
+          "depth": 0
+        },
+        {
+          "name": "shadow",
+          "parent": null,
+          "depth": -1
+        }
+      ]
+    },
+    "w": {
+      "origin": [
+        32,
+        32
+      ],
+      "parts": [
+        {
+          "name": "core",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "name": "fin_l",
+          "parent": "core",
+          "joint": "hinge_l",
+          "depth": 0
+        },
+        {
+          "name": "fin_r",
+          "parent": "core",
+          "joint": "hinge_r",
+          "depth": 0
+        },
+        {
+          "name": "shadow",
+          "parent": null,
+          "depth": -1
+        }
+      ]
+    }
+  },
+  "anchors": {},
+  "marks": {
+    "mark": {
+      "part": "core",
+      "at": [
+        0,
+        -18
+      ]
+    }
+  }
+}

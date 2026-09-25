@@ -1,0 +1,448 @@
+# lancer, facing w. Split from the delivered frames by sprite:split; the parts are now the source.
+
+legend outline:k eye:abc warm:defg steel:hijlmn bone:pqrst dusk:uvw
+
+part torso.stand pivot 22,14
+joint hip_l 16,23
+joint hip_r 27,23
+joint sh_l 11,7
+joint sh_r 32,7
+joint neck 22,7
+.................tttilijjrsjii
+..............ttttttilijjrsjii
+..............ttttttilijjrsjii
+.............tttttttilijjrsjii........f
+.......gg.tgggggggghilijjrsjii.......fff
+.....gggggggggggggghilijjrsjii.....ffffff
+..gggggggggggfffffhhilijjrsjii.....ffffff
+ggggggggggsssssssshhilijjrsjii.....ffffff
+ssssssssssssskiiiihhilijjrsjiiikkkfffffff
+.sssssssskkkkkiikkkhilijjrsjijljkkqqqqqqq
+.hhhhhhhhkijjlljikijllljiiijlljjjjkqqqqqqqq
+hhhhhhhhhhijmmmljhilmmllljjlljjmmlmmmmmmmmmm
+jjjjjjjjjjihmnmljhjjlmllllllljmmnnmmmmmmmmmm
+.mmmmmmmmmlhjnmljhikkkkllllljjmnnnnnnnnnnnnn
+mmmmmmmmmmmjimmlhkkkkkkhjjljjmmnnnnnnnnnnnnn
+nnnnnnnnnnmlhllkkssgtfkkjjjjlmmmnnnnnnnnnnnn
+nnnnnnnnnnmjhkkutgggekkiiiijjlmmmnmmmmmmmmmm
+nnnnnnnnnnmjhktgggtsqkkihkkkijlmmmmmmmmmmmmm
+mmmmmmmmmmmlkksfessskkhhkttpkkjlllllllllllhhh
+mmmmmmmmmmlikkrssskkkkhksfggskkijliiiiiiilhhhh
+llllllllllikkkkrrkkkkkkkssfggkkiiikiiiiillhhhhh
+jjjjjjjjjj....kkkkijikkksssggskhhkkiiiilllhhhhhh
+.jjjjjjjjjjjjjiiiiijiiissssggsshhhhiiillllhhhhhh
+..jjjjjjjjj..jiiiiijiiissssggsshhhhiilllllh
+...jjjjjjj...jiiiiijiiissssggsshhhhillllllhh
+....jjjj.....jiiiiijiiiss..ggs..hhhlllllllh
+.....j.......jiiiiijiiiss........hhmmmmmmml
+...............iiiijiiis.........hmmmmmmmmmj
+................iiijiiis..........mmmmmmmmlj
+.................iijii............lllllllljh
+..................iji.............lllllll
+...................................llllll
+
+part foot_l.stand pivot 13,1
+kktgfspkkkkkkhjlmlik
+gfgsrkkk..kkkilmmmli
+fsskkkk...kkkkmnnnmj
+.kkkk.....kkknnnnmmj
+..k.......kkimnmnmli
+...........sffsmmlik
+..........ttergtmikk
+..........fsllsriik
+...............kkk
+
+part foot_r.stand pivot 4,1
+kkssggtkkkkhilmmjk
+kkkkssskkkkhjmmnlj
+kkkkkkkkkkkilmnnnm
+kk..kkk..kkkilmnnn
+kk........kkkjlmnn
+k.........kkkkiffm
+k..........kktfgtm
+...........kktgerl
+...........kkkkkkk
+............kkkkkk
+
+part arm_l.stand pivot 13,3
+.........kk
+.......kkkq
+....kkkufgg
+..kkkktgggg
+..kktggggss
+..tttfsssqw
+tfssrpvkkkk
+..kkkkkkuse
+..kkkksggsi
+...kktggesj
+..kktgggsjm
+..ktfggslmn
+..tggeelmnn
+.ugtskkklmn
+.wgskkkkkhn
+.pekkctkkin
+.pvkkccakmm
+..kkkkkkrfs
+...kk
+...tg
+....f
+
+part arm_r.stand pivot -3,4
+...k
+..kkk
+kkktkk
+krftkk
+tggekk
+fgfskk
+sssqkk
+ksskkkkkus
+hkkkkkktgf
+likkkktggr
+mljkksffsp
+nmlhkksss
+mmljkkkpk
+mllhkkpkk
+ljikktgtk
+jjkkrggggk
+kkkkqssggtk
+khhkkkrssttk
+hijikkksrrrkk
+......kkkkkkk
+......kk
+......ikk
+
+part head.stand pivot 8,8
+...........rtfft
+...kkkkkkkfgtfsk
+kkkkddkddktestkk
+kuuhddkdddkrpkkk
+tgfkdddkddkwkwkk
+ggfqvddkddkksfkk
+ggfrkddkdkktggkk
+fssrkddkkktggtkk
+srrkkkkkksffgssk
+kkkkkkhikisessqi
+
+part torso.crouch pivot 22,16
+joint hip_l 16,25
+joint hip_r 27,25
+joint sh_l 11,9
+joint sh_r 32,9
+joint neck 22,9
+........................eeeeeevvv
+.....................eeeeeeeeeee
+...............hhhhhreeeeeeeeev
+..............hhhhhhrefeeeeeee
+..............hhhhhhreferheeee
+............ehhhhhhhreferhiie
+.......tt.ggtsssssssreferhii
+.....tttttgggeeeeehhreferhii.......tttt
+...gggggggggfsssshhhreferhii.......tttt
+.eeeeeeeeeesrrrrrhhhreferhiijj....ttttt
+sssssssssssvkkhhhhhhreferhiijj...tggggg
+.sssssssskkkkkhkkhhkreferhiijk..egggggg
+.iiiiiiiikkhjjihhiiiirrrnijljikkfseeeeee.qq
+iiiiiiiiiihimljkiijjiiijjjlljiiikkqqqqqqqqqq
+llllllllllihllikijjjljijllllijlllmkqqqqqqqq
+mmmmmmmmmmjhkkkkkkkijlllllljjllnnljjjjjjjjjj
+mmmmmmmmmmlkkftttkkkkklllljjlmnnnnmmmmmmmmmm
+nnnnnnnnnnmkufggggttpkilljijlnnnnnnnnnnnnnnn
+nnnnnnnnnnmkkefgggggpkiiijjlllnnnnnnnnnnnnnn
+mmmmmmmmmmmjkrseeesrkkiiiijjlllmnnmmmmmmmmmm
+mmmmmmmmmmlikkrrrsqkkiikkkkljlllmmmmmmmmmmjjj
+llllllllllikkkkvvkkkkkkkttukkjjlljjjjjjjjljjjj
+jjjjjjjjjjhkkkkkkkhhkkkrgggtkkjjjikjjjjjlljjjjj
+qqqqqqqqqq..hkkkhijhkkkrfggtvkkihkkjjjjllljjjjjj
+.qqqqqqqqqqhhhhhhijhhhrrfggtttiihhhjjjlllljjjjjj
+..qqqqqqqq..hhhhhijhhhrrfggtttiihhhjjllllljjjjj
+...qqqqq...hhhhhhijhhhrrfggtttiihhhjlllllljj
+....qq....hhhhhhhijhhhr.fggtttiihhhlllllllj
+.........hhhhhhhhijhhhr...gtttiihhhllllllljh
+.........hhhhhhhhijhhh......tti..hjjjjjjjjih
+..........hhhhhhhijhh............hiiiiiiiih
+...........hhh.hhijh.............hiiiiiii
+............h...hij...............iiiiiii
+
+part foot_l.crouch pivot 13,1
+ttfrrpkkkkkkjjljjhkk
+tsrrkkk..kkkllmljhkk
+kkkkk...kkkmnnnmjhkk
+.kk....kkknnnnmljhkk
+......kkpfennmljhkkk
+......kqffenmljhkkk
+......tfeffniikkkk
+......ssnsrphhkkk
+......u..u...kkk
+
+part foot_r.crouch pivot 4,1
+rrsggtkkhkkiijjikk
+ksseggkkkkkhjlmljk
+kkwrsgtkkkhjlnnnml
+.kkkketkkkkhilmnnm
+...kkkkkkkkkkinnnm
+.....kkk..kkpfftnl
+..........kkfrrrij
+..........kkkkkkkk
+...........kkkkkkk
+
+part arm_l.crouch pivot 13,3
+.........kk
+.......kkkt
+.....kkkggg
+...kkkggggg
+..kkptggfes
+...gggesrru
+.sfeeswkkkk
+ttspkkkkrri
+..kkkteeerj
+.ukktttgspj
+..ktgggsslm
+..qgggrqjmn
+..tgeukkmnn
+.uttkkkkkln
+.ueukcbakjm
+.vkkkccakjl
+..kkkbbkksj
+..kkkkkpfgs
+...vt
+....t
+
+part arm_r.crouch pivot -3,2
+kkkk
+kskk
+ttkk
+gekk
+gskk
+srkkk.kkw
+rpkkkkkst
+kkkkkktgt
+hkkkkgggs
+ljkkrefsr
+mjhkkssrk
+ljihkkksk
+mjikkkkkk
+jikkrgttkk
+hkkksgggskk
+kkkkrrsgfskk
+hhhkktssetgkk
+......kkrqqkk
+......kkkkkk
+......hkk
+
+part head.crouch pivot 8,9
+..........kkkkkk
+.......kkkkktttt
+.kkkkkkpttggggfs
+kkkkddkkggggerrk
+dddkvddkeessrvkk
+kdddkddkkrkkkkk
+kdddkddkkkkkkk
+wkddkpdkkqgkkk
+pkddkkkktttkkk
+kkdkkkksgggkkkkk
+kkkkkkqgggskkkkk
+
+part torso.pounce pivot 22,13
+joint hip_l 16,20
+joint hip_r 27,20
+joint sh_l 11,8
+joint sh_r 32,8
+joint neck 22,8
+.............................q
+..........................sfsqu
+........................sssfsq
+..................rrr.sssssfsq
+................trrrrrsssssfsq
+..............tttrrrrrsssssfsq.....ttttt
+.............ttttrrrrrsssssfsq.....ttttt
+.....pppppttggggrrrrrrsssssfsq....tttttt
+..gggggggggggggrrrrrrrsssssfsqkikprrrrrr
+eeeeeeeeeeeessrrrrkkkkkkkssfsqiiihkrrrrr.ll
+rrrrrrrrrrsqkkkkkkkkkkhjhipsjijjilllllllllll
+.rrrrrrrrkkkkppihhiihhjlljiiillillnnnnnnnnnn
+.......eeefferjljhjjhhhkkkklllilmnnnnnnnnnnn
+......gggggfrljmlhhkkkkkuvkkljilnnnnnnnnnnnn
+......ggggsrjlmmmikkttgggskkiijllmnnnnnnnnnll
+.....ggggkkkknnmliktfggfsvkhkkijllmmmmmmmmnll
+......gggkccklnmjhksfeerkkkkttkkjlmmmmmmmnnlll
+......gggacbknmlikkrrrrkkkkrggtkkiiiiiiiinnllll
+......gggkkksnmikkkkkkkkkkkreggskhhhhhhhnnnlllll
+......sssssssnmiiiiiiirrrrrreggsshhhhhhnnnnlllll
+.......ssssssnmiiiiiiirrrrrreggsshhhhhnnnnnll
+........sssssn.iiiiiiirrrrr.eggsshhhhnnnnnnll
+..............iiiiiii.rrrr....gss...nnnnnnnl
+.............iiiiiii...rr............fffffnmi
+............iiiiiii..................eeeeeqji
+.............iiiii...................rrrrrih
+..............iii.....................rrr
+
+part foot_l.pounce pivot 10,1
+kksttgfrqkkkkkkkh
+.kteesqkkkkkjllll
+..kkkkkk.kklmnmml
+........kktqnnmlj
+.......krgffnlljh
+......kvfpqgrii
+.......krjnrq
+........kkk
+
+part foot_r.pounce pivot 4,1
+hhkkrsfffkkkkhjlmj
+ihkkkkrstkkkkhjmnn
+ihkk.kkkkkkkkklmnn
+hkk....kkk...kklmn
+kk............kkkf
+..............kkfg
+..............kkrs
+...............kkk
+
+part arm_l.pounce pivot 13,1
+.......kkkk
+....kkkuttg
+..kkstgfggg
+pttfeesssrr
+...kkkkkkkk
+.........kk
+........kkt
+........ktg
+.......kkts
+........kqk
+........kkk
+........kkk
+
+part arm_r.pounce pivot -3,3
+kutkk
+tggkk
+ggekk
+ssrkk
+kpskk.kkpt
+lkkkkkkege
+mlikkktgfq
+nmljkkrss
+nnmlhkkqs
+nmmlhkkkkk
+mljikkffqk
+ljhkkreggqk
+jkkkkkssffpk
+kkiijkkwrstsk
+......kkkkkkk
+......mkkk
+......nlik
+
+part head.pounce pivot 8,8
+...............k
+............kkkt
+..........kkktte
+....kkk.kkktggsk
+..kkkdkkddkefskk
+kkqqkddkwdkwrkkt
+tgggkdddkddkkkgf
+gggfskddkddkttgs
+fssrrkddkukwggfr
+
+part torso.sleep pivot 22,14
+joint hip_l 16,21
+joint hip_r 27,21
+joint sh_l 11,8
+joint sh_r 32,8
+joint neck 22,8
+...........................ppp
+.......................ppppppppp
+.....................eeeeeeeeee
+................gggg..eeeeeeee
+..............ggggggghhhhseeee
+..............ggggggghhhhsefee........qq
+.......tt..gtgggggggghhhhsefss.....qqqqqq
+.....tttttggggggggggghhhhsefss.....qqqqqq
+...ggggggggggggggggghhhhhsefss.....qqqqqq
+.ggggggggggfsssppppphhhhhsefssk...qqqqqqq
+ssssssssssssssspkkkkkkkkhsefsshjkksssssss
+qqqqqqqqqqkkkkkkkkkkkijiiirsrijjjkkssssss.h
+.qqqqqqqqkkkhjjihkkijllljiiijjljjjhhhhhhhhhh
+hhhhhhhhhhiijllljkkijlmllljjlljlmmmmmmmmmmmm
+iiiiiiiiiijhjmnmlikijllllllllljmnnnnnnnnnnnn
+.lllllllllliimnnlikijjlljlllljmnnnnnnnnnnnnn
+mmmmmmmmmmmlilmmjhkkkkkkkjjjjlmnnnnnnnnnnnnn
+nnnnnnnnnnmljilljkkktgtkkjjijlmmnnnnnnnnnnnn
+nnnnnnnnnnnmjijkkwffggskkhkkjllmmmmmmmmmmmmm
+nnnnnnnnnnmmjhkktgggfskkkkkkkkjlmmllllllllll
+mmmmmmmmmmlljkksgggssvkkksgtukjlljjjjjjjjjjj
+.mmmmmmmmmlljjssgggsssssssgttjjlljjjjjjjjjj
+..mmmmmmmmlljjssgggsssssssgttjjlljjjjjjjjj
+ukkmmmmmmmlljjssgggsssssssgttjjlljjjjjjjjkk
+..k.mmmmmmlljjssgggsssssssgttjjlljjjjjjj.k
+.....mmmmmlljjssgggsssssssgttjjlljjjjjj..k
+......mmmmlljjssgggsssssssgttjjlljjjjj
+.......mmmlljjssgggsssss......jlljjjj
+........mmlljjssgggsss........jlljjj
+
+part foot_l.sleep pivot 13,0
+jmnmlmlljikkrssssqkk
+jlmkkkkkhhkkvsrsqkkk
+kkksttsvkkkkkkkkkkjh
+kugfggfskkkkkkkkhlli
+ttggggstkkkrrrqllmli
+qfemnfskkkstejqllljk
+....kkkkkkkkkkkkkkkk
+.....kkkkkkkkkkkkkk
+
+part foot_r.sleep pivot 4,0
+kseggfkkiiikkkkkkt
+kssggttkhhkkljiikk
+kussggtkkkklmmlljk
+kkpssgtkkktfemnmji
+kkkksskkkffgsnmlji
+kkkkkkkkuternijjih
+k......kkkkkkk
+.......kkkkkk
+
+part arm_l.sleep pivot 14,2
+..........kk
+........kkkp
+......kkkktg
+....kkkvtggg
+...kktffgges
+...wgggfsssr
+..ffessqwkkk
+vqqqkkkkkkur
+...kkkkkgfsr
+....kkwfgfsh
+...kkrgggenl
+...kwtggenjm
+...kfggsnlmm
+...tggeilmmm
+...ggsljmmmm
+...fsk
+...svk
+
+part arm_r.sleep pivot -3,3
+...kk
+kkkkkk
+kkstkk
+kfgfkk
+gggekk
+gfgskk
+rrrrkk.k
+krskkkkktf
+lkkkkkpfgs
+mlikktggev
+mmlkkqsss
+nmlikkqrr
+mmlikkkkk
+mlikkqtrk
+jikkkggfs
+kkkksstfgq
+......rsgtw
+......kssft
+
+part head.sleep pivot 8,8
+.............kkk
+.........kkkkkkp
+.......kkkkktfgt
+..kkkk.ddktggfer
+kkkkddkddukssskk
+utgkdddhddkrrkkk
+ggfqdddkddkvkvtk
+ggeskddkddkkvfgt
+gssrkddkkdkktggt
+srrrkddkkkktggfs

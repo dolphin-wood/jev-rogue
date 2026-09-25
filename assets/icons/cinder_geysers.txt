@@ -1,0 +1,18 @@
+# Cinder Geysers
+1=#a02a10 2=#d8401a 3=#ff8a2a 4=#ffd24a
+.ooooo..........
+.owo3o..........
+oo331oo.........
+o43221o.........
+o32211o...ooooo.
+oo211oo...owo3o.
+.oo1oo...oo331oo
+..ooooo..o43221o
+...oo3oo.o32211o
+...o431o.oo111oo
+...o211o..ooooo.
+oooooooooooooooo
+ow3333333333332o
+o21111111111111o
+oooooooooooooooo
+................

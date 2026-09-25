@@ -1,0 +1,92 @@
+{
+  "size": [
+    64,
+    64
+  ],
+  "outline": 2,
+  "detached": [
+    "shard_l",
+    "shard_r"
+  ],
+  "facings": {
+    "s": {
+      "origin": [
+        32,
+        32
+      ],
+      "parts": [
+        {
+          "name": "core",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "name": "shard_l",
+          "parent": null,
+          "depth": 0
+        },
+        {
+          "name": "shard_r",
+          "parent": null,
+          "depth": 0
+        }
+      ]
+    },
+    "n": {
+      "origin": [
+        32,
+        32
+      ],
+      "parts": [
+        {
+          "name": "core",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "name": "shard_l",
+          "parent": null,
+          "depth": 0
+        },
+        {
+          "name": "shard_r",
+          "parent": null,
+          "depth": 0
+        }
+      ]
+    },
+    "w": {
+      "origin": [
+        32,
+        32
+      ],
+      "parts": [
+        {
+          "name": "core",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "name": "shard_l",
+          "parent": null,
+          "depth": 0
+        },
+        {
+          "name": "shard_r",
+          "parent": null,
+          "depth": 0
+        }
+      ]
+    }
+  },
+  "anchors": {},
+  "marks": {
+    "mark": {
+      "part": "shard_l",
+      "at": [
+        0,
+        -23
+      ]
+    }
+  }
+}

@@ -1,0 +1,2079 @@
+{
+  "bands": {
+    "sleeve": {
+      "material": "cloth",
+      "shadowEdge": 1,
+      "shadow": 2,
+      "body": 3,
+      "light": 4,
+      "litEdge": 5
+    },
+    "cuff": {
+      "material": "trim",
+      "shadowEdge": 1,
+      "shadow": 2,
+      "body": 3,
+      "light": 4,
+      "litEdge": 4
+    },
+    "fist": {
+      "material": "trim",
+      "shadowEdge": 1,
+      "shadow": 2,
+      "body": 3,
+      "light": 4,
+      "litEdge": 4
+    },
+    "wood": {
+      "material": "belt",
+      "shadowEdge": 0,
+      "shadow": 1,
+      "body": 2,
+      "light": 3,
+      "litEdge": 3
+    },
+    "crystal": {
+      "material": "gem",
+      "shadowEdge": 0,
+      "shadow": 1,
+      "body": 2,
+      "light": 2,
+      "litEdge": 2
+    }
+  },
+  "parts": [
+    {
+      "facing": "s",
+      "part": "arm_sword",
+      "variant": "cross",
+      "pivot": [
+        21,
+        30
+      ],
+      "joints": {
+        "hand": [
+          36,
+          36
+        ],
+        "grip": [
+          36,
+          36
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            20,
+            31
+          ],
+          "to": [
+            31,
+            34
+          ],
+          "width": [
+            7,
+            5.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            31,
+            34
+          ],
+          "to": [
+            33,
+            35
+          ],
+          "width": [
+            5.5,
+            5
+          ],
+          "bands": "cuff"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            35.5,
+            35.5
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ]
+    },
+    {
+      "facing": "s",
+      "part": "arm_sword",
+      "variant": "low",
+      "pivot": [
+        21,
+        30
+      ],
+      "joints": {
+        "hand": [
+          30,
+          42
+        ],
+        "grip": [
+          30,
+          42
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            20,
+            31
+          ],
+          "to": [
+            27,
+            38
+          ],
+          "width": [
+            7,
+            5.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            27,
+            38
+          ],
+          "to": [
+            29,
+            40
+          ],
+          "width": [
+            5.5,
+            5
+          ],
+          "bands": "cuff"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            30.5,
+            42
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ]
+    },
+    {
+      "facing": "s",
+      "part": "arm_sword",
+      "variant": "lowl",
+      "pivot": [
+        21,
+        30
+      ],
+      "joints": {
+        "hand": [
+          19,
+          43
+        ],
+        "grip": [
+          19,
+          43
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            20,
+            31
+          ],
+          "to": [
+            20,
+            38
+          ],
+          "width": [
+            7,
+            5.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            20,
+            38
+          ],
+          "to": [
+            19.5,
+            40
+          ],
+          "width": [
+            5.5,
+            5
+          ],
+          "bands": "cuff"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            19,
+            43
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ]
+    },
+    {
+      "facing": "s",
+      "part": "staff",
+      "variant": "up",
+      "pivot": [
+        32,
+        32
+      ],
+      "joints": {
+        "crystal": [
+          30,
+          14
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            32.7,
+            40
+          ],
+          "to": [
+            30.8,
+            18.1
+          ],
+          "width": [
+            2.2,
+            2.2
+          ],
+          "bands": "wood"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            30.6,
+            15.6
+          ],
+          "r": 2.4,
+          "bands": "crystal"
+        }
+      ]
+    },
+    {
+      "facing": "s",
+      "part": "staff",
+      "variant": "wound",
+      "pivot": [
+        32,
+        32
+      ],
+      "joints": {
+        "crystal": [
+          48,
+          34
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            27,
+            31.4
+          ],
+          "to": [
+            43.9,
+            33.5
+          ],
+          "width": [
+            2.2,
+            2.2
+          ],
+          "bands": "wood"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            46.4,
+            33.8
+          ],
+          "r": 2.4,
+          "bands": "crystal"
+        }
+      ]
+    },
+    {
+      "facing": "s",
+      "part": "staff",
+      "variant": "k1",
+      "pivot": [
+        32,
+        32
+      ],
+      "joints": {
+        "crystal": [
+          39,
+          47
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            29.8,
+            27.5
+          ],
+          "to": [
+            37.3,
+            42.8
+          ],
+          "width": [
+            2.2,
+            2.2
+          ],
+          "bands": "wood"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            38.4,
+            45
+          ],
+          "r": 2.4,
+          "bands": "crystal"
+        }
+      ]
+    },
+    {
+      "facing": "s",
+      "part": "staff",
+      "variant": "k2",
+      "pivot": [
+        32,
+        32
+      ],
+      "joints": {
+        "crystal": [
+          25,
+          47
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            34.2,
+            27.5
+          ],
+          "to": [
+            26.7,
+            42.8
+          ],
+          "width": [
+            2.2,
+            2.2
+          ],
+          "bands": "wood"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            25.6,
+            45
+          ],
+          "r": 2.4,
+          "bands": "crystal"
+        }
+      ]
+    },
+    {
+      "facing": "s",
+      "part": "arm_sword",
+      "variant": "out",
+      "pivot": [
+        21,
+        30
+      ],
+      "joints": {
+        "hand": [
+          12,
+          37
+        ],
+        "grip": [
+          12,
+          37
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            20,
+            31
+          ],
+          "to": [
+            15,
+            35
+          ],
+          "width": [
+            7,
+            5.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            15,
+            35
+          ],
+          "to": [
+            13.5,
+            36
+          ],
+          "width": [
+            5.5,
+            5
+          ],
+          "bands": "cuff"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            12,
+            37
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ]
+    },
+    {
+      "facing": "s",
+      "part": "staff",
+      "variant": "land",
+      "pivot": [
+        32,
+        32
+      ],
+      "joints": {
+        "crystal": [
+          19,
+          39
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            36.3,
+            29.5
+          ],
+          "to": [
+            23.3,
+            37
+          ],
+          "width": [
+            2.2,
+            2.2
+          ],
+          "bands": "wood"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            21.2,
+            38.2
+          ],
+          "r": 2.4,
+          "bands": "crystal"
+        }
+      ]
+    },
+    {
+      "facing": "s",
+      "part": "arm_sword",
+      "variant": "swing_windup",
+      "pivot": [
+        21,
+        30
+      ],
+      "joints": {
+        "hand": [
+          14,
+          22
+        ],
+        "grip": [
+          14,
+          22
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            21,
+            30
+          ],
+          "to": [
+            18,
+            26
+          ],
+          "width": [
+            8,
+            6.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            18,
+            26
+          ],
+          "to": [
+            14,
+            22
+          ],
+          "width": [
+            6.5,
+            4.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            15.697056274847714,
+            23.697056274847714
+          ],
+          "to": [
+            14,
+            22
+          ],
+          "width": [
+            5.6,
+            5
+          ],
+          "bands": "cuff"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            14,
+            22
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ]
+    },
+    {
+      "facing": "s",
+      "part": "arm_sword",
+      "variant": "swing_strike",
+      "pivot": [
+        21,
+        30
+      ],
+      "joints": {
+        "hand": [
+          43,
+          40
+        ],
+        "grip": [
+          43,
+          40
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            21,
+            30
+          ],
+          "to": [
+            29,
+            37
+          ],
+          "width": [
+            8,
+            6.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            29,
+            37
+          ],
+          "to": [
+            43,
+            40
+          ],
+          "width": [
+            6.5,
+            4.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            40.65327420621422,
+            39.497130187045904
+          ],
+          "to": [
+            43,
+            40
+          ],
+          "width": [
+            5.6,
+            5
+          ],
+          "bands": "cuff"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            43,
+            40
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ]
+    },
+    {
+      "facing": "s",
+      "part": "arm_sword",
+      "variant": "swing_slash",
+      "pivot": [
+        21,
+        30
+      ],
+      "joints": {
+        "hand": [
+          25,
+          45
+        ],
+        "grip": [
+          25,
+          45
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            21,
+            30
+          ],
+          "to": [
+            24,
+            37
+          ],
+          "width": [
+            8,
+            6.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            24,
+            37
+          ],
+          "to": [
+            25,
+            45
+          ],
+          "width": [
+            6.5,
+            4.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            24.7023166369859,
+            42.618533095887194
+          ],
+          "to": [
+            25,
+            45
+          ],
+          "width": [
+            5.6,
+            5
+          ],
+          "bands": "cuff"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            25,
+            45
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ]
+    },
+    {
+      "facing": "s",
+      "part": "arm_sword",
+      "variant": "swing_follow",
+      "pivot": [
+        21,
+        30
+      ],
+      "joints": {
+        "hand": [
+          12,
+          40
+        ],
+        "grip": [
+          12,
+          40
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            21,
+            30
+          ],
+          "to": [
+            17,
+            34
+          ],
+          "width": [
+            8,
+            6.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            17,
+            34
+          ],
+          "to": [
+            12,
+            40
+          ],
+          "width": [
+            6.5,
+            4.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            13.536442559194752,
+            38.1562689289663
+          ],
+          "to": [
+            12,
+            40
+          ],
+          "width": [
+            5.6,
+            5
+          ],
+          "bands": "cuff"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            12,
+            40
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ]
+    },
+    {
+      "facing": "s",
+      "part": "arm_sword",
+      "variant": "swing_recover",
+      "pivot": [
+        21,
+        30
+      ],
+      "joints": {
+        "hand": [
+          17,
+          36
+        ],
+        "grip": [
+          17,
+          36
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            21,
+            30
+          ],
+          "to": [
+            19,
+            32
+          ],
+          "width": [
+            8,
+            6.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            19,
+            32
+          ],
+          "to": [
+            17,
+            36
+          ],
+          "width": [
+            6.5,
+            4.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            18.073312629199897,
+            33.853374741600206
+          ],
+          "to": [
+            17,
+            36
+          ],
+          "width": [
+            5.6,
+            5
+          ],
+          "bands": "cuff"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            17,
+            36
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ]
+    },
+    {
+      "facing": "n",
+      "part": "arm_sword",
+      "variant": "swing_windup",
+      "pivot": [
+        42,
+        30
+      ],
+      "joints": {
+        "hand": [
+          47,
+          21
+        ],
+        "grip": [
+          47,
+          21
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            42,
+            30
+          ],
+          "to": [
+            44,
+            25
+          ],
+          "width": [
+            8,
+            6.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            44,
+            25
+          ],
+          "to": [
+            47,
+            21
+          ],
+          "width": [
+            6.5,
+            4.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            45.56,
+            22.92
+          ],
+          "to": [
+            47,
+            21
+          ],
+          "width": [
+            5.6,
+            5
+          ],
+          "bands": "cuff"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            47,
+            21
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ]
+    },
+    {
+      "facing": "n",
+      "part": "arm_sword",
+      "variant": "swing_strike",
+      "pivot": [
+        42,
+        30
+      ],
+      "joints": {
+        "hand": [
+          52,
+          29
+        ],
+        "grip": [
+          52,
+          29
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            42,
+            30
+          ],
+          "to": [
+            48,
+            28
+          ],
+          "width": [
+            8,
+            6.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            48,
+            28
+          ],
+          "to": [
+            52,
+            29
+          ],
+          "width": [
+            6.5,
+            4.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            49.6716579996512,
+            28.4179144999128
+          ],
+          "to": [
+            52,
+            29
+          ],
+          "width": [
+            5.6,
+            5
+          ],
+          "bands": "cuff"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            52,
+            29
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ]
+    },
+    {
+      "facing": "n",
+      "part": "arm_sword",
+      "variant": "swing_slash",
+      "pivot": [
+        42,
+        30
+      ],
+      "joints": {
+        "hand": [
+          48,
+          40
+        ],
+        "grip": [
+          48,
+          40
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            42,
+            30
+          ],
+          "to": [
+            47,
+            35
+          ],
+          "width": [
+            8,
+            6.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            47,
+            35
+          ],
+          "to": [
+            48,
+            40
+          ],
+          "width": [
+            6.5,
+            4.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            47.52932127566836,
+            37.646606378341794
+          ],
+          "to": [
+            48,
+            40
+          ],
+          "width": [
+            5.6,
+            5
+          ],
+          "bands": "cuff"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            48,
+            40
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ]
+    },
+    {
+      "facing": "n",
+      "part": "arm_sword",
+      "variant": "swing_follow",
+      "pivot": [
+        42,
+        30
+      ],
+      "joints": {
+        "hand": [
+          35,
+          42
+        ],
+        "grip": [
+          35,
+          42
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            42,
+            30
+          ],
+          "to": [
+            40,
+            37
+          ],
+          "width": [
+            8,
+            6.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            40,
+            37
+          ],
+          "to": [
+            35,
+            42
+          ],
+          "width": [
+            6.5,
+            4.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            36.69705627484771,
+            40.30294372515229
+          ],
+          "to": [
+            35,
+            42
+          ],
+          "width": [
+            5.6,
+            5
+          ],
+          "bands": "cuff"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            35,
+            42
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ]
+    },
+    {
+      "facing": "n",
+      "part": "arm_sword",
+      "variant": "swing_recover",
+      "pivot": [
+        42,
+        30
+      ],
+      "joints": {
+        "hand": [
+          42,
+          34
+        ],
+        "grip": [
+          42,
+          34
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            42,
+            30
+          ],
+          "to": [
+            42,
+            32
+          ],
+          "width": [
+            8,
+            6.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            42,
+            32
+          ],
+          "to": [
+            42,
+            34
+          ],
+          "width": [
+            6.5,
+            4.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            42,
+            31.6
+          ],
+          "to": [
+            42,
+            34
+          ],
+          "width": [
+            5.6,
+            5
+          ],
+          "bands": "cuff"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            42,
+            34
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ]
+    },
+    {
+      "facing": "w",
+      "part": "arm_sword",
+      "variant": "swing_windup",
+      "pivot": [
+        24,
+        31
+      ],
+      "joints": {
+        "hand": [
+          31,
+          23
+        ],
+        "grip": [
+          31,
+          23
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            24,
+            31
+          ],
+          "to": [
+            28,
+            27
+          ],
+          "width": [
+            8,
+            6.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            28,
+            27
+          ],
+          "to": [
+            31,
+            23
+          ],
+          "width": [
+            6.5,
+            4.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            29.56,
+            24.92
+          ],
+          "to": [
+            31,
+            23
+          ],
+          "width": [
+            5.6,
+            5
+          ],
+          "bands": "cuff"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            31,
+            23
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ]
+    },
+    {
+      "facing": "w",
+      "part": "arm_sword",
+      "variant": "swing_strike",
+      "pivot": [
+        24,
+        31
+      ],
+      "joints": {
+        "hand": [
+          10,
+          37
+        ],
+        "grip": [
+          10,
+          37
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            24,
+            31
+          ],
+          "to": [
+            17,
+            34
+          ],
+          "width": [
+            8,
+            6.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            17,
+            34
+          ],
+          "to": [
+            10,
+            37
+          ],
+          "width": [
+            6.5,
+            4.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            12.205948072043338,
+            36.05459368341
+          ],
+          "to": [
+            10,
+            37
+          ],
+          "width": [
+            5.6,
+            5
+          ],
+          "bands": "cuff"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            10,
+            37
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ]
+    },
+    {
+      "facing": "w",
+      "part": "arm_sword",
+      "variant": "swing_slash",
+      "pivot": [
+        24,
+        31
+      ],
+      "joints": {
+        "hand": [
+          9,
+          46
+        ],
+        "grip": [
+          9,
+          46
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            24,
+            31
+          ],
+          "to": [
+            15,
+            37
+          ],
+          "width": [
+            8,
+            6.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            15,
+            37
+          ],
+          "to": [
+            9,
+            46
+          ],
+          "width": [
+            6.5,
+            4.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            10.33128047094055,
+            44.003079293589174
+          ],
+          "to": [
+            9,
+            46
+          ],
+          "width": [
+            5.6,
+            5
+          ],
+          "bands": "cuff"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            9,
+            46
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ]
+    },
+    {
+      "facing": "w",
+      "part": "arm_sword",
+      "variant": "swing_follow",
+      "pivot": [
+        24,
+        31
+      ],
+      "joints": {
+        "hand": [
+          17,
+          45
+        ],
+        "grip": [
+          17,
+          45
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            24,
+            31
+          ],
+          "to": [
+            20,
+            38
+          ],
+          "width": [
+            8,
+            6.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            20,
+            38
+          ],
+          "to": [
+            17,
+            45
+          ],
+          "width": [
+            6.5,
+            4.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            17.945406316590002,
+            42.79405192795666
+          ],
+          "to": [
+            17,
+            45
+          ],
+          "width": [
+            5.6,
+            5
+          ],
+          "bands": "cuff"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            17,
+            45
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ]
+    },
+    {
+      "facing": "w",
+      "part": "arm_sword",
+      "variant": "swing_recover",
+      "pivot": [
+        24,
+        31
+      ],
+      "joints": {
+        "hand": [
+          22,
+          36
+        ],
+        "grip": [
+          22,
+          36
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "capsule",
+          "from": [
+            24,
+            31
+          ],
+          "to": [
+            23,
+            33
+          ],
+          "width": [
+            8,
+            6.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            23,
+            33
+          ],
+          "to": [
+            22,
+            36
+          ],
+          "width": [
+            6.5,
+            4.5
+          ],
+          "bands": "sleeve"
+        },
+        {
+          "kind": "capsule",
+          "from": [
+            22.75894663844041,
+            33.72316008467877
+          ],
+          "to": [
+            22,
+            36
+          ],
+          "width": [
+            5.6,
+            5
+          ],
+          "bands": "cuff"
+        },
+        {
+          "kind": "disc",
+          "at": [
+            22,
+            36
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ]
+    },
+    {
+      "facing": "s",
+      "part": "fist_overlay",
+      "variant": "swing_windup",
+      "pivot": [
+        14,
+        22
+      ],
+      "joints": {
+        "grip": [
+          14,
+          22
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "disc",
+          "at": [
+            14,
+            22
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ],
+      "outline": true
+    },
+    {
+      "facing": "s",
+      "part": "fist_overlay",
+      "variant": "swing_strike",
+      "pivot": [
+        43,
+        40
+      ],
+      "joints": {
+        "grip": [
+          43,
+          40
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "disc",
+          "at": [
+            43,
+            40
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ],
+      "outline": true
+    },
+    {
+      "facing": "s",
+      "part": "fist_overlay",
+      "variant": "swing_slash",
+      "pivot": [
+        25,
+        45
+      ],
+      "joints": {
+        "grip": [
+          25,
+          45
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "disc",
+          "at": [
+            25,
+            45
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ],
+      "outline": true
+    },
+    {
+      "facing": "s",
+      "part": "fist_overlay",
+      "variant": "swing_follow",
+      "pivot": [
+        12,
+        40
+      ],
+      "joints": {
+        "grip": [
+          12,
+          40
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "disc",
+          "at": [
+            12,
+            40
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ],
+      "outline": true
+    },
+    {
+      "facing": "s",
+      "part": "fist_overlay",
+      "variant": "swing_recover",
+      "pivot": [
+        17,
+        36
+      ],
+      "joints": {
+        "grip": [
+          17,
+          36
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "disc",
+          "at": [
+            17,
+            36
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ],
+      "outline": true
+    },
+    {
+      "facing": "n",
+      "part": "fist_overlay",
+      "variant": "swing_windup",
+      "pivot": [
+        47,
+        21
+      ],
+      "joints": {
+        "grip": [
+          47,
+          21
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "disc",
+          "at": [
+            47,
+            21
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ],
+      "outline": true
+    },
+    {
+      "facing": "n",
+      "part": "fist_overlay",
+      "variant": "swing_strike",
+      "pivot": [
+        52,
+        29
+      ],
+      "joints": {
+        "grip": [
+          52,
+          29
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "disc",
+          "at": [
+            52,
+            29
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ],
+      "outline": true
+    },
+    {
+      "facing": "n",
+      "part": "fist_overlay",
+      "variant": "swing_slash",
+      "pivot": [
+        48,
+        40
+      ],
+      "joints": {
+        "grip": [
+          48,
+          40
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "disc",
+          "at": [
+            48,
+            40
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ],
+      "outline": true
+    },
+    {
+      "facing": "n",
+      "part": "fist_overlay",
+      "variant": "swing_follow",
+      "pivot": [
+        35,
+        42
+      ],
+      "joints": {
+        "grip": [
+          35,
+          42
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "disc",
+          "at": [
+            35,
+            42
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ],
+      "outline": true
+    },
+    {
+      "facing": "n",
+      "part": "fist_overlay",
+      "variant": "swing_recover",
+      "pivot": [
+        42,
+        34
+      ],
+      "joints": {
+        "grip": [
+          42,
+          34
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "disc",
+          "at": [
+            42,
+            34
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ],
+      "outline": true
+    },
+    {
+      "facing": "w",
+      "part": "fist_overlay",
+      "variant": "swing_windup",
+      "pivot": [
+        31,
+        23
+      ],
+      "joints": {
+        "grip": [
+          31,
+          23
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "disc",
+          "at": [
+            31,
+            23
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ],
+      "outline": true
+    },
+    {
+      "facing": "w",
+      "part": "fist_overlay",
+      "variant": "swing_strike",
+      "pivot": [
+        10,
+        37
+      ],
+      "joints": {
+        "grip": [
+          10,
+          37
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "disc",
+          "at": [
+            10,
+            37
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ],
+      "outline": true
+    },
+    {
+      "facing": "w",
+      "part": "fist_overlay",
+      "variant": "swing_slash",
+      "pivot": [
+        9,
+        46
+      ],
+      "joints": {
+        "grip": [
+          9,
+          46
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "disc",
+          "at": [
+            9,
+            46
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ],
+      "outline": true
+    },
+    {
+      "facing": "w",
+      "part": "fist_overlay",
+      "variant": "swing_follow",
+      "pivot": [
+        17,
+        45
+      ],
+      "joints": {
+        "grip": [
+          17,
+          45
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "disc",
+          "at": [
+            17,
+            45
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ],
+      "outline": true
+    },
+    {
+      "facing": "w",
+      "part": "fist_overlay",
+      "variant": "swing_recover",
+      "pivot": [
+        22,
+        36
+      ],
+      "joints": {
+        "grip": [
+          22,
+          36
+        ]
+      },
+      "strokes": [
+        {
+          "kind": "disc",
+          "at": [
+            22,
+            36
+          ],
+          "r": 3.1,
+          "bands": "fist"
+        }
+      ],
+      "outline": true
+    }
+  ]
+}

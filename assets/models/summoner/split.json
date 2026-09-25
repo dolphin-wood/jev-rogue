@@ -1,0 +1,511 @@
+{
+  "rules": [
+    {
+      "material": "eye",
+      "shades": 3,
+      "hue": [
+        150,
+        205
+      ],
+      "sat": [
+        0.3,
+        1
+      ]
+    },
+    {
+      "material": "hot",
+      "shades": 3,
+      "hue": [
+        295,
+        355
+      ],
+      "sat": [
+        0.42,
+        1
+      ]
+    },
+    {
+      "material": "warm",
+      "shades": 4,
+      "hue": [
+        15,
+        62
+      ],
+      "sat": [
+        0.32,
+        1
+      ]
+    },
+    {
+      "material": "steel",
+      "shades": 6,
+      "hue": [
+        200,
+        292
+      ],
+      "sat": [
+        0.05,
+        1
+      ],
+      "light": [
+        0.08,
+        0.92
+      ]
+    },
+    {
+      "material": "bone",
+      "shades": 5,
+      "sat": [
+        0,
+        0.3
+      ],
+      "light": [
+        0.3,
+        1
+      ]
+    },
+    {
+      "material": "dusk",
+      "shades": 3,
+      "light": [
+        0,
+        0.55
+      ]
+    }
+  ],
+  "outlineLuma": 24,
+  "lift": 1.0,
+  "paletteFrames": [
+    "enemy_summoner_s_idle0",
+    "enemy_summoner_s_dormant",
+    "enemy_summoner_s_tele",
+    "enemy_summoner_s_tether",
+    "enemy_summoner_n_idle0",
+    "enemy_summoner_n_dormant",
+    "enemy_summoner_n_tele",
+    "enemy_summoner_n_tether",
+    "enemy_summoner_w_idle0",
+    "enemy_summoner_w_dormant",
+    "enemy_summoner_w_tele",
+    "enemy_summoner_w_tether"
+  ],
+  "letters": {
+    "torso": "t",
+    "foot_l": "f",
+    "foot_r": "o",
+    "arm_l": "a",
+    "arm_r": "r",
+    "head": "h"
+  },
+  "rest": "torso",
+  "fillFrom": {
+    "torso": [
+      "steel",
+      "bone",
+      "warm"
+    ]
+  },
+  "fillRadius": {
+    "torso": 9,
+    "head": 3
+  },
+  "claimsFrac": {
+    "s": {
+      "foot_l": [
+        [
+          0.14,
+          0.74,
+          0.5,
+          1
+        ]
+      ],
+      "foot_r": [
+        [
+          0.5,
+          0.74,
+          0.86,
+          1
+        ]
+      ],
+      "arm_l": [
+        [
+          0,
+          0.18,
+          0.24,
+          0.8
+        ]
+      ],
+      "arm_r": [
+        [
+          0.76,
+          0.18,
+          1,
+          0.8
+        ]
+      ],
+      "head": [
+        [
+          0.35,
+          0,
+          0.65,
+          0.32
+        ]
+      ]
+    },
+    "n": {
+      "foot_l": [
+        [
+          0.14,
+          0.74,
+          0.5,
+          1
+        ]
+      ],
+      "foot_r": [
+        [
+          0.5,
+          0.74,
+          0.86,
+          1
+        ]
+      ],
+      "arm_l": [
+        [
+          0,
+          0.18,
+          0.24,
+          0.8
+        ]
+      ],
+      "arm_r": [
+        [
+          0.76,
+          0.18,
+          1,
+          0.8
+        ]
+      ],
+      "head": [
+        [
+          0.35,
+          0,
+          0.65,
+          0.32
+        ]
+      ]
+    },
+    "w": {
+      "foot_l": [
+        [
+          0.14,
+          0.74,
+          0.5,
+          1
+        ]
+      ],
+      "foot_r": [
+        [
+          0.5,
+          0.74,
+          0.86,
+          1
+        ]
+      ],
+      "arm_l": [
+        [
+          0,
+          0.18,
+          0.24,
+          0.8
+        ]
+      ],
+      "arm_r": [
+        [
+          0.76,
+          0.18,
+          1,
+          0.8
+        ]
+      ],
+      "head": [
+        [
+          0.35,
+          0,
+          0.65,
+          0.32
+        ]
+      ]
+    }
+  },
+  "jointsFrac": {
+    "s": {
+      "hip_l": [
+        0.4,
+        0.76
+      ],
+      "hip_r": [
+        0.6,
+        0.76
+      ],
+      "sh_l": [
+        0.3,
+        0.3
+      ],
+      "sh_r": [
+        0.7,
+        0.3
+      ],
+      "neck": [
+        0.5,
+        0.3
+      ]
+    },
+    "n": {
+      "hip_l": [
+        0.4,
+        0.76
+      ],
+      "hip_r": [
+        0.6,
+        0.76
+      ],
+      "sh_l": [
+        0.3,
+        0.3
+      ],
+      "sh_r": [
+        0.7,
+        0.3
+      ],
+      "neck": [
+        0.5,
+        0.3
+      ]
+    },
+    "w": {
+      "hip_l": [
+        0.4,
+        0.76
+      ],
+      "hip_r": [
+        0.6,
+        0.76
+      ],
+      "sh_l": [
+        0.3,
+        0.3
+      ],
+      "sh_r": [
+        0.7,
+        0.3
+      ],
+      "neck": [
+        0.5,
+        0.3
+      ]
+    }
+  },
+  "anchorsOn": {},
+  "rig": {
+    "size": [
+      96,
+      96
+    ],
+    "outline": 2,
+    "feet": [
+      "foot_l",
+      "foot_r"
+    ],
+    "detached": [
+      "arm_l",
+      "arm_r"
+    ],
+    "facings": {
+      "s": {
+        "origin": [
+          48,
+          48
+        ],
+        "parts": [
+          {
+            "name": "torso",
+            "parent": null,
+            "depth": 1
+          },
+          {
+            "name": "foot_l",
+            "parent": "torso",
+            "joint": "hip_l",
+            "depth": 1.5
+          },
+          {
+            "name": "foot_r",
+            "parent": "torso",
+            "joint": "hip_r",
+            "depth": 1.5
+          },
+          {
+            "name": "arm_l",
+            "parent": "torso",
+            "joint": "sh_l",
+            "depth": 2
+          },
+          {
+            "name": "arm_r",
+            "parent": "torso",
+            "joint": "sh_r",
+            "depth": 2
+          },
+          {
+            "name": "head",
+            "parent": "torso",
+            "joint": "neck",
+            "depth": 3
+          }
+        ]
+      },
+      "n": {
+        "origin": [
+          48,
+          48
+        ],
+        "parts": [
+          {
+            "name": "torso",
+            "parent": null,
+            "depth": 1
+          },
+          {
+            "name": "foot_l",
+            "parent": "torso",
+            "joint": "hip_l",
+            "depth": 1.5
+          },
+          {
+            "name": "foot_r",
+            "parent": "torso",
+            "joint": "hip_r",
+            "depth": 1.5
+          },
+          {
+            "name": "arm_l",
+            "parent": "torso",
+            "joint": "sh_l",
+            "depth": 2
+          },
+          {
+            "name": "arm_r",
+            "parent": "torso",
+            "joint": "sh_r",
+            "depth": 2
+          },
+          {
+            "name": "head",
+            "parent": "torso",
+            "joint": "neck",
+            "depth": 3
+          }
+        ]
+      },
+      "w": {
+        "origin": [
+          48,
+          48
+        ],
+        "parts": [
+          {
+            "name": "torso",
+            "parent": null,
+            "depth": 1
+          },
+          {
+            "name": "foot_l",
+            "parent": "torso",
+            "joint": "hip_l",
+            "depth": 1.5
+          },
+          {
+            "name": "foot_r",
+            "parent": "torso",
+            "joint": "hip_r",
+            "depth": 1.5
+          },
+          {
+            "name": "arm_l",
+            "parent": "torso",
+            "joint": "sh_l",
+            "depth": 2
+          },
+          {
+            "name": "arm_r",
+            "parent": "torso",
+            "joint": "sh_r",
+            "depth": 2
+          },
+          {
+            "name": "head",
+            "parent": "torso",
+            "joint": "neck",
+            "depth": 3
+          }
+        ]
+      }
+    }
+  },
+  "facings": {
+    "s": [
+      {
+        "variant": "stand",
+        "frame": "enemy_summoner_s_idle0"
+      },
+      {
+        "variant": "sleep",
+        "frame": "enemy_summoner_s_dormant"
+      },
+      {
+        "variant": "glow",
+        "frame": "enemy_summoner_s_tele"
+      },
+      {
+        "variant": "tether",
+        "frame": "enemy_summoner_s_tether"
+      }
+    ],
+    "n": [
+      {
+        "variant": "stand",
+        "frame": "enemy_summoner_n_idle0"
+      },
+      {
+        "variant": "sleep",
+        "frame": "enemy_summoner_n_dormant"
+      },
+      {
+        "variant": "glow",
+        "frame": "enemy_summoner_n_tele"
+      },
+      {
+        "variant": "tether",
+        "frame": "enemy_summoner_n_tether"
+      }
+    ],
+    "w": [
+      {
+        "variant": "stand",
+        "frame": "enemy_summoner_w_idle0"
+      },
+      {
+        "variant": "sleep",
+        "frame": "enemy_summoner_w_dormant"
+      },
+      {
+        "variant": "glow",
+        "frame": "enemy_summoner_w_tele"
+      },
+      {
+        "variant": "tether",
+        "frame": "enemy_summoner_w_tether"
+      }
+    ]
+  }
+}

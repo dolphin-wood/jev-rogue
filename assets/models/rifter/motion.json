@@ -1,0 +1,21 @@
+{
+  "base": "enemy_rifter",
+  "facings": [
+    "s"
+  ],
+  "weight": "mid",
+  "gait": "fixed",
+  "stand": "stand",
+  "roles": {
+    "core": "body",
+    "pod_l": "fin_l",
+    "pod_r": "fin_r"
+  },
+  "slump": "sleep",
+  "flatNames": true,
+  "extra": {
+    "telegraph": "glow",
+    "erupt": "blast",
+    "telegraph_walk": "stride"
+  }
+}

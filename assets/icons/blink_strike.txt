@@ -1,0 +1,18 @@
+# Blink Strike
+1=#6b5218 2=#c9a03c 3=#ffe9a8 4=#ffffff
+................
+.........ooooo..
+.........ow32o..
+.........o311o..
+.....oooooo2ooo.
+...ooo3oo43332o.
+.ooo3o2oo32211o.
+.o3o2o2ooo321oo.
+.o2o2o2o.o321o..
+.o1o2o2ooo311oo.
+.ooo1o2oo41o31o.
+...ooo1oo31o31oo
+.....ooo31ooo11o
+.......oooo.oooo
+................
+................

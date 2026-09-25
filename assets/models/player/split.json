@@ -1,0 +1,1479 @@
+{
+ "rules": [
+  {
+   "material": "eye",
+   "shades": 3,
+   "hue": [
+    40,
+    65
+   ],
+   "sat": [
+    0.6,
+    1
+   ]
+  },
+  {
+   "material": "gem",
+   "shades": 3,
+   "hue": [
+    180,
+    210
+   ],
+   "sat": [
+    0.5,
+    1
+   ]
+  },
+  {
+   "material": "belt",
+   "shades": 4,
+   "hue": [
+    0,
+    22
+   ],
+   "sat": [
+    0.18,
+    1
+   ],
+   "light": [
+    0.1,
+    0.58
+   ]
+  },
+  {
+   "material": "cloth",
+   "shades": 6,
+   "hue": [
+    222,
+    268
+   ],
+   "sat": [
+    0.08,
+    1
+   ],
+   "light": [
+    0.1,
+    0.62
+   ]
+  },
+  {
+   "material": "trim",
+   "shades": 5,
+   "hue": [
+    12,
+    50
+   ],
+   "light": [
+    0.4,
+    1
+   ]
+  },
+  {
+   "material": "umber",
+   "shades": 3,
+   "hue": [
+    0,
+    60
+   ],
+   "light": [
+    0.06,
+    0.4
+   ]
+  }
+ ],
+ "outlineLuma": 20,
+ "paletteFrames": [
+  "player_s_idle0",
+  "player_s_idle1",
+  "player_s_idle2",
+  "player_s_idle3",
+  "player_s_walk0",
+  "player_s_walk1",
+  "player_s_walk2",
+  "player_s_walk3",
+  "player_s_windup",
+  "player_s_follow",
+  "player_s_dash",
+  "player_s_hurt0",
+  "player_s_hurt1",
+  "player_n_idle0",
+  "player_n_idle1",
+  "player_n_idle2",
+  "player_n_idle3",
+  "player_n_walk0",
+  "player_n_walk1",
+  "player_n_walk2",
+  "player_n_walk3",
+  "player_n_windup",
+  "player_n_follow",
+  "player_n_dash",
+  "player_n_hurt0",
+  "player_n_hurt1",
+  "player_w_idle0",
+  "player_w_idle1",
+  "player_w_idle2",
+  "player_w_idle3",
+  "player_w_walk0",
+  "player_w_walk1",
+  "player_w_walk2",
+  "player_w_walk3",
+  "player_w_windup",
+  "player_w_follow",
+  "player_w_dash",
+  "player_w_hurt0",
+  "player_w_hurt1"
+ ],
+ "letters": {
+  "head": "h",
+  "torso": "t",
+  "arm_sword": "s",
+  "arm_cast": "c",
+  "foot_l": "l",
+  "foot_r": "r",
+  "figure": "f",
+  "hem": "m"
+ },
+ "rest": "torso",
+ "anchorsOn": {
+  "grip": [
+   "arm_sword",
+   "figure"
+  ],
+  "offhand": [
+   "arm_cast",
+   "figure"
+  ],
+  "hand": [
+   "arm_sword"
+  ],
+  "crystal": [
+   "staff"
+  ]
+ },
+ "anchorsFile": "assets/source/player-anchors.json",
+ "rig": {
+  "size": [
+   64,
+   64
+  ],
+  "outline": 2,
+  "facings": {
+   "s": {
+    "origin": [
+     32,
+     40
+    ],
+    "parts": [
+     {
+      "name": "foot_l",
+      "parent": null,
+      "depth": 0
+     },
+     {
+      "name": "foot_r",
+      "parent": null,
+      "depth": 0
+     },
+     {
+      "name": "arm_cast",
+      "parent": "torso",
+      "joint": "shoulder_cast",
+      "depth": 2
+     },
+     {
+      "name": "torso",
+      "parent": null,
+      "depth": 1
+     },
+     {
+      "name": "hem",
+      "parent": "torso",
+      "joint": "waist",
+      "depth": 1.5
+     },
+     {
+      "name": "staff",
+      "parent": "arm_sword",
+      "joint": "hand",
+      "depth": 1.95
+     },
+     {
+      "name": "arm_sword",
+      "parent": "torso",
+      "joint": "shoulder_sword",
+      "depth": 2
+     },
+     {
+      "name": "head",
+      "parent": "torso",
+      "joint": "neck",
+      "depth": 3
+     },
+     {
+      "name": "figure",
+      "parent": null,
+      "depth": 4
+     }
+    ]
+   },
+   "n": {
+    "origin": [
+     34,
+     40
+    ],
+    "parts": [
+     {
+      "name": "foot_l",
+      "parent": null,
+      "depth": 0
+     },
+     {
+      "name": "foot_r",
+      "parent": null,
+      "depth": 0
+     },
+     {
+      "name": "arm_cast",
+      "parent": "torso",
+      "joint": "shoulder_cast",
+      "depth": 2
+     },
+     {
+      "name": "torso",
+      "parent": null,
+      "depth": 1
+     },
+     {
+      "name": "hem",
+      "parent": "torso",
+      "joint": "waist",
+      "depth": 1.5
+     },
+     {
+      "name": "staff",
+      "parent": "arm_sword",
+      "joint": "hand",
+      "depth": 1.95
+     },
+     {
+      "name": "arm_sword",
+      "parent": "torso",
+      "joint": "shoulder_sword",
+      "depth": 2
+     },
+     {
+      "name": "head",
+      "parent": "torso",
+      "joint": "neck",
+      "depth": 3
+     },
+     {
+      "name": "figure",
+      "parent": null,
+      "depth": 4
+     }
+    ]
+   },
+   "w": {
+    "origin": [
+     30,
+     40
+    ],
+    "parts": [
+     {
+      "name": "foot_l",
+      "parent": null,
+      "depth": 0
+     },
+     {
+      "name": "foot_r",
+      "parent": null,
+      "depth": 0
+     },
+     {
+      "name": "arm_cast",
+      "parent": "torso",
+      "joint": "shoulder_cast",
+      "depth": 0.5
+     },
+     {
+      "name": "torso",
+      "parent": null,
+      "depth": 1
+     },
+     {
+      "name": "hem",
+      "parent": "torso",
+      "joint": "waist",
+      "depth": 1.5
+     },
+     {
+      "name": "staff",
+      "parent": "arm_sword",
+      "joint": "hand",
+      "depth": 1.95
+     },
+     {
+      "name": "arm_sword",
+      "parent": "torso",
+      "joint": "shoulder_sword",
+      "depth": 2
+     },
+     {
+      "name": "head",
+      "parent": "torso",
+      "joint": "neck",
+      "depth": 3
+     },
+     {
+      "name": "figure",
+      "parent": null,
+      "depth": 4
+     }
+    ]
+   }
+  },
+  "feet": [
+   "foot_l",
+   "foot_r"
+  ],
+  "optionalAnchors": [
+   "hand",
+   "crystal"
+  ]
+ },
+ "facings": {
+  "s": [
+   {
+    "variant": "stand",
+    "frame": "player_s_idle0",
+    "claims": {
+     "arm_sword": [
+      [
+       6,
+       26,
+       22,
+       40
+      ]
+     ],
+     "arm_cast": [
+      [
+       42,
+       28,
+       59,
+       42
+      ]
+     ],
+     "foot_l": [
+      [
+       12,
+       51,
+       28,
+       61
+      ]
+     ],
+     "foot_r": [
+      [
+       34,
+       51,
+       50,
+       61
+      ]
+     ],
+     "head": [
+      [
+       15,
+       3,
+       49,
+       27
+      ]
+     ],
+     "hem": [
+      [
+       14,
+       45,
+       50,
+       53
+      ]
+     ]
+    },
+    "joints": {
+     "neck": [
+      32,
+      26
+     ],
+     "shoulder_sword": [
+      21,
+      30
+     ],
+     "shoulder_cast": [
+      43,
+      31
+     ],
+     "waist": [
+      32,
+      45
+     ],
+     "hand": [
+      11,
+      31
+     ]
+    },
+    "fill": {
+     "torso": [
+      [
+       23,
+       26
+      ],
+      [
+       41,
+       26
+      ],
+      [
+       45,
+       30
+      ],
+      [
+       46,
+       34
+      ],
+      [
+       47,
+       40
+      ],
+      [
+       49,
+       47
+      ],
+      [
+       47,
+       50
+      ],
+      [
+       17,
+       50
+      ],
+      [
+       15,
+       47
+      ],
+      [
+       17,
+       40
+      ],
+      [
+       18,
+       34
+      ],
+      [
+       19,
+       30
+      ]
+     ]
+    }
+   },
+   {
+    "variant": "windup",
+    "frame": "player_s_windup",
+    "claims": {
+     "arm_sword": [
+      [
+       4,
+       20,
+       16,
+       31
+      ],
+      [
+       12,
+       27,
+       24,
+       37
+      ]
+     ],
+     "arm_cast": [
+      [
+       44,
+       27,
+       59,
+       41
+      ]
+     ],
+     "foot_l": [
+      [
+       10,
+       50,
+       25,
+       61
+      ]
+     ],
+     "foot_r": [
+      [
+       37,
+       50,
+       53,
+       61
+      ]
+     ],
+     "head": [
+      [
+       16,
+       3,
+       47,
+       28
+      ]
+     ]
+    },
+    "joints": {
+     "neck": [
+      31,
+      27
+     ],
+     "shoulder_sword": [
+      21,
+      31
+     ],
+     "shoulder_cast": [
+      44,
+      32
+     ],
+     "waist": [
+      32,
+      45
+     ],
+     "hand": [
+      10,
+      26
+     ]
+    },
+    "fill": {
+     "torso": [
+      [
+       20,
+       27
+      ],
+      [
+       42,
+       27
+      ],
+      [
+       46,
+       33
+      ],
+      [
+       48,
+       42
+      ],
+      [
+       50,
+       49
+      ],
+      [
+       17,
+       49
+      ],
+      [
+       16,
+       42
+      ],
+      [
+       18,
+       33
+      ]
+     ]
+    }
+   },
+   {
+    "variant": "follow",
+    "frame": "player_s_follow",
+    "claims": {
+     "arm_sword": [
+      [
+       5,
+       20,
+       17,
+       31
+      ],
+      [
+       14,
+       26,
+       27,
+       37
+      ]
+     ],
+     "arm_cast": [
+      [
+       44,
+       30,
+       59,
+       40
+      ]
+     ],
+     "foot_l": [
+      [
+       9,
+       50,
+       24,
+       61
+      ]
+     ],
+     "foot_r": [
+      [
+       37,
+       50,
+       55,
+       61
+      ]
+     ],
+     "head": [
+      [
+       19,
+       3,
+       50,
+       27
+      ]
+     ]
+    },
+    "joints": {
+     "neck": [
+      34,
+      27
+     ],
+     "shoulder_sword": [
+      24,
+      31
+     ],
+     "shoulder_cast": [
+      44,
+      33
+     ],
+     "waist": [
+      32,
+      45
+     ],
+     "hand": [
+      11,
+      26
+     ]
+    },
+    "fill": {
+     "torso": [
+      [
+       22,
+       27
+      ],
+      [
+       44,
+       27
+      ],
+      [
+       46,
+       34
+      ],
+      [
+       47,
+       42
+      ],
+      [
+       48,
+       50
+      ],
+      [
+       16,
+       50
+      ],
+      [
+       17,
+       42
+      ],
+      [
+       20,
+       34
+      ]
+     ]
+    }
+   },
+   {
+    "variant": "dash",
+    "frame": "player_s_dash",
+    "claims": {
+     "figure": [
+      [
+       0,
+       0,
+       64,
+       64
+      ]
+     ]
+    },
+    "joints": {}
+   },
+   {
+    "variant": "hurt0",
+    "frame": "player_s_hurt0",
+    "claims": {
+     "figure": [
+      [
+       0,
+       0,
+       64,
+       64
+      ]
+     ]
+    },
+    "joints": {}
+   },
+   {
+    "variant": "hurt1",
+    "frame": "player_s_hurt1",
+    "claims": {
+     "figure": [
+      [
+       0,
+       0,
+       64,
+       64
+      ]
+     ]
+    },
+    "joints": {}
+   }
+  ],
+  "n": [
+   {
+    "variant": "stand",
+    "frame": "player_n_idle0",
+    "claims": {
+     "arm_sword": [
+      [
+       43,
+       20,
+       58,
+       37
+      ]
+     ],
+     "arm_cast": [
+      [
+       7,
+       26,
+       22,
+       42
+      ]
+     ],
+     "foot_l": [
+      [
+       17,
+       51,
+       31,
+       61
+      ]
+     ],
+     "foot_r": [
+      [
+       34,
+       51,
+       52,
+       61
+      ]
+     ],
+     "head": [
+      [
+       20,
+       3,
+       50,
+       26
+      ]
+     ],
+     "hem": [
+      [
+       18,
+       45,
+       52,
+       53
+      ]
+     ]
+    },
+    "joints": {
+     "neck": [
+      34,
+      26
+     ],
+     "shoulder_sword": [
+      42,
+      30
+     ],
+     "shoulder_cast": [
+      22,
+      30
+     ],
+     "waist": [
+      35,
+      45
+     ],
+     "hand": [
+      52,
+      26
+     ]
+    },
+    "fill": {
+     "torso": [
+      [
+       22,
+       26
+      ],
+      [
+       46,
+       26
+      ],
+      [
+       47,
+       34
+      ],
+      [
+       48,
+       44
+      ],
+      [
+       49,
+       50
+      ],
+      [
+       20,
+       50
+      ],
+      [
+       21,
+       44
+      ],
+      [
+       21,
+       34
+      ]
+     ]
+    }
+   },
+   {
+    "variant": "windup",
+    "frame": "player_n_windup",
+    "claims": {
+     "arm_sword": [
+      [
+       43,
+       17,
+       58,
+       36
+      ]
+     ],
+     "arm_cast": [
+      [
+       6,
+       28,
+       24,
+       43
+      ]
+     ],
+     "foot_l": [
+      [
+       12,
+       51,
+       27,
+       61
+      ]
+     ],
+     "foot_r": [
+      [
+       40,
+       51,
+       57,
+       61
+      ]
+     ],
+     "head": [
+      [
+       19,
+       3,
+       48,
+       27
+      ]
+     ]
+    },
+    "joints": {
+     "neck": [
+      33,
+      27
+     ],
+     "shoulder_sword": [
+      44,
+      30
+     ],
+     "shoulder_cast": [
+      24,
+      32
+     ],
+     "waist": [
+      35,
+      45
+     ],
+     "hand": [
+      52,
+      23
+     ]
+    },
+    "fill": {
+     "torso": [
+      [
+       22,
+       27
+      ],
+      [
+       46,
+       27
+      ],
+      [
+       47,
+       36
+      ],
+      [
+       49,
+       46
+      ],
+      [
+       50,
+       51
+      ],
+      [
+       18,
+       51
+      ],
+      [
+       20,
+       44
+      ],
+      [
+       21,
+       34
+      ]
+     ]
+    }
+   },
+   {
+    "variant": "follow",
+    "frame": "player_n_follow",
+    "claims": {
+     "arm_sword": [
+      [
+       45,
+       19,
+       59,
+       35
+      ],
+      [
+       38,
+       26,
+       46,
+       34
+      ]
+     ],
+     "arm_cast": [
+      [
+       5,
+       27,
+       24,
+       42
+      ]
+     ],
+     "foot_l": [
+      [
+       10,
+       51,
+       26,
+       61
+      ]
+     ],
+     "foot_r": [
+      [
+       40,
+       51,
+       56,
+       61
+      ]
+     ],
+     "head": [
+      [
+       16,
+       3,
+       46,
+       27
+      ]
+     ]
+    },
+    "joints": {
+     "neck": [
+      31,
+      27
+     ],
+     "shoulder_sword": [
+      41,
+      30
+     ],
+     "shoulder_cast": [
+      22,
+      32
+     ],
+     "waist": [
+      35,
+      45
+     ],
+     "hand": [
+      53,
+      24
+     ]
+    },
+    "fill": {
+     "torso": [
+      [
+       20,
+       27
+      ],
+      [
+       44,
+       27
+      ],
+      [
+       45,
+       36
+      ],
+      [
+       47,
+       46
+      ],
+      [
+       48,
+       51
+      ],
+      [
+       16,
+       51
+      ],
+      [
+       18,
+       44
+      ],
+      [
+       19,
+       34
+      ]
+     ]
+    }
+   },
+   {
+    "variant": "dash",
+    "frame": "player_n_dash",
+    "claims": {
+     "figure": [
+      [
+       0,
+       0,
+       64,
+       64
+      ]
+     ]
+    },
+    "joints": {}
+   },
+   {
+    "variant": "hurt0",
+    "frame": "player_n_hurt0",
+    "claims": {
+     "figure": [
+      [
+       0,
+       0,
+       64,
+       64
+      ]
+     ]
+    },
+    "joints": {}
+   },
+   {
+    "variant": "hurt1",
+    "frame": "player_n_hurt1",
+    "claims": {
+     "figure": [
+      [
+       0,
+       0,
+       64,
+       64
+      ]
+     ]
+    },
+    "joints": {}
+   }
+  ],
+  "w": [
+   {
+    "variant": "stand",
+    "frame": "player_w_idle0",
+    "claims": {
+     "arm_sword": [
+      [
+       10,
+       26,
+       27,
+       40
+      ]
+     ],
+     "arm_cast": [
+      [
+       43,
+       32,
+       56,
+       44
+      ]
+     ],
+     "foot_l": [
+      [
+       15,
+       51,
+       30,
+       61
+      ]
+     ],
+     "foot_r": [
+      [
+       34,
+       51,
+       49,
+       61
+      ]
+     ],
+     "head": [
+      [
+       16,
+       3,
+       46,
+       26
+      ]
+     ],
+     "hem": [
+      [
+       17,
+       45,
+       48,
+       53
+      ]
+     ]
+    },
+    "joints": {
+     "neck": [
+      30,
+      26
+     ],
+     "shoulder_sword": [
+      24,
+      31
+     ],
+     "shoulder_cast": [
+      42,
+      34
+     ],
+     "waist": [
+      32,
+      45
+     ],
+     "hand": [
+      15,
+      32
+     ]
+    },
+    "fill": {
+     "torso": [
+      [
+       22,
+       26
+      ],
+      [
+       44,
+       26
+      ],
+      [
+       45,
+       34
+      ],
+      [
+       46,
+       40
+      ],
+      [
+       45,
+       50
+      ],
+      [
+       20,
+       50
+      ],
+      [
+       21,
+       40
+      ],
+      [
+       22,
+       32
+      ]
+     ]
+    }
+   },
+   {
+    "variant": "windup",
+    "frame": "player_w_windup",
+    "claims": {
+     "arm_sword": [
+      [
+       9,
+       26,
+       31,
+       41
+      ]
+     ],
+     "arm_cast": [
+      [
+       39,
+       25,
+       52,
+       36
+      ]
+     ],
+     "foot_l": [
+      [
+       14,
+       51,
+       31,
+       61
+      ]
+     ],
+     "foot_r": [
+      [
+       36,
+       51,
+       56,
+       61
+      ]
+     ],
+     "head": [
+      [
+       12,
+       3,
+       43,
+       26
+      ]
+     ]
+    },
+    "joints": {
+     "neck": [
+      28,
+      26
+     ],
+     "shoulder_sword": [
+      27,
+      31
+     ],
+     "shoulder_cast": [
+      40,
+      30
+     ],
+     "waist": [
+      32,
+      45
+     ],
+     "hand": [
+      15,
+      36
+     ]
+    },
+    "fill": {
+     "torso": [
+      [
+       20,
+       26
+      ],
+      [
+       42,
+       26
+      ],
+      [
+       44,
+       34
+      ],
+      [
+       46,
+       40
+      ],
+      [
+       46,
+       50
+      ],
+      [
+       20,
+       50
+      ],
+      [
+       22,
+       40
+      ]
+     ]
+    }
+   },
+   {
+    "variant": "follow",
+    "frame": "player_w_follow",
+    "claims": {
+     "arm_sword": [
+      [
+       6,
+       29,
+       25,
+       41
+      ]
+     ],
+     "arm_cast": [
+      [
+       39,
+       24,
+       54,
+       36
+      ]
+     ],
+     "foot_l": [
+      [
+       12,
+       51,
+       28,
+       61
+      ]
+     ],
+     "foot_r": [
+      [
+       43,
+       50,
+       59,
+       61
+      ]
+     ],
+     "head": [
+      [
+       10,
+       3,
+       42,
+       27
+      ]
+     ]
+    },
+    "joints": {
+     "neck": [
+      26,
+      26
+     ],
+     "shoulder_sword": [
+      24,
+      32
+     ],
+     "shoulder_cast": [
+      39,
+      29
+     ],
+     "waist": [
+      32,
+      45
+     ],
+     "hand": [
+      12,
+      35
+     ]
+    },
+    "fill": {
+     "torso": [
+      [
+       18,
+       26
+      ],
+      [
+       40,
+       26
+      ],
+      [
+       44,
+       36
+      ],
+      [
+       46,
+       44
+      ],
+      [
+       44,
+       50
+      ],
+      [
+       18,
+       50
+      ],
+      [
+       20,
+       40
+      ]
+     ]
+    }
+   },
+   {
+    "variant": "dash",
+    "frame": "player_w_dash",
+    "claims": {
+     "figure": [
+      [
+       0,
+       0,
+       64,
+       64
+      ]
+     ]
+    },
+    "joints": {}
+   },
+   {
+    "variant": "hurt0",
+    "frame": "player_w_hurt0",
+    "claims": {
+     "figure": [
+      [
+       0,
+       0,
+       64,
+       64
+      ]
+     ]
+    },
+    "joints": {}
+   },
+   {
+    "variant": "hurt1",
+    "frame": "player_w_hurt1",
+    "claims": {
+     "figure": [
+      [
+       0,
+       0,
+       64,
+       64
+      ]
+     ]
+    },
+    "joints": {}
+   }
+  ]
+ },
+ "fillFrom": {
+  "torso": [
+   "cloth"
+  ]
+ }
+}

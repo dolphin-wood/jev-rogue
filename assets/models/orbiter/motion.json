@@ -1,0 +1,36 @@
+{
+  "base": "enemy_orbiter",
+  "facings": [
+    "s",
+    "n",
+    "w"
+  ],
+  "weight": "light",
+  "gait": "float",
+  "stand": "stand",
+  "roles": {
+    "core": "body",
+    "tent_l": "fin_l",
+    "tent_r": "fin_r",
+    "horn_l": "prop",
+    "horn_r": "prop"
+  },
+  "slump": "sleep",
+  "extra": {
+    "tele": "glow",
+    "tele1": "glow1"
+  },
+  "poses": {
+    "glow1": {
+      "base": "glow",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -1
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+# Contagion
+1=#1f6a2a 2=#4fbf3a 3=#6fdc5a 4=#e8ffd4
+................
+..........ooooo.
+.........oo443oo
+.......ooo34322o
+.......o3o43221o
+..ooooooooo221oo
+.oo44433ooooooo.
+.o44w3332o......
+oo4w33322oo.....
+o443332222ooooo.
+o433322221oo43oo
+oo3322221oo4322o
+.o3222211o3o22oo
+.oo22211ooooooo.
+..ooooooo.......
+................

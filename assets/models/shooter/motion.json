@@ -1,0 +1,36 @@
+{
+  "base": "enemy_shooter",
+  "facings": [
+    "s",
+    "n",
+    "w"
+  ],
+  "weight": "light",
+  "gait": "float",
+  "stand": "stand",
+  "roles": {
+    "core": "body",
+    "fin_l": "fin_l",
+    "fin_r": "fin_r",
+    "shadow": "prop"
+  },
+  "slump": "sleep",
+  "extra": {
+    "tele": "glow",
+    "tele1": "glow1",
+    "lob": "lob"
+  },
+  "poses": {
+    "glow1": {
+      "base": "glow",
+      "parts": {
+        "core": {
+          "at": [
+            0,
+            -1
+          ]
+        }
+      }
+    }
+  }
+}

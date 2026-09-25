@@ -1,0 +1,21 @@
+{
+  "base": "enemy_sower",
+  "facings": [
+    "s",
+    "n",
+    "w"
+  ],
+  "weight": "light",
+  "gait": "float",
+  "stand": "stand",
+  "roles": {
+    "core": "body",
+    "shard_l": "fin_l",
+    "shard_r": "fin_r"
+  },
+  "slump": "sleep",
+  "extra": {
+    "cast": "sow",
+    "bloom_cast": "bloom"
+  }
+}

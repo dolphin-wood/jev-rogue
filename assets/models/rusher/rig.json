@@ -1,0 +1,101 @@
+{
+  "size": [
+    64,
+    64
+  ],
+  "outline": 2,
+  "feet": [
+    "leg_l",
+    "leg_r"
+  ],
+  "facings": {
+    "s": {
+      "origin": [
+        32,
+        32
+      ],
+      "parts": [
+        {
+          "name": "leg_l",
+          "parent": "shell",
+          "joint": "hip_l",
+          "depth": 1.5
+        },
+        {
+          "name": "leg_r",
+          "parent": "shell",
+          "joint": "hip_r",
+          "depth": 1.5
+        },
+        {
+          "name": "shell",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "name": "head",
+          "parent": "shell",
+          "joint": "neck",
+          "depth": 2
+        }
+      ]
+    },
+    "w": {
+      "origin": [
+        32,
+        32
+      ],
+      "parts": [
+        {
+          "name": "leg_r",
+          "parent": "shell",
+          "joint": "hip_r",
+          "depth": 1.5
+        },
+        {
+          "name": "shell",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "name": "head",
+          "parent": "shell",
+          "joint": "neck",
+          "depth": 2
+        },
+        {
+          "name": "leg_l",
+          "parent": "shell",
+          "joint": "hip_l",
+          "depth": 1.5
+        }
+      ]
+    },
+    "n": {
+      "origin": [
+        32,
+        32
+      ],
+      "parts": [
+        {
+          "name": "leg_l",
+          "parent": "shell",
+          "joint": "hip_l",
+          "depth": 1.5
+        },
+        {
+          "name": "leg_r",
+          "parent": "shell",
+          "joint": "hip_r",
+          "depth": 1.5
+        },
+        {
+          "name": "shell",
+          "parent": null,
+          "depth": 1
+        }
+      ]
+    }
+  },
+  "anchors": {}
+}

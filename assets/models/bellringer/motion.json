@@ -1,0 +1,29 @@
+{
+  "base": "enemy_bellringer",
+  "facings": [
+    "s",
+    "n",
+    "w"
+  ],
+  "weight": "mid",
+  "gait": "walk",
+  "stand": "stand",
+  "roles": {
+    "torso": "body",
+    "head": "head",
+    "foot_l": "foot_l",
+    "foot_r": "foot_r",
+    "arm_l": "arm_l",
+    "arm_r": "arm_r"
+  },
+  "crouch": "crouch",
+  "strike": "chime",
+  "slump": "sleep",
+  "extra": {
+    "cast": "chime",
+    "field": "field",
+    "burst": "burst",
+    "peal_windup": "pealup",
+    "peal_release": "pealgo"
+  }
+}

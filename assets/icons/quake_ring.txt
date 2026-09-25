@@ -1,0 +1,18 @@
+# Quake Ring
+1=#5a4a3a 2=#8a7a64 3=#d8cab0 4=#f0e6d0
+................
+.......ooo......
+......oo4oo.....
+......o443o.....
+..ooooo211ooooo.
+..o443ooooo443o.
+.oo211o...o211oo
+oo4ooooooooooo4o
+o43o..oo1oo.o43o
+o32oooo121ooo32o
+o21o4ooooooo421o
+ooo443oo4oo443oo
+..o322o443o322o.
+..o211o322o211o.
+..ooooo211ooooo.
+......ooooo.....

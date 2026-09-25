@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "artPixelCell": [336, 336],
+  "pivot": [168, 272],
+  "frameNamePrefix": "boss_p{phase}_",
+  "directionRule": "The whole combo faces south. For the opposite side, mirror every pose and anchor in the entire combo consistently; do not alternate a whole-body mirror on each hit.",
+  "beats": {
+    "frontCut": {
+      "frames": ["sweep_front_wind", "sweep_front_enter", "sweep_front_mid", "sweep_front_cut"],
+      "contact": "sweep_front_cut",
+      "swordPath": "screen right to screen left"
+    },
+    "returnCut": {
+      "frames": ["sweep_back_wind", "sweep_back_cross", "sweep_back_cut"],
+      "contact": "sweep_back_cut",
+      "swordPath": "screen left to screen right"
+    },
+    "verticalFinisher": {
+      "frames": ["cleave_front_raise", "cleave_front_fall", "cleave_front_cut", "cleave_front_follow"],
+      "contact": "cleave_front_cut",
+      "swordPath": "above brow through the space in front of the king; tip stays above the floor",
+      "waveOrigin": "tip anchor of cleave_front_cut"
+    }
+  },
+  "strings": {
+    "phase2": {
+      "greatslash": ["frontCut", "returnCut", "verticalFinisher"],
+      "greatsweep": ["frontCut", "verticalFinisher"]
+    },
+    "phase3": {
+      "greatslash": ["frontCut", "returnCut", "frontCut", "verticalFinisher"],
+      "greatsweep": ["frontCut", "returnCut", "verticalFinisher"]
+    }
+  },
+  "integrationStatus": "Source art and 336px anchors delivered. Atlas packaging, renderer size class and gameplay beat timing are pending CC integration."
+}

@@ -1,0 +1,308 @@
+{
+  "rules": [
+    {
+      "material": "eye",
+      "shades": 3,
+      "hue": [
+        150,
+        205
+      ],
+      "sat": [
+        0.3,
+        1
+      ]
+    },
+    {
+      "material": "hot",
+      "shades": 3,
+      "hue": [
+        295,
+        355
+      ],
+      "sat": [
+        0.42,
+        1
+      ]
+    },
+    {
+      "material": "warm",
+      "shades": 4,
+      "hue": [
+        15,
+        62
+      ],
+      "sat": [
+        0.32,
+        1
+      ]
+    },
+    {
+      "material": "steel",
+      "shades": 6,
+      "hue": [
+        200,
+        292
+      ],
+      "sat": [
+        0.05,
+        1
+      ],
+      "light": [
+        0.08,
+        0.92
+      ]
+    },
+    {
+      "material": "bone",
+      "shades": 5,
+      "sat": [
+        0,
+        0.3
+      ],
+      "light": [
+        0.3,
+        1
+      ]
+    },
+    {
+      "material": "dusk",
+      "shades": 3,
+      "light": [
+        0,
+        0.55
+      ]
+    }
+  ],
+  "outlineLuma": 24,
+  "lift": 1.0,
+  "paletteFrames": [
+    "enemy_sower_s_idle0",
+    "enemy_sower_s_dormant0",
+    "enemy_sower_s_cast",
+    "enemy_sower_s_bloom_cast",
+    "enemy_sower_n_idle0",
+    "enemy_sower_n_dormant0",
+    "enemy_sower_n_cast",
+    "enemy_sower_n_bloom_cast",
+    "enemy_sower_w_idle0",
+    "enemy_sower_w_dormant0",
+    "enemy_sower_w_cast",
+    "enemy_sower_w_bloom_cast"
+  ],
+  "letters": {
+    "core": "c",
+    "shard_l": "s",
+    "shard_r": "h"
+  },
+  "rest": "core",
+  "fillFrom": {
+    "core": [
+      "steel",
+      "bone",
+      "warm"
+    ]
+  },
+  "fillRadius": {
+    "core": 4
+  },
+  "claimsFrac": {
+    "s": {
+      "shard_l": [
+        [
+          0,
+          0,
+          0.24,
+          1
+        ]
+      ],
+      "shard_r": [
+        [
+          0.76,
+          0,
+          1,
+          1
+        ]
+      ]
+    },
+    "n": {
+      "shard_l": [
+        [
+          0,
+          0,
+          0.24,
+          1
+        ]
+      ],
+      "shard_r": [
+        [
+          0.76,
+          0,
+          1,
+          1
+        ]
+      ]
+    },
+    "w": {
+      "shard_l": [
+        [
+          0,
+          0,
+          0.24,
+          1
+        ]
+      ],
+      "shard_r": [
+        [
+          0.76,
+          0,
+          1,
+          1
+        ]
+      ]
+    }
+  },
+  "jointsFrac": {
+    "s": {},
+    "n": {},
+    "w": {}
+  },
+  "anchorsOn": {},
+  "rig": {
+    "size": [
+      64,
+      64
+    ],
+    "outline": 2,
+    "detached": [
+      "shard_l",
+      "shard_r"
+    ],
+    "facings": {
+      "s": {
+        "origin": [
+          32,
+          32
+        ],
+        "parts": [
+          {
+            "name": "core",
+            "parent": null,
+            "depth": 1
+          },
+          {
+            "name": "shard_l",
+            "parent": null,
+            "depth": 0
+          },
+          {
+            "name": "shard_r",
+            "parent": null,
+            "depth": 0
+          }
+        ]
+      },
+      "n": {
+        "origin": [
+          32,
+          32
+        ],
+        "parts": [
+          {
+            "name": "core",
+            "parent": null,
+            "depth": 1
+          },
+          {
+            "name": "shard_l",
+            "parent": null,
+            "depth": 0
+          },
+          {
+            "name": "shard_r",
+            "parent": null,
+            "depth": 0
+          }
+        ]
+      },
+      "w": {
+        "origin": [
+          32,
+          32
+        ],
+        "parts": [
+          {
+            "name": "core",
+            "parent": null,
+            "depth": 1
+          },
+          {
+            "name": "shard_l",
+            "parent": null,
+            "depth": 0
+          },
+          {
+            "name": "shard_r",
+            "parent": null,
+            "depth": 0
+          }
+        ]
+      }
+    }
+  },
+  "facings": {
+    "s": [
+      {
+        "variant": "stand",
+        "frame": "enemy_sower_s_idle0"
+      },
+      {
+        "variant": "sleep",
+        "frame": "enemy_sower_s_dormant0"
+      },
+      {
+        "variant": "sow",
+        "frame": "enemy_sower_s_cast"
+      },
+      {
+        "variant": "bloom",
+        "frame": "enemy_sower_s_bloom_cast"
+      }
+    ],
+    "n": [
+      {
+        "variant": "stand",
+        "frame": "enemy_sower_n_idle0"
+      },
+      {
+        "variant": "sleep",
+        "frame": "enemy_sower_n_dormant0"
+      },
+      {
+        "variant": "sow",
+        "frame": "enemy_sower_n_cast"
+      },
+      {
+        "variant": "bloom",
+        "frame": "enemy_sower_n_bloom_cast"
+      }
+    ],
+    "w": [
+      {
+        "variant": "stand",
+        "frame": "enemy_sower_w_idle0"
+      },
+      {
+        "variant": "sleep",
+        "frame": "enemy_sower_w_dormant0"
+      },
+      {
+        "variant": "sow",
+        "frame": "enemy_sower_w_cast"
+      },
+      {
+        "variant": "bloom",
+        "frame": "enemy_sower_w_bloom_cast"
+      }
+    ]
+  }
+}

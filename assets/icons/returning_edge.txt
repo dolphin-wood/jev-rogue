@@ -1,0 +1,18 @@
+# Returning Edge
+1=#1b5a48 2=#46a888 3=#7fe8c0 4=#e6fff4
+................
+.........ooo....
+........oo4oooo.
+.......oo444o3o.
+......oo442oo3oo
+.....oo4422oo33o
+....oo4422ooo33o
+...oo4422oo.o33o
+..oo4422oo..o33o
+ooo4422oo...o33o
+o21122oo...oo3oo
+o1211oo...oo22o.
+oo122oooooo22oo.
+o222ooo22222oo..
+ooo2oo2222ooo...
+..ooooooooo.....

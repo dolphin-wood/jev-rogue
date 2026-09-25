@@ -1,0 +1,221 @@
+{
+  "image": "ossuary.png",
+  "frames": {
+    "tile_ossuary_floor_0": {
+      "x": 0,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_floor_1": {
+      "x": 128,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_floor_2": {
+      "x": 256,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_floor_3": {
+      "x": 384,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_wall_solid": {
+      "x": 0,
+      "y": 128,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_wall_n": {
+      "x": 128,
+      "y": 128,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_wall_e": {
+      "x": 256,
+      "y": 128,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_wall_s": {
+      "x": 384,
+      "y": 128,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_wall_w": {
+      "x": 0,
+      "y": 256,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_wall_ne": {
+      "x": 128,
+      "y": 256,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_wall_es": {
+      "x": 256,
+      "y": 256,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_wall_sw": {
+      "x": 384,
+      "y": 256,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_wall_wn": {
+      "x": 0,
+      "y": 384,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_wall_ns": {
+      "x": 128,
+      "y": 384,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_wall_ew": {
+      "x": 256,
+      "y": 384,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_wall_nes": {
+      "x": 384,
+      "y": 384,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_wall_esw": {
+      "x": 0,
+      "y": 512,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_wall_swn": {
+      "x": 128,
+      "y": 512,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_wall_wne": {
+      "x": 256,
+      "y": 512,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_wall_nesw": {
+      "x": 384,
+      "y": 512,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_wall_inner_ne": {
+      "x": 0,
+      "y": 640,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_wall_inner_es": {
+      "x": 128,
+      "y": 640,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_wall_inner_sw": {
+      "x": 256,
+      "y": 640,
+      "w": 64,
+      "h": 64
+    },
+    "tile_ossuary_wall_inner_wn": {
+      "x": 384,
+      "y": 640,
+      "w": 64,
+      "h": 64
+    },
+    "deco_ossuary_0": {
+      "x": 0,
+      "y": 768,
+      "w": 64,
+      "h": 64
+    },
+    "deco_ossuary_1": {
+      "x": 128,
+      "y": 768,
+      "w": 64,
+      "h": 64
+    },
+    "deco_ossuary_2": {
+      "x": 256,
+      "y": 768,
+      "w": 64,
+      "h": 64
+    },
+    "deco_ossuary_3": {
+      "x": 384,
+      "y": 768,
+      "w": 64,
+      "h": 64
+    },
+    "deco_ossuary_4": {
+      "x": 0,
+      "y": 896,
+      "w": 64,
+      "h": 64
+    },
+    "deco_ossuary_5": {
+      "x": 128,
+      "y": 896,
+      "w": 64,
+      "h": 64
+    },
+    "deco_ossuary_6": {
+      "x": 256,
+      "y": 896,
+      "w": 64,
+      "h": 64
+    },
+    "deco_ossuary_7": {
+      "x": 384,
+      "y": 896,
+      "w": 64,
+      "h": 64
+    },
+    "patch_ossuary_0": {
+      "x": 0,
+      "y": 1024,
+      "w": 128,
+      "h": 128
+    },
+    "patch_ossuary_1": {
+      "x": 128,
+      "y": 1024,
+      "w": 128,
+      "h": 128
+    },
+    "patch_ossuary_2": {
+      "x": 256,
+      "y": 1024,
+      "w": 128,
+      "h": 128
+    },
+    "prop_ossuary_sconce": {
+      "x": 384,
+      "y": 1024,
+      "w": 64,
+      "h": 128
+    }
+  }
+}
