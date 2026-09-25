@@ -3206,6 +3206,17 @@ function applyElementTo(e: Enemy, element: string, power: number, mult = 1): voi
     e.chillBuild = Math.min(1, e.chillBuild + add);
     e.buildFedMs = 600;
     e.slowMs = 1500;
+    /*
+     * **The king is not frozen.** Every move he starts, he finishes
+     * (`canStagger`), and a freeze cancelled the blade he was winding up: in
+     * play, a warning and then no blow. A full gauge slows him hard and long
+     * instead, and empties to fill again.
+     */
+    if (e.chillBuild >= 1 && e.archetype === "boss") {
+      e.chillBuild = 0;
+      e.slowMs = BOSS_CHILL_SLOW_MS;
+      return;
+    }
     if (e.chillBuild >= 1) {
       e.frozenMs = ENEMY_FREEZE_MS;
       e.pending = [];
@@ -5028,6 +5039,8 @@ const BULLET_HEARTS: Readonly<Record<string, number>> = {
   shooter: 0.6, orbiter: 0.5, boss: 0.6, summoner: 0.6, turret: 0.6, sentinel: 0.7, lancer: 0.4,
 };
 const LIGHTNING_HEARTS = 1.2;
+/** How long a full chill gauge slows the king, who is never frozen (`applyElementTo`). */
+const BOSS_CHILL_SLOW_MS = 3000;
 
 /** What `attacks.ts` lands its damage through. */
 function attackHooks(w: World): AttackHooks {
