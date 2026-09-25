@@ -182,6 +182,44 @@ describe("hit affixes", () => {
     expect(castAndRun(forkW, forkW.enemies[0]!).splits).toBe(1);
   });
 
+  /**
+   * **A fork's shards are the spell again, smaller.** The first shard is
+   * handed its dead parent's own pool slot, and the slot used to be wiped
+   * before the parent was read: every shard came out slot -1 and element-less,
+   * drawn as a plain bolt whatever had split, and each later shard was cut
+   * from the one before it.
+   */
+  it.each(["frost_needle", "void_orb"])("fork's shards keep %s's slot, element and speed", (base) => {
+    const w = arena({ id: "fork", tier: 2 }, base);
+    // The orb pierces two bodies and splits on the third.
+    const first = dummy(w, 60, 0);
+    dummy(w, 110, 0);
+    dummy(w, 160, 0);
+    step(w, aimAt(first, { spell: 0 }));
+    let parent: { speed: number; radius: number; damage: number; element: string } | null = null;
+    let shards: { speed: number; radius: number; damage: number; element: string; slot: number }[] = [];
+    for (let i = 0; i < 400 && shards.length === 0; i++) {
+      step(w, aimAt(first));
+      const split = w.events.some((e) => e.kind === "shot" && e.what === "split");
+      const live = w.playerBullets.filter((b) => b.alive);
+      if (split) shards = live.filter((b) => b.split === 0).map((b) => ({
+        speed: Math.hypot(b.vx, b.vy), radius: b.radius, damage: b.damage, element: b.element, slot: b.spellIndex,
+      }));
+      else if (live[0]) parent = { speed: Math.hypot(live[0].vx, live[0].vy), radius: live[0].radius, damage: live[0].damage, element: live[0].element };
+    }
+    expect(parent).not.toBeNull();
+    expect(shards.length).toBe(3);
+    for (const s of shards) {
+      expect(s.slot).toBe(0);
+      expect(s.element).toBe(parent!.element);
+      expect(s.speed).toBeCloseTo(parent!.speed, 0);
+      expect(s.radius).toBeLessThan(parent!.radius);
+      expect(s.damage).toBeLessThan(parent!.damage);
+    }
+    // Every shard is cut from the parent, not from the shard before it.
+    expect(new Set(shards.map((s) => `${s.radius}:${s.damage}`)).size).toBe(1);
+  });
+
   it("chain reaches the next body with a copy of the spell", () => {
     const w = arena({ id: "chain" });
     const first = dummy(w, 150, 0);

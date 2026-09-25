@@ -3288,7 +3288,7 @@ function bulletsBreakProps(
  *
  * `Bullet.split` is set by `fork` on a hit and by `shatter` on a wall.
  *
- * The fragments are deliberately weak and short-lived. What splitting buys is
+ * The fragments are deliberately weak and short-reaching. What splitting buys is
  * **coverage**, not damage: the parent's damage is divided rather than copied,
  * so a fork is a decision to hit more things for less each, which is the trade
  * that makes it a choice against a straight damage upgrade.
@@ -3296,20 +3296,32 @@ function bulletsBreakProps(
  * They also carry `split: 0`. A fragment that forks again is a chain reaction
  * that ends in the bullet cap, and the cap is shared with everything else the
  * player has in the air.
+ *
+ * **A shard is the spell again, smaller** — the rule `chain`'s copies follow
+ * (`affix-hooks.ts`). It keeps the parent's speed, element, slot (which is
+ * what it is drawn as), weight and fire, and loses damage and size. The
+ * parent is read into a copy first: its slot is dead, so the first shard is
+ * handed that very slot, and `acquire` wipes it before it could be read. Every
+ * shard came out a plain element-less bolt, drawn as one, whatever split.
  */
 const SPLIT_ARC_DEG = 54;
 const SPLIT_LIFE = 0.45;
+/** How far a shard carries at least: a bolt's shard flies it in `SPLIT_LIFE`, and a slow orb's is given the time to. */
+const SPLIT_REACH_PX = 270;
+/** A shard's size, and its weight, of the parent's. */
+const SPLIT_SIZE = 0.7;
 
 function splitBullets(w: World, dead: readonly Bullet[]): void {
-  for (const parent of dead) {
-    const n = parent.split | 0;
+  for (const b of dead) {
+    const n = b.split | 0;
     if (n <= 0) continue;
+    const parent = { ...b, powers: { ...b.powers }, hitIds: [...b.hitIds] };
     const speed = Math.hypot(parent.vx, parent.vy) || 1;
     const heading = Math.atan2(parent.vy, parent.vx);
     const spread = (SPLIT_ARC_DEG * Math.PI) / 180;
     for (let i = 0; i < n; i++) {
       const child = acquire(w.playerBullets, false);
-      if (!child) return;
+      if (!child) break;
       // Fanned evenly about the parent's heading, so the pattern reads as one
       // thing coming apart rather than as a fresh volley.
       const t = n === 1 ? 0 : (i / (n - 1)) * 2 - 1;
@@ -3317,18 +3329,22 @@ function splitBullets(w: World, dead: readonly Bullet[]): void {
       child.alive = true;
       child.x = parent.x;
       child.y = parent.y;
+      // A streak is drawn back along its own path, so it starts where it broke off.
+      child.originX = parent.x;
+      child.originY = parent.y;
       child.vx = Math.cos(angle) * speed;
       child.vy = Math.sin(angle) * speed;
-      child.radius = Math.max(2, parent.radius * 0.7);
+      child.radius = Math.max(2, parent.radius * SPLIT_SIZE);
       child.damage = Math.max(1, Math.round(parent.damage / n));
-      child.lifeMs = parent.lifeMs > 0 ? parent.lifeMs : 1000 * SPLIT_LIFE;
-      child.lifeMs = 1000 * SPLIT_LIFE;
+      child.lifeMs = 1000 * Math.max(SPLIT_LIFE, SPLIT_REACH_PX / speed);
       child.element = parent.element;
       child.elementPower = parent.elementPower;
       copyPowers(child.powers, parent.powers);
       // A shard is a piece of the shot that made it, and procs like one.
       child.proc = parent.proc * PROC_SPLIT;
       child.statusMult = parent.statusMult;
+      child.weight = parent.weight * SPLIT_SIZE;
+      child.leavesFire = parent.leavesFire;
       child.split = 0;
       child.pierce = 0;
       child.bounce = 0;
@@ -3338,8 +3354,12 @@ function splitBullets(w: World, dead: readonly Bullet[]): void {
       // one target, which is a different and much duller item than one that
       // turns a single shot into a reason to fight things in a line.
       child.hitIds = [...parent.hitIds];
-      child.affixes = parent.affixes;
+      // The spell's slot, which is what it is drawn as, but none of its
+      // affixes: a `shatter` shard would break again on the next wall and a
+      // `bloom` shard lay a field of its own, each one a chain reaction.
+      child.affixes = [];
       child.spellIndex = parent.spellIndex;
+      child.from = parent.from;
       child.manaSpent = 0;
       child.arcLeft = 0;
     }
