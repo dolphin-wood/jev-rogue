@@ -2,8 +2,13 @@ import Phaser from "phaser";
 import { preloadSfx } from "../audio.ts";
 import { fontFamily, getLang, loadFont, t } from "../i18n/index.ts";
 import { preloadHallArt } from "./hall-art.ts";
+import { LoadProgress } from "./load-progress.ts";
 
-/** A visible first frame while the atlas, hall art, effects and font load. */
+/**
+ * A visible first frame while the atlas, hall art, effects and font load,
+ * then the title. The music stems are not in this queue: `StemMusic` fetches
+ * them in the background once sound is on, so no one waits on 18 MB of audio.
+ */
 export class BootScene extends Phaser.Scene {
   private bar!: Phaser.GameObjects.Graphics;
   private wordmark!: Phaser.GameObjects.Text;
@@ -11,9 +16,11 @@ export class BootScene extends Phaser.Scene {
   private count!: Phaser.GameObjects.Text;
   private logo: Phaser.GameObjects.Image | null = null;
   private progress = 0;
+  private readonly bytes = new LoadProgress();
   private assetsReady = false;
   private fontReady = false;
   private failedFile: string | null = null;
+  private leaving = false;
 
   constructor() {
     super("boot");
@@ -41,18 +48,22 @@ export class BootScene extends Phaser.Scene {
     // asset queue, with the splash already on screen.
     void loadFont(getLang()).then(() => {
       this.fontReady = true;
-      this.status.setText(this.status.text);
-      this.count.setText(this.count.text);
+      // Same text, new face: `setText` skips an unchanged string, so redraw.
+      this.status.updateText();
+      this.count.updateText();
       this.enterPlayWhenReady();
     });
 
-    this.load.on(Phaser.Loader.Events.PROGRESS, (value: number) => {
-      this.progress = value;
-      this.count.setText(`${Math.round(value * 100)}%`);
-      this.drawBar();
-    });
+    // Phaser's own PROGRESS counts files, and the sheet is one file of ~200
+    // but most of the bytes; the bar follows bytes instead (`LoadProgress`).
     this.load.on(Phaser.Loader.Events.FILE_PROGRESS, (file: Phaser.Loader.File) => {
+      this.bytes.update(this.fileId(file), Math.max(0, file.bytesLoaded), file.bytesTotal);
       this.showFile(file);
+      this.showProgress();
+    });
+    this.load.on(Phaser.Loader.Events.FILE_LOAD, (file: Phaser.Loader.File) => {
+      this.bytes.finish(this.fileId(file));
+      this.showProgress();
     });
     this.load.on(Phaser.Loader.Events.FILE_COMPLETE, (key: string) => {
       if (key !== "gameLogo") return;
@@ -61,11 +72,15 @@ export class BootScene extends Phaser.Scene {
       this.layout();
     });
     this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, (file: Phaser.Loader.File) => {
+      this.bytes.finish(this.fileId(file));
       this.failedFile ??= this.fileName(file);
       this.status.setText(t("boot.failed", { file: this.failedFile }));
     });
     this.load.once(Phaser.Loader.Events.COMPLETE, () => {
       this.assetsReady = true;
+      this.progress = 1;
+      this.count.setText("100%");
+      this.drawBar();
       if (!this.failedFile) this.status.setText(t("boot.preparing"));
       this.enterPlayWhenReady();
     });
@@ -75,7 +90,21 @@ export class BootScene extends Phaser.Scene {
     this.load.json("atlasJson", "sprites.json");
     preloadHallArt(this);
     preloadSfx(this);
+    for (const file of this.load.list.getArray()) this.bytes.add(this.fileId(file));
     this.load.start();
+  }
+
+  /** Keys are unique per type, not across types. */
+  private fileId(file: Phaser.Loader.File): string {
+    return `${file.type}:${file.key}`;
+  }
+
+  private showProgress(): void {
+    const value = this.bytes.value();
+    if (Math.floor(value * 100) === Math.floor(this.progress * 100)) return;
+    this.progress = value;
+    this.count.setText(`${Math.floor(value * 100)}%`);
+    this.drawBar();
   }
 
   private fileName(file: Phaser.Loader.File): string {
@@ -88,7 +117,13 @@ export class BootScene extends Phaser.Scene {
   }
 
   private enterPlayWhenReady(): void {
-    if (this.assetsReady && this.fontReady && !this.failedFile) this.scene.start("play");
+    if (!this.assetsReady || !this.fontReady || this.failedFile || this.leaving) return;
+    this.leaving = true;
+    // Building the title (recolouring the atlas, baking the effect sheets)
+    // holds the main thread for a few seconds on a slow machine; start it
+    // only once the full bar and "preparing" have been drawn, so that is what
+    // stays on screen meanwhile.
+    this.game.events.once(Phaser.Core.Events.POST_RENDER, () => this.scene.start("play"));
   }
 
   private layout(): void {
