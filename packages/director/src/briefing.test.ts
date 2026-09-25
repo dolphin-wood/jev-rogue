@@ -935,28 +935,40 @@ describe("the facts the offer's shape is read off", () => {
     expect(text).toMatch(/- Last 3 cards kept, oldest first: Shock Arc \(tagged spam\); Fleet \(tagged [a-z, ]+\); Kindle \(tagged [a-z, ]+\)/);
   });
 
-  it("gives Jev its own answers for each room so far, one JSON object a room, and no verdict on them", () => {
+  it("writes each room's fight and doors as they were built, with what each door promised", () => {
+    const encounter = {
+      composition: "ranged_heavy", density: "sparse", wave_structure: "steady", anchor: "tank",
+      entry: "flanks", subspecies: ["wisp"], subspecies_weight: "some", elite_presence: "one",
+    } as const;
     const ctx: RunContext = {
       ...minimalContext(),
       history: {
         ...emptyHistory(),
-        journal: [
-          room(1, { decided: { composition: "ranged_heavy", density: "sparse", spell_school: "spirit" } }),
-          room(2, { decided: { composition: "ranged_heavy", density: "normal" } }),
-          room(3, {}),
-        ],
+        journal: [room(1, {
+          size: "compact", encounter, enemies: ["shooter", "wisp"],
+          doors: [
+            { kind: "spell", school: "storm" },
+            { kind: "stat", family: "movement", elite: true, grade: 2 },
+            { kind: "smith" },
+          ],
+        })],
       },
     };
     const text = briefingFrom(ctx, { deciding: [] });
-    expect(text).toContain("- The Director's answers for each room so far, oldest first, one JSON object a room:");
-    expect(text).toContain('  {"room":1,"composition":"ranged_heavy","density":"sparse","spell_school":"spirit"}');
-    expect(text).toContain('  {"room":2,"composition":"ranged_heavy","density":"normal"}');
-    // A room with nothing decided is not a line, and nothing tells Jev what to make of the record.
-    expect(text).not.toContain('"room":3');
-    const lines = text.split("\n");
-    const at = lines.findIndex((l) => l.startsWith("- The Director's answers"));
-    const section = lines.slice(at, at + 3).join("\n");
-    expect(section).not.toMatch(/vary|variety|repeat|again|same/i);
+    expect(text).toContain("- Room 1: combat, build, compact open arena, mirrored");
+    expect(text).toContain("  - fight as built: ranged heavy roster, density sparse, steady waves, entering from the "
+      + "flanks, anchored by a tank, variants wisp, one enraged");
+    expect(text).toContain("  - doors out spell promising storm, stat promising movement (elite, grade 2), smith, took affix");
+    // No record of the Director's own answers beside the rooms: the rooms are the record.
+    expect(text).not.toContain("JSON");
+  });
+
+  it("tallies what the rolled-up rooms' doors promised, so the run's first spell doors are not lost", () => {
+    const journal = [1, 2, 3, 4, 5, 6, 7].map((i) => room(i, {
+      doors: [{ kind: "spell", school: i === 2 ? "void" : "storm" }, { kind: "stat", family: "mana" }],
+    }));
+    const text = briefingFrom({ ...minimalContext(), history: { ...emptyHistory(), journal } }, { deciding: [] });
+    expect(text).toContain("  - spell doors promised storm, void; stat doors promised mana ×2; no elite doors");
   });
 
   it("says, for a spell offer with an empty key, where a new spell and a copy go", () => {

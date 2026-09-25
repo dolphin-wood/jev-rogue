@@ -26,7 +26,7 @@ import type {
   PlayerMods, RewardCardKind, RoomPlan, RoomType, RunHistory, World, AttachedAffix,
   Element, Tension, RunContext, RunJournalEntry, Staff, SpellSlot, MeleeKind, MusicState,
 } from "@jr/core";
-import { createDirector, createEvaluator, decidedOf, EvaluatorError } from "@jr/director";
+import { createDirector, createEvaluator, EvaluatorError } from "@jr/director";
 import type {
   Decision, Director, DirectorArm, RoomPlanResult, DoorPlan, PortalPlan, CardPlan, CardRequest, ObservedRequest, OfferPlan, OfferRequest,
 } from "@jr/director";
@@ -42,7 +42,7 @@ import {
   heldSpell, fixedExit, buildShapeFor, expectedClearMsFor, COIN_BOOST_MAX, bucketConsistency, cardStyleTags,
   measureOf, observedLabels, UNMEASURED, type HeldSpell, type RoomMeasure,
   SMITH_PRICE, MERCHANT_PRICE, FOUNTAIN_HEAL_FRACTION, fountainDrink, fountainWouldHeal,
-  ARCHETYPES, STYLE_CARDS, observedFigures,
+  ARCHETYPES, STYLE_CARDS, observedFigures, journalDoor,
 } from "@jr/core";
 import type { BaseItem, CardNeeds, NpcKind, OfferPromise, RoomStage, RunShape, WorldEvent } from "@jr/core";
 import {
@@ -8444,6 +8444,7 @@ export class PlayScene extends Phaser.Scene {
       type: portal.npc ?? w.room.room_type,
       tension: this.tension,
       space: w.room.params.space,
+      size: w.room.params.size,
       symmetry: w.room.params.symmetry,
       mood: w.room.params.mood,
       health_lost: stats.heartsLost * HP_PER_HEART,
@@ -8455,12 +8456,13 @@ export class PlayScene extends Phaser.Scene {
       hurt_by: worst[1] > 0 ? worst[0] : "nothing",
       ...(hurtMost ? { hurt_most_by: hurtMost } : {}),
       ...(bodies.length ? { enemies: bodies } : {}),
+      ...(this.planned?.plan.encounter ? { encounter: this.planned.plan.encounter.profile } : {}),
       doors_offered: (this.offer?.doors ?? []).flatMap((d) => (d.onward ? [] : [d.npc ?? d.reward])),
+      doors: (this.offer?.doors ?? []).filter((d) => !d.onward).map(journalDoor),
       ...(portal.onward ? {} : { door_taken: portal.npc ?? portal.reward }),
       ...(this.pickedThisRoom ? { picked: [this.pickedThisRoom] } : {}),
       passed_over: offered.filter((id) => id !== this.pickedThisRoom),
       ...(this.pickedThisRoom === "gold" ? { took_gold_instead: true } : {}),
-      decided: decidedOf([...this.planRecords.values()].flatMap((r) => r.decisions)),
     };
   }
 

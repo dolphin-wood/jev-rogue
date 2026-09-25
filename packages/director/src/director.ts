@@ -335,14 +335,16 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
    */
   const recentSchools: SpellSchool[] = [];
   /*
-   * **The run caps are the rule arm's, not Jev's.** The school and the
-   * sparse-room caps were written because neither arm could see a run of
-   * its own answers. Jev now can — the briefing carries every room's answers
-   * (`RunJournalEntry.decided`) — and a cap in code overrides it whatever it
-   * would have answered, which is the Director deciding less. So they hold
-   * for the rule and random arms, whose tables cannot read the record, and
-   * Jev is left to read it. The door-kind streak cap stays on every arm: it
-   * was measured, and the record is the same one it would read.
+   * **The sparse-room cap is the rule arm's; the school cap is everyone's.**
+   * Both were written because no arm could see the run. Jev's briefing now
+   * carries every room as it was built — the fight, and each door with what
+   * it promised — so the sparse-room cap holds only for the rule and random
+   * arms, whose tables cannot read it. The school cap stays on every arm:
+   * measured with Jev's own answers in the briefing and the cap off, one run
+   * promised storm on nine spell doors of nine, and replaying its requests
+   * with the record removed moved storm *down*, not up — Jev reads a school
+   * the run keeps promising as the school this run is about. The door-kind
+   * streak cap stays on every arm for the same reason.
    */
   const capRuns = mode !== "jev";
   /** The questions in an answer that the rule table filled because Jev declined them. */
@@ -538,7 +540,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
     choices = { ...choices, kinds: choices.kinds.filter((k) => !withheld.has(k)) };
     // A school a recent spell door promised sits the next ones out, while three are left to choose from.
     const fresh = choices.schools.filter((sc) => !recentSchools.includes(sc));
-    if (capRuns && fresh.length >= 3) choices = { ...choices, schools: fresh };
+    if (fresh.length >= 3) choices = { ...choices, schools: fresh };
     const needOptions = [
       ...choices.kinds.map((k) => ({ ...opt(k, KIND_CLAUSE[k] ?? k), ...(KIND_SPEC[k] ? { spec: KIND_SPEC[k]! } : {}) })),
       ...choices.npcKinds.map((k) => ({ ...opt(k, NPC_CLAUSE[k]!), ...(NPC_SPEC[k] ? { spec: NPC_SPEC[k]! } : {}) })),

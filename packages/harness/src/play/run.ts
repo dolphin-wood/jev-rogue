@@ -15,13 +15,13 @@ import {
   levelAt, withLevels,
   observedFigures,
   bucketConsistency, cardStyleTags, measureOf, observedLabels, UNMEASURED,
-  makeEnemy, GRID_W, GRID_H, TILE_PX, runStaff, SPELL_LEVEL_MAX, slotCost, affixFitsSpell, spellAffixById,
+  makeEnemy, GRID_W, GRID_H, TILE_PX, runStaff, SPELL_LEVEL_MAX, slotCost, affixFitsSpell, spellAffixById, journalDoor,
 } from "@jr/core";
 import type {
   Archetype, ItemInstance, RoomType, RunContext, RunHistory, RunJournalEntry, Staff, Tension, World,
   PlayerMods, RewardCardKind, DoorOffer, OfferCard, AttachedAffix,
 } from "@jr/core";
-import { createDirector, decidedOf } from "@jr/director";
+import { createDirector } from "@jr/director";
 import type { CardRequest, DirectorArm, DirectorDeps, OfferRequest } from "@jr/director";
 import { referenceInput, lastDecision, lastPlan } from "./player-model.ts";
 import { SKILL_PROFILES } from "./skill.ts";
@@ -756,11 +756,9 @@ export async function playRun(
       // `door_taken` is the door out of *this* room, which is chosen at the
       // bottom of the loop; the entry is patched there.
       journal_.push({
-        decided: decidedOf([
-          ...(planned?.decisions ?? []), ...(answered?.portals?.decisions ?? []),
-        ]),
         index, type: door.npc ?? roomType, tension: builtTension,
-        space: plan.params.space, symmetry: plan.params.symmetry, mood: plan.params.mood,
+        space: plan.params.space, size: plan.params.size, symmetry: plan.params.symmetry, mood: plan.params.mood,
+        ...(planned?.plan.encounter ? { encounter: planned.plan.encounter.profile } : {}),
         health_lost: result.heartsLost * HP_PER_HEART,
         health_low: world.stats.heartsLow * HP_PER_HEART,
         ...(isFight || stage === "boss" ? {
@@ -771,6 +769,7 @@ export async function playRun(
         ...(hurtByEnemy ? { hurt_most_by: hurtByEnemy } : {}),
         ...(bodies.length ? { enemies: bodies } : {}),
         doors_offered: doorsOut.flatMap((d) => (d.onward ? [] : [d.npc ?? d.reward])),
+        doors: doorsOut.filter((d) => !d.onward).map(journalDoor),
         ...(reward ? { picked: [reward.toLowerCase().replace(/ /g, "_")] } : {}),
         passed_over: cards
           .map((c) => c.itemId || c.kind)
