@@ -20,6 +20,7 @@ import {
   MUSKET_RANGE, MUSKET_SPREAD_DEG, MUSKET_WINDUP_MS, FLAME_ROLL_MS, FLAME_LIFE_MS, flameRays, muzzleOf,
   ELEMENT_TINT, spellLookOf,
   levelAt, withLevels, levelBonus, LEVEL_HP, swordAt,
+  HIT_FLASH_MS,
 } from "@jr/core";
 import type {
   Bullet, Enemy, EnemyId, Input, ItemInstance, Mood, Offer, OfferCard, Portal,
@@ -127,6 +128,8 @@ const TUNED = ART_SCALE / TUNED_SCALE;
 const FRAME_PX = 32 * ART_SCALE;
 /** Texels per world px of the textures baked at boot (`fx/sheets.ts`), whatever the art's scale. */
 const FX_TEXEL = 2;
+/** How far above its foot the throne hall candelabrum's flames stand, in world pixels. */
+const CANDELABRUM_FLAMES_PX = 48;
 /**
  * Bullet art is a half-tile frame. Drawn honestly a bullet would span exactly its
  * own hitbox; a small margin keeps a radius-3 bolt visible without lying about
@@ -237,6 +240,8 @@ const WAVE_BODY_PX = 11;
  * flash has to say *that landed*, not light the screen.
  */
 const HIT_FLASH_FILL = 0xd2c6cc;
+/** How strong the king's hit wash starts, added over him (`drawEnemy`'s boss flash). */
+const BOSS_FLASH_ALPHA = 0.35;
 const KING_WAVE = { lip: 0x1a0806, aura: 0xe8344a, mid: mix(0xe8344a, 0xffb070, 0.6), core: 0xfff0d8 } as const;
 const WAVE_FLASH_PX = 10;
 /** How thick the crescent starts, as a fraction of its full thickness. */
@@ -1517,6 +1522,10 @@ export class PlayScene extends Phaser.Scene {
     checking: number;
     closing: boolean;
     onResize: () => void;
+    /** Takes the focus back for the field; see `showInvite`. */
+    onRefocus: () => void;
+    /** Keys that reached the page instead of the field; see `showInvite`. */
+    onStrayKey: (e: KeyboardEvent) => void;
   } | null = null;
   /** A code taken out of the URL in `create`, waiting for the title to be up. */
   private claimedInvite = "";
@@ -2662,7 +2671,23 @@ export class PlayScene extends Phaser.Scene {
         affixes: slot ? slot.affixes.map((a) => `${a.id}${a.tier > 1 ? ` x${a.tier}` : ""}`) : [],
       })),
       enemies: { alive: w.enemies.filter((e) => e.hp > 0).length, pending: w.pendingWaves.length, byArchetype },
-      history: { rooms: this.history.rooms, tensions: this.history.tensions },
+      history: {
+        rooms: this.history.rooms, tensions: this.history.tensions,
+        ...(this.intent?.preset ? { style: this.intent.preset } : {}),
+        ...(this.intent?.free_text ? { words: this.intent.free_text } : {}),
+        built: (this.history.journal ?? []).map((j) => ({
+          room: j.index,
+          facts: {
+            type: j.type,
+            ...(j.size ? { size: j.size } : {}),
+            ...(j.doors?.length ? {
+              doors: j.doors.map((d) => `${d.kind}${[...(d.schools ?? d.families ?? []), ...(d.elite ? ["elite"] : [])].length
+                ? `(${[...(d.schools ?? d.families ?? []), ...(d.elite ? ["elite"] : [])].join(", ")})` : ""}`).join(" "),
+            } : {}),
+            ...(j.door_taken ? { taken: j.door_taken } : {}),
+          },
+        })),
+      },
       /*
        * The room round 1 produced, which round 2 was then asked about. It is
        * the reason a room takes two requests rather than one: round 2's
@@ -2916,7 +2941,22 @@ export class PlayScene extends Phaser.Scene {
       img.setScale((column ? 1.6 : 0.9) / ART_SCALE).setDepth(0.38).setAlpha(0.9);
       this.sprites.add(img);
       return;
-    } else img = this.add.image(p.x, foot, column ? "hall_throne_column" : "hall_throne_candelabra", column ? undefined : 0);
+    } else {
+      // Standing, a candelabrum's flame has its two frames and throws a warm pool round its foot.
+      const flicker = column ? undefined : ((this.world.tick >> 3) + Math.round(p.x)) & 1;
+      img = this.add.image(p.x, foot, column ? "hall_throne_column" : "hall_throne_candelabra", flicker);
+      if (!column) {
+        // The pool on the floor round its foot, and a halo round the three flames at its head.
+        // Each a wide faint layer under a smaller one, so the light fades out rather than stopping at an edge.
+        const lift = flicker ? 1 : 0;
+        for (const [k, a] of [[1, 0.08], [0.6, 0.1]] as const) {
+          this.sprites.add(this.add.ellipse(p.x, foot - 2, 72 * k, 28 * k, 0xff9a40, a + lift * 0.02)
+            .setBlendMode(Phaser.BlendModes.ADD).setDepth(0.3));
+          this.sprites.add(this.add.circle(p.x, foot - CANDELABRUM_FLAMES_PX, (16 + lift) * k, 0xffa848, a + 0.02)
+            .setBlendMode(Phaser.BlendModes.ADD).setDepth(bodyDepth(foot, 0) + 0.001));
+        }
+      }
+    }
     // Fallen masonry lies on the floor; body-depth sorting would let its tall
     // transparent image cover a player walking through the former column.
     img.setOrigin(0.5, 1).setScale(1 / ART_SCALE).setDepth(state === "broken" ? 0.38 : bodyDepth(foot, 0));
@@ -4958,6 +4998,15 @@ export class PlayScene extends Phaser.Scene {
       objects: [] as Phaser.GameObjects.GameObject[], field, action: 0,
       status: (autoVerify ? "checking" : "idle") as InviteStatus,
       checking: 0, closing: false, onResize: () => this.renderInvite(),
+      onRefocus: () => {
+        // After the click's own focus change, which would otherwise undo this.
+        setTimeout(() => { if (this.inviteUi === ui && !ui.closing) field.focus(); }, 0);
+      },
+      onStrayKey: (e: KeyboardEvent) => {
+        if (this.inviteUi !== ui || e.target === field) return;
+        this.readInviteKey(e);
+        ui.onRefocus();
+      },
     };
     this.inviteUi = ui;
 
@@ -4986,6 +5035,17 @@ export class PlayScene extends Phaser.Scene {
       }, 0);
     });
     window.addEventListener("resize", ui.onResize);
+    /*
+     * The blur handler above leaves a blur alone when the whole window went
+     * away — copying the code from a chat, say. Coming back then left the
+     * focus on the page, where no key reached the field and the game's own
+     * keyboard was off: Escape did nothing and the dialog could not be left.
+     * So the focus comes back with the window and with any click on the page,
+     * and a key that still lands on the page is read as the dialog's.
+     */
+    window.addEventListener("focus", ui.onRefocus);
+    document.addEventListener("pointerdown", ui.onRefocus);
+    document.addEventListener("keydown", ui.onStrayKey);
     field.focus();
     field.select();
     this.renderInvite();
@@ -4998,6 +5058,9 @@ export class PlayScene extends Phaser.Scene {
     ui.closing = true;
     for (const g of ui.objects) { this.tweens.killTweensOf(g); g.destroy(); }
     window.removeEventListener("resize", ui.onResize);
+    window.removeEventListener("focus", ui.onRefocus);
+    document.removeEventListener("pointerdown", ui.onRefocus);
+    document.removeEventListener("keydown", ui.onStrayKey);
     ui.field.remove();
     this.inviteUi = null;
     const kb = this.input.keyboard;
@@ -6398,13 +6461,13 @@ export class PlayScene extends Phaser.Scene {
       }
 
     /*
-     * **A depth's floor patches and wall lights** (art order
+     * **A depth's floor patches** (art order
      * `docs/art-workorder-biomes.md`), where its sheet has them. A patch is a
      * 2 × 2 piece of floor with a story — a spread of bones, a pool, a scorch —
      * laid flat on open floor, clear of the doors and of each other, two at
      * most to a room, so the floor has places in it rather than a pattern.
-     * The lights hang on the north walls, every few cells, each throwing a
-     * warm pool on the floor below it.
+     * No wall lights: the painted sconces are side views of a lamp on a wall
+     * face, and the walls here are seen from above with no face.
      */
     if (biome) {
       const patches = Array.from({ length: BIOME_PATCH_VARIANTS }, (_, i) => `patch_${biome}_${i}`).filter((n) => this.atlas.has(n));
@@ -6420,16 +6483,6 @@ export class PlayScene extends Phaser.Scene {
         this.tiles.add(this.add.image(x * TILE_PX, y * TILE_PX, this.textureKey, patches[hash2(x, y) % patches.length]!)
           .setOrigin(0).setScale(1 / ART_SCALE).setAlpha(0.8).setDepth(0.25));
       }
-      const sconce = `prop_${biome}_sconce`;
-      if (this.atlas.has(sconce))
-        for (let y = 0; y < GRID_H - 1; y++)
-          for (let x = 1; x < GRID_W - 1; x++) {
-            if (grid[y * GRID_W + x] !== Tile.Wall || grid[(y + 1) * GRID_W + x] !== Tile.Floor || x % 5 !== 2) continue;
-            this.tiles.add(this.add.image((x + 0.5) * TILE_PX, (y + 1) * TILE_PX, this.textureKey, sconce)
-              .setOrigin(0.5, 1).setScale(1 / ART_SCALE).setDepth(0.4));
-            this.tiles.add(this.add.ellipse((x + 0.5) * TILE_PX, (y + 1.5) * TILE_PX, 72, 30, 0xffb070, 0.1)
-              .setBlendMode(Phaser.BlendModes.ADD).setDepth(0.3));
-          }
     }
 
     this.lavaTiles = [];
@@ -15990,7 +16043,7 @@ function drawEnemy(
    * an enemy struck while winding up or lunging showed no flash at all —
    * missing precisely when the player was hitting it.
    */
-  if (e.hitFlashMs > 0) img.setTintFill(HIT_FLASH_FILL);
+  if (e.hitFlashMs > 0 && e.archetype !== "boss") img.setTintFill(HIT_FLASH_FILL);
 
   /*
    * The motion the frames do not carry (`body-feel.ts`): the give as a foot
@@ -16040,6 +16093,22 @@ function drawEnemy(
   }
 
   group.add(img);
+  /*
+   * **The king's flash is a wash, not a fill.** He is struck far more often
+   * than any body and is the largest thing on the screen, so filling him
+   * pale on every blow turned him into a flickering light-grey block for a
+   * third of the fight under a held sword. His own frame is added over him,
+   * pale and faint, fading out through the flash: his shading stays, and the
+   * blow still reads.
+   */
+  if (e.archetype === "boss" && e.hitFlashMs > 0) {
+    const fade = Math.min(1, e.hitFlashMs / HIT_FLASH_MS);
+    group.add(scene.add.image(img.x, img.y, textureKey, name)
+      .setOrigin(img.originX, img.originY).setFlipX(img.flipX).setRotation(img.rotation)
+      .setScale(img.scaleX, img.scaleY)
+      .setTintFill(HIT_FLASH_FILL).setBlendMode(Phaser.BlendModes.ADD).setAlpha(BOSS_FLASH_ALPHA * fade)
+      .setDepth(img.depth + 0.0005));
+  }
   // The king's frames are to carry his sword (doc 020, art order B8: his cuts go to his sides, so a
   // drawn sword can match them). Until the atlas packs those frames, the sword is placed here.
   if (BOSS_PLACED_SWORD && e.archetype === "boss" && e.hp > 0 && !replacementFrame && atlas.has("weapon_boss_sword")) {
@@ -16075,13 +16144,11 @@ function drawEnemy(
       .setScale(1 / ART_SCALE)
       .setRotation(blade + Math.PI / 2)
       .setDepth(img.depth + (Math.sin(blade) < -.3 ? -.002 : .002));
-    if (e.hitFlashMs > 0) sword.setTintFill(HIT_FLASH_FILL);
     group.add(sword);
     const fist = `weapon_boss_fist_p${Math.min(3, Math.max(1, e.phase))}`;
     if (atlas.has(fist)) {
       const wrap = scene.add.image(gx, gy, textureKey, fist)
         .setScale(1 / ART_SCALE).setDepth(img.depth + .004);
-      if (e.hitFlashMs > 0) wrap.setTintFill(HIT_FLASH_FILL);
       group.add(wrap);
     }
   }

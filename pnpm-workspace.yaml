@@ -3,7 +3,9 @@ packages:
 
 # pnpm 11 reads settings from here, not from package.json.
 # esbuild's postinstall is not needed: vite and vitest load the platform
-# package directly, so the check is skipped rather than the build approved.
-onlyBuiltDependencies:
-  - esbuild
+# package directly, so the build is declined rather than approved. It must be
+# listed as `false` (pnpm 11's `allowBuilds`), not left unreviewed: pnpm 11
+# fails a clean install (Vercel, CI) over any build script nobody ruled on.
+allowBuilds:
+  esbuild: false
 verifyDepsBeforeRun: false

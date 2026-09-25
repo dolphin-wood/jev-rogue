@@ -747,7 +747,7 @@ export class SpellLabPanel {
       + `<div style="margin-top:2px"><label style="cursor:pointer"><input type="checkbox" data-immortal> bodies never fall</label></div>`
       + `<div style="${NOTE}">unticked, a body takes about six casts (or its status run) and stands up again 0.6 s after it falls. Burnt grass grows back.</div>`
       + `<h2 style="${HEAD}">compare</h2>`
-      + `<div><button data-wave="greatsweep" style="${BTN}">boss wave: sweep</button><button data-wave="greatcleave" style="${BTN}">boss wave: cleave</button></div>`
+      + `<div><button data-wave="greatsweep" style="${BTN}">boss wave: sweep</button></div>`
       + `<div style="${NOTE}">the Crypt King's sword wave, thrown from the player's feet toward the targets (harmless). Its figures are copied from the boss code; see <b>spell-lab.ts</b>.</div>`;
 
     /*

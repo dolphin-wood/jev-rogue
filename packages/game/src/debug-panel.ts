@@ -368,6 +368,11 @@ export interface DebugSnapshot {
   readonly history: {
     readonly rooms: readonly string[];
     readonly tensions: readonly string[];
+    /** The style the player chose, and their own words if any. */
+    readonly style?: string;
+    readonly words?: string;
+    /** Each room so far as it was built — the run the briefing gives Jev. */
+    readonly built?: readonly { readonly room: number; readonly facts: Readonly<Record<string, string>> }[];
   };
   /** Every Director request for this room: its state and every question, all options. */
   readonly director: readonly ReadoutRequest[];
@@ -609,7 +614,10 @@ export class DebugPanel {
       + `<button data-log-save style="${BTN}">download</button>`
       + `<button data-log-clear style="${BTN}">clear</button>`
       + `<div data-log-count style="color:#5a5f7a"></div>`
-      + `<div style="color:#5a5f7a">per room: time, HP lost by source, kills, dashes, casts, swings.`
+      + `<div style="color:#5a5f7a">this run only (cleared when a run begins), headed by its Director and style.`
+      + ` Per room: time, HP lost by source, kills, dashes, casts, swings, the mana economy, and every`
+      + ` Director answer made for it — question, choice, source, confidence and distribution — with the doors`
+      + ` out, the cards offered and the card taken.`
       + ` Feed it to <b>pnpm play:calibrate &lt;file&gt;</b> to compare it against the skill profiles.</div></div>`;
     this.toolBox.appendChild(playtest);
     const count = playtest.querySelector<HTMLElement>("[data-log-count]");
@@ -754,9 +762,17 @@ export class DebugPanel {
 
     parts.push(h2("history"));
     parts.push(kv([
+      ["style", snap.history.style ? `${snap.history.style}${snap.history.words ? ` — “${snap.history.words}”` : ""}` : dim("—")],
       ["rooms", snap.history.rooms.join(" › ") || dim("—")],
       ["tensions", snap.history.tensions.join(" › ") || dim("—")],
     ]));
+    // Each room as it was built, doors and all: the run the briefing hands Jev.
+    const built = snap.history.built ?? [];
+    parts.push(`<div style="color:#5f86a8;margin:6px 0 2px">the run as built (in Jev's briefing)</div>`);
+    parts.push(built.length === 0 ? dim("none yet") : built.map((d) =>
+      `<div style="margin:2px 0;font-size:11px"><b style="color:#ffe9a8">#${d.room}</b> `
+      + Object.entries(d.facts).map(([k, v]) => `<span style="color:#8792b5">${esc(k)}</span>=${esc(v)}`).join(" · ")
+      + `</div>`).join(""));
     return parts;
   }
 
@@ -889,7 +905,11 @@ export class DebugPanel {
             + `<div style="padding-left:10px;font-size:11px">${opts || dim("no options")}</div></div>`;
         }).join(""));
       }
-      parts.push(raw(`req${i}-state`, "state as sent", req.raw.state));
+      // The briefing arm sends one text field: shown as the text Jev reads, line for line, not as an escaped JSON string.
+      const brief = (req.raw.state as Record<string, unknown> | null)?.["briefing"];
+      parts.push(typeof brief === "string"
+        ? rawText(`req${i}-state`, "state as sent (briefing)", brief)
+        : raw(`req${i}-state`, "state as sent (labels)", req.raw.state));
       parts.push(raw(`req${i}-questions`, "questions as sent", req.raw.questions));
       parts.push(raw(`req${i}-answers`, "answers as returned", req.raw.answers));
     });
@@ -989,6 +1009,15 @@ function raw(id: string, label: string, value: unknown): string {
     + ` <button data-copy="${esc(id)}" style="${BTN}">copy</button></summary>`
     + `<pre data-raw="${esc(id)}" style="margin:2px 0;padding:4px;background:#0d0b1f;border:1px solid #2a2750;`
     + `max-height:180px;overflow:auto;font-size:10px;white-space:pre-wrap;word-break:break-all">${esc(json)}</pre>`
+    + `</details>`;
+}
+/** Like `raw`, for text that is already what was sent: a briefing, kept as its own lines. */
+function rawText(id: string, label: string, text: string): string {
+  return `<details style="margin:2px 0">`
+    + `<summary style="cursor:pointer;color:#5a5f7a;font-size:11px">${esc(label)}`
+    + ` <button data-copy="${esc(id)}" style="${BTN}">copy</button></summary>`
+    + `<pre data-raw="${esc(id)}" style="margin:2px 0;padding:4px;background:#0d0b1f;border:1px solid #2a2750;`
+    + `max-height:420px;overflow:auto;font-size:10px;white-space:pre-wrap;word-break:break-word">${esc(text)}</pre>`
     + `</details>`;
 }
 function dim(text: string): string {
