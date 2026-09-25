@@ -86,9 +86,12 @@ export interface EnemyDef extends EnemyArchetype {
    */
   readonly aggro_range: number;
   /**
-   * Floats clear of the floor: burning ground and lava pass under it. Only
-   * what the art draws off the ground flies — the shooter's winged lens, the
-   * orbiter's wisp, the sower's pod.
+   * Floats clear of the floor: the room's own ground — lava, a poison pool,
+   * fire the player did not light — passes under it. The player's spells
+   * reach it all the same, ground ones included: a spell that whiffed on a
+   * third of the bestiary read as a bug, not as flight. Only what the art
+   * draws off the ground flies — the shooter's winged lens, the orbiter's
+   * wisp, the sower's pod.
    */
   readonly flying?: true;
   /**

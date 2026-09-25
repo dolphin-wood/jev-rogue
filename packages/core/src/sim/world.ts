@@ -1390,8 +1390,9 @@ function resolveFires(w: World, dtMs: number): void {
   for (const { id, damage, owner, statusMult, powers, proc, element } of enemies) {
     const e = w.enemies.find((x) => x.id === id);
     if (!e || e.hp <= 0) continue;
-    // Burning ground burns what stands on it; what flies passes over.
-    if (ENEMIES[e.archetype].flying) continue;
+    // What flies passes over the room's own fire; the player's is a spell,
+    // and a spell reaches whatever it was aimed at.
+    if (ENEMIES[e.archetype].flying && owner !== "player") continue;
     if (element === "poison") {
       poisonCloudTick(w, e, damage, statusMult, powers, proc);
       continue;
@@ -1467,13 +1468,13 @@ const CLOUD_SLOW_MS = 250;
 /**
  * **A poison field slows what stands in it** (doc 006), every step rather
  * than on the tick: the slow is the ground's grip, not a status it builds.
- * What flies is over the cloud, as it is over burning ground.
+ * The cloud is the player's spell, so it reaches what flies too.
  */
 function slowInClouds(w: World): void {
   for (const f of w.fires) {
     if (!f.alive || f.element !== "poison" || f.owner !== "player") continue;
     for (const e of w.enemies) {
-      if (e.hp <= 0 || e.spawnFadeMs > 0 || ENEMIES[e.archetype].flying) continue;
+      if (e.hp <= 0 || e.spawnFadeMs > 0) continue;
       if (!circlesOverlap(f.x, f.y, f.radius, e.x, e.y, e.radius)) continue;
       e.slowMs = Math.max(e.slowMs, CLOUD_SLOW_MS);
     }
@@ -4581,8 +4582,6 @@ function stepEruptions(w: World, dtMs: number): void {
       if (!isActive(e) || e.hp <= 0) continue;
       const d = Math.hypot(e.x - c.x, e.y - c.y);
       if (d > c.radius + e.radius) continue;
-      // What flies is over a spike; fire rises high enough to reach it.
-      if (c.kind === "earth" && ENEMIES[e.archetype].flying) continue;
       if (c.castId > 0) {
         if (e.eruptionCastId === c.castId) continue;
         e.eruptionCastId = c.castId;

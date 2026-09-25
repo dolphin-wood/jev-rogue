@@ -387,6 +387,18 @@ describe("the ring pattern (Quake Ring)", () => {
     }
     expect(hits).toBe(1);
   });
+
+  it("reaches what flies: a ground spell is still the player's spell", () => {
+    const w = arena("quake_ring");
+    const e = body(w, 36, 0);
+    const flyer = makeEnemy(w.nextEnemyId++, "shooter", PX - 36, PY, []);
+    Object.assign(flyer, { spawnFadeMs: 0, awake: true, hp: 100_000, maxHp: 100_000, speed: 0, attackCooldownMs: 1e9 });
+    w.enemies.push(flyer);
+    step(w, at(PX + 100, PY, { spell: 0 }));
+    run(w, at(PX + 100, PY), 60, [e, flyer]);
+    expect(hurt(e)).toBeGreaterThan(0);
+    expect(hurt(flyer)).toBeGreaterThan(0);
+  });
 });
 
 describe("land (Leap Slam)", () => {
