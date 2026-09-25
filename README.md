@@ -44,10 +44,11 @@ The simulation runs at a fixed 60 Hz step. Jev is consulted when a room or offer
 
 **Decisions are Jev's; generation and hard rules are code's.** Code first calculates the player's situation and removes impossible options. Jev then returns a distribution over the remaining options. Code samples from that distribution and checks the completed plan. Jev does not place tiles, create enemies or spells, calculate damage, or write game content.
 
-For a combat room, the Director asks in two rounds:
+For a combat room, the Director asks in two rounds as the room begins, and once more when its way out opens:
 
-1. **High-level direction:** tension, room space, size, symmetry, and mood. Independent door and card-offer questions can travel in the same request.
+1. **High-level direction:** tension, room space, size, symmetry, and mood.
 2. **After the room shape is known:** zones and encounter details such as composition, density, waves, entry, variants, and elite presence. Questions that depend on earlier answers are built only after those answers exist.
+3. **When the reward is taken:** the doors out, and for every kind a door could be, the cards the room behind it will offer. The doors rise pending and turn while Jev answers, then open badged with every spell school or stat family among their cards. Decided here rather than as the room began, they read the fight just played and the build just changed ([finding 34](docs/research/jev-findings.md#finding-34)).
 
 The browser normally sends Jev a structured plain-English **briefing**. It describes the game, chosen play style, held spells and upgrades, recent combat measurements, offers taken or skipped, room history, current health and gold, and what this request is deciding. It gives Jev **neutral facts**—for example, “lost 9 of 60 health”—rather than a verdict such as “struggling” or “needs mana.” Otherwise a human-written judgment would quietly decide the answer before Jev does. `?state=labels` switches to the compact label-table format for comparison; the rule-based control always reads those labels.
 
@@ -74,7 +75,7 @@ Here is a shortened example of one real question shape. The full request carries
 }
 ```
 
-A response contains `answers.portal_need.choice`, a probability for **every** offered ID, and optionally a confidence value. For example, `spell: 0.55`, `affix: 0.20`, `stat: 0.15`, `gold: 0.08`, `fallback: 0.02` sums to 1. The game does **not** simply take the `choice` field: it validates the distribution, removes the escape option, and samples the doors with a seed. For this question it draws a stronger first door and broader, distinct later doors. If Jev declines, times out, or returns an invalid answer, the affected decision uses the rule table. The flat-random arm is a separate experimental baseline, not a fallback.
+A response contains `answers.portal_need.choice`, a probability for **every** offered ID, and a confidence value computed from how the probabilities are spread. For example, `spell: 0.55`, `affix: 0.20`, `stat: 0.15`, `gold: 0.08`, `fallback: 0.02` sums to 1. The game validates the distribution and removes the escape option. For a question with one answer it reads the answer the way TypeSafe documents it: Jev's `choice` when the confidence is at least 0.5, and a seeded draw from Jev's distribution as given when it is lower, so Jev's own hesitation is where a run varies ([finding 33](docs/research/jev-findings.md#finding-33)). A ranking such as `portal_need` is drawn with a seed: a stronger first door and broader, distinct later doors. If Jev declines, times out, or returns an invalid answer, the affected decision uses the rule table. The flat-random arm is a separate experimental baseline, not a fallback.
 
 The complete request and response contract, decision schedule, validation, sampling, and failure paths are in [How Jev directs a run](docs/architecture.md) ([中文](docs/architecture.zh-CN.md) · [日本語](docs/architecture.ja.md)). The measured behavior and design changes are in [Jev findings](docs/research/jev-findings.md).
 
@@ -104,11 +105,13 @@ The local Vite server exposes the stateless proxy at `/api/decide`, so the key s
 
 ### Transferable Jev findings
 
-Three lessons from the [full Jev findings log](docs/research/jev-findings.md) apply beyond this game:
+Five lessons from the [full Jev findings log](docs/research/jev-findings.md) apply beyond this game:
 
 1. [Give every question a “none of these” option (finding 0)](docs/research/jev-findings.md#finding-0). Jev always distributes probability across the options it receives, even when none fits. An explicit escape option lets the caller detect that case and use a fallback; a peaked distribution alone cannot prove that an option fits. In this project, the first room's questions about a previous room declined because that history did not exist.
 2. [Give Jev neutral observations, not verdicts (finding 16)](docs/research/jev-findings.md#finding-16). State should report measured facts and precomputed counts without arguing for an answer. After we removed emphatic judgments from the briefing, even untargeted answers changed: `mood_particles: calm` fell from 91% to 72%, and `stat_family: survival` fell from 75% to 42%. Recheck every question when shared state wording changes.
-3. [Enforce sequence requirements in code (finding 5)](docs/research/jev-findings.md#finding-5). A stateless classification cannot guarantee variety across calls. In this game, the longest streak of one door kind was 5 with a code cap, 7 without it, and 10 after we asked for variety in the prompt. Use sampling rules, penalties, or caps for streaks and rate limits; let Jev judge the current state.
+3. [Enforce sequence requirements in code, unless the state prints the sequence (findings 5 and 32)](docs/research/jev-findings.md#finding-32). A stateless classification cannot see its own streaks: the longest run of one door kind was 5 with a code cap, 7 without it, and 10 after we asked for variety in the prompt. Once the briefing printed each room as it was built, one even-handed sentence in an instruction — naming where the run is in the state, and saying it weighs nothing before there is one — cut the mass on the previous spell school from 0.87 to 0.46. The same idea worded generically pushed answers away from the player's style even in the first room. A list of Jev's own earlier answers made streaks worse ([finding 31](docs/research/jev-findings.md#finding-31)).
+4. [Read a Choice by its confidence (finding 33)](docs/research/jev-findings.md#finding-33). A sampling temperature below one re-reads Jev's second option as weaker than Jev said. Taking `choice` when confident and Jev's distribution as given when not matched the tuned temperatures overall, with no number per question, and let an asked-for hesitation actually change the answer.
+5. [Decide the thing, then read its label off it (findings 34 and 35)](docs/research/jev-findings.md#finding-34). A door that promised a spell school, decided on its own, repeated whenever Jev's taste was steady (storm on 10 doors of 10). Deciding the cards and badging the door with every school among them kept style fit (67% versus 69%) and widened the schools a run saw from 4.3 to 5.3 of 7.
 
 ### Jev versus rule in this game
 

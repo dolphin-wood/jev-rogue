@@ -779,6 +779,224 @@ because turning it round is arithmetic. And a question whose options differ
 only by one line's value needs that line on each option as its example, or the
 answer drifts to whichever option reads safest.
 
+<a id="finding-31"></a>
+
+### 31. A list of Jev's own answers is read as a precedent; the run as it was built is not (2026-09-25)
+Commit 993a7c0 gave the briefing a record of the Director's answers — one JSON
+object a room, every kept question — and took the school and sparse-room caps
+off the Jev arm on the grounds that Jev could now see its own run. It could,
+and it kept to it. One live run (seed-0, `spam`, `expert`, 29 calls) was
+recorded with the record in its briefing, and its 25 requests from room 3 on
+were replayed twice each with the record and twice with the block removed,
+nothing else varied:
+
+| mass on the previous room's answer | with the record | without |
+|---|---|---|
+| all questions (1,228 answers) | **0.58** | 0.49 |
+| `size` | **0.88** | 0.06 |
+| `elite_portal` | 0.78 | 0.58 |
+| `spell_school` | 0.82 | 0.65 |
+
+The two arms differed by 0.11 on average (total variation) against 0.04
+between two sends of the same request. `size` is the plain case: the run's
+first two rooms happened to be `compact`, and with the record every later room
+was `compact` at 0.82–0.95 where without it Jev wanted `standard` at ~0.85. The
+run itself: `next_tension` build 13 of 13, `entry` flanks 13 of 13,
+`symmetry` asymmetric 12 of 12, `mood_temperature` warm 12 of 12,
+`spell_school` storm 9 of 9, `elite_portal` none 11 of 11 — no elite room at
+all.
+
+The record was also not the run. It held the *sampled* answers before code
+finished the room: a door the vendor replaced (`affix > spell > gold >
+fountain` over doors affix, spell, fountain), a variant *ranking* rather than
+the bodies that came, `elite_portal: elite` with no word of which door. And it
+listed every room in full beside the room lines that roll the early ones up.
+
+**Now:** no record. What it was added for — the doors a run generated, not
+only the ones taken — is in the journal as built and printed in each room's
+lines: every door out with what was behind it, the fight as assembled (roster,
+density, waves, entry, anchor, variants, enraged bodies), the room's size; the
+rolled-up rooms tally their doors. Replayed the same way on a second recorded
+run, these facts moved answers no more than noise toward repeating: 0.40 on
+the previous answer with them, 0.39 without; mean total variation 0.07 against
+0.04.
+
+**Rule:** give Jev the run as it was built, in the briefing's own lines — not
+a list of the Director's answers, which it reads as the precedent to keep.
+
+<a id="finding-32"></a>
+
+### 32. A principle about the run works once the state prints the run — if it says where, and that it weighs nothing without it (2026-09-25)
+Findings 5 and 15 put every sequence property in code, because every sentence
+asking for variety concentrated the answer. Those were measured when the state
+did not print the run. With the rooms as built in the briefing (finding 31),
+the question was asked again.
+
+**The history alone does nothing.** Two live runs with the school cap off and
+every door's school in the briefing: storm on 10 spell doors of 10 (`spam`),
+spirit on 7 of 7 (`melee`).
+
+**Where the sentence goes.** 44 requests from those runs, one change at a
+time, two sends each; mass on the previous answer:
+
+| | none | in the instruction | on every option's `not_for` |
+|---|---|---|---|
+| `spell_school` | 0.87 | **0.46** | 0.80 |
+| `composition` | 0.78 | 0.58 | 0.53 |
+
+The sentence was even-handed and named no option: "A run is travelled
+through: over a run, the schools its spell doors promise should not settle
+into one." `symmetry`, which already carries such a principle in its
+instruction and on both options, was run with it removed: after a mirrored
+room it moves to asymmetric at 0.76 with the principle and 0.14 without; after
+an asymmetric one it stays at 0.58 and 0.54. It works in one direction only.
+Rewording asymmetric's "buys variety" to "a floor to learn" changed nothing
+(0.77 / 0.57), so the word was not the reason.
+
+**Which sentence.** Shipped in the instruction, the generic sentence took a
+four-style set of live runs to 45% of spell doors in the player's style — 1 of
+10 for `spam` — and in its first room, with no door behind it, Jev's
+`spell_school` for that run was storm 0.36 / void 0.30 at confidence 0.26
+against 0.75 / 0.72 in a run without it. It was not reading the run; it read
+"should not settle" as an argument against the obvious answer (finding 4). A
+version that says where the run is and what it weighs when there is none — "The
+spell doors earlier in this run, and the school each promised, are in the
+state. A run whose doors have kept promising one school has settled into it,
+which a run should not; where no spell door has promised a school yet, this
+weighs nothing." — replayed on 100 requests across four styles, 300 calls:
+
+| `spell_school` | none | generic | anchored |
+|---|---|---|---|
+| change from none with no history (total variation) | — | 0.41, top answer changed in 20% | **0.08, top answer unchanged** |
+| mass on schools holding the stated style | 0.85 | 0.47 (`spam` 0.28) | **0.70** (`spam` 0.58) |
+
+`composition` behaves the same way (with no history: the generic one changed
+the top answer in 25% of requests, the anchored one in none; with history the
+repeat rate under the confidence reading, finding 33, is 0.52 / 0.41 / 0.43).
+Four live runs with the anchored wording: 93% of spell doors in style. For
+`size` and `stat_family` neither wording moved anything (mass on the previous
+answer 0.78 / 0.75 / 0.78 and 0.54 / 0.50 / 0.55), and they carry none.
+
+**Rule:** a principle about the run can go in an instruction when the state
+prints the run: name where in the state the run is, and say the principle
+weighs nothing before there is one. A principle that does not is an argument
+against whichever answer is most obvious. Measure it on the requests with no
+history first.
+
+<a id="finding-33"></a>
+
+### 33. Read Jev's answer by its confidence, not through a temperature (2026-09-25)
+TypeSafe documents a Choice as its `choice` — the option with the most
+probability — gated on `confidence`, which is computed from the spread
+(`(n × peak − 1) / (n − 1)`): act on a confident answer, and treat a low one
+as the model saying it does not know. The Director instead sampled every
+answer through a per-question temperature, mostly 0.4 (doc 002: argmax never
+decides play, or one state always builds one room). A temperature below one
+re-reads Jev's second option as weaker than Jev said it was: with the anchored
+principle (finding 32) Jev put 0.46 on the previous school, and at 0.4 that
+came back as a repeat 78% of the time.
+
+Offline, over the logged answers of four live runs (60 rooms, 2,000 draws per
+rule; later answers were conditioned on the history that really happened, so
+this is a direction, not a forecast):
+
+| rule | off Jev's top answer | same as last time | longest run | commonest answer's share |
+|---|---|---|---|---|
+| per-question temperature (as shipped) | 18% | 60% | 5.1 | 71% |
+| always `choice` | 0% | 68% | 6.0 | 77% |
+| `choice` at confidence ≥ 0.5, else the distribution as given | 20% | 60% | 5.1 | 71% |
+
+The confidence reading matches the temperatures overall without a number per
+question, and it is where the principle's hesitation becomes a different
+answer: on the replayed `spell_school` requests, the previous school came back
+65% of the time under the temperatures, 82% always taking `choice`, and 31%
+under the confidence reading. Always taking `choice` locks `symmetry` (100%
+repeats, runs of 11.8).
+
+**Now:** a question Jev answers takes its `choice` at confidence ≥ 0.5
+(TypeSafe's suggested floor, `JEV_CONFIDENT`) and draws from its distribution
+as given below it; the confidence is TypeSafe's statistic over the distribution
+actually drawn from, after code filtered the options and any repeat penalty.
+The rule and random arms keep their temperatures, as do rankings
+(`portal_need`, `subspecies`) and card draws. The cost: a question Jev is
+always sure of is now fixed — `size` was `standard` in 92% of rooms and one
+run's stat doors held survival ten times running.
+
+**Rule:** take Jev's answer the way TypeSafe documents it. Its `choice` when it
+is confident, its distribution when it is not; a temperature is a designer's
+reading of Jev's uncertainty, and it hid the one hesitation we had asked for.
+
+<a id="finding-34"></a>
+
+### 34. A promise decided apart from the cards repeats; decide the doors when they open, with the cards behind them (2026-09-25)
+A spell door promised a school — its own question, asked in the room's round 2
+— and the offer behind it was forced to hold a card of that school; a stat
+door promised a family. Even with the anchored principle and the confidence
+reading, four live runs repeated the previous spell door's school 68% of the
+time. The school is a proxy: a player wants spells of their style, and a style
+spans schools (void holds spam spells and nuke spells). Asking for the top
+two or three schools instead would not have helped — Jev's ranking is steady,
+and its top two were the same pair on every door of a run (storm + void 10 of
+10, spirit + stone 7 of 7).
+
+And the doors were decided as the room began, before the fight they depend
+on: one run walked into room 5 on 37 of 90 health and out on 12, through doors
+chosen for 37 (fountain at 0.14), and died two rooms later.
+
+**Now:** a room decides only how many doors it has. When the way out opens —
+the reward taken, a gold room's coins scattered, a vendor's room entered — the
+doors rise pending (turning, unreadable, "Opening…" beside them) and one
+request decides them: the portal questions, and for every kind a door could be
+the cards the room behind it will offer, read against the fight just played
+and the build just changed. Each door keeps its kind's cards and is badged
+from them (finding 35); the room behind it offers exactly those cards and asks
+for none. `spell_school`, `stat_family`, their round-2 follow-up and the
+school cap are gone.
+
+Four live runs (one per style, `expert`) against four with the school promise:
+
+| | promised school | cards decided with the door |
+|---|---|---|
+| spell cards in the stated style | 69% | 67% |
+| distinct spells, of those shown | 63% | 60% |
+| commonest school's share of spell cards | 53% (64% with the cap, 2 runs) | **46%** |
+| schools seen in a run, of 7 | 4.3 (4.0) | **5.3** |
+| spell door badge the same as the last | 68% | **41%** |
+| Jev requests a run | 29 | 40 |
+
+Style fit and card variety held; the school spread widened. The cost is a
+request a room, and the opening request carries three card pools (80–103 KB):
+about 60% more input tokens a run. None of these runs made a door decision
+below half health, so whether the fountain now comes when it should is not yet
+measured.
+
+Operational, found on the way: `answerOffer` runs outside a world step, so the
+`portals_open` it pushes never reached the scene's event loop — the scene asks
+for the doors directly after it; and the scene's journal typed a room by the
+door out of it (a fight left by a smith's door was a smithy), which it no
+longer does.
+
+**Rule:** a label or promise decided apart from what it describes repeats
+whenever Jev's taste is steady, however varied the thing itself is, and then
+needs a rule to hold it. Decide the thing, and read the label off it.
+
+<a id="finding-35"></a>
+
+### 35. A badge that names the commonest of three names one card (2026-09-25)
+The first badge named the school most of a door's cards belonged to, the
+first card breaking a tie. Across the four runs of finding 34, 9 of 22 spell
+doors were badged by one card of three — three schools, three cards, and the
+Director's first pick named the door. For a `spam` player that pick is usually
+a level for the held storm spell, so a played run read "storm" on 6 of 9 spell
+doors over offers that were mostly something else.
+
+**Now:** a door names every school (every family, on a stat door) among its
+cards, once each, in the Director's order: "Storm · Void · Stone". More than
+one stands one to a line under the arch, so a row of doors cannot run their
+names into each other.
+
+**Rule:** a summary of three things is one of them; show the three.
+
 ## Standing rules that follow
 - State: facts from play, in words, with counts precomputed; no verdicts, no
   prescriptions; every coined term explained. An instruction may name a fact
@@ -789,10 +1007,20 @@ answer drifts to whichever option reads safest.
   a question is a starting point and not a law: it moved two questions the
   right way and two the wrong way (finding 26), so measure it like anything
   else.
-- Instructions: principles, even-handed.
-- Code: safety bounds, sequence properties (variety, streaks, rate floors),
-  arithmetic. A rare option Jev never picks in any state gets a rate floor,
-  not more words (finding 27).
+- State: the run as it was built — each room, its fight, each door and what
+  was behind it — not a list of the Director's own answers, which Jev reads as
+  a precedent to keep (finding 31).
+- Instructions: principles, even-handed. A principle about the run may go in
+  once the state prints the run, if it says where and that it weighs nothing
+  without it; measure it first on requests with no history (finding 32).
+- Code: safety bounds, sequence properties Jev does not answer to (streaks,
+  rate floors), arithmetic. A rare option Jev never picks in any state gets a
+  rate floor, not more words (finding 27).
+- Answers: Jev's `choice` when its confidence is at least 0.5, its
+  distribution as given below that — not a temperature re-reading its
+  uncertainty (finding 33).
+- Labels: decide the thing and read the label off it; a promise decided apart
+  from what it describes repeats with Jev's steady taste (findings 34, 35).
 - Content text: a card's `what` is its neutral description, never the
   player's copy; a verdict is removed even when it does not decide the
   answer, because a later edit could make it decisive (finding 28). Say what
