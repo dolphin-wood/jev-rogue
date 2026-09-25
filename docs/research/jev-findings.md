@@ -949,7 +949,7 @@ doors rise pending (turning, unreadable, "Opening…" beside them) and one
 request decides them: the portal questions, and for every kind a door could be
 the cards the room behind it will offer, read against the fight just played
 and the build just changed. Each door keeps its kind's cards and is badged
-from them (finding 35); the room behind it offers exactly those cards and asks
+from them; the room behind it offers exactly those cards and asks
 for none. `spell_school`, `stat_family`, their round-2 follow-up and the
 school cap are gone.
 
@@ -970,37 +970,9 @@ about 60% more input tokens a run. None of these runs made a door decision
 below half health, so whether the fountain now comes when it should is not yet
 measured.
 
-Operational, found on the way: `answerOffer` runs outside a world step, so the
-`portals_open` it pushes never reached the scene's event loop — the scene asks
-for the doors directly after it; and the scene's journal typed a room by the
-door out of it (a fight left by a smith's door was a smithy), which it no
-longer does.
-
 **Rule:** a label or promise decided apart from what it describes repeats
 whenever Jev's taste is steady, however varied the thing itself is, and then
 needs a rule to hold it. Decide the thing, and read the label off it.
-
-<a id="finding-35"></a>
-
-### 35. A badge that names the commonest of three names one card (2026-09-25)
-The first badge named the school most of a door's cards belonged to, the
-first card breaking a tie. Across the four runs of finding 34, 9 of 22 spell
-doors were badged by one card of three — three schools, three cards, and the
-Director's first pick named the door. For a `spam` player that pick is usually
-a level for the held storm spell, so a played run read "storm" on 6 of 9 spell
-doors over offers that were mostly something else.
-
-**Now:** a door shows every school (every family, on a stat door) among its
-cards, once each, in the Director's order — as a row of marks under its badge
-(each school's icon, drawn for the purpose as text in `assets/icons/school_*`;
-a stat's icon for each family), with the names in the prompt for the door the
-player stands by: "[E] storm · void · stone spell". An elite door's grade is
-its elite marks, one per step above the first; a star in the row read as one
-more school. Written out under each door, the
-names ran into the next door's badge whenever a room stood its doors in a
-column.
-
-**Rule:** a summary of three things is one of them; show the three.
 
 ## Standing rules that follow
 - State: facts from play, in words, with counts precomputed; no verdicts, no
@@ -1025,7 +997,7 @@ column.
   distribution as given below that — not a temperature re-reading its
   uncertainty (finding 33).
 - Labels: decide the thing and read the label off it; a promise decided apart
-  from what it describes repeats with Jev's steady taste (findings 34, 35).
+  from what it describes repeats with Jev's steady taste (finding 34).
 - Content text: a card's `what` is its neutral description, never the
   player's copy; a verdict is removed even when it does not decide the
   answer, because a later edit could make it decisive (finding 28). Say what

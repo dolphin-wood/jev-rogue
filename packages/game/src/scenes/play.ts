@@ -788,9 +788,12 @@ const ENEMY_FRAME: Record<EnemyId, string> = fillSubspecies<string>({
   boss: "boss_p1",
 });
 
-/** A stat family's mark on a door: the icon of its first stat card. */
+/**
+ * A stat family's mark on a door: the icon of its first stat card, but for
+ * survival, whose card heart is blue — on a door it is the HUD's red heart.
+ */
 const FAMILY_ICON: Readonly<Record<string, string>> = {
-  movement: "icon_stat_fleet", survival: "icon_stat_vigour", mana: "icon_stat_deep_well", sword: "icon_stat_keen_edge",
+  movement: "icon_stat_fleet", survival: "ui_heart_full", mana: "icon_stat_deep_well", sword: "icon_stat_keen_edge",
 };
 
 /**
@@ -1339,7 +1342,8 @@ export class PlayScene extends Phaser.Scene {
   private offerHintStr = "";
   /** Rebuilt per room: portals with their type badge, and the reward cards. */
   /** "ELITE" over the portals that lead to one. Rebuilt with the portals. */
-  private eliteMarks: { portal: Portal; mark: Phaser.GameObjects.Image | Phaser.GameObjects.Text }[] = [];
+  /** The marks over a door that show and fade with it: its elite mark, and a star a grade step. */
+  private eliteMarks: { portal: Portal; mark: Phaser.GameObjects.Image | Phaser.GameObjects.Text | Phaser.GameObjects.Star }[] = [];
   private portalGfx: {
     portal: Portal; body: Phaser.GameObjects.Image;
     badge: Phaser.GameObjects.Image; plate: Phaser.GameObjects.Image;
@@ -3075,28 +3079,30 @@ export class PlayScene extends Phaser.Scene {
        * instead of it; a red badge would say one thing where two are meant.
        */
       if (portal.elite) {
-        /*
-         * **One elite mark per step the reward is graded up**: an elite door
-         * is graded 2 or 3, and shows one mark or two, side by side. The
-         * grade was a star beside the door's schools, which read as one more
-         * of them.
-         */
-        const count = Math.max(1, (portal.grade ?? 2) - 1);
-        for (let k = 0; k < count; k++) {
-          const mark = this.atlas.has("ui_elite_badge")
-            ? this.add.image(portal.x, portal.y - TILE_PX * 1.72, this.crispTextureKey, "ui_elite_badge")
-              .setOrigin(0.5).setScale(1 / TUNED).setDepth(8.6)
-            : this.add.text(
-              portal.x, portal.y - TILE_PX * 1.75, t("roomType.elite"),
-              { fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(7, ZOOM) * ZOOM)}px`, color: "#ff8877" },
-            ).setOrigin(0.5).setScale(1 / ZOOM).setDepth(8.6);
-          mark.setX(portal.x + (k - (count - 1) / 2) * (mark.displayWidth + 1));
-          // Hidden with its portal; see `updateExits`. It was created visible
-          // and never touched again, so the badge stood on bare floor for the
-          // whole fight, over a portal that had not risen yet.
-          mark.setVisible(false);
-          this.eliteMarks.push({ portal, mark });
-        }
+        const mark = this.atlas.has("ui_elite_badge")
+          ? this.add.image(portal.x, portal.y - TILE_PX * 1.72, this.crispTextureKey, "ui_elite_badge")
+            .setOrigin(0.5).setScale(1 / TUNED).setDepth(8.6)
+          : this.add.text(
+            portal.x, portal.y - TILE_PX * 1.75, t("roomType.elite"),
+            { fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(7, ZOOM) * ZOOM)}px`, color: "#ff8877" },
+          ).setOrigin(0.5).setScale(1 / ZOOM).setDepth(8.6);
+        // Hidden with its portal; see `updateExits`. It was created visible
+        // and never touched again, so the badge stood on bare floor for the
+        // whole fight, over a portal that had not risen yet.
+        mark.setVisible(false);
+        this.eliteMarks.push({ portal, mark });
+      }
+      /*
+       * **The grade, as stars on the arch's top-right corner**: one for each
+       * step above the first, on an elite door and on a normal door raised
+       * late in the run alike. It was a star in the row of schools, which read
+       * as one more of them. Kept with the elite marks, which show and fade
+       * as the door does.
+       */
+      for (let k = 1; k < (portal.grade ?? 1); k++) {
+        const star = this.add.star(portal.x + 10, portal.y - 9 + (k - 1) * 8.5, 5, 1.9, 4.2, 0xffd45e)
+          .setStrokeStyle(0.8, 0x0d0b1f).setDepth(8.7).setVisible(false);
+        this.eliteMarks.push({ portal, mark: star });
       }
       /*
        * The promise, under the badge: a spell door's school in its colour, a
@@ -3120,7 +3126,7 @@ export class PlayScene extends Phaser.Scene {
        * badge. What is behind the door is now a row of marks under its badge —
        * each school's icon, a stat's own icon for each family — and the words
        * are the prompt's, shown for the door the player stands by
-       * (`updateExits`). The grade is not here: it is the elite marks above.
+       * (`updateExits`). The grade is not here: it is the stars on the door.
        */
       const types = portal.schools ?? portal.families ?? [];
       const marks: Phaser.GameObjects.GameObject[] = [];
@@ -10746,7 +10752,7 @@ export class PlayScene extends Phaser.Scene {
   private updateExits(): void {
     if (this.portalGfx.length !== this.world.portals.length) this.buildPortalGfx();
     for (const { portal, body, badge, plate, tag } of this.portalGfx) {
-      // A door graded up twice carries two elite marks; they show and fade together.
+      // An elite mark and a door's grade stars show and fade together.
       const own = this.eliteMarks.filter((m) => m.portal === portal).map((m) => m.mark);
       const eliteMark = own.length ? {
         setVisible: (v: boolean) => { for (const m of own) m.setVisible(v); },
@@ -11033,7 +11039,8 @@ export class PlayScene extends Phaser.Scene {
   /** The highest thing drawn over a door: its reward badge, and an elite mark. */
   private portalTop(portal: Portal): number {
     const g = this.portalGfx.find((x) => x.portal === portal);
-    const mark = this.eliteMarks.find((m) => m.portal === portal)?.mark ?? null;
+    const mark = (this.eliteMarks.find((m) => m.portal === portal && m.mark.type !== "Star")?.mark ?? null) as
+      Phaser.GameObjects.Image | Phaser.GameObjects.Text | null;
     return Math.min(
       this.topOf(g?.badge ?? null, portal.y - TILE_PX * 1.4),
       this.topOf(mark, Number.POSITIVE_INFINITY),
