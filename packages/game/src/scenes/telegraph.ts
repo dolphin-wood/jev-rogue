@@ -103,6 +103,8 @@ export const TELE_FLASH = 0xfff3d0;
 export const TELE_SAFE = 0xffffff;
 /** The lightning mark's cold blue: not the enemy's own red, on purpose. */
 export const TELE_MARK = 0x9ad8ff;
+/** A stone out of the roof's mark (the king's fall into phase III): earth, where the storm's is sky. */
+export const TELE_ROCK = 0xd8b060;
 
 /* ------------------------------------------------------------------ *\
    Clocks
@@ -777,9 +779,10 @@ export function drawFlameCone(
  */
 export function drawStrikeMark(
   pen: Pen, x: number, y: number, r: number, left: number, tick: number, view: ViewBox,
+  colour: number = TELE_MARK,
 ): void {
   const t = 1 - left;
-  teleDisc(pen, x, y, r - INSET, TELE_MARK, 0.55, 0.25 + 0.75 * t, view);
+  teleDisc(pen, x, y, r - INSET, colour, 0.55, 0.25 + 0.75 * t, view);
   teleRing(pen, x, y, r - RIM_PX * P, TELE_LINER, 0.8, view, { thick: LINER_PX });
   /*
    * **Solid, not dashed.** A dash says "a clock is running"; this ring says
@@ -789,7 +792,7 @@ export function drawStrikeMark(
    * all-round tells — marches. That is the whole grammar, and it is worth
    * more than any of the individual drawings.
    */
-  teleRing(pen, x, y, r, t > 0.8 && !blink(tick, 2) ? TELE_FLASH : TELE_MARK, 1, view,
+  teleRing(pen, x, y, r, t > 0.8 && !blink(tick, 2) ? TELE_FLASH : colour, 1, view,
     { thick: t > 0.6 ? RIM_PX + 1 : RIM_PX });
 }
 

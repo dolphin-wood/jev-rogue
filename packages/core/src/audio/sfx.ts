@@ -916,22 +916,24 @@ const DEFS = {
   },
 
   /**
-   * A ranged body taking aim: two thin steady tones, no sweep at all. It has
-   * to be told from the two movement telegraphs while several of each are
-   * running, so it is the only one that does not move in pitch.
-   */
-  /*
-   * Quiet and spaced: with a few shooters aiming at once its two square
-   * beeps ran together into a constant beeping, the loudest thing in a
-   * fight that was not the player's. It is still a tell, so it is kept.
+   * A ranged body taking aim: steady, with no sweep at all, since it has to
+   * be told from the two movement telegraphs while several of each are
+   * running — so it is the only one that does not move in pitch.
+   *
+   * It was two square beeps at 1180 Hz, and in a room of shooters it was
+   * the most-heard sound in the game: a chime over everything. Now it has no
+   * tone to ring: a soft mechanical tick, as of something being drawn or
+   * cocked, then a short held hiss of tension over a faint low hum. Quiet
+   * and spaced, as before (`retriggerMs`), and still a tell.
    */
   tele_aim: {
-    category: "combat", variants: 2, gain: 0.2, retriggerMs: 400,
+    category: "combat", variants: 2, gain: 0.22, retriggerMs: 400,
     render: (r, j) => {
-      const out = buffer(0.4);
-      mixInto(out, tone({ wave: "square", from: 1180 * j, length: 0.1, gain: 0.2, env: { attack: 0.004, curve: 2 } }), 0);
-      mixInto(out, tone({ wave: "square", from: 1180 * j, length: 0.16, gain: 0.22, env: { attack: 0.004, curve: 2 } }), 0.16);
-      mixInto(out, highpass(noiseBurst(0.3, r, 0.07, { attack: 0.02, curve: 1.2 }), 3600), 0);
+      const out = buffer(0.34);
+      mixInto(out, click(r, 1500 * j, 0.018, 0.55), 0);
+      mixInto(out, lowpass(thump(240 * j, 200 * j, 0.05, 0.3, 4), 900), 0);
+      mixInto(out, bandpass(noiseBurst(0.26, r, 0.4, { attack: 0.04, hold: 0.12, curve: 2.4 }), 2300 * j, 3), 0.03);
+      mixInto(out, tone({ wave: "sine", from: 190 * j, length: 0.26, gain: 0.14, env: { attack: 0.04, hold: 0.1, curve: 2 } }), 0.03);
       return finish(out, "combat", 1.1);
     },
   },
@@ -1028,6 +1030,74 @@ const DEFS = {
     },
   },
 
+  /**
+   * **Off the floor**: the leap, the fall into phase III and the hop back.
+   * Plate and weight leaving stone — a thud with the armour's clank on it —
+   * and the air torn going up. Played lower for the leap and higher for the
+   * hop, so how far he is going is in the pitch.
+   */
+  boss_jump: {
+    category: "combat", variants: 1, gain: 0.5, retriggerMs: 300,
+    render: (r, j) => {
+      const out = buffer(0.55);
+      mixInto(out, thump(110 * j, 45, 0.28, 0.9, 2), 0);
+      mixInto(out, click(r, 2200 * j, 0.025, 0.5), 0);
+      mixInto(out, bell(410 * j, 0.14, 1.41, 3, 0.2, 4), 0.005);
+      mixInto(out, air(r, 0.42, 500 * j, 4200 * j, 0.8), 0.04);
+      return finish(out, "combat", 1.2);
+    },
+  },
+
+  /**
+   * **The leap's mark locks**: the moment it stops following, which is the
+   * moment to go. A short hard clack and a high tight note stopping dead —
+   * nothing like the aim cue's steady two-tone, since this one means "now".
+   */
+  boss_lock: {
+    category: "combat", variants: 1, gain: 0.5, retriggerMs: 300,
+    render: (r, j) => {
+      const out = buffer(0.2);
+      mixInto(out, click(r, 3000 * j, 0.02, 1), 0);
+      mixInto(out, bell(1180 * j, 0.14, 1.5, 1.2, 0.5, 5), 0);
+      mixInto(out, tone({ wave: "square", from: 880 * j, length: 0.06, gain: 0.18, env: { attack: 0.001, curve: 6 } }), 0.002);
+      return finish(out, "combat", 1.1);
+    },
+  },
+
+  /**
+   * **The band going out**: a low roll of broken floor travelling away, under
+   * the strike that threw it. It is the thing in the fight the dash answers,
+   * and it had no sound of its own at all. The phase III wake plays it high
+   * and short.
+   */
+  boss_wave: {
+    category: "combat", variants: 1, gain: 0.44, retriggerMs: 250,
+    render: (r, j) => {
+      const len = 0.62;
+      const out = lowpass(noiseBurst(len, r, 0.9, { attack: 0.04, curve: 1.4, sustain: 0.3 }), 320 * j);
+      // The roll: the rumble shaken at a rate that slows as it goes.
+      for (let i = 0, ph = 0; i < out.length; i++) {
+        ph += (14 - 8 * i / out.length) / SAMPLE_RATE;
+        out[i]! *= 0.6 + 0.4 * Math.sin(ph * Math.PI * 2);
+      }
+      for (let k = 0; k < 5; k++) mixInto(out, grit(r, 0.05, (900 + r() * 900) * j, 0.12 + r() * 0.1, 1.6), 0.04 + k * 0.1 + r() * 0.04);
+      mixInto(out, thump(70 * j, 38, 0.3, 0.5, 2), 0);
+      return finish(out, "combat", 1.2);
+    },
+  },
+
+  /** The backhand: a gauntleted arm swung round, heavier and lower than any roster swipe, with the plate on it. */
+  boss_backhand: {
+    category: "combat", variants: 1, gain: 0.48, retriggerMs: 200,
+    render: (r, j) => {
+      const out = buffer(0.45);
+      mixInto(out, air(r, 0.36, 220 * j, 1400 * j, 1), 0);
+      mixInto(out, thump(130 * j, 60, 0.22, 0.55, 2), 0.1);
+      mixInto(out, bell(520 * j, 0.1, 1.41, 2.5, 0.18, 4), 0.12);
+      return finish(out, "combat", 1.2);
+    },
+  },
+
   /** A sleeper waking: a breath in, and a body finding its feet. */
   enemy_wake: {
     category: "combat", variants: 3, gain: 0.4, retriggerMs: 260,
@@ -1037,20 +1107,6 @@ const DEFS = {
       mixInto(out, tone({ wave: "triangle", from: 190 * j, to: 300 * j, length: 0.24, gain: 0.26, env: { attack: 0.05, curve: 1.6 } }), 0.02);
       mixInto(out, grit(r, 0.1, 1400 * j, 0.25, 1.2), 0.22);
       return finish(out, "combat", 1.15);
-    },
-  },
-
-  /** The boss turning over into its next phase: a low horn and a shudder. */
-  boss_phase: {
-    category: "combat", variants: 2, gain: 0.8, retriggerMs: 1500,
-    render: (r, j) => {
-      const out = buffer(1.5);
-      mixInto(out, tone({ wave: "saw", from: 74 * j, length: 1, gain: 0.34, env: { attack: 0.1, curve: 1.4 }, vibrato: { hz: 4.5, cents: 16 } }), 0);
-      mixInto(out, tone({ wave: "saw", from: 111 * j, length: 0.86, gain: 0.2, env: { attack: 0.16, curve: 1.6 } }), 0.06);
-      mixInto(out, thump(90 * j, 34, 0.7, 0.8, 1.6), 0);
-      mixInto(out, sweepLowpass(noiseBurst(0.9, r, 0.3, { attack: 0.02, curve: 1.5 }), 2400, 260, 0.9), 0.02);
-      mixInto(out, grit(r, 0.6, 600 * j, 0.2, 0.7), 0.1);
-      return finish(tail(out, 0.1, 0.42, 0.3, 1800), "combat", 1.25);
     },
   },
 

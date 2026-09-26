@@ -76,7 +76,7 @@ const RIFT_SCAR_MS = 1500;
 
 export function castRift(
   w: World, x: number, y: number, angle: number, length: number,
-  opts: { width?: number; teleMs?: number; damage?: number; bolt?: boolean; summon?: boolean } = {},
+  opts: { width?: number; teleMs?: number; damage?: number; bolt?: boolean; summon?: boolean; rock?: boolean } = {},
 ): Rift {
   const r: Rift = {
     alive: true, x, y, angle, length,
@@ -86,10 +86,16 @@ export function castRift(
     damage: opts.damage ?? 1, struck: false,
     ...(opts.bolt ? { bolt: true } : {}),
     ...(opts.bolt && opts.summon ? { summon: true } : {}),
+    ...(opts.rock ? { rock: true } : {}),
   };
   w.rifts.push(r);
-  w.events.push({ kind: "telegraph", x, y, what: r.bolt ? "bolt" : length > 0 ? "rift" : "burst" });
+  w.events.push({ kind: "telegraph", x, y, what: riftName(r, "bolt", "rock") });
   return r;
+}
+
+/** What a rift is called in its events and as a cause of hurt: `bolt` and `rock` name the sky's and the roof's. */
+function riftName(r: Rift, bolt: string, rock: string): string {
+  return r.bolt ? bolt : r.rock ? rock : r.length > 0 ? "rift" : "burst";
 }
 
 /** Distance from a point to a rift's spine, which is a segment or, at length 0, a point. */
@@ -1019,14 +1025,14 @@ export function stepAttacks(w: World, dtMs: number, hooks: AttackHooks): void {
     if (!r.alive) continue;
     if (r.teleMs > 0) {
       r.teleMs -= dtMs;
-      if (r.teleMs <= 0) w.events.push({ kind: "hazard_tick", x: r.x, y: r.y, what: r.bolt ? "lightning" : r.length > 0 ? "rift" : "burst" });
+      if (r.teleMs <= 0) w.events.push({ kind: "hazard_tick", x: r.x, y: r.y, what: riftName(r, "lightning", "rockfall") });
       continue;
     }
     if (r.activeMs > 0) {
       r.activeMs -= dtMs;
       if (!r.struck && riftHits(r, p.x, p.y, PLAYER_RADIUS)) {
         r.struck = true;
-        hooks.hurtPlayer(p.x, p.y, r.bolt ? "lightning" : r.length > 0 ? "rift" : "burst", 0, r.damage);
+        hooks.hurtPlayer(p.x, p.y, riftName(r, "lightning", "rockfall"), 0, r.damage);
       }
       continue;
     }

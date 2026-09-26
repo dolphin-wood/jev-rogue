@@ -47,7 +47,7 @@ import {
 } from "@jr/core";
 import type { BaseItem, CardNeeds, DoorOffer, NpcKind, OfferPromise, RoomStage, RunShape, WorldEvent } from "@jr/core";
 import {
-  BOSS_LEAP_MS, BOSS_LEAP_RISE_MS, BOSS_SLAM_MS, BOSS_SLAM_IMPACT_PX, BOSS_LEAP_RADIUS, BOSS_QUAKE_MS, SLAM_SHOCK_RADIUS,
+  BOSS_LEAP_RISE_MS, BOSS_LEAP_LOCK_MS, BOSS_METEOR_GATHER_MS, BOSS_METEOR_UP_MS, BOSS_METEOR_RAIN_MS, BOSS_SLAM_IMPACT_PX, BOSS_LEAP_RADIUS, BOSS_QUAKE_MS, SLAM_SHOCK_RADIUS,
   BOSS_POWER,
   withLevel, levelDamageMult, dismantleValue, spellDetail, offerStatParts, slotStatParts, statusForecast, SPELL_DAMAGE_SCALE, rarityOf, STAT_UPGRADES, statById, SPELL_LEVEL_MAX, SCHOOL_COLOUR, schoolOf, spellSound, shapeEventSound, offerCards,
   slotCooldownMs, DASH_COOLDOWN_MS, DASH_MS,
@@ -83,9 +83,9 @@ import type { ViewBox } from "./ground.ts";
 import {
   ART_SCALE, TELE_HOT, TELE_RIM, drawAimLine, drawBlastRing, drawFlameCone, drawLeapMark,
   drawQuakeTell, drawRiftBurst, drawRiftCircle, drawRingTell, drawSectorTell,
-  drawSlamTell, drawStrikeMark,
+  drawSlamTell, drawStrikeMark, TELE_ROCK,
 } from "./telegraph.ts";
-import { BAR_MS, BEAT_MS, BOSS_PHASES, MELEE_ATTACKS, RUN_BOSS_ROOM, forceBossBlade, propState, queueBossMove } from "@jr/core";
+import { BAR_MS, BEAT_MS, BOSS_PHASES, BOSS_SLAM_STOMP_PX, BOSS_METEOR_LAND_PX, BOSS_METEOR_LAND_TELL_MS, MELEE_ATTACKS, RUN_BOSS_ROOM, bossMusicPhase, bossSlamNext, bossTempo, forceBossBlade, propState, queueBossMove } from "@jr/core";
 import type { BossMove } from "@jr/core";
 import type { BossHold, BossLabFrame } from "../boss-lab.ts";
 import { SpellLab, spellLabAsked } from "../spell-lab.ts";
@@ -1940,7 +1940,8 @@ export class PlayScene extends Phaser.Scene {
         hold: () => ({ ...this.labHold }),
         setHold: (hold) => { this.labHold = { ...hold }; if (this.labOn) this.world.bossHold = this.labHold; },
         move: (name) => queueBossMove(this.world, name as BossMove),
-        blade: (kind) => forceBossBlade(this.world, kind),
+        // The dashcut as his turn throws it: the hop back first.
+        blade: (kind) => forceBossBlade(this.world, kind, { hop: true }),
         speed: () => this.labSpeed,
         setSpeed: (speed) => this.setLabSpeed(speed),
         stepFrame: () => { this.setLabSpeed(0); this.labSteps++; },
@@ -7894,7 +7895,14 @@ export class PlayScene extends Phaser.Scene {
               sfx.holdMusic(0.65, BOSS_ROAR_MS / 1000);
             }
           }
-          const cue = this.telegraphFor(ev.what ?? "");
+          // After phase III's roar, the fall: the music held down under all of it, to come back at phase III's
+          // tempo with the landing (`BOSS_METEOR_GATHER_MS`).
+          if (ev.what === "boss_meteor") {
+            sfx.holdMusic(0.75, (BOSS_METEOR_GATHER_MS + BOSS_METEOR_UP_MS + BOSS_METEOR_RAIN_MS) / 1000);
+          }
+          // The king's chain shares the snarecaster's event; his is silent like his other tells (`telegraphFor`).
+          const kingsChain = ev.what === "hook" && this.world.enemies.some((e) => e.archetype === "boss" && Math.hypot(e.x - ev.x, e.y - ev.y) < 1);
+          const cue = kingsChain ? null : this.telegraphFor(ev.what ?? "");
           if (cue) sfx.play(cue[0], cue[1]);
           break;
         }
@@ -7904,10 +7912,18 @@ export class PlayScene extends Phaser.Scene {
           else if (what === "lightning" || what === "peal") sfx.play("impact_storm");
           else if (what === "heavy_hit") sfx.play("hit_heavy");
           // The boss's ground strikes have their own voice: played as a low heavy hit they lost it to the player's hits.
+          /*
+           * The charged third blow of phase III's slam, and the fall's landing: the floor heaved up — the
+           * strike a fourth lower, and so longer and heavier, in place of the ordinary one.
+           */
+          else if ((what === "boss_slam" || what === "boss_land") && this.bossHeaves(what)) sfx.play("boss_impact", 0.72);
           else if (what === "boss_land") sfx.play("boss_impact", 0.9);
           // An add of his rising at the call.
           else if (what === "boss_summon") sfx.play("cast_void", 0.8);
+          // Phase III's stomps: the strike, lighter and higher than the charged blow they lead to.
+          else if (what === "boss_stomp") sfx.play("boss_impact", 1.15);
           else if (what.startsWith("boss_")) sfx.play("boss_impact");
+
           else if (what.startsWith("ram:")) sfx.play("hit_heavy", 0.78);
           // The boss's arms reaching the floor after their windup.
           else if (what === "arm") sfx.play("boss_sweep");
@@ -7915,7 +7931,7 @@ export class PlayScene extends Phaser.Scene {
           else if (what === "fire" || what === "lava") sfx.play("hazard_fire");
           else if (what === "ice") sfx.play("hazard_ice");
           else if (what === "poison") sfx.play("impact_venom", 0.85);
-          else if (what === "rift" || what === "burst") sfx.play("eruption_stone");
+          else if (what === "rift" || what === "burst" || what === "rockfall") sfx.play("eruption_stone");
           // The band setting off, and the bell landing.
           else if (what === "shockwave") sfx.play("eruption_stone", 0.9);
           else if (what === "toll") sfx.play("impact_storm", 0.8);
@@ -8038,6 +8054,8 @@ export class PlayScene extends Phaser.Scene {
       if (e.attack !== "windup") continue;
       winding.add(e.id);
       if (a.winding.has(e.id)) continue;
+      // The king's windups are seen, not heard: he is the one body the player is always watching (doc 020).
+      if (e.archetype === "boss") continue;
       sfx.play(e.meleeKind && SLAM_KINDS.has(e.meleeKind) ? "tele_slam" : "tele_charge",
         e.meleeKind === "slash" || e.meleeKind === "claw" ? 1.2 : 1);
     }
@@ -8058,6 +8076,8 @@ export class PlayScene extends Phaser.Scene {
       else if (k === "greatslash") sfx.play("boss_sweep", 1.25);
       else if (k === "dashcut") { sfx.play("enemy_lunge", 0.8); sfx.play("boss_sweep", 0.9); }
       else if (k === "greatcleave") sfx.play("boss_impact", 1.1);
+      // His backhand: a gauntleted arm, not a roster body's swipe.
+      else if (k === "maul" && e.archetype === "boss") sfx.play("boss_backhand");
       else if (k === "bristle") sfx.play("enemy_spikes");
       else if (k === "charge" || k === "thrust" || k === "lance" || k === "bash") sfx.play("enemy_lunge", k === "bash" ? 0.85 : 1);
       else sfx.play("enemy_swipe", SLAM_KINDS.has(k) ? 0.8 : 1.05);
@@ -8090,7 +8110,9 @@ export class PlayScene extends Phaser.Scene {
     const boss = w.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
     // Off 1× in the boss lab the fight's clock is not the music's, so it is not passed on.
     const introClock = this.kingIntro && (this.kingIntro.phase === "throw" || this.kingIntro.phase === "rise") ? this.kingIntro.clock : undefined;
-    sfx.setMusic(this.musicStateNow(), w.room.params.mood, boss?.phase ?? 1, this.labSpeed === 1 ? boss?.bossFightMs ?? introClock : undefined);
+    // Phase III's layers and tempo come in with the landing that opens it (`bossMusicPhase`, `bossTempo`).
+    sfx.setMusic(this.musicStateNow(), w.room.params.mood, boss ? bossMusicPhase(boss) : 1,
+      this.labSpeed === 1 ? boss?.bossFightMs ?? introClock : undefined, boss ? bossTempo(boss) : 1);
   }
 
   /** The key whose shape a cast event started on the caster, or the newest orb's; -1 when none is known. */
@@ -8208,16 +8230,41 @@ export class PlayScene extends Phaser.Scene {
     }
   }
 
+  /** Whether a ground strike is one that heaves the floor: phase III's charged slam, or the fall's landing. */
+  private bossHeaves(what: string): boolean {
+    const king = this.world.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
+    return !!king && (what === "boss_slam" ? king.phase >= 3 : king.bossCast === "meteor");
+  }
+
   private telegraphFor(what: string): [SfxName, number] | null {
     /*
-     * A phase change is a blow of the king's, pitched down,
-     * not `boss_phase`: that is a second of low tone falling from 300 to
-     * 100 Hz, which under the boss theme read as a hum rather than an event.
+     * A phase change is a blow of the king's, pitched down, not a sound of
+     * its own: the horn it once had (a second of low tone falling from 300 to
+     * 100 Hz) read under the boss theme as a hum rather than an event, and
+     * has been taken out of the set.
      */
     if (what.startsWith("boss_phase:")) return ["boss_impact", 0.8];
     // The call: the sword going up, the storm's voice pitched down.
     if (what === "boss_summon") return ["impact_storm", 0.7];
-    if (what.startsWith("boss_")) return ["tele_slam", 0.85];
+    // The fall into phase III starts silent: the roar before it was the sound, and the music is held down under it.
+    if (what === "boss_meteor") return null;
+    /*
+     * **The king's fight has no warning cues** (doc 020). His moves are on
+     * the beat of a theme that is already counting them in, his body is the
+     * one the player is always watching, and his marks — the storm's bolts,
+     * the stones, a volley's aim — came a beat apart for bars at a time, so
+     * the aim cue's two beeps ran on through the music as a chime. What he
+     * is heard doing is his body: off the floor (lower for the leap and the
+     * fall, higher for the hop back), the band rolling out (higher and
+     * shorter for the dashcut's wake) — and the leap's mark locking, the one
+     * cue kept, since he is out of sight when it is the moment to go.
+     */
+    if (what === "boss_jump") return ["boss_jump", 0.9];
+    if (what === "boss_hop") return ["boss_jump", 1.2];
+    if (what === "boss_lock") return ["boss_lock", 1];
+    if (what === "boss_wave") return ["boss_wave", 1];
+    if (what === "boss_wake") return ["boss_wave", 1.35];
+    if (what.startsWith("boss_") || what === "boss" || what === "bolt" || what === "rock") return null;
     if (what.startsWith("stir:")) return ["enemy_wake", 1.15];
     // A sidestep and a blink are movement, not a promise of damage;
     // cueing them would make the three telegraph families mean nothing.
@@ -8227,8 +8274,6 @@ export class PlayScene extends Phaser.Scene {
     // promise — something physical is about to be somewhere.
     if (what === "arm") return ["tele_slam", 1.25];
     if (what === "rift" || what === "burst") return ["tele_slam", 1.1];
-    // A storm bolt's mark: the aim cue, lower, as the turret's strike marks are.
-    if (what === "bolt") return ["tele_aim", 0.8];
     if (what === "mine_primed" || what === "hook") return ["tele_aim", 0.9];
     return ["tele_aim", 1];
   }
@@ -8452,6 +8497,39 @@ export class PlayScene extends Phaser.Scene {
          * chips — because the sword arriving is the whole of the move, and a
          * puff beside a body that barely moved was what made it read as soft.
          */
+        // A stone out of the roof landing: chips and dust off the mark, and the floor cracked under it.
+        if (ev.kind === "hazard_tick" && ev.what === "rockfall") {
+          for (let k = 0; k < 5; k++) this.shards.push({ x: ev.x, y: ev.y, a: (k / 5) * Math.PI * 2 + 0.3, ms: 0 });
+          this.burst(ev.x, ev.y - 3, 0x9a8a78, 6, 150, -Math.PI / 2, 1.6, 1.2, 200);
+          this.eruptCracks.push({ x: ev.x, y: ev.y, ms: 0, variant: 1 });
+        }
+        // Phase III's stomps: the sword into stone as the slam's, a flash and a ring (the heave below is the rest).
+        if (ev.kind === "hazard_tick" && ev.what === "boss_stomp") {
+          const y = ev.y + BOSS_FOOT_PX;
+          this.impacts.push({ x: ev.x, y, ms: IMPACT_MS * 1.2, scale: 2.2 });
+          this.ring(ev.x, y, 5, 40, 0xffffff, 200, 4);
+        }
+        /*
+         * **The floor heaved up** (phase III's slam, every blow): the struck
+         * ground drawn as ground — cracks broken open in a ring out to its
+         * edge, slabs of stone thrown up off it and dust rolling out past it —
+         * so the reach the blow has is the floor that moved.
+         */
+        if (ev.kind === "hazard_tick" && ev.what === "heave") {
+          const y = ev.y + BOSS_FOOT_PX;
+          const r = ev.amount ?? BOSS_SLAM_STOMP_PX;
+          this.ring(ev.x, y, 8, r, 0xffc890, 320, 5);
+          for (let k = 0; k < 10; k++) {
+            const a = (k / 10) * Math.PI * 2 + (k % 2) * 0.2;
+            const d = r * (k % 2 ? 0.55 : 0.85);
+            const cx = ev.x + Math.cos(a) * d, cy = y + Math.sin(a) * d * 0.7;
+            this.eruptCracks.push({ x: cx, y: cy, ms: 0, variant: k % 2 });
+            // A slab of the floor thrown up, and its dust.
+            this.burst(cx, cy - 4, 0x6f6252, 3, 160, -Math.PI / 2, 1.1, 1.6, 240);
+            this.burst(cx, cy, 0x9a8a78, 3, 120, a, 0.6, 1.2, 160);
+          }
+          for (let k = 0; k < 8; k++) this.shards.push({ x: ev.x + Math.cos(k) * r * 0.5, y: y + Math.sin(k) * r * 0.35, a: (k / 8) * Math.PI * 2, ms: 0 });
+        }
         if (ev.kind === "hazard_tick" && (ev.what === "boss_slam" || ev.what === "boss_quake")) {
           const y = ev.y + BOSS_FOOT_PX;
           this.impacts.push({ x: ev.x, y, ms: IMPACT_MS * 1.6, scale: 2.9 });
@@ -12844,8 +12922,19 @@ export class PlayScene extends Phaser.Scene {
          * there is no safe circle any more (`BOSS_SLAM_IMPACT_PX`) — growing
          * out past where the shockwave is born.
          */
-        const t = 1 - e.bossCastMs / BOSS_SLAM_MS;
-        drawSlamTell(this.threatGfx, e.x, e.y, 0, BOSS_SLAM_IMPACT_PX + 60 * t, t, tick, view);
+        // Only the blow that throws the band is marked: phase III's stomps before it (`BOSS_SLAM_III_STOMPS`)
+        // are told by the raise alone, and its mark starts as the second stomp lands and runs out from his
+        // feet to the edge of the heaved ground over the gathering.
+        const next = bossSlamNext(e);
+        if (next?.last) {
+          const r = e.phase >= 3 ? Math.max(6, next.radius * next.t) : next.radius + 60 * next.t;
+          drawSlamTell(this.threatGfx, e.x, e.y, 0, r, next.t, tick, view);
+        }
+      }
+      // The fall's landing in the middle: only once the stones have all come down (`BOSS_METEOR_LAND_TELL_MS`).
+      if (e.archetype === "boss" && e.bossCast === "meteor" && e.bossCastMs > 0 && e.bossCastMs <= BOSS_METEOR_LAND_TELL_MS) {
+        const t = 1 - e.bossCastMs / BOSS_METEOR_LAND_TELL_MS;
+        drawLeapMark(this.threatGfx, e.bossTargetX, e.bossTargetY, BOSS_METEOR_LAND_PX, 0, t, tick, view);
       }
       if (e.archetype === "boss" && e.bossCast === "leap" && e.bossCastMs > 0) {
         /*
@@ -12860,8 +12949,9 @@ export class PlayScene extends Phaser.Scene {
          * at the radius the band is born on, so "get in close" is a decision
          * that can be made before the boss is down rather than after.
          */
-        const t = 1 - e.bossCastMs / BOSS_LEAP_MS;
-        drawLeapMark(this.threatGfx, e.bossTargetX, e.bossTargetY, BOSS_LEAP_RADIUS, 0, t, tick, view);
+        // While he hunts the mark follows the player, empty; once it stops, its clock fills to the landing.
+        const t = Math.max(0, 1 - e.bossCastMs / BOSS_LEAP_LOCK_MS);
+        drawLeapMark(this.threatGfx, e.bossTargetX, e.bossTargetY, BOSS_LEAP_RADIUS, 0, t, tick, view, { clock: t > 0 });
         // The landing's band is born at the mark's own edge, so the mark is all there is to read.
       }
       /*
@@ -13600,6 +13690,40 @@ export class PlayScene extends Phaser.Scene {
         } else {
           this.hazardGfx.fillStyle(0x151320, 0.4 * Math.max(0, r.scarMs / 1500));
           this.hazardGfx.fillCircle(r.x, r.y, r.width * 0.32);
+        }
+        continue;
+      }
+      /*
+       * **A stone out of the roof** (the fall into phase III): marked as a
+       * bolt is, with the stone's shadow growing in it; then the stone, a
+       * grey block dropping out of the top of the view onto the mark, and
+       * dust and chips where it lands (`hazard_tick` "rockfall").
+       */
+      if (r.rock) {
+        const rad = r.width / 2;
+        if (r.teleMs > 0) {
+          const t = 1 - r.teleMs / r.teleMaxMs;
+          // Earth, not the storm's sky blue (`TELE_ROCK`): a stone and a bolt are different blows.
+          drawStrikeMark(this.hazardGfx, r.x, r.y, rad, r.teleMs / r.teleMaxMs, tick, this.teleView(), TELE_ROCK);
+          this.hazardGfx.fillStyle(0x0d0b1f, 0.15 + 0.35 * t);
+          this.hazardGfx.fillEllipse(r.x, r.y + 2, rad * 1.4 * t, rad * 0.7 * t);
+          // The last fifth of a second: the stone itself, falling onto its shadow.
+          const fall = Math.max(0, 1 - r.teleMs / 200);
+          if (fall > 0) {
+            const top = this.cameras.main.worldView.y - rad;
+            const y = top + (r.y - rad * 0.6 - top) * fall * fall;
+            this.hazardGfx.fillStyle(0x6f6252, 1);
+            this.hazardGfx.fillRoundedRect(r.x - rad * 0.6, y - rad * 0.5, rad * 1.2, rad, 3);
+            this.hazardGfx.fillStyle(0x9a8a78, 1);
+            this.hazardGfx.fillRoundedRect(r.x - rad * 0.5, y - rad * 0.5, rad, rad * 0.35, 2);
+          }
+        } else if (r.activeMs > 0) {
+          const t = Math.max(0, Math.min(1, 1 - r.activeMs / 230));
+          this.hazardGfx.fillStyle(0x6f6252, 1 - t);
+          this.hazardGfx.fillRoundedRect(r.x - rad * 0.6, r.y - rad * 0.6, rad * 1.2, rad, 3);
+        } else {
+          this.hazardGfx.fillStyle(0x151320, 0.35 * Math.max(0, r.scarMs / 1500));
+          this.hazardGfx.fillCircle(r.x, r.y, rad * 0.5);
         }
         continue;
       }
@@ -15805,10 +15929,18 @@ function specialPose(w: World, e: Enemy): string | null {
       if (e.bossVolleyMs > 0)
         return ((w.tick / 24) | 0) % 2 === 0 ? "tele" : "tele1";
       // Lifted through the raise (`slam_lift`), driven in on the commit (`slam_drive`), knelt on while it rings out (`slam`).
+      // Phase III's stomps drive in and lift again for the next (`bossSlamNext`).
+      if (e.bossCast === "slam" && e.bossCastMs > 0) return (bossSlamNext(e)?.since ?? Infinity) < BOSS_DRIVE_MS ? "slam_drive" : "slam_lift";
       if (e.bossCast === "slam" || e.bossCast === "quake")
         return e.bossCastMs > 0 ? "slam_lift" : -e.bossCastMs < BOSS_DRIVE_MS ? "slam_drive" : "slam";
       // The storm: the greatsword held straight up over his head for all of it (art order B8, `storm`).
-      if (e.bossCast === "storm") return "storm";
+      // The hop back before it (`bossLift`): the leap's gather and flight.
+      if (e.bossCast === "storm") return e.bossLift < 0 ? "leap_gather" : e.bossLift > 0 ? "leap_air" : "storm";
+      // The dashcut's hop back, the same frames; its windup after is the blade's own.
+      if (e.bossHopMs > 0) return e.bossLift > 0 ? "leap_air" : "leap_gather";
+      // The fall into phase III: the leap's frames (`BOSS_METEOR_GATHER_MS`).
+      if (e.bossCast === "meteor")
+        return e.airborne ? "leap_air" : e.bossCastMs > 0 ? "leap_gather" : -e.bossCastMs < BOSS_DRIVE_MS ? "slam_drive" : "slam";
       // The leap: low for the gather, the sword over his head in the air, low again on the landing.
       if (e.bossCast === "leap")
         return e.airborne ? "leap_air" : e.bossCastMs > 0 ? "leap_gather" : -e.bossCastMs < BOSS_DRIVE_MS ? "slam_drive" : "slam";
@@ -15944,11 +16076,17 @@ const BOSS_BLADE_FRAMES: Partial<Record<MeleeKind, BladeFrames>> = {
     recovery: ["dash_skid", "recover"],
   },
 };
-// The light slash is too quick (160 ms) for the sweep's four strike keys, which flickered past unread:
-// wound back, then the end of the cut held — two keys, 大起大落.
+/*
+ * The light slash is quick (160 ms). The sweep's four strike keys evenly
+ * flickered past unread; the end of the cut alone, straight from the windup,
+ * threw the sword from one side of him to the other with nothing between.
+ * So the swing is seen going through — the sword coming down, then across,
+ * a quarter each — and the end of the cut is held for the other half (a key
+ * listed twice holds twice as long).
+ */
 BOSS_BLADE_FRAMES.greatslash = {
   windup: ["sweep_wind"],
-  strike: ["sweep_cut"],
+  strike: ["sweep_enter", "sweep_mid", "sweep_cut", "sweep_cut"],
   recovery: ["sweep_recover~", "sweep_reset~"],
 };
 /**
@@ -15976,9 +16114,10 @@ const BOSS_DRIVE_MS = 140;
 const WIDE_FRONT: BladeFrames = {
   windup: ["sweep_front_wind"], strike: ["sweep_front_enter", "sweep_front_mid", "sweep_front_cut"], recovery: ["sweep_front_cut"],
 };
-// The slash is quick (160 ms): the front cut's last two keys, so neither flickers past unread.
+// The slash is quick (160 ms): the whole front cut, the sword coming down and across a quarter each and the
+// end of it held for the other half, so it is seen swinging rather than jumping sides (`BOSS_BLADE_FRAMES.greatslash`).
 const WIDE_FRONT_SLASH: BladeFrames = {
-  windup: ["sweep_front_wind"], strike: ["sweep_front_mid", "sweep_front_cut"], recovery: ["sweep_front_cut"],
+  windup: ["sweep_front_wind"], strike: ["sweep_front_enter", "sweep_front_mid", "sweep_front_cut", "sweep_front_cut"], recovery: ["sweep_front_cut"],
 };
 const WIDE_BACK: BladeFrames = {
   windup: ["sweep_back_wind"], strike: ["sweep_back_cross", "sweep_back_cut"], recovery: ["sweep_back_cut"],
@@ -16140,6 +16279,8 @@ function drawEnemy(
    */
   const lift = e.bossLift ?? 0;
   const airK = Math.min(1, Math.abs(lift) / 84);
+  // Up out of the hall the shadow goes too, and comes back as he falls: the mark is what is read up there.
+  const skyK = Math.max(0, Math.min(1, (lift - 84) / 160));
   const shadowName = `shadow_${ENEMY_FRAME[e.archetype].replace("enemy_", "")}`;
   if (atlas.has(shadowName)) {
     const shadow = group.image(
@@ -16147,13 +16288,13 @@ function drawEnemy(
     ).setOrigin(0.5)
       .setScale(shadowScale(atlas, name, shadowName) * (1 - 0.45 * airK), (1 - 0.45 * airK) / ART_SCALE)
       .setDepth(3)
-      .setAlpha((e.awake ? 0.5 : 0.34) * (1 - 0.25 * airK));
+      .setAlpha((e.awake ? 0.5 : 0.34) * (1 - 0.25 * airK) * (1 - skyK));
   } else {
     const shadow = group.ellipse(
       e.x, e.y + e.radius * 0.66,
       e.radius * 1.55 * (1 - 0.45 * airK), e.radius * 0.62 * (1 - 0.45 * airK), 0,
     );
-    shadow.setFillStyle(0x0d0b1f, (e.awake ? 0.4 : 0.28) * (1 - 0.25 * airK));
+    shadow.setFillStyle(0x0d0b1f, (e.awake ? 0.4 : 0.28) * (1 - 0.25 * airK) * (1 - skyK));
     shadow.setDepth(3);
   }
 
