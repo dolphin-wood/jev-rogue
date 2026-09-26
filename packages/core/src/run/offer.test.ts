@@ -235,6 +235,14 @@ describe("a kind-driven offer", () => {
     }
   });
 
+  it("names which held spell each affix fits when the staff mixes shapes", () => {
+    const held = [heldSpell(item("meteor")), heldSpell(item("shock_arc")), heldSpell(item("magic_bolt"))];
+    const candidates = new Map(cardPool(ITEMS, [], "affix", held).candidates.map((c) => [c.id, c]));
+    expect(candidates.get("fork")?.compatibleHeldSpellIds).toEqual(["shock_arc", "magic_bolt"]);
+    expect(candidates.get("scatter")?.compatibleHeldSpellIds).toEqual(["meteor", "shock_arc", "magic_bolt"]);
+    expect(candidates.get("repeat")?.compatibleHeldSpellIds).toEqual(["meteor", "shock_arc", "magic_bolt"]);
+  });
+
   it("stops offering an affix once every key it could go on is full", () => {
     // Three slots used on the one key, and none of them the affix in question:
     // there is nowhere left to put a new one, so it leaves the pool.

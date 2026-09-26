@@ -904,6 +904,10 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
       labels, style,
     };
     const what = pool.kind === "spell" ? "spell" : pool.kind === "stat" ? "stat upgrade" : "affix";
+    const namedSpellFit = pool.kind === "affix" && pool.candidates.some((c) => c.compatibleHeldSpellIds)
+      ? " The state lists the offered affixes each held spell can take. If the player's words name a spell, "
+        + "count an affix as answering that wish only when it is in that spell's list."
+      : "";
     const offStyle = pool.candidates.filter((c) => !c.facts.includes("style"));
     const named: Record<string, ChoiceQuestion> = {
       /*
@@ -927,7 +931,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
           "in intent free text, which is the one input they wrote themselves. Every card on the list can go " +
           "on the staff as it stands: a new spell fills the first empty key, a copy of a held spell raises " +
           "that key's level and fills no key, and an affix the staff already carries raises its tier. " +
-          INTENT_CLAUSE,
+          INTENT_CLAUSE + namedSpellFit,
       }),
       for_style: choiceQuestion({
         ...shared, short: true,
@@ -936,7 +940,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
           "what they stated (intent preset), what they typed in their own words (intent free text), and " +
           "what the keys actually lean (keys lean, dominant tags and the elements in held spells). When " +
           "off style picks is two running, the keys are the intent, not the preset. A player who has " +
-          "committed to one direction should be offered more of it, not taxed for specialising.",
+          "committed to one direction should be offered more of it, not taxed for specialising." + namedSpellFit,
       }),
       for_needs: choiceQuestion({
         ...shared, short: true,
@@ -944,7 +948,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
           `Which ${what} best addresses what the build lacks right now, ignoring style? Read it off the ` +
           "build itself — held spells, spell levels, affix slots open, casts per bar and mana stats taken " +
           "— and off what the last rooms measured: hits per shot, mana refused, mana short time, cast " +
-          "rate, damage rate and what hurt the player most.",
+          "rate, damage rate and what hurt the player most." + namedSpellFit,
       }),
       variety: choiceQuestion({ ...VARIETY_QUESTION, labels, style }),
     };
@@ -978,9 +982,16 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
 
     const questions = Object.fromEntries(Object.entries(named).map(([k, q]) => [`${prefix}${k}`, q]));
     const facts = Object.fromEntries(pool.candidates.map((c) => [c.id, c.facts.join(" ") || "plain"]));
+    const compatibility = pool.kind === "affix" && pool.candidates.some((c) => c.compatibleHeldSpellIds)
+      ? Object.fromEntries(ctx.slots.flatMap((slot) => slot ? [[slot.base, pool.candidates
+        .filter((c) => c.compatibleHeldSpellIds?.includes(slot.base)).map((c) => c.id).join(" ")]] : []))
+      : null;
     return {
       questions,
-      state: { [`${prefix}reward_kind`]: pool.kind, [`${prefix}card_facts`]: facts },
+      state: {
+        [`${prefix}reward_kind`]: pool.kind, [`${prefix}card_facts`]: facts,
+        ...(compatibility ? { [`${prefix}affixes_by_spell`]: compatibility } : {}),
+      },
       finish(answer) {
         const { source, path } = answer;
         const dists = Object.fromEntries(Object.entries(answer.dists).flatMap(([k, d]) =>
@@ -1492,7 +1503,10 @@ function cardPools(req: { readonly cards?: readonly CardRequest[] }): BriefingCa
   return (req.cards ?? []).map((c) => ({
     kind: c.pool.kind,
     ...(c.salt ? { where: c.salt.replace(/_/g, " ") } : {}),
-    candidates: c.pool.candidates.map((x) => ({ id: x.id, facts: x.facts })),
+    candidates: c.pool.candidates.map((x) => ({
+      id: x.id, facts: x.facts,
+      ...(x.compatibleHeldSpellIds ? { compatibleHeldSpellIds: x.compatibleHeldSpellIds } : {}),
+    })),
     ...(c.pity ? { pity: true } : {}),
     ...(c.temptation ? { temptation: true } : {}),
     ...(c.pool.guarantee?.length ? { guarantee: c.pool.guarantee } : {}),
