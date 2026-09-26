@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { PlayScene, DPR, VIEW_W, VIEW_H, worldZoom, presentScale } from "./scenes/play.ts";
 import { BootScene } from "./scenes/boot.ts";
+import { installCheapArcs } from "./scenes/graphics-arcs.ts";
 import { BASE_PALETTE } from "@jr/core";
 
 /**
@@ -17,6 +18,8 @@ function canvasSize(): { css: [number, number]; px: [number, number]; shown: num
   const shown = presentScale();
   return { css: [(px[0] * shown) / DPR, (px[1] * shown) / DPR], px, shown };
 }
+
+installCheapArcs();
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
