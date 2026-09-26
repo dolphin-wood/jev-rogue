@@ -5070,7 +5070,9 @@ export class PlayScene extends Phaser.Scene {
     field.focus();
     field.select();
     this.renderInvite();
-    if (autoVerify) void this.verifyInviteField();
+    // A code from the link is checked at once, but its dialog stays up: the
+    // player has not seen it yet, and closing on its own it was never seen.
+    if (autoVerify) void this.verifyInviteField(false);
   }
 
   private hideInvite(): void {
@@ -5137,7 +5139,8 @@ export class PlayScene extends Phaser.Scene {
   }
 
   /** Checks what is in the field, and keeps it if the proxy says it works. */
-  private async verifyInviteField(): Promise<void> {
+  /** `closeOnAccept`: a code the player entered closes its dialog once accepted; one from a link does not. */
+  private async verifyInviteField(closeOnAccept = true): Promise<void> {
     const ui = this.inviteUi;
     if (!ui) return;
     const code = ui.field.value.trim();
@@ -5171,7 +5174,7 @@ export class PlayScene extends Phaser.Scene {
      * code was taken rather than the dialog simply vanishing. Anything done
      * in that moment — an edit, a clear, a close — keeps it open.
      */
-    if (ui.status === "accepted") setTimeout(() => {
+    if (closeOnAccept && ui.status === "accepted") setTimeout(() => {
       if (this.inviteUi === ui && !ui.closing && ui.checking === token && ui.status === "accepted") this.hideInvite();
     }, INVITE_ACCEPTED_CLOSE_MS);
   }
