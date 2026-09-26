@@ -8,7 +8,7 @@ import {
   GRID_W, GRID_H, TILE_PX, Tile, STEP_MS, MAX_HEARTS, HP_PER_HEART, ITEMS, SPELL_SLOTS, slotCost, runStaff, PLAYER_SPEED,
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
-  moodTransform, dashInvulnerable, MELEE, ARMOUR_BREAK_MS, brakeFraction, ENEMIES,
+  moodTransform, tintRGBA, dashInvulnerable, MELEE, ARMOUR_BREAK_MS, brakeFraction, ENEMIES,
   BOSS_ARCHETYPES, makeEnemy, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
@@ -73,6 +73,7 @@ import { drawCrackle, drawProjectile } from "./projectiles.ts";
 import { equipKeepingOthers } from "./equip-keys.ts";
 import { SHADOW_INK, drawLeapShadow, drawMeteorShadow } from "./spell-marks.ts";
 import { FireFx } from "./fire-fx.ts";
+import { FrameLayer } from "./frame-layer.ts";
 import { drawHallArt } from "./hall-art.ts";
 import { cellHash } from "./cell-hash.ts";
 import { fillKeyLine, KeyPrompt, keyLine, setCoinArt } from "../ui/keycap.ts";
@@ -957,7 +958,7 @@ export class PlayScene extends Phaser.Scene {
   /** The code-drawn effect sheets (`fx/sheets.ts`), baked at boot. */
   private fxSheets: ReadonlyMap<string, FxSheetInfo> = new Map();
   /** Each live blast's wall-cut shape, as the mask its frames are drawn through. */
-  private readonly blastMasks = new Map<World["flames"][number], Phaser.GameObjects.Graphics>();
+  private readonly blastMasks = new Map<World["flames"][number], { g: Phaser.GameObjects.Graphics; mask: Phaser.Display.Masks.GeometryMask }>();
   /** A dear spell's kick on the player's body, render only. */
   private recoil: { a: number; ms: number } | null = null;
   /** The body's velocity as drawn, eased, px/s: what the lean, the dust and the scarf read. */
@@ -983,7 +984,7 @@ export class PlayScene extends Phaser.Scene {
   private tiles!: Phaser.GameObjects.Group;
   /** The upper halves of lone columns, drawn over the bodies; see `drawTiles`. */
   private pillarTops: { img: Phaser.GameObjects.Image; x: number; y: number; h: number }[] = [];
-  private sprites!: Phaser.GameObjects.Group;
+  private sprites!: FrameLayer;
   private hud!: Phaser.GameObjects.Text;
   private roomIndex = 1;
   /**
@@ -1460,6 +1461,8 @@ export class PlayScene extends Phaser.Scene {
   private popPalette = new Map<string, number[]>();
   /** How far down each bolt frame is drawn (`boltReach`), read once per frame. */
   private boltReaches = new Map<string, number>();
+  /** The mood the current sheet was tinted in (`applyMood`), for `framePixels`. */
+  private sheetMood: Mood | null = null;
   /**
    * Standing features with a light in them, so the flame or the glow has two
    * frames rather than one. Rebuilt per room with the tile layer.
@@ -1494,7 +1497,15 @@ export class PlayScene extends Phaser.Scene {
    * text is now fetched by a key, redrawn only when its string changes, and
    * hidden at the end of a frame nothing asked for it in.
    */
-  private readonly textCache = new Map<string, { t: Phaser.GameObjects.Text; used: boolean; style: string; idle: number }>();
+  private readonly textCache = new Map<string, KeptText>();
+  /**
+   * Finished damage numbers, hidden and kept by style for the next hit. A
+   * number lives 700 ms and a busy fight throws several a second, so building
+   * each one's canvas and texture new and dropping it after was a steady
+   * stream of garbage — the collector's work landing mid-fight.
+   */
+  private readonly spareTexts = new Map<string, Phaser.GameObjects.Text[]>();
+  private spareTextCount = 0;
   /** The kept texts drawn this frame, in order, so a HUD block can fade its own; see `fadeMark`. */
   private keptDrawn: Phaser.GameObjects.Text[] = [];
   private shards: { x: number; y: number; a: number; ms: number }[] = [];
@@ -1917,7 +1928,7 @@ export class PlayScene extends Phaser.Scene {
       },
     });
     this.tiles = this.add.group();
-    this.sprites = this.add.group();
+    this.sprites = new FrameLayer(this);
     // Text is rasterised at its font size and then scaled by the camera, so
     // asking for the final size and scaling back down is what keeps it sharp.
     /*
@@ -2922,8 +2933,8 @@ export class PlayScene extends Phaser.Scene {
     if (t < 1) {
       const spin = Math.floor(g.ms / 60) % 4;
       if (this.atlas.has(`vfx_goblet_${spin}`))
-        this.sprites.add(this.add.image(x, y, this.textureKey, `vfx_goblet_${spin}`).setScale(1 / ART_SCALE).setDepth(9));
-      else this.sprites.add(this.add.circle(x, y, 2, 0xd8b56a).setDepth(9));
+        this.sprites.image(x, y, this.textureKey, `vfx_goblet_${spin}`).setScale(1 / ART_SCALE).setDepth(9);
+      else this.sprites.circle(x, y, 2, 0xd8b56a).setDepth(9);
       return;
     }
     // It breaks: glass off the carpet, and the wine left on it.
@@ -2949,32 +2960,30 @@ export class PlayScene extends Phaser.Scene {
     const stage = column ? `hall_column_${state}` : `hall_candelabrum_${state}`;
     const foot = p.y + TILE_PX / 2;
     let img: Phaser.GameObjects.Image;
-    if (this.textures.exists(stage)) img = this.add.image(p.x, foot, stage);
+    if (this.textures.exists(stage)) img = this.sprites.image(p.x, foot, stage);
     else if (state === "broken" && column) {
       // The plinth left standing and a stub of the shaft over it, floor to walk over: the column cropped to its foot.
-      img = this.add.image(p.x, foot, "hall_throne_column").setOrigin(0.5, 1).setScale(1 / ART_SCALE);
+      img = this.sprites.image(p.x, foot, "hall_throne_column").setOrigin(0.5, 1).setScale(1 / ART_SCALE);
       const h = img.frame.height;
       img.setCrop(0, h - COLUMN_STUMP_PX, img.frame.width, COLUMN_STUMP_PX).setTint(0x8a8490).setDepth(0.38);
-      this.sprites.add(img);
       return;
     } else if (state === "broken") {
-      img = this.add.image(p.x, p.y, this.textureKey, safeFrame(this.atlas, "prop_break_urn_2", "prop_break_crate_0"));
+      img = this.sprites.image(p.x, p.y, this.textureKey, safeFrame(this.atlas, "prop_break_urn_2", "prop_break_crate_0"));
       img.setScale((column ? 1.6 : 0.9) / ART_SCALE).setDepth(0.38).setAlpha(0.9);
-      this.sprites.add(img);
       return;
     } else {
       // Standing, a candelabrum's flame has its two frames and throws a warm pool round its foot.
       const flicker = column ? undefined : ((this.world.tick >> 3) + Math.round(p.x)) & 1;
-      img = this.add.image(p.x, foot, column ? "hall_throne_column" : "hall_throne_candelabra", flicker);
+      img = this.sprites.image(p.x, foot, column ? "hall_throne_column" : "hall_throne_candelabra", flicker);
       if (!column) {
         // The pool on the floor round its foot, and a halo round the three flames at its head.
         // Each a wide faint layer under a smaller one, so the light fades out rather than stopping at an edge.
         const lift = flicker ? 1 : 0;
         for (const [k, a] of [[1, 0.08], [0.6, 0.1]] as const) {
-          this.sprites.add(this.add.ellipse(p.x, foot - 2, 72 * k, 28 * k, 0xff9a40, a + lift * 0.02)
-            .setBlendMode(Phaser.BlendModes.ADD).setDepth(0.3));
-          this.sprites.add(this.add.circle(p.x, foot - CANDELABRUM_FLAMES_PX, (16 + lift) * k, 0xffa848, a + 0.02)
-            .setBlendMode(Phaser.BlendModes.ADD).setDepth(bodyDepth(foot, 0) + 0.001));
+          this.sprites.ellipse(p.x, foot - 2, 72 * k, 28 * k, 0xff9a40, a + lift * 0.02)
+            .setBlendMode(Phaser.BlendModes.ADD).setDepth(0.3);
+          this.sprites.circle(p.x, foot - CANDELABRUM_FLAMES_PX, (16 + lift) * k, 0xffa848, a + 0.02)
+            .setBlendMode(Phaser.BlendModes.ADD).setDepth(bodyDepth(foot, 0) + 0.001);
         }
       }
     }
@@ -2986,7 +2995,6 @@ export class PlayScene extends Phaser.Scene {
       img.x += ((this.world.tick >> 1) & 1 ? 1 : -1) * 1.2;
       img.setTint(0xffe2c0);
     }
-    this.sprites.add(img);
   }
 
   /** The name card, over the hall for a bar as he stands (doc 020). */
@@ -3380,8 +3388,8 @@ export class PlayScene extends Phaser.Scene {
     const sx0 = UI_W / 2 - (spellW + GROUP_GAP + innateW) / 2;
     const ix0 = sx0 + spellW + GROUP_GAP;
     const top = 0;
-    this.sprites.add(this.add.rectangle(sx0 - 7, y - SLOT / 2 - 5 - top, spellW + 14, SLOT + 22 + top, 0x0d0b1f, 0.7).setOrigin(0).setDepth(99));
-    this.sprites.add(this.add.rectangle(ix0 - 6, y - SMALL / 2 - 4 - top, innateW + 12, SMALL + 20 + top, 0x0d0b1f, 0.55).setOrigin(0).setDepth(99));
+    this.sprites.rectangle(sx0 - 7, y - SLOT / 2 - 5 - top, spellW + 14, SLOT + 22 + top, 0x0d0b1f, 0.7).setOrigin(0).setDepth(99);
+    this.sprites.rectangle(ix0 - 6, y - SMALL / 2 - 4 - top, innateW + 12, SMALL + 20 + top, 0x0d0b1f, 0.55).setOrigin(0).setDepth(99);
     /*
      * No captions over the groups. The icons and their keycaps say what each
      * slot is, the first-launch card and the controls page name them in
@@ -3416,11 +3424,11 @@ export class PlayScene extends Phaser.Scene {
       letterSpacing: letterSpacing() * ZOOM,
     }).setScale(1 / ZOOM).setOrigin(0, 0.5).setDepth(101);
     const w = text.displayWidth + 17;
-    this.sprites.add(this.add.rectangle(x - 4, y, w, 13, 0x0d0b1f, 0.75)
-      .setOrigin(0, 0.5).setStrokeStyle(1, 0x2a2750, 0.8).setDepth(100));
+    this.sprites.rectangle(x - 4, y, w, 13, 0x0d0b1f, 0.75)
+      .setOrigin(0, 0.5).setStrokeStyle(1, 0x2a2750, 0.8).setDepth(100);
     // The dot: lit for Jev, dim for the rule table. A colour alone would be
     // one more coloured word in a HUD that has several.
-    this.sprites.add(this.add.circle(x + 3, y, 2.2, fell ? 0xffb080 : jev ? 0x8fdcff : 0x4a5480, 1).setDepth(101));
+    this.sprites.circle(x + 3, y, 2.2, fell ? 0xffb080 : jev ? 0x8fdcff : 0x4a5480, 1).setDepth(101);
     this.fadeIfCovering(fadeFrom, x - 4, y - 8, w, 16);
   }
 
@@ -3459,18 +3467,17 @@ export class PlayScene extends Phaser.Scene {
      */
     const cue = sl.refused;
     if (cue?.mana) x += Math.sin(this.time.now / 21) * 2.2 * cue.k;
-    this.sprites.add(this.add.rectangle(x, y, size, size, 0x161334, 1).setDepth(101)
-      .setStrokeStyle(1.5, sl.usable ? accent : 0x3a3f5a, sl.usable ? 0.9 : 0.7));
+    this.sprites.rectangle(x, y, size, size, 0x161334, 1).setDepth(101)
+      .setStrokeStyle(1.5, sl.usable ? accent : 0x3a3f5a, sl.usable ? 0.9 : 0.7);
     if (sl.icon && this.atlas.has(sl.icon)) {
-      const img = this.add.image(x, y, this.crispTextureKey, sl.icon).setOrigin(0.5).setScale((size / 20) / TUNED).setDepth(102);
+      const img = this.sprites.image(x, y, this.crispTextureKey, sl.icon).setOrigin(0.5).setScale((size / 20) / TUNED).setDepth(102);
       if (!sl.usable) img.setTint(0x55506a);
-      this.sprites.add(img);
     }
     // The spin: a ring round its sword, so it is not read as the attack.
     if (sl.ring)
-      this.sprites.add(this.add.circle(x, y, size / 2 - 2.5, 0, 0).setStrokeStyle(1.2, sl.ring, sl.usable ? 0.9 : 0.35).setDepth(102.5));
+      this.sprites.circle(x, y, size / 2 - 2.5, 0, 0).setStrokeStyle(1.2, sl.ring, sl.usable ? 0.9 : 0.35).setDepth(102.5);
     if (sl.cooling > 0)
-      this.sprites.add(this.add.rectangle(x - size / 2, y - size / 2, size, size * sl.cooling, 0x0d0b1f, 0.72).setOrigin(0).setDepth(103));
+      this.sprites.rectangle(x - size / 2, y - size / 2, size, size * sl.cooling, 0x0d0b1f, 0.72).setOrigin(0).setDepth(103);
     const tint = sl.tint ?? accent;
     if (sl.pips) {
       // One pip per charge the key can bank, across its head: lit for each banked, the next one filling.
@@ -3480,9 +3487,9 @@ export class PlayScene extends Phaser.Scene {
       const py = y - size / 2 + 1.5;
       for (let k = 0; k < max; k++) {
         const px = x - size / 2 + 2 + k * (pw + gap);
-        this.sprites.add(this.add.rectangle(px, py, pw, 2.5, 0x0d0b1f, 0.85).setOrigin(0).setDepth(103.2));
-        if (k < have) this.sprites.add(this.add.rectangle(px, py, pw, 2.5, have >= max ? 0xffffff : tint, 1).setOrigin(0).setDepth(103.3));
-        else if (k === have && next > 0) this.sprites.add(this.add.rectangle(px, py, pw * next, 2.5, tint, 0.55).setOrigin(0).setDepth(103.3));
+        this.sprites.rectangle(px, py, pw, 2.5, 0x0d0b1f, 0.85).setOrigin(0).setDepth(103.2);
+        if (k < have) this.sprites.rectangle(px, py, pw, 2.5, have >= max ? 0xffffff : tint, 1).setOrigin(0).setDepth(103.3);
+        else if (k === have && next > 0) this.sprites.rectangle(px, py, pw * next, 2.5, tint, 0.55).setOrigin(0).setDepth(103.3);
       }
     }
     if (sl.charge !== undefined) {
@@ -3490,11 +3497,11 @@ export class PlayScene extends Phaser.Scene {
       const full = sl.charge >= 1;
       const blinkOn = ((this.world.tick >> 2) & 1) === 0;
       const by = y + size / 2 - 4;
-      this.sprites.add(this.add.rectangle(x - size / 2 + 2, by, size - 4, 2.5, 0x0d0b1f, 0.9).setOrigin(0).setDepth(103.2));
-      this.sprites.add(this.add.rectangle(x - size / 2 + 2, by, (size - 4) * Math.min(1, sl.charge), 2.5, full ? 0xffffff : tint, 1).setOrigin(0).setDepth(103.3));
-      this.sprites.add(this.add.rectangle(x, y, size, size, 0, 0)
-        .setStrokeStyle(full ? 2 : 1.5, full && blinkOn ? 0xffffff : tint, 1).setDepth(103.4));
-      if (full && blinkOn) this.sprites.add(this.add.rectangle(x, y, size, size, 0xffffff, 0.18).setDepth(103.35));
+      this.sprites.rectangle(x - size / 2 + 2, by, size - 4, 2.5, 0x0d0b1f, 0.9).setOrigin(0).setDepth(103.2);
+      this.sprites.rectangle(x - size / 2 + 2, by, (size - 4) * Math.min(1, sl.charge), 2.5, full ? 0xffffff : tint, 1).setOrigin(0).setDepth(103.3);
+      this.sprites.rectangle(x, y, size, size, 0, 0)
+        .setStrokeStyle(full ? 2 : 1.5, full && blinkOn ? 0xffffff : tint, 1).setDepth(103.4);
+      if (full && blinkOn) this.sprites.rectangle(x, y, size, size, 0xffffff, 0.18).setDepth(103.35);
     }
     if (cue?.cooldown) {
       /*
@@ -3506,14 +3513,14 @@ export class PlayScene extends Phaser.Scene {
        */
       const ink = 0xffd98a;
       const cover = Math.max(0.15, sl.cooling);
-      this.sprites.add(this.add.rectangle(x - size / 2, y - size / 2, size, size * cover, ink, 0.34 * cue.k).setOrigin(0).setDepth(103.4));
-      this.sprites.add(this.add.rectangle(x, y, size, size, 0, 0)
-        .setStrokeStyle(2, ink, 0.9 * Math.min(1, cue.k * 1.4)).setDepth(103.5));
+      this.sprites.rectangle(x - size / 2, y - size / 2, size, size * cover, ink, 0.34 * cue.k).setOrigin(0).setDepth(103.4);
+      this.sprites.rectangle(x, y, size, size, 0, 0)
+        .setStrokeStyle(2, ink, 0.9 * Math.min(1, cue.k * 1.4)).setDepth(103.5);
     } else if (cue) {
       const ink = cue.mana ? 0x8fdcff : 0x8792b5;
-      this.sprites.add(this.add.rectangle(x, y, size, size, ink, (cue.mana ? 0.3 : 0.12) * cue.k).setDepth(103.4));
-      this.sprites.add(this.add.rectangle(x, y, size, size, 0, 0)
-        .setStrokeStyle(2, ink, (cue.mana ? 1 : 0.55) * cue.k).setDepth(103.5));
+      this.sprites.rectangle(x, y, size, size, ink, (cue.mana ? 0.3 : 0.12) * cue.k).setDepth(103.4);
+      this.sprites.rectangle(x, y, size, size, 0, 0)
+        .setStrokeStyle(2, ink, (cue.mana ? 1 : 0.55) * cue.k).setDepth(103.5);
     }
     if (sl.corner)
       this.ftext(`slot:corner:${sl.key}`, x + size / 2 - 1, y + size / 2 - 1, sl.corner, {
@@ -3527,12 +3534,11 @@ export class PlayScene extends Phaser.Scene {
     const capW = Math.max(12, Math.ceil(capPx * 0.72 * sl.key.length) + 6);
     const capH = Math.ceil(capPx * 1.15);
     const capY = y + size / 2 + capH / 2 + 2;
-    const cap = this.add.graphics().setDepth(103);
+    const cap = this.sprites.graphics().setDepth(103);
     cap.fillStyle(0x2a2750, 1);
     cap.fillRoundedRect(x - capW / 2, capY - capH / 2, capW, capH, 2.5);
     cap.lineStyle(1, 0x8792b5, 0.9);
     cap.strokeRoundedRect(x - capW / 2, capY - capH / 2, capW, capH, 2.5);
-    this.sprites.add(cap);
     // The key on the cap is the thing the bar exists to tell you, so it takes
     // the body floor like every other word a player reads.
     this.ftext(`slot:key:${sl.key}`, x, capY, sl.key, {
@@ -4125,7 +4131,7 @@ export class PlayScene extends Phaser.Scene {
       // Merged as the room's numbers are, so the preview shows what play shows (`addDamageNumber`).
       for (const ev of w.events)
         if (ev.kind === "damage" && (ev.amount ?? 0) > 0)
-          addDamageNumber(d.numbers, ev.x, ev.y, ev.amount!, damageColour(ev.what ?? ""), "", () => 0);
+          addDamageNumber(d.numbers, ev.x, ev.y, ev.amount!, damageColour(ev.what ?? ""), "", () => this.damageNumberId++);
     }
   }
 
@@ -4156,9 +4162,9 @@ export class PlayScene extends Phaser.Scene {
         n.ms += this.game.loop.delta;
         if (n.bumpMs !== undefined) n.bumpMs += this.game.loop.delta;
         const pop = (n.bumpMs ?? n.ms) / 700;
-        this.sprites.add(this.add.text(n.x, n.y - (n.ms / 700) * 16, n.text, {
+        this.ftext(`dmg:demo:${n.id}`, n.x, n.y - (n.ms / 700) * 16, n.text, {
           fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(8, ZOOM) * ZOOM)}px`, color: n.colour, stroke: "#0d0b1f", strokeThickness: 2 * ZOOM,
-        }).setScale((1 / ZOOM) * (pop < 0.12 ? 1.3 - pop * 2.5 : 1)).setOrigin(0.5).setAlpha(1 - n.ms / 700).setDepth(9.9));
+        }).setScale((1 / ZOOM) * (pop < 0.12 ? 1.3 - pop * 2.5 : 1)).setOrigin(0.5).setAlpha(1 - n.ms / 700).setDepth(9.9);
       }
       d.numbers = d.numbers.filter((n) => n.ms < 700);
       d.pops = this.agePops(d.pops, this.game.loop.delta);
@@ -5597,21 +5603,27 @@ export class PlayScene extends Phaser.Scene {
       sh.ms += dtMs;
       const t = sh.ms / 500;
       const d = 6 + 34 * Math.sqrt(t);
-      this.sprites.add(this.add.rectangle(sh.x + Math.cos(sh.a) * d, sh.y + Math.sin(sh.a) * d, 5, 2, 0xe8fbff, 1 - t)
-        .setRotation(sh.a + t * 6).setStrokeStyle(0.6, 0x6fa8d8, 1 - t).setDepth(9.8));
+      this.sprites.rectangle(sh.x + Math.cos(sh.a) * d, sh.y + Math.sin(sh.a) * d, 5, 2, 0xe8fbff, 1 - t)
+        .setRotation(sh.a + t * 6).setStrokeStyle(0.6, 0x6fa8d8, 1 - t).setDepth(9.8);
     }
     this.shards = this.shards.filter((sh) => sh.ms < 500);
   }
 
   /** A kept text for this frame, by key; see `textCache`. */
   private ftext(key: string, x: number, y: number, text: string, style: Phaser.Types.GameObjects.Text.TextStyle): Phaser.GameObjects.Text {
-    const sig = JSON.stringify(style);
     let c = this.textCache.get(key);
-    if (!c || c.style !== sig) {
-      c?.t.destroy();
-      c = { t: this.add.text(x, y, text, style), used: true, style: sig, idle: 0 };
-      this.textCache.set(key, c);
-    } else if (c.t.text !== text) c.t.setText(text);
+    // Callers pass a fresh literal every frame; comparing it field by field
+    // settles the usual case without serialising it.
+    if (!c || !sameStyle(c.from, style)) {
+      const sig = JSON.stringify(style);
+      if (c && c.style === sig) c.from = style;
+      else {
+        if (c) this.spareText(c);
+        c = { t: this.takeText(sig, x, y, text, style), used: true, style: sig, from: style, idle: 0 };
+        this.textCache.set(key, c);
+      }
+    }
+    if (c.t.text !== text) c.t.setText(text);
     c.used = true;
     c.idle = 0;
     this.keptDrawn.push(c.t);
@@ -5671,11 +5683,13 @@ export class PlayScene extends Phaser.Scene {
        */
       const fi = BLAST_FRAME_MS.findIndex((t) => fl.ms < t);
       if (fi >= 0 && this.fxSheets.has("blast")) {
-        let mask = this.blastMasks.get(fl);
-        if (!mask) {
-          mask = this.make.graphics({}, false);
-          this.blastMasks.set(fl, mask);
+        let blast = this.blastMasks.get(fl);
+        if (!blast) {
+          const g = this.make.graphics({}, false);
+          blast = { g, mask: g.createGeometryMask() };
+          this.blastMasks.set(fl, blast);
         }
+        const mask = blast.g;
         mask.clear();
         mask.fillStyle(0xffffff, 1);
         const pts = [{ x: fl.x, y: fl.y }];
@@ -5686,13 +5700,12 @@ export class PlayScene extends Phaser.Scene {
         }
         mask.fillPoints(pts, true);
         const o = this.fxSheets.get("blast")!.origins[fi]!;
-        const im = this.add.image(fl.x, fl.y, FX_TEXTURE, `blast_${fi}`)
+        const im = this.sprites.image(fl.x, fl.y, FX_TEXTURE, `blast_${fi}`)
           .setOrigin(o[0], o[1]).setRotation(fl.aim).setScale(1 / FX_TEXEL).setDepth(8.7);
-        im.setMask(mask.createGeometryMask());
-        this.sprites.add(im);
+        im.setMask(blast.mask);
       }
     }
-    for (const [fl, g] of this.blastMasks) if (!fl.alive || !w.flames.includes(fl)) { g.destroy(); this.blastMasks.delete(fl); }
+    for (const [fl, b] of this.blastMasks) if (!fl.alive || !w.flames.includes(fl)) { b.mask.destroy(); b.g.destroy(); this.blastMasks.delete(fl); }
     // Smoke off the muzzle after the shot, rolling along the aim and rising.
     const dt = this.game.loop.delta;
     for (const m of this.muzzleFx) {
@@ -5747,10 +5760,9 @@ export class PlayScene extends Phaser.Scene {
       const i = Math.floor(a.ms / a.frameMs);
       if (i >= info.frames) continue;
       const o = info.origins[i]!;
-      const im = this.add.image(a.x, a.y, FX_TEXTURE, `${a.sheet}_${i}`)
+      const im = this.sprites.image(a.x, a.y, FX_TEXTURE, `${a.sheet}_${i}`)
         .setOrigin(o[0], o[1]).setRotation(a.rot).setScale(1 / FX_TEXEL).setDepth(a.depth);
       if (a.tint !== undefined) im.setTint(a.tint);
-      this.sprites.add(im);
     }
     this.fxAnims = this.fxAnims.filter((a) => a.ms < this.fxSheets.get(a.sheet)!.frames * a.frameMs);
   }
@@ -5778,13 +5790,33 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private sweepTexts(): void {
-    this.keptDrawn = [];
+    this.keptDrawn.length = 0;
     for (const [key, c] of this.textCache) {
       if (c.used) { c.used = false; continue; }
-      // A damage number is done for good; anything else unused for two seconds is let go.
-      if (key.startsWith("dmg:") || ++c.idle > 120) { c.t.destroy(); this.textCache.delete(key); continue; }
+      // A damage number is done for good and its text goes back for the next
+      // one; anything else unused for two seconds is let go.
+      if (key.startsWith("dmg:")) { this.spareText(c); this.textCache.delete(key); continue; }
+      if (++c.idle > 120) { c.t.destroy(); this.textCache.delete(key); continue; }
       c.t.setVisible(false);
     }
+  }
+
+  /** A text in this style: a spare one if there is, rewritten, else a new one. */
+  private takeText(sig: string, x: number, y: number, text: string, style: Phaser.Types.GameObjects.Text.TextStyle): Phaser.GameObjects.Text {
+    const spare = this.spareTexts.get(sig)?.pop();
+    if (!spare) return this.add.text(x, y, text, style);
+    this.spareTextCount--;
+    return spare.setText(text).setScale(1).setOrigin(0).setDepth(0);
+  }
+
+  /** Hides a kept text and keeps it for reuse in its style, within a small cap. */
+  private spareText(c: KeptText): void {
+    if (this.spareTextCount >= SPARE_TEXTS_MAX) { c.t.destroy(); return; }
+    c.t.setVisible(false);
+    let shelf = this.spareTexts.get(c.style);
+    if (!shelf) this.spareTexts.set(c.style, (shelf = []));
+    shelf.push(c.t);
+    this.spareTextCount++;
   }
 
   /** Draws and ages the floating numbers: a short rise, then a fade. */
@@ -6209,6 +6241,7 @@ export class PlayScene extends Phaser.Scene {
     this.ensureCrispSheet();
     const key = `sheet_${mood.temperature}_${mood.brightness}`;
     this.textureKey = key;
+    this.sheetMood = mood;
     /*
      * The swap matches exact colours, and the sheet it samples has been
      * through this mood — so the table is built in the same light.
@@ -6656,8 +6689,8 @@ export class PlayScene extends Phaser.Scene {
     if (p.poisonBuild > 0 || p.poisonMs > 0) gauges.push([p.poisonBuild, p.poisonMs > 0 ? 0x9ff07a : 0x4f9a40, 1]);
     gauges.forEach(([fill, colour], i) => {
       const y = top - i * 4;
-      this.sprites.add(this.add.rectangle(p.x, y, 20, 2.4, 0x0d0b1f, 0.8).setOrigin(0.5).setDepth(9.7));
-      this.sprites.add(this.add.rectangle(p.x - 10, y, 20 * fill, 2.4, colour, 1).setOrigin(0, 0.5).setDepth(9.8));
+      this.sprites.rectangle(p.x, y, 20, 2.4, 0x0d0b1f, 0.8).setOrigin(0.5).setDepth(9.7);
+      this.sprites.rectangle(p.x - 10, y, 20 * fill, 2.4, colour, 1).setOrigin(0, 0.5).setDepth(9.8);
     });
     /*
      * Spin charges, over the head: one pip per banked spin. The gauge in the
@@ -6668,8 +6701,8 @@ export class PlayScene extends Phaser.Scene {
     const pipY = top - gauges.length * 4 - 3;
     for (let i = 0; i < charges; i++) {
       const x = p.x + (i - (charges - 1) / 2) * 6;
-      this.sprites.add(this.add.rectangle(x, pipY, 3.4, 3.4, 0xff7a4a, 1).setAngle(45)
-        .setStrokeStyle(0.8, 0xffe0c0, 0.9).setDepth(9.8));
+      this.sprites.rectangle(x, pipY, 3.4, 3.4, 0xff7a4a, 1).setAngle(45)
+        .setStrokeStyle(0.8, 0xffe0c0, 0.9).setDepth(9.8);
     }
     // A burning player's flames are `FireFx`'s.
     if (p.poisonMs > 0) {
@@ -7090,9 +7123,8 @@ export class PlayScene extends Phaser.Scene {
    */
   private spellSprite(name: string, x: number, y: number, depth: number, scale = 1, rotation = 0): Phaser.GameObjects.Image | null {
     if (!this.atlas.has(name)) return null;
-    const image = this.add.image(x, y, this.uiTextureKey, name)
+    const image = this.sprites.image(x, y, this.uiTextureKey, name)
       .setScale(scale / ART_SCALE).setRotation(rotation).setDepth(depth);
-    this.sprites.add(image);
     return image;
   }
 
@@ -7329,8 +7361,8 @@ export class PlayScene extends Phaser.Scene {
     }
     // Full: the delivered four-pointed glint on the hand, white, flickering between its two frames.
     if (full && this.atlas.has("bullet_player_c_0"))
-      this.sprites.add(this.add.image(hand.x, hand.y, this.textureKey, `bullet_player_c_${(w.tick >> 2) & 1}`)
-        .setScale(1 / ART_SCALE).setTintFill(0xffffff).setBlendMode(Phaser.BlendModes.ADD).setDepth(9.62));
+      this.sprites.image(hand.x, hand.y, this.textureKey, `bullet_player_c_${(w.tick >> 2) & 1}`)
+        .setScale(1 / ART_SCALE).setTintFill(0xffffff).setBlendMode(Phaser.BlendModes.ADD).setDepth(9.62);
   }
 
   /**
@@ -7370,11 +7402,10 @@ export class PlayScene extends Phaser.Scene {
       const f = facingFrame("pet", (pet.facing * 180) / Math.PI, pose);
       const name = this.atlas.has(f.name) ? f.name : "pet_s_idle0";
       if (!this.atlas.has(name)) continue;
-      this.sprites.add(this.add.ellipse(pet.x, pet.y + 5, 12, 5, 0x0d0b1f, 0.32).setDepth(3));
-      const img = this.add.image(pet.x, pet.y - 6, this.textureKey, name)
+      this.sprites.ellipse(pet.x, pet.y + 5, 12, 5, 0x0d0b1f, 0.32).setDepth(3);
+      const img = this.sprites.image(pet.x, pet.y - 6, this.textureKey, name)
         .setOrigin(0.5).setScale(1 / ART_SCALE).setDepth(7.6).setFlipX(f.flipX);
       if (pet.lifeMs < 1500) img.setAlpha((w.tick >> 2) & 1 ? 0.45 : 1);
-      this.sprites.add(img);
     }
   }
 
@@ -7999,14 +8030,12 @@ export class PlayScene extends Phaser.Scene {
       const name = `boss_chain_link_${i % 2 ? "edge" : "face"}`;
       if (!this.atlas.has(name)) break;
       const t = (i + .5) / links;
-      const sprite = this.add.image(x0 + dx * t, y0 + dy * t, this.textureKey, name)
+      const sprite = this.sprites.image(x0 + dx * t, y0 + dy * t, this.textureKey, name)
         .setScale(BOSS_CHAIN_LINK_SCALE / ART_SCALE).setRotation(angle).setDepth(depth).setAlpha(alpha);
-      this.sprites.add(sprite);
     }
     if (hook && this.atlas.has("boss_chain_hook_head")) {
-      const head = this.add.image(x1, y1, this.textureKey, "boss_chain_hook_head")
+      const head = this.sprites.image(x1, y1, this.textureKey, "boss_chain_hook_head")
         .setScale(BOSS_CHAIN_LINK_SCALE / ART_SCALE).setRotation(angle).setDepth(depth + .01).setAlpha(alpha);
-      this.sprites.add(head);
     }
   }
 
@@ -11454,14 +11483,13 @@ export class PlayScene extends Phaser.Scene {
       const t = 1 - pop.ms / POP_MS;
       const flash = t < POP_FLASH_SHARE;
       const u = flash ? t / POP_FLASH_SHARE : (t - POP_FLASH_SHARE) / (1 - POP_FLASH_SHARE);
-      const img = this.add.image(pop.x, pop.y, this.textureKey, pop.frame)
+      const img = this.sprites.image(pop.x, pop.y, this.textureKey, pop.frame)
         .setOrigin(0.5)
         .setFlipX(pop.flipX)
         // Swells through the flash and holds, as though about to give.
         .setScale((1 / ART_SCALE) * (flash ? 1 + 0.12 * u : 1.12 + 0.04 * u))
         .setDepth(7);
       if (flash) img.setTintFill(HIT_FLASH_FILL);
-      this.sprites.add(img);
       /*
        * The death frame under a filter: a hot glow laid over it additively,
        * cooling from white-gold to ember red as it goes. The frame alone is a
@@ -11469,7 +11497,7 @@ export class PlayScene extends Phaser.Scene {
        * between the flash and the burst.
        */
       if (!flash) {
-        const glow = this.add.image(pop.x, pop.y, this.textureKey, pop.frame)
+        const glow = this.sprites.image(pop.x, pop.y, this.textureKey, pop.frame)
           .setOrigin(0.5)
           .setFlipX(pop.flipX)
           .setScale(img.scaleX, img.scaleY)
@@ -11477,7 +11505,6 @@ export class PlayScene extends Phaser.Scene {
           .setBlendMode(Phaser.BlendModes.ADD)
           .setAlpha(0.75 * (1 - 0.6 * u))
           .setDepth(7.01);
-        this.sprites.add(glow);
       }
     }
   }
@@ -11507,16 +11534,48 @@ export class PlayScene extends Phaser.Scene {
     const known = this.boltReaches.get(frame);
     if (known !== undefined) return known;
     let reach = 1;
-    const f = this.textures.getFrame(this.textureKey, frame);
-    if (f) {
-      scan: for (let y = f.cutHeight - 1; y >= 0; y--)
-        for (let x = 0; x < f.cutWidth; x++) {
-          const c = this.textures.getPixel(x, y, this.textureKey, frame);
-          if (c && c.alpha > 20) { reach = (y + 1) / f.cutHeight; break scan; }
+    const px = this.framePixels(frame);
+    if (px) {
+      scan: for (let y = px.h - 1; y >= 0; y--)
+        for (let x = 0; x < px.w; x++) {
+          const i = px.at(x, y);
+          if (i >= 0 && px.data[i + 3]! > 20) { reach = (y + 1) / px.h; break scan; }
         }
     }
     this.boltReaches.set(frame, reach);
     return reach;
+  }
+
+  /**
+   * **A frame's pixels, read from the atlas rather than back from the texture.**
+   *
+   * `textures.getPixel` draws one pixel to a scratch canvas and reads it back
+   * — a round trip through the 4096-px sheet per pixel. `boltReach` scanned a
+   * whole bolt frame that way, and the first strike of each frame in a run
+   * stalled the game for up to a second and a half; `popColours` paid the
+   * same on a kind's first kill. Even one whole-frame read of the sheet's
+   * canvas costs tens of milliseconds the first time, so neither touches the
+   * texture now: the atlas keeps the sheet's pixels in memory, the frames are
+   * its rectangles untrimmed, and the mood's tint is per pixel and leaves
+   * alpha alone — so `colour` tints just the pixels asked for.
+   *
+   * `at(x, y)` takes the frame's own coordinates, as `getPixel` did, and gives
+   * the index of the pixel's red byte in `data`, or -1 outside the frame.
+   */
+  private framePixels(frame: string): { w: number; h: number; data: Uint8Array; at: (x: number, y: number) => number; colour: (i: number) => [number, number, number] } | null {
+    if (!this.atlas.has(frame)) return null;
+    const r = this.atlas.frame(frame);
+    const data = this.atlas.base, stride = this.atlas.sheetWidth;
+    const transform = this.sheetMood ? moodTransform(this.sheetMood) : null;
+    return {
+      w: r.w, h: r.h, data,
+      at: (x, y) => (x >= 0 && y >= 0 && x < r.w && y < r.h ? ((r.y + y) * stride + r.x + x) * 4 : -1),
+      colour: (i) => {
+        const px = data.slice(i, i + 4);
+        if (transform) tintRGBA(px, transform);
+        return [px[0]!, px[1]!, px[2]!];
+      },
+    };
   }
 
   /** A few of the colours a frame is drawn in, read off the sheet and kept, so a body bursts into itself. */
@@ -11524,15 +11583,17 @@ export class PlayScene extends Phaser.Scene {
     const known = this.popPalette.get(frame);
     if (known) return known;
     const out: number[] = [];
-    const f = this.textures.getFrame(this.textureKey, frame);
-    if (f) {
+    const px = this.framePixels(frame);
+    if (px) {
       for (let i = 0; i < 40 && out.length < 3; i++) {
-        const x = Math.floor(f.cutWidth * (0.25 + 0.5 * ((i * 0.618) % 1)));
-        const y = Math.floor(f.cutHeight * (0.3 + 0.5 * ((i * 0.382) % 1)));
-        const c = this.textures.getPixel(x, y, this.textureKey, frame);
+        const x = Math.floor(px.w * (0.25 + 0.5 * ((i * 0.618) % 1)));
+        const y = Math.floor(px.h * (0.3 + 0.5 * ((i * 0.382) % 1)));
+        const k = px.at(x, y);
+        if (k < 0 || px.data[k + 3]! < 200) continue;
+        const [red, green, blue] = px.colour(k);
         // Skip the ink and the empty cells: the burst is the body's colours.
-        if (!c || c.alpha < 200 || c.red + c.green + c.blue < 90) continue;
-        const rgb = (c.red << 16) | (c.green << 8) | c.blue;
+        if (red + green + blue < 90) continue;
+        const rgb = (red << 16) | (green << 8) | blue;
         if (!out.includes(rgb)) out.push(rgb);
       }
     }
@@ -11769,7 +11830,7 @@ export class PlayScene extends Phaser.Scene {
   private drawHeldStaff(st: HeldStaff | null): void {
     if (FOCUS !== "staff" || !st || !this.atlas.has("weapon_player_staff")) return;
     const w = this.world;
-    const staff = this.add.image(st.spriteX, st.spriteY, this.textureKey, "weapon_player_staff")
+    const staff = this.sprites.image(st.spriteX, st.spriteY, this.textureKey, "weapon_player_staff")
       .setOrigin(0.5)
       .setScale(1 / ART_SCALE)
       // The sprite is drawn pointing up, so its own zero is a quarter turn on.
@@ -11777,16 +11838,14 @@ export class PlayScene extends Phaser.Scene {
       .setDepth(this.playerDepth + (this.frameStaff.depth >= 0 ? PLAYER_CONJURE : -PLAYER_HELD));
     if (dashInvulnerable(w.player)) staff.setAlpha(0.55);
     else if (w.player.invulnMs > 0) staff.setAlpha((w.tick >> 2) & 1 ? 0.35 : 1);
-    this.sprites.add(staff);
     if (this.atlas.has("weapon_player_fist")) {
-      const fist = this.add.image(st.gripX, st.gripY, this.textureKey, "weapon_player_fist")
+      const fist = this.sprites.image(st.gripX, st.gripY, this.textureKey, "weapon_player_fist")
         .setOrigin(0.5)
         .setScale(1 / ART_SCALE)
         // Always above the shaft, whichever side of the body the staff is on.
         .setDepth(this.playerDepth + PLAYER_GRIP);
       if (dashInvulnerable(w.player)) fist.setAlpha(0.55);
       else if (w.player.invulnMs > 0) fist.setAlpha((w.tick >> 2) & 1 ? 0.35 : 1);
-      this.sprites.add(fist);
     }
   }
 
@@ -12267,16 +12326,15 @@ export class PlayScene extends Phaser.Scene {
     const copies = Math.round(3 * fast);
     // Each copy a fixed step back round the turn: at this rate, where the blade was a frame or two ago.
     for (let k = copies; k >= 1; k--) {
-      this.sprites.add(this.add.image(b.x, b.y - lift, this.textureKey, "weapon_player_sword")
+      this.sprites.image(b.x, b.y - lift, this.textureKey, "weapon_player_sword")
         .setOrigin(pivot, 0.5).setScale(1 / ART_SCALE).setRotation(turn - k * 0.5)
         .setTintFill(look.glow).setBlendMode(Phaser.BlendModes.ADD)
-        .setAlpha((0.42 / k) * (0.5 + 0.5 * fast)).setDepth(9.5));
+        .setAlpha((0.42 / k) * (0.5 + 0.5 * fast)).setDepth(9.5);
     }
-    const sword = this.add.image(b.x, b.y - lift, this.textureKey, "weapon_player_sword")
+    const sword = this.sprites.image(b.x, b.y - lift, this.textureKey, "weapon_player_sword")
       .setOrigin(pivot, 0.5).setScale(1 / ART_SCALE).setRotation(turn).setDepth(9.52);
     // Coming home it carries the light: the steel washed a little toward it.
     if (b.returning) sword.setTint(0xffffff, look.core, 0xffffff, look.core);
-    this.sprites.add(sword);
     // Its shadow on the floor under it, so it reads as flying and not as lying there.
     this.projGfx.fillStyle(SHADOW_INK, 0.22);
     this.projGfx.fillEllipse(b.x, b.y + 3, 12, 4);
@@ -12926,7 +12984,7 @@ export class PlayScene extends Phaser.Scene {
       // whole tile stood as tall as a body and crowded the floor round it. A
       // conjured pillar is the spell's stone, and keeps the cell's size.
       const size = (p.kind === "pillar" ? 1 : PROP_DRAW_SCALE) / ART_SCALE;
-      const img = this.add.image(
+      const img = this.sprites.image(
         p.x, standing ? p.y + TILE_PX / 2 : p.y,
         this.textureKey, safeFrame(this.atlas, frame, "prop_break_crate_0"),
       )
@@ -12957,7 +13015,6 @@ export class PlayScene extends Phaser.Scene {
         img.setScale(size * 1.1, size * 0.92);
         img.setTint(0xffd9b0);
       }
-      this.sprites.add(img);
     }
   }
 
@@ -13080,7 +13137,7 @@ export class PlayScene extends Phaser.Scene {
     const tick = this.world.tick;
     const play = (x: number, y: number, name: string, alpha: number): void => {
       if (!this.atlas.has(name)) return;
-      this.sprites.add(this.add.image(x, y + ERUPTION_FOOT_PX, this.textureKey, name)
+      this.sprites.image(x, y + ERUPTION_FOOT_PX, this.textureKey, name)
         .setOrigin(0.5, 1).setScale(1 / ART_SCALE)
         /*
          * In the body band, by the foot of the spike rather than over every
@@ -13088,7 +13145,7 @@ export class PlayScene extends Phaser.Scene {
          * front of the near one and behind the far one, which a fixed depth
          * above both of them cannot say.
          */
-        .setDepth(bodyDepth(y + ERUPTION_FOOT_PX, 0) + 0.003).setAlpha(alpha));
+        .setDepth(bodyDepth(y + ERUPTION_FOOT_PX, 0) + 0.003).setAlpha(alpha);
     };
     for (const c of this.world.eruptions) {
       if (!c.alive) continue;
@@ -13141,9 +13198,9 @@ export class PlayScene extends Phaser.Scene {
     for (const k of this.eruptCracks) {
       if (!this.atlas.has(`vfx_earth_crack_${k.variant}`)) break;
       // On the floor, under the bodies: what is left is scenery, not an effect.
-      this.sprites.add(this.add.image(k.x, k.y + ERUPTION_FOOT_PX, this.textureKey, `vfx_earth_crack_${k.variant}`)
+      this.sprites.image(k.x, k.y + ERUPTION_FOOT_PX, this.textureKey, `vfx_earth_crack_${k.variant}`)
         .setOrigin(0.5, 1).setScale(1 / ART_SCALE).setDepth(2.9)
-        .setAlpha(0.75 * Math.min(1, (ERUPTION_CRACK_MS - k.ms) / 300)));
+        .setAlpha(0.75 * Math.min(1, (ERUPTION_CRACK_MS - k.ms) / 300));
     }
   }
 
@@ -13256,8 +13313,7 @@ export class PlayScene extends Phaser.Scene {
     const has = (n: string) => this.atlas.has(n);
     const img = (x: number, y: number, name: string, depth: number, scale = 1 / ART_SCALE) => {
       if (!has(name)) return null;
-      const im = this.add.image(x, y, this.textureKey, name).setScale(scale).setDepth(depth);
-      this.sprites.add(im);
+      const im = this.sprites.image(x, y, this.textureKey, name).setScale(scale).setDepth(depth);
       return im;
     };
     /** A segment sprite repeated along a line, each tile rotated to it. */
@@ -14283,7 +14339,7 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private draw(): void {
-    this.sprites.clear(true, true);
+    this.sprites.clear();
     /*
      * **The player sorts with the bodies.**
      *
@@ -14318,9 +14374,7 @@ export class PlayScene extends Phaser.Scene {
     const w = this.world;
     const frame = (n: string) => (this.atlas.has(n) ? n : "player_s_idle0");
     const put = (x: number, y: number, name: string, depth: number, scale = 1 / ART_SCALE) =>
-      this.sprites.add(
-        this.add.image(x, y, this.textureKey, frame(name)).setOrigin(0.5).setScale(scale).setDepth(depth),
-      );
+      this.sprites.image(x, y, this.textureKey, frame(name)).setOrigin(0.5).setScale(scale).setDepth(depth);
 
     // Bullets are drawn from their own radius, not a fixed scale. The 32px
     // frame at a flat half scale made every bullet 16 world px across while
@@ -14405,8 +14459,8 @@ export class PlayScene extends Phaser.Scene {
        * sliver — the splinters and the orb are one frost spell.
        */
       if (look.shape === "frost_orb" && b.emitMs <= 0 && this.atlas.has("bullet_player_a_0")) {
-        this.sprites.add(this.add.image(b.x, b.y, this.textureKey, `bullet_player_a_${(w.tick >> 2) & 1}`)
-          .setScale(1 / ART_SCALE).setRotation(Math.atan2(b.vy, b.vx) + Math.PI / 2).setDepth(7.2));
+        this.sprites.image(b.x, b.y, this.textureKey, `bullet_player_a_${(w.tick >> 2) & 1}`)
+          .setScale(1 / ART_SCALE).setRotation(Math.atan2(b.vy, b.vx) + Math.PI / 2).setDepth(7.2);
         if (Math.random() < 0.25)
           this.shed({ x: b.x, y: b.y, vx: -b.vx * 0.05 + (Math.random() - 0.5) * 12, vy: -b.vy * 0.05 + (Math.random() - 0.5) * 12, ms: 0, life: 160 + Math.random() * 100, size: 0.8, colour: 0xcfefff, gravity: 6 });
         continue;
@@ -14435,22 +14489,20 @@ export class PlayScene extends Phaser.Scene {
       if (q.kind === "mana") {
         const bob = Math.sin((w.tick + q.x) / 7) * 1.2;
         const fade = pickupFading(q) && (w.tick >> 2) & 1 ? 0.35 : 1;
-        this.sprites.add(this.add.circle(q.x, q.y - 3 + bob, 4.2, 0x3f7fe0, 0.28 * fade).setDepth(4).setBlendMode(Phaser.BlendModes.ADD));
-        this.sprites.add(this.add.circle(q.x, q.y - 3 + bob, 2.1, 0x8fdcff, 0.95 * fade).setDepth(4.1));
-        this.sprites.add(this.add.rectangle(q.x - 0.5, q.y - 3.5 + bob, 1, 1, 0xffffff, fade).setDepth(4.2));
+        this.sprites.circle(q.x, q.y - 3 + bob, 4.2, 0x3f7fe0, 0.28 * fade).setDepth(4).setBlendMode(Phaser.BlendModes.ADD);
+        this.sprites.circle(q.x, q.y - 3 + bob, 2.1, 0x8fdcff, 0.95 * fade).setDepth(4.1);
+        this.sprites.rectangle(q.x - 0.5, q.y - 3.5 + bob, 1, 1, 0xffffff, fade).setDepth(4.2);
         continue;
       }
       const name = `pickup_${q.kind}_${(w.tick >> 4) & 1}`;
       if (!this.atlas.has(name)) continue;
-      const img = this.add.image(q.x, q.y, this.uiTextureKey, name)
+      const img = this.sprites.image(q.x, q.y, this.uiTextureKey, name)
         .setOrigin(0.5).setScale(1 / ART_SCALE).setDepth(4);
 
       if (pickupFading(q)) img.setAlpha((w.tick >> 2) & 1 ? 0.35 : 1);
       // A shadow, so it reads as lying on the floor rather than floating.
-      const sh = this.add.ellipse(q.x, q.y + 4, 9, 4, 0);
+      const sh = this.sprites.ellipse(q.x, q.y + 4, 9, 4, 0);
       sh.setFillStyle(0x0d0b1f, 0.3).setDepth(3);
-      this.sprites.add(sh);
-      this.sprites.add(img);
     }
     const label = (k: string, x: number, y: number, t: string, st: Phaser.Types.GameObjects.Text.TextStyle) => this.ftext(k, x, y, t, st);
     this.drawKingGoblet(this.game.loop.delta * this.labSpeed);
@@ -14473,8 +14525,8 @@ export class PlayScene extends Phaser.Scene {
     if (this.bossDeath) {
       const { x, y, startedAt } = this.bossDeath;
       const frame = `boss_death${Math.min(2, Math.floor((this.time.now - startedAt) / 400))}`;
-      if (this.atlas.has(frame)) this.sprites.add(this.add.image(x, y - BOSS_DRAW_RISE_PX, this.textureKey, frame)
-        .setOrigin(0.5).setScale(1 / ART_SCALE).setDepth(bodyDepth(y + BOSS_FOOT_PX, 0)));
+      if (this.atlas.has(frame)) this.sprites.image(x, y - BOSS_DRAW_RISE_PX, this.textureKey, frame)
+        .setOrigin(0.5).setScale(1 / ART_SCALE).setDepth(bodyDepth(y + BOSS_FOOT_PX, 0));
     }
     for (const b of w.enemyBullets) {
       if (!b.alive) continue;
@@ -14491,8 +14543,8 @@ export class PlayScene extends Phaser.Scene {
         this.fxTopGfx.lineStyle(SPIKE_OUTLINE_PX, 0x120e1a, 0.9);
         this.fxTopGfx.lineBetween(b.x - Math.cos(a) * 5, b.y - Math.sin(a) * 5, b.x + Math.cos(a) * 5, b.y + Math.sin(a) * 5);
         if (this.atlas.has("vfx_spike_gold"))
-          this.sprites.add(this.add.image(b.x, b.y, this.textureKey, "vfx_spike_gold")
-            .setOrigin(0.5).setRotation(a).setScale(1.2 / ART_SCALE, SPIKE_FAT / ART_SCALE).setDepth(7));
+          this.sprites.image(b.x, b.y, this.textureKey, "vfx_spike_gold")
+            .setOrigin(0.5).setRotation(a).setScale(1.2 / ART_SCALE, SPIKE_FAT / ART_SCALE).setDepth(7);
         continue;
       }
       /*
@@ -14509,14 +14561,13 @@ export class PlayScene extends Phaser.Scene {
         if (info) {
           const i = (w.tick >> 2) & 1;
           const o = info.origins[i]!;
-          this.sprites.add(this.add.image(b.x, b.y, FX_TEXTURE, `${sheet}_${i}`)
-            .setOrigin(o[0], o[1]).setRotation(Math.atan2(b.vy, b.vx)).setScale(1 / FX_TEXEL).setDepth(7));
+          this.sprites.image(b.x, b.y, FX_TEXTURE, `${sheet}_${i}`)
+            .setOrigin(o[0], o[1]).setRotation(Math.atan2(b.vy, b.vx)).setScale(1 / FX_TEXEL).setDepth(7);
           continue;
         }
       }
-      const ghost = this.add.image(b.x - b.vx * 0.03, b.y - b.vy * 0.03, this.textureKey, frame(bulletFrame(b, w.tick, true)))
+      const ghost = this.sprites.image(b.x - b.vx * 0.03, b.y - b.vy * 0.03, this.textureKey, frame(bulletFrame(b, w.tick, true)))
         .setOrigin(0.5).setScale(bulletScale(b.radius) * 0.8).setAlpha(0.3).setDepth(6.95);
-      this.sprites.add(ghost);
       put(b.x, b.y, bulletFrame(b, w.tick, true), 7, bulletScale(b.radius));
     }
 
@@ -14622,8 +14673,7 @@ export class PlayScene extends Phaser.Scene {
       });
     for (const g of this.ghosts) {
       const k = 1 - g.ms / GHOST_MS;
-      this.sprites.add(
-        this.add.image(g.x, g.y, this.textureKey, g.frame)
+      this.sprites.image(g.x, g.y, this.textureKey, g.frame)
           .setOrigin(0.5)
           // Shrinking very slightly as it fades, so the chain reads as
           // receding rather than as a row of identical cut-outs.
@@ -14631,8 +14681,7 @@ export class PlayScene extends Phaser.Scene {
           .setDepth(this.playerDepth + PLAYER_TRAIL)
           .setFlipX(g.flipX)
           .setAlpha(0.42 * (1 - k) ** 1.4)
-          .setTint(0x9ad8ff),
-      );
+          .setTint(0x9ad8ff);
     }
 
 
@@ -14656,7 +14705,7 @@ export class PlayScene extends Phaser.Scene {
     }
 
     if (this.atlas.has("shadow_player")) {
-      const shadow = this.add.image(
+      const shadow = this.sprites.image(
         w.player.x,
         w.player.y - BODY_LIFT + shadowOffset(this.atlas, frame(spin.name), "shadow_player"),
         this.textureKey, "shadow_player",
@@ -14665,7 +14714,6 @@ export class PlayScene extends Phaser.Scene {
         .setScale(shadowScale(this.atlas, frame(spin.name), "shadow_player") * (1 - lift / 60), (1 / ART_SCALE) * (1 - lift / 60))
         .setDepth(3)
         .setAlpha(0.5 - lift / 80);
-      this.sprites.add(shadow);
     }
 
     /*
@@ -14831,7 +14879,7 @@ export class PlayScene extends Phaser.Scene {
       }
     } else {
       const held = this.attachToBody(swordX, swordY);
-      const sword = this.add.image(
+      const sword = this.sprites.image(
         held.x,
         held.y,
         this.textureKey,
@@ -14861,7 +14909,6 @@ export class PlayScene extends Phaser.Scene {
       else if (w.player.invulnMs > 0) sword.setAlpha((w.tick >> 2) & 1 ? 0.35 : 1);
       // Charged: the blade goes white and swells, the way ALttP's does.
       if (spinWindup) { sword.setTintFill((w.tick >> 1) & 1 ? 0xffffff : 0xffe9a8); sword.setScale((1 / ART_SCALE) * 1.15); }
-      this.sprites.add(sword);
     }
 
     // A dear spell kicks the body back along its line for a few frames.
@@ -14881,7 +14928,7 @@ export class PlayScene extends Phaser.Scene {
      * kicks up at the heels.
      */
     const lean = this.stepMoveFeel();
-    const player = this.add.image(w.player.x + kickX, w.player.y - BODY_LIFT + kickY + LEAN_PIVOT_Y, this.textureKey, frame(spin.name))
+    const player = this.sprites.image(w.player.x + kickX, w.player.y - BODY_LIFT + kickY + LEAN_PIVOT_Y, this.textureKey, frame(spin.name))
       .setOrigin(0.5, 0.5 + LEAN_PIVOT_Y / (FRAME_PX / ART_SCALE)).setScale(1 / ART_SCALE).setDepth(this.playerDepth).setFlipX(spin.flipX)
       .setRotation(lean);
     /*
@@ -14906,7 +14953,6 @@ export class PlayScene extends Phaser.Scene {
     else if (w.player.poisonMs > 0) player.setTint(0xa8f0a8);
     // Guarding: the body a shade paler in the guard's light, steady rather than blinking.
     else if (w.player.stance) player.setTint(0xdcfff6);
-    this.sprites.add(player);
     this.drawPlayerStatus();
     this.drawCasterStates();
     /*
@@ -14926,10 +14972,9 @@ export class PlayScene extends Phaser.Scene {
     this.handAt = this.attachToBody(w.player.x + flameOffset.x, w.player.y + flameOffset.y);
     if (w.player.mana > 0 && flameAlpha > 0.02) {
       const fp = this.attachToBody(w.player.x + flameOffset.x, w.player.y + flameOffset.y);
-      const flame = this.add.image(fp.x, fp.y, this.textureKey, frame(flameName))
+      const flame = this.sprites.image(fp.x, fp.y, this.textureKey, frame(flameName))
         .setOrigin(0.5).setScale(FLAME_SCALE * this.flare())
         .setDepth(this.playerDepth + PLAYER_FLAME).setAlpha(flameAlpha);
-      this.sprites.add(flame);
     }
 
     this.drawPops(this.renderingDemo && this.demo ? this.demo.pops : this.pops);
@@ -14947,9 +14992,7 @@ export class PlayScene extends Phaser.Scene {
       if (!q.alive) continue;
       const t = q.lifeMs / q.maxLifeMs;
       const size = q.kind === "kill" ? 4 : 3;
-      this.sprites.add(
-        this.add.rectangle(q.x, q.y, size, size, 0xe8e3d8, t).setDepth(9),
-      );
+      this.sprites.rectangle(q.x, q.y, size, size, 0xe8e3d8, t).setDepth(9);
     }
 
     /*
@@ -14973,14 +15016,13 @@ export class PlayScene extends Phaser.Scene {
        */
       const frameName = impactFrame(t);
       if (hit.slashAngle !== undefined && this.atlas.has(frameName)) {
-        const impact = this.add.image(
+        const impact = this.sprites.image(
           hit.x, hit.y, this.textureKey, frameName,
         ).setOrigin(0.5)
           .setRotation(hit.slashAngle)
           .setScale((1 / ART_SCALE) * hit.scale)
           .setAlpha(1 - t)
           .setDepth(9.5);
-        this.sprites.add(impact);
         continue;
       }
       const r = hit.scale * (3 + 15 * t);
@@ -15005,7 +15047,7 @@ export class PlayScene extends Phaser.Scene {
     // Soft backing behind the body's gauges, so they read over stone.
     // Held off the frame by the same margin as the rest of the HUD, and
     // opaque enough to be a panel rather than a smudge over the stones.
-    const topBacking = this.add.rectangle(
+    const topBacking = this.sprites.rectangle(
       HUD_INSET - 10, HUD_INSET - 8, HUD_BAR_X + HUD_BAR_W + 18 - HUD_INSET, 36, 0x0d0b1f, 0.8,
     ).setOrigin(0).setStrokeStyle(1, 0x2a2750, 0.8).setDepth(99);
 
@@ -15032,17 +15074,17 @@ export class PlayScene extends Phaser.Scene {
       const BX = UI_W / 2 - BW / 2;
       // At the bottom, above the spell row, so the top row is the player's.
       const BY = UI_H - 52;
-      this.sprites.add(this.add.rectangle(BX - 2, BY, BW + 4, 11, 0x0d0b1f, 0.85).setOrigin(0, 0.5).setDepth(100));
-      this.sprites.add(this.add.rectangle(BX, BY, BW, 7, 0x2a1418, 1).setOrigin(0, 0.5).setDepth(100.5));
+      this.sprites.rectangle(BX - 2, BY, BW + 4, 11, 0x0d0b1f, 0.85).setOrigin(0, 0.5).setDepth(100);
+      this.sprites.rectangle(BX, BY, BW, 7, 0x2a1418, 1).setOrigin(0, 0.5).setDepth(100.5);
       const frac = Math.max(0, boss.hp / Math.max(1, boss.maxHp));
-      this.sprites.add(this.add.rectangle(BX, BY, BW * frac, 7, boss.phase >= 3 ? 0xff5a3a : 0xd83a3a, 1).setOrigin(0, 0.5).setDepth(101));
+      this.sprites.rectangle(BX, BY, BW * frac, 7, boss.phase >= 3 ? 0xff5a3a : 0xd83a3a, 1).setOrigin(0, 0.5).setDepth(101);
       if (boss.maxArmour > 0) {
-        this.sprites.add(this.add.rectangle(BX, BY - 7, BW, 3, 0x0f1c3a, 0.9).setOrigin(0, 0.5).setDepth(100.8));
-        this.sprites.add(this.add.rectangle(BX, BY - 7, BW * Math.max(0, boss.armour / boss.maxArmour), 3, SHIELD_BLUE, boss.armour > 0 ? 1 : 0.15).setOrigin(0, 0.5).setDepth(101));
+        this.sprites.rectangle(BX, BY - 7, BW, 3, 0x0f1c3a, 0.9).setOrigin(0, 0.5).setDepth(100.8);
+        this.sprites.rectangle(BX, BY - 7, BW * Math.max(0, boss.armour / boss.maxArmour), 3, SHIELD_BLUE, boss.armour > 0 ? 1 : 0.15).setOrigin(0, 0.5).setDepth(101);
         this.sprites.add(shieldMark(this, this.atlas, this.uiTextureKey, BX - 7, BY - 7, 8).setDepth(102));
       }
       for (const mark of [0.6, 0.3])
-        this.sprites.add(this.add.rectangle(BX + BW * mark, BY, 1, 9, 0xffe9a8, 0.8).setOrigin(0.5).setDepth(102));
+        this.sprites.rectangle(BX + BW * mark, BY, 1, 9, 0xffe9a8, 0.8).setOrigin(0.5).setDepth(102);
       this.ftext("boss:title", BX, BY - 11, t("hud.bossTitle"), {
         fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(7, ZOOM) * ZOOM)}px`, color: "#ffe9a8",
       }).setScale(1 / ZOOM).setOrigin(0, 0.5).setDepth(102);
@@ -15053,18 +15095,15 @@ export class PlayScene extends Phaser.Scene {
     }
 
     const topFade = this.fadeMark();
-    this.sprites.add(topBacking);
     const hpMax = (MAX_HEARTS + w.player.mods.maxHearts) * HP_PER_HEART;
     const hp = shownHp(w.player.hearts);
     const HP_Y = HUD_TOP_Y;
-    this.sprites.add(this.add.rectangle(HUD_BAR_X, HP_Y, HUD_BAR_W, 7, 0x2a1418, 1).setOrigin(0, 0.5).setDepth(100));
-    this.sprites.add(
-      this.add.rectangle(HUD_BAR_X, HP_Y, HUD_BAR_W * (hp / Math.max(1, hpMax)), 7,
-        w.player.hearts <= 1 ? 0xff6a5a : 0xd83a3a, 1).setOrigin(0, 0.5).setDepth(101),
-    );
+    this.sprites.rectangle(HUD_BAR_X, HP_Y, HUD_BAR_W, 7, 0x2a1418, 1).setOrigin(0, 0.5).setDepth(100);
+    this.sprites.rectangle(HUD_BAR_X, HP_Y, HUD_BAR_W * (hp / Math.max(1, hpMax)), 7,
+        w.player.hearts <= 1 ? 0xff6a5a : 0xd83a3a, 1).setOrigin(0, 0.5).setDepth(101);
     if (this.atlas.has("ui_heart_full"))
-      this.sprites.add(this.add.image(HUD_BAR_X - 2, HP_Y, this.uiTextureKey, "ui_heart_full")
-        .setOrigin(1, 0.5).setDisplaySize(12, 12).setDepth(101));
+      this.sprites.image(HUD_BAR_X - 2, HP_Y, this.uiTextureKey, "ui_heart_full")
+        .setOrigin(1, 0.5).setDisplaySize(12, 12).setDepth(101);
     /*
      * The number on the bar, outlined.
      *
@@ -15109,13 +15148,9 @@ export class PlayScene extends Phaser.Scene {
     const BAR_W = HUD_BAR_W;
     const PIPS_X = BAR_X + BAR_W + 8;
     const filled = w.player.mana / w.staff.mana_max;
-    this.sprites.add(
-      this.add.rectangle(BAR_X, BAR_Y, BAR_W, 7, 0x1a1f3d, 1).setOrigin(0, 0.5).setDepth(100),
-    );
-    this.sprites.add(
-      this.add.rectangle(BAR_X, BAR_Y, BAR_W * filled, 7, 0x6fa8ff, 1)
-        .setOrigin(0, 0.5).setDepth(101),
-    );
+    this.sprites.rectangle(BAR_X, BAR_Y, BAR_W, 7, 0x1a1f3d, 1).setOrigin(0, 0.5).setDepth(100);
+    this.sprites.rectangle(BAR_X, BAR_Y, BAR_W * filled, 7, 0x6fa8ff, 1)
+        .setOrigin(0, 0.5).setDepth(101);
     /*
      * **What the next cast costs, marked on the bar.**
      *
@@ -15142,8 +15177,8 @@ export class PlayScene extends Phaser.Scene {
       const tick = BAR_X + BAR_W * (lastCost / w.staff.mana_max);
       const short = w.player.mana < lastCost;
       if (shortCue > 0)
-        this.sprites.add(this.add.rectangle(BAR_X + BAR_W * filled, BAR_Y, Math.max(1, tick - (BAR_X + BAR_W * filled)), 7, 0xff8877, 0.55 * shortCue)
-          .setOrigin(0, 0.5).setDepth(101.4));
+        this.sprites.rectangle(BAR_X + BAR_W * filled, BAR_Y, Math.max(1, tick - (BAR_X + BAR_W * filled)), 7, 0xff8877, 0.55 * shortCue)
+          .setOrigin(0, 0.5).setDepth(101.4);
       /*
        * Two-tone, because the mark crosses from the bar's light blue fill to
        * its dark track as the bar drains: a gold hairline alone disappeared
@@ -15151,21 +15186,21 @@ export class PlayScene extends Phaser.Scene {
        * number (depth 102), because a spell costing half the pool puts the
        * mark exactly where the number is and the number has to win.
        */
-      this.sprites.add(this.add.rectangle(tick, BAR_Y, 3, 11, 0x0d0b1f, 0.85).setDepth(101.7));
-      this.sprites.add(this.add.rectangle(tick, BAR_Y, 1, 11,
-        short ? 0xff9a88 : 0xffe9a8, 1).setDepth(101.75));
+      this.sprites.rectangle(tick, BAR_Y, 3, 11, 0x0d0b1f, 0.85).setDepth(101.7);
+      this.sprites.rectangle(tick, BAR_Y, 1, 11,
+        short ? 0xff9a88 : 0xffe9a8, 1).setDepth(101.75);
     }
     if (this.atlas.has("ui_mana_pip"))
       // The same size as the heart beside the bar above, so the two gauges
       // read as a pair; the pip's own scale was half again as tall.
-      this.sprites.add(this.add.image(BAR_X - 2, BAR_Y, this.uiTextureKey, "ui_mana_pip")
+      this.sprites.image(BAR_X - 2, BAR_Y, this.uiTextureKey, "ui_mana_pip")
         .setOrigin(1, 0.5).setDisplaySize(12, 12).setDepth(101)
         // The pip brightens with the refusal, so the gauge as a whole is seen
         // to answer rather than one band of it changing colour.
-        .setTint(shortCue > 0 ? 0xffb0a0 : 0x8fdcff));
+        .setTint(shortCue > 0 ? 0xffb0a0 : 0x8fdcff);
     if (shortCue > 0)
-      this.sprites.add(this.add.rectangle(BAR_X, BAR_Y, BAR_W, 7, 0, 0)
-        .setOrigin(0, 0.5).setStrokeStyle(1, 0xffb0a0, shortCue).setDepth(101.6));
+      this.sprites.rectangle(BAR_X, BAR_Y, BAR_W, 7, 0, 0)
+        .setOrigin(0, 0.5).setStrokeStyle(1, 0xffb0a0, shortCue).setDepth(101.6);
     // The number, as on the health bar: what the player is adding costs
     // against, outlined for the same reason the health number is.
     this.ftext("hud:mana", BAR_X + BAR_W / 2, BAR_Y, `${Math.floor(w.player.mana)}/${w.staff.mana_max}`, {
@@ -15194,11 +15229,11 @@ export class PlayScene extends Phaser.Scene {
     const fill = Math.max(0, Math.min(1, xp.into / Math.max(1, xp.toNext)));
     // Where the bar stood before the flash, so the lit band is what was gained.
     const was = Math.max(0, Math.min(fill, (xp.into - this.xpFlash) / Math.max(1, xp.toNext)));
-    this.sprites.add(this.add.rectangle(HUD_BAR_X, XP_Y, HUD_BAR_W, 4, 0x27351f, 1).setOrigin(0, 0.5).setDepth(100));
-    this.sprites.add(this.add.rectangle(HUD_BAR_X, XP_Y, HUD_BAR_W * was, 4, 0x6fc46a, 1).setOrigin(0, 0.5).setDepth(101));
+    this.sprites.rectangle(HUD_BAR_X, XP_Y, HUD_BAR_W, 4, 0x27351f, 1).setOrigin(0, 0.5).setDepth(100);
+    this.sprites.rectangle(HUD_BAR_X, XP_Y, HUD_BAR_W * was, 4, 0x6fc46a, 1).setOrigin(0, 0.5).setDepth(101);
     if (fill > was)
-      this.sprites.add(this.add.rectangle(HUD_BAR_X + HUD_BAR_W * was, XP_Y, HUD_BAR_W * (fill - was), 4, 0xe8ffd8, 1)
-        .setOrigin(0, 0.5).setDepth(101.2).setAlpha(0.35 + 0.65 * (this.xpFlashMs / XP_FLASH_MS)));
+      this.sprites.rectangle(HUD_BAR_X + HUD_BAR_W * was, XP_Y, HUD_BAR_W * (fill - was), 4, 0xe8ffd8, 1)
+        .setOrigin(0, 0.5).setDepth(101.2).setAlpha(0.35 + 0.65 * (this.xpFlashMs / XP_FLASH_MS));
     /*
      * The level, in the column the heart and the mana pip stand in. Left-aligned
      * inside the plate rather than right-aligned to the bar: "Lv 10" is wider
@@ -15250,11 +15285,11 @@ export class PlayScene extends Phaser.Scene {
       fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(9, ZOOM) * ZOOM)}px`, color: "#ffd45e",
     }).setScale(1 / ZOOM).setOrigin(1, 0.5).setDepth(102);
     const goldX = UI_W - HUD_INSET - 4 - goldText.displayWidth - 8;
-    this.sprites.add(this.add.rectangle(goldX - 8, HUD_TOP_Y, UI_W - HUD_INSET + 2 - (goldX - 8), 16, 0x0d0b1f, 0.8)
-      .setOrigin(0, 0.5).setStrokeStyle(1, 0x2a2750, 0.8).setDepth(99));
+    this.sprites.rectangle(goldX - 8, HUD_TOP_Y, UI_W - HUD_INSET + 2 - (goldX - 8), 16, 0x0d0b1f, 0.8)
+      .setOrigin(0, 0.5).setStrokeStyle(1, 0x2a2750, 0.8).setDepth(99);
     if (this.atlas.has("pickup_coin_0"))
-      this.sprites.add(this.add.image(goldX, HUD_TOP_Y, this.uiTextureKey, "pickup_coin_0")
-        .setOrigin(0.5).setDisplaySize(11, 11).setDepth(102));
+      this.sprites.image(goldX, HUD_TOP_Y, this.uiTextureKey, "pickup_coin_0")
+        .setOrigin(0.5).setDisplaySize(11, 11).setDepth(102);
     this.fadeIfCovering(goldFade, goldX - 8, HUD_TOP_Y - 8, UI_W - HUD_INSET + 2 - (goldX - 8), 16);
 
     /*
@@ -15659,7 +15694,7 @@ function drawEnemy(
   e: Enemy,
   textureKey: string,
   atlas: RecolourableAtlas,
-  group: Phaser.GameObjects.Group,
+  group: FrameLayer,
   /** A kept text by key (the scene's `ftext`), so a mark over a head is not rebuilt each frame. */
   label?: (key: string, x: number, y: number, text: string, style: Phaser.Types.GameObjects.Text.TextStyle) => Phaser.GameObjects.Text,
   /** The subspecies palette swaps and marks (doc 019), absent on a plain body. */
@@ -15679,9 +15714,14 @@ function drawEnemy(
    * `drawExpansion`). What cannot be hit must not be seen as a target.
    */
   if ((e.archetype === "delver" || e.archetype === "burrower") && e.delve === "under") return;
+  // Only what the pose reads, named: spreading the whole body copied every
+  // field of every enemy each frame, the largest allocation in the draw.
   const chosen = enemyFrame(
     {
-      ...e, roused,
+      awake: e.awake, brakeMs: e.brakeMs, radius: e.radius, speed: e.speed, attack: e.attack, attackMs: e.attackMs,
+      hitFlashMs: e.hitFlashMs, telegraphMs: e.telegraphMs, vx: e.vx, vy: e.vy, travelled: e.travelled,
+      facing: e.facing, idleAction: e.idleAction,
+      roused,
       sleeping: !e.awake && e.idleRole === "sleeper",
       recoversBraced: ENEMIES[e.archetype].melee === "charge",
       flinches: e.archetype !== "boss",
@@ -15744,26 +15784,24 @@ function drawEnemy(
   const airK = Math.min(1, Math.abs(lift) / 84);
   const shadowName = `shadow_${ENEMY_FRAME[e.archetype].replace("enemy_", "")}`;
   if (atlas.has(shadowName)) {
-    const shadow = scene.add.image(
+    const shadow = group.image(
       e.x, e.y + (e.archetype === "boss" ? bossShadowOffset(atlas, shadowName) + bossEntranceLift(e) : shadowOffset(atlas, name, shadowName)), textureKey, shadowName,
     ).setOrigin(0.5)
       .setScale(shadowScale(atlas, name, shadowName) * (1 - 0.45 * airK), (1 - 0.45 * airK) / ART_SCALE)
       .setDepth(3)
       .setAlpha((e.awake ? 0.5 : 0.34) * (1 - 0.25 * airK));
-    group.add(shadow);
   } else {
-    const shadow = scene.add.ellipse(
+    const shadow = group.ellipse(
       e.x, e.y + e.radius * 0.66,
       e.radius * 1.55 * (1 - 0.45 * airK), e.radius * 0.62 * (1 - 0.45 * airK), 0,
     );
     shadow.setFillStyle(0x0d0b1f, (e.awake ? 0.4 : 0.28) * (1 - 0.25 * airK));
     shadow.setDepth(3);
-    group.add(shadow);
   }
 
 
 
-  const img = scene.add.image(
+  const img = group.image(
     e.x + (e.archetype === "boss" ? bossBodyShift(atlas, name, flipX) : 0),
     e.y + bob - (e.archetype === "boss" ? bossRiseFor(atlas, name) - bossEntranceLift(e) : 0), textureKey, name,
   )
@@ -15810,14 +15848,13 @@ function drawEnemy(
     const aim = e.awake ? seenPlayer(w, e) : { x: e.x + 1, y: e.y };
     const a = Math.atan2(aim.y - e.y, aim.x - e.x);
     if (atlas.has("weapon_enemy_sentinel_barrel")) {
-      const barrel = scene.add.image(e.x, e.y - 3, textureKey, "weapon_enemy_sentinel_barrel")
+      const barrel = group.image(e.x, e.y - 3, textureKey, "weapon_enemy_sentinel_barrel")
         .setOrigin(0.2, 0.5).setRotation(a).setScale(1 / ART_SCALE)
         // Just inside the body band, so it stays over its own body and still
         // sorts against the others by where that body is standing.
         .setDepth(bodyDepth(e.y + e.radius, e.id) + 0.002);
       // The barrel is part of the body: it flashes with it when struck.
       if (e.hitFlashMs > 0) barrel.setTintFill(HIT_FLASH_FILL);
-      group.add(barrel);
     }
   }
   /*
@@ -15846,8 +15883,8 @@ function drawEnemy(
     if (e.chillBuild > 0) bars.push([e.chillBuild, e.frozenMs > 0 ? 0xd8f4ff : 0x6fa8d8]);
     bars.forEach(([fill, colour], i) => {
       const y = gy - i * 3.5;
-      group.add(scene.add.rectangle(e.x, y, 16, 2.2, 0x0d0b1f, 0.8).setOrigin(0.5).setDepth(9.6));
-      group.add(scene.add.rectangle(e.x - 8, y, 16 * Math.min(1, fill), 2.2, colour, 1).setOrigin(0, 0.5).setDepth(9.7));
+      group.rectangle(e.x, y, 16, 2.2, 0x0d0b1f, 0.8).setOrigin(0.5).setDepth(9.6);
+      group.rectangle(e.x - 8, y, 16 * Math.min(1, fill), 2.2, colour, 1).setOrigin(0, 0.5).setDepth(9.7);
     });
   }
   if (e.hp > 0 && e.spawnFadeMs <= 0) {
@@ -15858,15 +15895,14 @@ function drawEnemy(
       img.setTint(0x9fe89f);
       for (let i = 0; i < 2; i++) {
         const u = ((w.tick / 40) + i / 2 + e.id * 0.3) % 1;
-        const bubble = scene.add.circle(e.x - 4 + i * 8, e.y - e.radius - u * 12, 1.2 + (1 - u), 0x8fe08f, 0.7 * (1 - u))
+        const bubble = group.circle(e.x - 4 + i * 8, e.y - e.radius - u * 12, 1.2 + (1 - u), 0x8fe08f, 0.7 * (1 - u))
           .setDepth(6.5);
-        group.add(bubble);
       }
     } else if (e.frozenMs > 0) {
       // Frozen: pale and still, with a glint.
       img.setTint(0xcfefff);
       if ((w.tick >> 3) % 6 === 0)
-        group.add(scene.add.circle(e.x + e.radius * 0.4, e.y - e.radius * 0.5, 1.6, 0xffffff, 0.9).setDepth(6.6));
+        group.circle(e.x + e.radius * 0.4, e.y - e.radius * 0.5, 1.6, 0xffffff, 0.9).setDepth(6.6);
     } else if (e.slowMs > 0) {
       img.setTint(0x9ad8ff);
     }
@@ -15884,10 +15920,9 @@ function drawEnemy(
    */
   if (e.affixes.length > 0 && e.hp > 0) {
     const pulse = 0.85 + 0.15 * Math.sin(w.tick / 7 + e.id);
-    const ring = scene.add.circle(e.x, e.y + e.radius * 0.7, e.radius * 1.35 * pulse, 0xff8a5a, 0.22)
+    const ring = group.circle(e.x, e.y + e.radius * 0.7, e.radius * 1.35 * pulse, 0xff8a5a, 0.22)
       .setDepth(3.5).setBlendMode(Phaser.BlendModes.ADD);
     ring.setStrokeStyle(1.2, 0xffb37a, 0.55);
-    group.add(ring);
   }
 
   // Leaning into travel costs nothing and reads as weight — from the velocity
@@ -15920,7 +15955,6 @@ function drawEnemy(
     img.setAlpha(0.92);
     img.setScale(base);
     if (e.hitFlashMs > 0) img.setTintFill(HIT_FLASH_FILL);
-    group.add(img);
     drawSubspeciesMark(scene, group, textureKey, atlas, e, img, name, flipX);
     return;
   }
@@ -15934,10 +15968,9 @@ function drawEnemy(
   if (e.attack === "windup") {
     // Against this body's own windup, which its tempo and jitter set (doc 005).
     const t = 1 - e.attackMs / Math.max(1, e.windupMs);
-    const ring = scene.add.circle(e.x, e.y, e.radius + 22 * (1 - t), 0, 0);
+    const ring = group.circle(e.x, e.y, e.radius + 22 * (1 - t), 0, 0);
     ring.setStrokeStyle(2, 0xff6a6a, 0.85);
     ring.setDepth(5);
-    group.add(ring);
   }
 
   /*
@@ -15977,20 +16010,17 @@ function drawEnemy(
      */
     const W = Math.max(16, e.radius * 2.2);
     const y = e.y + bob - overheadPx(e);
-    const back = scene.add.rectangle(e.x - W / 2, y, W, 3, 0x0f1c3a, 0.9)
+    const back = group.rectangle(e.x - W / 2, y, W, 3, 0x0f1c3a, 0.9)
       .setOrigin(0, 0.5).setDepth(9);
-    const fill = scene.add.rectangle(
+    const fill = group.rectangle(
       e.x - W / 2, y, W * (e.armour / Math.max(1, e.maxArmour)), 3, SHIELD_BLUE, 1,
     ).setOrigin(0, 0.5).setDepth(10);
-    group.add(back);
-    group.add(fill);
     group.add(shieldMark(scene, atlas, textureKey, e.x - W / 2 - 4, y, 6));
   } else if (e.armourBreakMs > 0) {
     const t = e.armourBreakMs / ARMOUR_BREAK_MS;
-    const burst = scene.add.circle(e.x, e.y + bob, e.radius + 3 + 18 * (1 - t), 0, 0);
+    const burst = group.circle(e.x, e.y + bob, e.radius + 3 + 18 * (1 - t), 0, 0);
     burst.setStrokeStyle(2, SHIELD_BLUE, t);
     burst.setDepth(8);
-    group.add(burst);
   }
 
   /*
@@ -16002,8 +16032,8 @@ function drawEnemy(
     // The delivered alert mark, popping up as it notices.
     const pop = Math.min(1, (ALERT_MS - e.alertMs) / 90);
     if (atlas.has("icon_status_alert")) {
-      group.add(scene.add.image(e.x, e.y - e.radius - 14 - (1 - pop) * 4, textureKey, "icon_status_alert")
-        .setOrigin(0.5).setScale((0.9 * (0.6 + 0.4 * pop)) / TUNED).setDepth(8));
+      group.image(e.x, e.y - e.radius - 14 - (1 - pop) * 4, textureKey, "icon_status_alert")
+        .setOrigin(0.5).setScale((0.9 * (0.6 + 0.4 * pop)) / TUNED).setDepth(8);
     } else if (label) {
       label(`alert:${e.id}`, e.x, e.y - e.radius - 12, "!", {
         fontFamily: fontFamily(), fontSize: "12px", color: "#ffe9a8",
@@ -16024,8 +16054,8 @@ function drawEnemy(
       : e.poisonMs > 0 ? "poison"
       : e.chillBuild > 0.3 ? "chill" : null;
     if (status && atlas.has(`icon_status_${status}`))
-      group.add(scene.add.image(e.x + e.radius * 0.9, e.y - e.radius - 8, textureKey, `icon_status_${status}`)
-        .setOrigin(0.5).setScale(0.62 / TUNED).setDepth(9.65));
+      group.image(e.x + e.radius * 0.9, e.y - e.radius - 8, textureKey, `icon_status_${status}`)
+        .setOrigin(0.5).setScale(0.62 / TUNED).setDepth(9.65);
   }
   /*
    * Asleep: a small "z" drifting up, so a sleeper — the body the player can
@@ -16053,13 +16083,12 @@ function drawEnemy(
       const spread = (i - 1) * 0.5;
       const a = Math.atan2(-e.lungeY, -e.lungeX) + spread;
       const d = e.radius * (0.7 + (1 - t) * 1.4);
-      const puff = scene.add.circle(
+      const puff = group.circle(
         e.x + Math.cos(a) * d, e.y + Math.sin(a) * d + e.radius * 0.4,
         2 + (1 - t) * 3.5, 0,
       );
       puff.setFillStyle(0xb9b9c6, 0.45 * t);
       puff.setDepth(4);
-      group.add(puff);
     }
   }
 
@@ -16127,20 +16156,18 @@ function drawEnemy(
     for (let k = 0; k < 2; k++) {
       const phase = ((t * 3 + k * 0.5) % 1);
       const r = e.radius * (0.5 + 2.6 * phase);
-      const ring = scene.add.circle(e.x, e.y + e.radius * 0.5, r, 0, 0);
+      const ring = group.circle(e.x, e.y + e.radius * 0.5, r, 0, 0);
       ring.setStrokeStyle(2.4 * (1 - phase * 0.5), 0xff5a4a, 0.95 * (1 - phase) * (1 - t * 0.5)).setDepth(2.5)
         .setScale(1, 0.55);
-      group.add(ring);
     }
 
     // The ground opening: a dark hole that widens and then closes around it.
     const open = Math.min(1, t * 2);
-    const hole = scene.add.ellipse(
+    const hole = group.ellipse(
       e.x, e.y + e.radius * 0.5,
       e.radius * 2.4 * open, e.radius * 0.95 * open, 0,
     );
     hole.setFillStyle(0x120d22, 0.72 * (1 - t * 0.35)).setDepth(2);
-    group.add(hole);
 
     // Climbing out. It is clipped by nothing, so the rise is sold by the body
     // starting low and by the hole sitting over its feet.
@@ -16158,18 +16185,16 @@ function drawEnemy(
 
     if (land > 0) {
       // The landing: one ring off the floor, and grit.
-      const ring = scene.add.circle(e.x, e.y + e.radius * 0.5, e.radius * (1 + land * 1.6), 0, 0);
+      const ring = group.circle(e.x, e.y + e.radius * 0.5, e.radius * (1 + land * 1.6), 0, 0);
       ring.setStrokeStyle(2, 0x9a8f7a, 0.55 * (1 - land)).setDepth(3);
-      group.add(ring);
       for (let i = 0; i < 4; i++) {
         const a = (i / 4) * Math.PI * 2 + e.id;
         const d = e.radius * (0.6 + land * 1.5);
-        const grit = scene.add.circle(
+        const grit = group.circle(
           e.x + Math.cos(a) * d, e.y + e.radius * 0.5 + Math.sin(a) * d * 0.4,
           1.8 + (1 - land) * 1.6, 0,
         );
         grit.setFillStyle(0xb9b9c6, 0.5 * (1 - land)).setDepth(4);
-        group.add(grit);
       }
     }
   } else if ((e.meleeKind === "bristle" || e.meleeKind === "lance") && e.attack === "windup") {
@@ -16229,16 +16254,14 @@ function drawEnemy(
     const beat = (w.tick % 24) / 24;
     for (const [k, a] of [[0, 0.55], [0.5, 0.35]] as const) {
       const t = (beat + k) % 1;
-      const glow = scene.add.image(img.x, img.y, textureKey, name)
+      const glow = group.image(img.x, img.y, textureKey, name)
         .setOrigin(img.originX, img.originY).setFlipX(img.flipX).setRotation(img.rotation)
         .setScale(img.scaleX * (1.02 + 0.08 * t), img.scaleY * (1.02 + 0.08 * t))
         .setTintFill(tint).setBlendMode(Phaser.BlendModes.ADD).setAlpha(a * (1 - t))
         .setDepth(img.depth - 0.0005);
-      group.add(glow);
     }
   }
 
-  group.add(img);
   /*
    * **The king's flash is a wash, not a fill.** He is struck far more often
    * than any body and is the largest thing on the screen, so filling him
@@ -16249,11 +16272,11 @@ function drawEnemy(
    */
   if (e.archetype === "boss" && e.hitFlashMs > 0) {
     const fade = Math.min(1, e.hitFlashMs / HIT_FLASH_MS);
-    group.add(scene.add.image(img.x, img.y, textureKey, name)
+    group.image(img.x, img.y, textureKey, name)
       .setOrigin(img.originX, img.originY).setFlipX(img.flipX).setRotation(img.rotation)
       .setScale(img.scaleX, img.scaleY)
       .setTintFill(HIT_FLASH_FILL).setBlendMode(Phaser.BlendModes.ADD).setAlpha(BOSS_FLASH_ALPHA * fade)
-      .setDepth(img.depth + 0.0005));
+      .setDepth(img.depth + 0.0005);
   }
   // The king's frames are to carry his sword (doc 020, art order B8: his cuts go to his sides, so a
   // drawn sword can match them). Until the atlas packs those frames, the sword is placed here.
@@ -16285,17 +16308,15 @@ function drawEnemy(
     // Held along the cut for the first half of the recovery; back at guard, with the frame, for the second.
     else if (e.attack === "recover" && e.meleeKind && e.meleeKind !== "charge" && bossRecovering(e) < 0.5)
       blade = e.swing.angle;
-    const sword = scene.add.image(gx, gy, textureKey, "weapon_boss_sword")
+    const sword = group.image(gx, gy, textureKey, "weapon_boss_sword")
       .setOrigin(.5, 158 / 192)
       .setScale(1 / ART_SCALE)
       .setRotation(blade + Math.PI / 2)
       .setDepth(img.depth + (Math.sin(blade) < -.3 ? -.002 : .002));
-    group.add(sword);
     const fist = `weapon_boss_fist_p${Math.min(3, Math.max(1, e.phase))}`;
     if (atlas.has(fist)) {
-      const wrap = scene.add.image(gx, gy, textureKey, fist)
+      const wrap = group.image(gx, gy, textureKey, fist)
         .setScale(1 / ART_SCALE).setDepth(img.depth + .004);
-      group.add(wrap);
     }
   }
   drawSubspeciesMark(scene, group, textureKey, atlas, e, img, name, flipX);
@@ -16327,7 +16348,7 @@ function drawEnemy(
  */
 function drawSubspeciesMark(
   scene: Phaser.Scene,
-  group: Phaser.GameObjects.Group,
+  group: FrameLayer,
   textureKey: string,
   atlas: RecolourableAtlas,
   e: Enemy,
@@ -16348,7 +16369,7 @@ function drawSubspeciesMark(
   const ay = (at[1] - rect.h / 2) * img.scaleY;
   const cos = Math.cos(img.rotation), sin = Math.sin(img.rotation);
 
-  const decal = scene.add.image(
+  const decal = group.image(
     img.x + ax * cos - ay * sin,
     img.y + ax * sin + ay * cos,
     textureKey, mark,
@@ -16362,7 +16383,6 @@ function drawSubspeciesMark(
     // still sorts against other bodies by where this one is standing.
     .setDepth(img.depth + 0.004);
   if (e.hitFlashMs > 0) decal.setTintFill(HIT_FLASH_FILL);
-  group.add(decal);
 }
 
 /** Bodies with no feet, which sway on a clock instead of stepping. */
@@ -17256,6 +17276,37 @@ function DEMO_SPELL(): string | null {
 }
 
 /** A floating damage number, in the room or in the style screen's demo. */
+/** A text kept across frames by key; see `textCache`. `from` is the style literal it was last asked for with. */
+interface KeptText {
+  t: Phaser.GameObjects.Text; used: boolean; style: string; from: Phaser.Types.GameObjects.Text.TextStyle; idle: number;
+}
+
+/** How many finished damage-number texts are kept for reuse. */
+const SPARE_TEXTS_MAX = 48;
+
+/** Whether two text styles say the same thing, one level of nesting deep (`shadow`, `wordWrap`), without allocating. */
+function sameStyle(a: object, b: object): boolean {
+  if (a === b) return true;
+  const ra = a as Record<string, unknown>, rb = b as Record<string, unknown>;
+  let n = 0;
+  for (const k in rb) {
+    n++;
+    const x = ra[k], y = rb[k];
+    if (x === y) continue;
+    if (!x || !y || typeof x !== "object" || typeof y !== "object" || !sameFlat(x, y)) return false;
+  }
+  for (const _ in ra) n--;
+  return n === 0;
+}
+
+function sameFlat(a: object, b: object): boolean {
+  const ra = a as Record<string, unknown>, rb = b as Record<string, unknown>;
+  let n = 0;
+  for (const k in rb) { n++; if (ra[k] !== rb[k]) return false; }
+  for (const _ in ra) n--;
+  return n === 0;
+}
+
 interface FloatingNumber {
   id: number; x: number; y: number; text: string; colour: string; ms: number; drift: number;
   /** A merged number's hits: their total, how many, the first one's amount, whether all were that amount, and its mark. */
