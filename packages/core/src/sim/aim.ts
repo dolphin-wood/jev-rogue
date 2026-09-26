@@ -14,6 +14,8 @@
  * keep doing the aiming, and only the last degree or two is given back.
  */
 import type { World } from "./types.ts";
+import { TILE_PX } from "../types.ts";
+import { hasLineOfSight } from "./collide.ts";
 
 /** Half-angle of the assist cone. Wider than this and the game aims for you. */
 export const ASSIST_CONE_DEG = 14;
@@ -36,6 +38,8 @@ export const ASSIST_RANGE = 460;
  */
 export const SEEK_CONE_DEG = 52;
 export const SEEK_RANGE = 520;
+/** Added to a hidden body's score: more than any angle and distance can make. */
+const HIDDEN_LAST = 100;
 
 /**
  * The enemy a keyed spell will curve toward, or null.
@@ -57,12 +61,70 @@ export function seekTargets(
     if (dist > SEEK_RANGE || dist < 1) continue;
     const angle = angleBetween(dirX, dirY, dx / dist, dy / dist);
     if (angle > cone) continue;
-    // Angle first, distance as the tiebreaker, at about a degree per 40 px.
-    found.push({ id: e.id, x: e.x, y: e.y, score: angle + dist / 40 / 57.3 });
+    /*
+     * Angle first, distance as the tiebreaker, at about a degree per 40 px —
+     * and a body the caster cannot see after every body it can. Ranked by
+     * angle alone, one behind a pillar outranked one in the open beside it,
+     * and a homing shot curved into the pillar; it still counts, last.
+     */
+    const hidden = !hasLineOfSight(world.room.grid, x, y, e.x, e.y);
+    found.push({ id: e.id, x: e.x, y: e.y, score: angle + dist / 40 / 57.3 + (hidden ? HIDDEN_LAST : 0) });
   }
   found.sort((a, b) => a.score - b.score);
   return found.map(({ id, x: ex, y: ey }) => ({ id, x: ex, y: ey }));
 }
+
+/**
+ * **The view, as the simulation can know it**: the 16 x 9 tiles the camera
+ * shows (the game's `VIEW_TILES_W` / `VIEW_TILES_H`, restated because the
+ * scene cannot be imported here), centred on the player and held inside the
+ * room as the camera is, then drawn in by the camera's dead zone (34 x 20 px)
+ * — the view's centre may sit that far from the player, so a body inside the
+ * narrowed box is on screen wherever inside the dead zone it sits.
+ */
+const VIEW_HALF_W = (16 * TILE_PX) / 2;
+const VIEW_HALF_H = (9 * TILE_PX) / 2;
+const VIEW_SLACK_X = 34;
+const VIEW_SLACK_Y = 20;
+
+/**
+ * **Every living body on screen**, best first, and no wall in the way: for a
+ * spell that comes down from above anywhere the player can see (Meteor).
+ *
+ * The bodies inside the seek cone come first, **nearest first**; the rest
+ * after them, by angle from `dir`. Ranked by angle alone, as `seekTargets`
+ * ranks its cone, a degree of angle outweighed forty pixels of distance, so a
+ * body at the far edge of the screen dead on the aim beat the one a few tiles
+ * away just off it — and the rock went somewhere the player was not looking.
+ * Inside the cone the player has already said "that way"; which one is then
+ * the nearest.
+ */
+export function screenTargets(
+  world: World, x: number, y: number, dirX: number, dirY: number,
+  /** Only the bodies inside the cone round `dir`: a side cast keeps to its own side. */
+  coneOnly = false,
+): { id: number; x: number; y: number }[] {
+  const cone = (SEEK_CONE_DEG * Math.PI) / 180;
+  const roomW = world.room.extent.w * TILE_PX, roomH = world.room.extent.h * TILE_PX;
+  const cx = VIEW_HALF_W * 2 >= roomW ? roomW / 2 : Math.max(VIEW_HALF_W, Math.min(roomW - VIEW_HALF_W, x));
+  const cy = VIEW_HALF_H * 2 >= roomH ? roomH / 2 : Math.max(VIEW_HALF_H, Math.min(roomH - VIEW_HALF_H, y));
+  const found: { id: number; x: number; y: number; score: number }[] = [];
+  for (const e of world.enemies) {
+    if (e.hp <= 0 || e.spawnFadeMs > 0) continue;
+    if (Math.abs(e.x - cx) > VIEW_HALF_W - VIEW_SLACK_X || Math.abs(e.y - cy) > VIEW_HALF_H - VIEW_SLACK_Y) continue;
+    const dx = e.x - x, dy = e.y - y, dist = Math.hypot(dx, dy);
+    const angle = dist < 1 ? 0 : angleBetween(dirX, dirY, dx / dist, dy / dist);
+    const inCone = angle <= cone;
+    if (coneOnly && !inCone) continue;
+    // In the cone: by distance, ahead of everything outside it (at most a screen's width, well under the offset).
+    found.push({ id: e.id, x: e.x, y: e.y, score: inCone ? dist : OUTSIDE_CONE + angle + dist / 40 / 57.3 });
+  }
+  found.sort((a, b) => a.score - b.score);
+  return found.map(({ id, x: ex, y: ey }) => ({ id, x: ex, y: ey }));
+}
+
+/** Put before every score outside the cone, so it outranks any distance on screen. */
+const OUTSIDE_CONE = 1e6;
 
 /** The single best target, for a spell that fires one projectile. */
 export function seekTarget(

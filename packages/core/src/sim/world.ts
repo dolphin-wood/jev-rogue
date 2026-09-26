@@ -29,7 +29,7 @@ import {
   circleHitsWall, circlesOverlap, entryPosition, hasLineOfSight, moveSliding, normalise,
 } from "./collide.ts";
 import {
-  beginSwing, cancelSwing, makeSwingBox, manaPerHit, sectorHits, snapFacing,
+  autoMeleeFacing, beginSwing, canSwing, cancelSwing, makeSwingBox, manaPerHit, sectorHits, snapFacing,
   stepStrike, stepSwing, strikeHits, swingMoveScale, beginSpin,
 } from "./melee.ts";
 import { CLOUD_TICK_MS, FIRE_ENEMY_DAMAGE, FIRE_TICK_MS, GROUND_STATUS_POWER, lightFire, makeFirePool, makeScorchPool, scorch, stepFires, stepScorches } from "./fire.ts";
@@ -163,6 +163,16 @@ const HITSTOP_CAP = FRAME_MS * 6;
 const TRAUMA_HIT = 0;
 const TRAUMA_KILL = 0;
 const TRAUMA_PLAYER_HIT = 0.55;
+/**
+ * **The one blow of the player's own that shakes** (doc 008): a rock from
+ * above landing. Every other hit and kill the player lands keeps to the rule
+ * above; this is the exception the boss's cleave is on the enemy side — a
+ * blow the player waited most of a second for, on a long cooldown, rare
+ * enough that a shake from it cannot become the constant rumble the rule is
+ * there to stop. 0.5 because the camera moves by the square: at the reduced
+ * default it is about a pixel and a half, where 0.3 would be under half of one.
+ */
+const TRAUMA_SKY_LANDING = 0.5;
 /** Linear, and fast enough that a quiet second returns the camera to still. */
 const TRAUMA_DECAY_PER_S = 1.5;
 
@@ -1126,7 +1136,13 @@ function stepPlayer(w: World, input: Input, dtMs: number): void {
   if (spun) p.spinBufferMs = 0;
   else {
     p.spinBufferMs = Math.max(0, p.spinBufferMs - dtMs);
-    if (input.swing && !stunned) beginSwing(p, w);
+    if (input.swing && !stunned) {
+      if (input.autoMeleeAim && canSwing(p)) {
+        const facing = autoMeleeFacing(w);
+        if (facing !== null) p.facing = facing;
+      }
+      beginSwing(p, w);
+    }
   }
 
   const dashing = p.dashMs > 0;
@@ -3305,7 +3321,14 @@ function applyElementsTo(e: Enemy, powers: ElementPowers, mult = 1, proc = 1): v
  * whatever lit it.
  */
 function applyElementTo(e: Enemy, element: string, power: number, mult = 1): void {
-  // An immune body takes no status either; a resistant one builds it slower.
+  /*
+   * An immune body takes no status either; a resistant one builds it slower.
+   * The king roaring is immune to everything (`hurtEnemy`), and only his
+   * damage was refused: the hits still filled his burn, poison and chill, so
+   * a roar spent pouring fire into him came out of it with a full burn to
+   * spend as soon as it ended.
+   */
+  if (e.bossRoarMs > 0) return;
   const resist = resistOf(e.archetype, element);
   if (resist === 0) return;
   const add = ENEMY_BUILD_PER_HIT * Math.max(0.5, power || 1) * resist;
@@ -3652,14 +3675,15 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
          * hit is a hit, not a second payoff. A `contagion` hit that leaves
          * the body poisoned makes it a carrier for as long as the poison runs.
          */
-        if (b.doomMs > 0 && e.doomMs <= 0 && e.hp > 0) {
+        // Neither lands on the king roaring: a mark put on him then went off once he could be hurt.
+        if (b.doomMs > 0 && e.doomMs <= 0 && e.hp > 0 && e.bossRoarMs <= 0) {
           e.doomMs = b.doomMs;
           e.doomDamage = b.doomDamage;
           e.doomRadius = b.doomRadius;
           e.doomSpell = b.spellIndex;
           w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "doom_mark" });
         }
-        if (b.contagion > 0 && e.poisonMs > 0) {
+        if (b.contagion > 0 && e.poisonMs > 0 && e.bossRoarMs <= 0) {
           e.contagion = Math.max(e.contagion, b.contagion);
           e.contagionReach = Math.max(e.contagionReach, b.contagionReach);
         }
@@ -4823,6 +4847,8 @@ function stepEruptions(w: World, dtMs: number): void {
     }
     if (c.burnMs > 0) lightFire(w, c.x, c.y, "player", { radius: c.radius, lifeMs: c.burnMs, damage: c.damage * 0.2 });
     if (hit) impact(w, HITSTOP_HIT * (1 + c.weight * 0.5), TRAUMA_HIT * Math.max(1, c.weight));
+    // A rock from above (a telegraphed cell, Meteor's) shakes the room when it lands, hit or miss.
+    if (c.telegraphMs > 0) w.trauma = Math.min(1, w.trauma + TRAUMA_SKY_LANDING);
     w.events.push({ kind: "eruption", x: c.x, y: c.y, what: c.kind });
   }
 }
@@ -4946,7 +4972,9 @@ function spreadContagion(w: World, e: Enemy): void {
   e.contagion = 0;
   if (n <= 0 || e.poisonMs <= 0) return;
   const near = w.enemies
-    .filter((o) => o !== e && o.hp > 0 && isActive(o) && o.contagion <= 0 && resistOf(o.archetype, "poison") > 0)
+    // Not onto the king roaring: nothing lands on him then (`applyElementTo`).
+    .filter((o) => o !== e && o.hp > 0 && isActive(o) && o.contagion <= 0 && o.bossRoarMs <= 0
+      && resistOf(o.archetype, "poison") > 0)
     .map((o) => ({ o, d: Math.hypot(o.x - e.x, o.y - e.y) }))
     .filter((c) => c.d <= e.contagionReach + c.o.radius)
     .sort((a, b) => a.d - b.d)

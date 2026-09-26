@@ -191,7 +191,12 @@ export interface BriefingCardPool {
   readonly kind: string;
   readonly where?: string;
   /** Per candidate: its id and the facts the pool tagged it with. */
-  readonly candidates: readonly { readonly id: string; readonly facts: readonly string[] }[];
+  readonly candidates: readonly {
+    readonly id: string;
+    readonly facts: readonly string[];
+    /** Affix candidates carry the actual held spells that can take them. */
+    readonly compatibleHeldSpellIds?: readonly string[];
+  }[];
   /** Whether a pity card or a temptation card is armed for this offer. */
   readonly pity?: boolean;
   readonly temptation?: boolean;
@@ -873,6 +878,13 @@ function cardLines(
   const out: string[] = [];
   for (const pool of pools) {
     out.push(`- ${pool.where ? `${pool.where}, ` : ""}${pool.kind} cards; each candidate's own behaviour is on its option below`);
+    if (pool.kind === "affix" && pool.candidates.some((c) => c.compatibleHeldSpellIds))
+      for (const key of keys) {
+        if (!key) continue;
+        const fits = pool.candidates.filter((c) => c.compatibleHeldSpellIds?.includes(key.base));
+        out.push(`  - ${nameOf(key.base)} can take these affixes from this offer: ${fits.length
+          ? fits.map((c) => nameOf(c.id)).join(", ") : "none"}`);
+      }
     /*
      * **Where a spell card goes**, said once for the pool rather than on
      * every option. The build section lists the empty keys and the flags below

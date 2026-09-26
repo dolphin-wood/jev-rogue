@@ -64,6 +64,7 @@ export const ZH: Table = {
   "menu.damageDealt": "造成伤害",
   "menu.damageTaken": "受到伤害",
   "menu.damageNumbers": "伤害数字",
+  "menu.autoMeleeAim": "近战自动索敌",
   "menu.roomPlan": "每层开始前显示规划",
   "menu.screenShake": "画面震动",
   "shake.off": "关",

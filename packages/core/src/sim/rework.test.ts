@@ -619,6 +619,44 @@ describe("the boss", () => {
     expect(w.enemyBullets.filter((x) => x.alive).length).toBeLessThanOrEqual(shots);
   });
 
+  /*
+   * Reported from play: the roar refused his damage, and the burn, the poison
+   * and the chill still built on him through it, to be spent the moment it
+   * ended. Nothing lands on him while he cannot be hurt.
+   */
+  it("takes no status through the roar, and does after it", () => {
+    const w = world();
+    const b = boss(w);
+    w.player.x = b.x + 150;
+    w.player.y = b.y;
+    b.hp = b.maxHp * 0.5;
+    step(w, NO_INPUT);
+    expect(b.bossRoarMs).toBeGreaterThan(0);
+    /** A cell of burning, poisoned ground going off under him now. */
+    const douse = () => {
+      const c = w.eruptions.find((x) => !x.alive)!;
+      clearPowers(c.powers);
+      addPower(c.powers, "fire", 3);
+      addPower(c.powers, "poison", 3);
+      Object.assign(c, {
+        alive: true, fired: false, x: b.x, y: b.y, radius: 40, delayMs: 0, telegraphMs: 0, damage: 1,
+        element: "fire", elementPower: 3, statusMult: 1, proc: 1, weight: 0, burnMs: 0, castId: 0, kind: "fire",
+      });
+    };
+    for (let i = 0; i < Math.floor(BOSS_ROAR_MS / STEP_MS) - 4; i++) {
+      w.player.hearts = 6;
+      douse();
+      step(w, NO_INPUT);
+    }
+    expect(b.bossRoarMs).toBeGreaterThan(0);
+    expect(b.burnBuild + b.burnMs + b.poisonBuild + b.poisonMs).toBe(0);
+    for (let i = 0; i < 600 && b.bossRoarMs > 0; i++) { w.player.hearts = 6; step(w, NO_INPUT); }
+    expect(b.bossRoarMs).toBeLessThanOrEqual(0);
+    douse();
+    step(w, NO_INPUT);
+    expect(b.burnBuild + b.burnMs).toBeGreaterThan(0);
+  });
+
   it("roars at a phase change: stands, cannot be hurt, then calls his adds and violet bolts after the player", () => {
     const w = world();
     const b = boss(w);

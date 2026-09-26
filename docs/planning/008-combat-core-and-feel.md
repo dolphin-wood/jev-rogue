@@ -247,7 +247,11 @@ after Squirrel Eiserloh's model. **Only the player being hurt adds to it**
 (0.55): a hit or a kill the player lands, and an enemy attack that misses,
 freeze the frame but do not shake it, and neither does a body braking out
 of a lunge or charging into a wall, so a shake always means "that cost you".
-The one other is a boss changing phase. It decays at 1.5 per second, and the
+The others are the boss's heavy blows and its changing phase, and on the
+player's side one only: **a meteor landing** (0.5, hit or miss). It is the
+one blow the player waits most of a second for, on a long cooldown, so it
+is rare enough not to become the constant rumble this rule exists to stop;
+nothing the player casts often may join it. It decays at 1.5 per second, and the
 renderer displaces the camera by its **square**, at most 4 world px — sized
 for the near camera, which draws a world pixel half as large again as the
 room view did.

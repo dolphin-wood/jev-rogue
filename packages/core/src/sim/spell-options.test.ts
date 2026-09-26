@@ -14,6 +14,7 @@ import { createWorld, step } from "./world.ts";
 import { NO_INPUT, STEP_MS } from "./types.ts";
 import type { Enemy, Input, World } from "./types.ts";
 import { makeEnemy, ENEMY_POISON_MS } from "./enemy.ts";
+import { seekTargets } from "./aim.ts";
 import { attachAffix, bankOf, chargeMsOf, slotCost } from "./spells.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
 import { ITEMS, plainInstance } from "../spells/index.ts";
@@ -334,6 +335,133 @@ describe("telegraph (Meteor)", () => {
     expect(hurt(e)).toBeGreaterThan(0);
   });
 
+  /** A wall `dx` tiles east of the caster, from the top of the room to the bottom. */
+  const wallAt = (dx: number) => {
+    const walled = grid.slice();
+    const wx = Math.floor(PX / TILE_PX) + dx;
+    for (let y = 1; y < GRID_H - 1; y++) walled[y * GRID_W + wx] = Tile.Wall;
+    return walled;
+  };
+  const marked = (w: World) => w.eruptions.filter((c) => c.alive && !c.fired);
+
+  /*
+   * Reported from play: "no rock came down at all". The seek cone could
+   * choose a body behind a wall and the line of sight then refused the only
+   * cell, or with nothing in the cone the landing went `reach` tiles ahead
+   * through a near wall; either way the cast spent its mana on nothing. A rock
+   * from above seeks the whole screen and needs no line of sight.
+   */
+  const castAt = (w: World, x: number, y: number, pinned: Enemy[] = []) => {
+    step(w, at(x, y, { spell: 0 }));
+    run(w, at(x, y), Math.ceil(windup / STEP_MS) + 2, pinned);
+  };
+
+  it("comes down on a body behind a wall", () => {
+    const w = arena("meteor", "hidden", wallAt(3));
+    const hidden = body(w, 150, 0);
+    castAt(w, hidden.x, hidden.y, [hidden]);
+    expect(marked(w)).toHaveLength(1);
+    expect(marked(w)[0]!.x).toBeCloseTo(hidden.x, 0);
+    expect(marked(w)[0]!.y).toBeCloseTo(hidden.y, 0);
+  });
+
+  it("finds a body anywhere on screen, and still takes the one it is aimed at first", () => {
+    const w = arena("meteor", "behind");
+    const behind = body(w, -150, 0);
+    castAt(w, PX + 200, PY, [behind]);
+    expect(marked(w)[0]!.x).toBeCloseTo(behind.x, 0);
+
+    const w2 = arena("meteor", "faced");
+    const faced = body(w2, 120, 60);
+    const other = body(w2, -150, 0);
+    castAt(w2, PX + 200, PY, [faced, other]);
+    expect(marked(w2)[0]!.x).toBeCloseTo(faced.x, 0);
+  });
+
+  it("takes the nearest body in the aim's cone, not the far one dead on the aim", () => {
+    const w = arena("meteor", "near");
+    const far = body(w, 210, 0);
+    const near = body(w, 70, 30);
+    castAt(w, far.x, far.y, [far, near]);
+    expect(marked(w)[0]!.x).toBeCloseTo(near.x, 0);
+  });
+
+  const withAffix = (w: World, id: string, tier = 1) => {
+    let slot = attachAffix(w.spells[0]!, id)!;
+    for (let t = 1; t < tier; t++) slot = attachAffix(slot, id)!;
+    w.spells[0] = slot;
+  };
+
+  it("a scatter's rock thrown behind seeks a body behind, not the bare floor", () => {
+    const w = arena("meteor", "behind-scatter");
+    withAffix(w, "scatter");
+    const front = body(w, 120, 0);
+    const back = body(w, -130, 40);
+    castAt(w, front.x, front.y, [front, back]);
+    const xs = marked(w).map((c) => Math.round(c.x)).sort((a, b) => a - b);
+    expect(xs).toEqual([Math.round(back.x), Math.round(front.x)].sort((a, b) => a - b));
+  });
+
+  it("does not bring a second rock down on a body one is already marked on, while another is free", () => {
+    const w = arena("meteor", "spread-out");
+    const a = body(w, 90, 0);
+    const b = body(w, 150, 30);
+    // A rock already coming down on the nearer body.
+    const slot = w.eruptions.find((c) => !c.alive)!;
+    Object.assign(slot, { alive: true, fired: false, x: a.x, y: a.y, radius: 34, delayMs: 5000, telegraphMs: 700, damage: 0 });
+    castAt(w, a.x, a.y, [a, b]);
+    const fresh = marked(w).filter((c) => c !== slot);
+    expect(fresh).toHaveLength(1);
+    expect(fresh[0]!.x).toBeCloseTo(b.x, 0);
+  });
+
+  it("echoes once the first rock is down, not while it is still coming", () => {
+    const w = arena("meteor", "echo");
+    withAffix(w, "repeat");
+    const e = body(w, 120, 0);
+    castAt(w, e.x, e.y, [e]);
+    run(w, at(e.x, e.y), Math.floor((telegraph - 100) / STEP_MS), [e]);
+    expect(marked(w)).toHaveLength(1);
+    run(w, at(e.x, e.y), Math.ceil(200 / STEP_MS), [e]);
+    expect(w.eruptions.some((c) => c.alive && c.fired)).toBe(true);
+    expect(marked(w)).toHaveLength(1);
+  });
+
+  it("shakes the room when the rock lands, which no other blow of the player's does", () => {
+    const w = arena("meteor", "shake");
+    const e = body(w, 120, 0);
+    castAt(w, e.x, e.y, [e]);
+    let peak = 0;
+    for (let i = 0; i < Math.ceil((telegraph + 200) / STEP_MS); i++) { run(w, at(e.x, e.y), 1, [e]); peak = Math.max(peak, w.trauma); }
+    expect(peak).toBeGreaterThanOrEqual(0.45);
+
+    const b = arena("magic_bolt", "no-shake");
+    const t = body(b, 120, 0);
+    step(b, at(t.x, t.y, { spell: 0 }));
+    let most = 0;
+    for (let i = 0; i < 60; i++) { run(b, at(t.x, t.y), 1, [t]); most = Math.max(most, b.trauma); }
+    expect(hurt(t)).toBeGreaterThan(0);
+    expect(most).toBe(0);
+  });
+
+  it("does not reach a body off screen", () => {
+    const w = arena("meteor", "far");
+    const far = body(w, 400, 0);
+    castAt(w, far.x, far.y, [far]);
+    expect(marked(w)).toHaveLength(1);
+    expect(marked(w)[0]!.x).toBeLessThan(far.x - 100);
+  });
+
+  it("with no body on screen, lands on the ground ahead short of the wall", () => {
+    const w = arena("meteor", "walled", wallAt(3));
+    step(w, at(PX + 200, PY, { spell: 0 }));
+    run(w, at(PX + 200, PY), Math.ceil(windup / STEP_MS) + 2);
+    expect(marked(w)).toHaveLength(1);
+    const c = marked(w)[0]!;
+    expect(c.x).toBeGreaterThan(PX);
+    expect(c.x).toBeLessThan((Math.floor(PX / TILE_PX) + 3) * TILE_PX);
+  });
+
   it("misses a body that walks out of the mark", () => {
     const w = arena("meteor");
     const e = body(w, 150, 0);
@@ -343,6 +471,41 @@ describe("telegraph (Meteor)", () => {
     run(w, at(e.x, e.y), Math.ceil((telegraph + 400) / STEP_MS), [e]);
     expect(hurt(e)).toBe(0);
   });
+});
+
+/*
+ * **A seeking spell prefers a body it can reach.** The seek cone ranked by
+ * angle and distance alone, so a body behind a pillar outranked one in the
+ * open beside it: a homing shot curved into the pillar, a line of spikes ran
+ * into it, and Cinder Geysers put every cell on the far side and had them
+ * all refused. A body behind a wall still counts; it just comes after every
+ * body the caster can see.
+ */
+describe("seeking past a pillar", () => {
+  const pillar = (() => {
+    const g2 = grid.slice();
+    const tx = Math.floor(PX / TILE_PX) + 3, ty = Math.floor(PY / TILE_PX);
+    for (const dy of [-1, 0, 1]) g2[(ty + dy) * GRID_W + tx] = Tile.Wall;
+    return g2;
+  })();
+
+  it("ranks the bodies it can see before the one behind a pillar", () => {
+    const w = arena("magic_bolt", "rank", pillar);
+    const hidden = body(w, 200, 0);
+    const seen = body(w, 150, 100);
+    const ranked = seekTargets(w, PX, PY, 1, 0).map((t) => t.id);
+    expect(ranked).toEqual([seen.id, hidden.id]);
+  });
+
+  for (const spell of ["magic_bolt", "earth_spikes", "cinder_geysers", "arc_lance"])
+    it(`${spell} reaches the body in the open, not the pillar`, () => {
+      const w = arena(spell, `pillar-${spell}`, pillar);
+      const hidden = body(w, 200, 0);
+      const seen = body(w, 150, 100);
+      step(w, at(hidden.x, hidden.y, { spell: 0 }));
+      run(w, at(hidden.x, hidden.y), Math.ceil(1500 / STEP_MS), [hidden, seen]);
+      expect(hurt(seen), spell).toBeGreaterThan(0);
+    });
 });
 
 describe("the ring pattern (Quake Ring)", () => {

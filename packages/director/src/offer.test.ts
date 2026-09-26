@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   ITEMS, MAX_HEARTS, bucketClearSpeed, bucketGold, bucketHealth, bucketMovementPressure,
-  bucketRecentDamage, bucketRunProgress, cardPool, cardsFor, emptyHistory, plainInstance,
+  bucketRecentDamage, bucketRunProgress, cardPool, cardsFor, emptyHistory, heldSpell, plainInstance,
   portalChoices, RngSource, schoolOf, heldDominantTags, NPC_OFFERS_MAX, RUN_COMBAT_ROOMS,
 } from "@jr/core";
 import type { RunContext, RunShape } from "@jr/core";
 import { createDirector } from "./director.ts";
 import { FALLBACK } from "./types.ts";
 import type { Evaluator } from "./types.ts";
+import { optionText } from "./questions/common.ts";
 
 function ctx(
   index: number,
@@ -192,6 +193,50 @@ describe("the Director's portals (doc 003)", () => {
 });
 
 describe("the Director's cards (doc 007)", () => {
+  it("lists each held spell's compatible affixes once in Jev's state", async () => {
+    const evaluate: Evaluator = async (req) => ({
+      answers: Object.fromEntries(Object.entries(req.questions).map(([name, question]) => {
+        const ids = Object.keys(question.criteria);
+        const choice = ids.find((id) => id !== FALLBACK)!;
+        return [name, {
+          choice, probabilities: Object.fromEntries(ids.map((id) => [id, id === choice ? 1 : 0])),
+          confidence: null,
+        }];
+      })),
+      usage: { input_tokens: null },
+    });
+    for (const state_format of ["labels", "briefing"] as const) {
+      const seen: import("./director.ts").ObservedRequest[] = [];
+      const director = createDirector("jev", { evaluate, state_format, observe: (request) => seen.push(request) });
+      const run = {
+        ...ctx(4), slots: [plainInstance("meteor"), plainInstance("shock_arc"), plainInstance("magic_bolt")],
+        intent: { preset: "area" as const, free_text: "想要多重陨石" },
+      };
+      const held = [heldSpell(ITEMS.get("meteor")), heldSpell(ITEMS.get("shock_arc")), heldSpell(ITEMS.get("magic_bolt"))];
+      const pool = cardPool(ITEMS, [], "affix", held);
+      await director.planCards(run, { room_index: 4, pool, count: 3, pity: false, temptation: false });
+      const overall = seen[0]!.questions.overall!;
+      expect(overall.instructions).toContain("only when it is in that spell's list");
+      expect(optionText(overall.criteria["fork"]!)).not.toContain("Can attach to these held spells");
+      if (state_format === "labels") {
+        const bySpell = seen[0]!.state["affixes_by_spell"] as Record<string, string>;
+        expect(bySpell["meteor"]?.split(" ")).toContain("scatter");
+        expect(bySpell["meteor"]?.split(" ")).not.toContain("fork");
+        expect(bySpell["shock_arc"]?.split(" ")).toContain("fork");
+        expect(bySpell["magic_bolt"]?.split(" ")).toContain("fork");
+      } else {
+        const lines = (seen[0]!.state["briefing"] as string).split("\n");
+        const meteor = lines.find((line) => line.includes("Meteor can take these affixes from this offer:"));
+        const arc = lines.find((line) => line.includes("Shock Arc can take these affixes from this offer:"));
+        const bolt = lines.find((line) => line.includes("Magic Bolt can take these affixes from this offer:"));
+        expect(meteor).toContain("Scatter");
+        expect(meteor).not.toContain("Fork");
+        expect(arc).toContain("Fork");
+        expect(bolt).toContain("Fork");
+      }
+    }
+  });
+
   it("keeps a door's promise as one card, and draws the rest from the whole pool", async () => {
     const d = createDirector("rule");
     const promise = { school: "flame", grade: 2 };

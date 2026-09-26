@@ -92,6 +92,37 @@ describe("the swing's timing", () => {
   });
 });
 
+describe("optional melee auto-target", () => {
+  it("faces the nearest enemy in reach when a new swing starts", () => {
+    const w = world();
+    put(w, 1, w.player.x - 35, w.player.y);
+    const target = put(w, 2, w.player.x, w.player.y + 24);
+    step(w, input({ swing: true, autoMeleeAim: true }));
+    expect(w.player.swingFacing).toBeCloseTo(Math.PI / 2);
+    for (let i = 0; i < 16; i++) stepSwing(w, STEP_MS);
+    expect(w.swing.hitIds).toContain(target.id);
+  });
+
+  it("keeps the chosen facing when the option is off or no enemy is in reach", () => {
+    const off = world();
+    put(off, 1, off.player.x - 24, off.player.y);
+    step(off, input({ swing: true }));
+    expect(off.player.swingFacing).toBe(0);
+
+    const far = world();
+    put(far, 1, far.player.x - ARC_REACH - 40, far.player.y);
+    step(far, input({ swing: true, autoMeleeAim: true }));
+    expect(far.player.swingFacing).toBe(0);
+  });
+
+  it("ignores an airborne enemy when choosing a target", () => {
+    const w = world();
+    put(w, 1, w.player.x - 20, w.player.y).airborne = true;
+    step(w, input({ swing: true, autoMeleeAim: true }));
+    expect(w.player.swingFacing).toBe(0);
+  });
+});
+
 describe("the swing's geometry", () => {
   it("is a wide arc reaching 1.8 tiles", () => {
     // Widened from ALttP's measured 80 because that angle at this reach is a

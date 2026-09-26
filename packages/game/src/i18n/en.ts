@@ -64,6 +64,7 @@ export const EN = {
   "menu.damageDealt": "Damage dealt",
   "menu.damageTaken": "Damage taken",
   "menu.damageNumbers": "Damage numbers",
+  "menu.autoMeleeAim": "Melee auto-target",
   "menu.roomPlan": "Plan page before each floor",
   "menu.screenShake": "Screen shake",
   "shake.off": "Off",

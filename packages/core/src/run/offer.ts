@@ -479,6 +479,8 @@ export interface CardCandidate {
   readonly id: string;
   readonly description: string;
   readonly facts: readonly CardFact[];
+  /** For affixes, the held spell ids that can actually take this card. */
+  readonly compatibleHeldSpellIds?: readonly string[];
 }
 
 /** What the build is short of, as labels. */
@@ -797,7 +799,7 @@ export function cardPool(
   const revealed = needs.revealed ?? [];
   const neck = needs.gap ?? "none";
   const elements = needs.elements ?? [];
-  type Entry = { id: string; description: string; facts: CardFact[]; group: boolean };
+  type Entry = { id: string; description: string; facts: CardFact[]; group: boolean; compatibleHeldSpellIds?: readonly string[] };
   const when = (cond: boolean, fact: CardFact): CardFact[] => (cond ? [fact] : []);
   let all: Entry[] = [];
   if (kind === "spell") {
@@ -824,7 +826,12 @@ export function cardPool(
     }));
   } else if (kind === "affix") {
     all = fittingAffixes(held).map((a) => ({
-      id: a.id, description: cardText(a.id, a.description, a.name), group: false,
+      id: a.id,
+      description: cardText(a.id, a.description, a.name),
+      ...(held.length > 0 && held.every((key) => key.id)
+        ? { compatibleHeldSpellIds: held.filter((key) => affixFitsHeld(a, key)).map((key) => key.id!) }
+        : {}),
+      group: false,
       facts: [
         ...when(!!style && !!AFFIX_STYLE[style]?.includes(a.id), "style"),
         ...when(revealed.some((t) => AFFIX_STYLE[t]?.includes(a.id)), "build"),
@@ -873,6 +880,7 @@ export function cardPool(
   };
   const tidy = (e: Entry): CardCandidate => ({
     id: e.id, description: e.description, facts: e.group ? [...e.facts, "promised"] : e.facts,
+    ...(e.compatibleHeldSpellIds ? { compatibleHeldSpellIds: e.compatibleHeldSpellIds } : {}),
   });
   // The whole pool, the door's school or family marked `promised`: the
   // Director keeps one card of it in the offer (`cardAsk`), not the offer to it.
@@ -955,6 +963,8 @@ function cardOf(items: ItemRegistry, kind: RewardCardKind, id: string, level = 1
  * slot left.
  */
 export interface HeldSpell {
+  /** The spell's id, so a card can name the keys it actually fits to Jev. */
+  readonly id?: string;
   readonly shape: SpellShape;
   /** Projectiles per cast. A spread does not home, so `seek` is dead on one. */
   readonly count: number;
@@ -969,9 +979,11 @@ export interface HeldSpell {
 
 /** A key as `HeldSpell`, from the item on it and the affixes attached. */
 export function heldSpell(
-  item: Pick<BaseItem, "params"> | null | undefined, affixes: readonly string[] = [],
+  item: (Pick<BaseItem, "params"> & Partial<Pick<BaseItem, "id">>) | null | undefined,
+  affixes: readonly string[] = [],
 ): HeldSpell {
   return {
+    ...(item?.id ? { id: item.id } : {}),
     shape: itemShape(item), count: Number(item?.params["count"] ?? 1),
     spread: Number(item?.params["spread"] ?? 0), affixes,
   };

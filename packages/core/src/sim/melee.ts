@@ -26,6 +26,7 @@ import { TILE_PX } from "../types.ts";
 import { PLAYER_RADIUS } from "./types.ts";
 import type { Enemy, Player, Strike, Vec, World } from "./types.ts";
 import { throwWave } from "./shapes.ts";
+import { hasLineOfSight } from "./collide.ts";
 
 /* -------------------------------- constants ------------------------------- */
 
@@ -365,6 +366,29 @@ export function canSwing(p: Player): boolean {
    */
   const cut = SWING_RECOVER_MS * (1 - (p.mods?.swingRecovery ?? 1)) * 4;
   return p.swingStretch === 1 && swingPhase(p) === "recover" && p.swingMs <= cut;
+}
+
+/** Facing for an assisted new swing, or null when no reachable enemy qualifies. */
+export function autoMeleeFacing(world: World): number | null {
+  const p = world.player;
+  const chained = p.swung && (p.swingMs > 0 || p.chainMs > 0);
+  const finisher = (chained ? p.swingRun + 1 : 1) >= SWING_RUN;
+  const reach = BLADE_REACH * (p.mods?.swordReach ?? 1)
+    + SPREAD_BASE * (finisher ? FINISH_SPREAD : 1);
+  const originY = p.y - SWING_ORIGIN_LIFT;
+  let nearest: Enemy | null = null;
+  let nearestDistance = Infinity;
+  for (const e of world.enemies) {
+    if (e.hp <= 0 || e.spawnFadeMs > 0 || e.airborne) continue;
+    const distance = Math.hypot(e.x - p.x, e.y - originY);
+    if (distance > reach + e.radius || distance < 0.001) continue;
+    if (!hasLineOfSight(world.room.grid, p.x, originY, e.x, e.y)) continue;
+    if (distance < nearestDistance || (distance === nearestDistance && e.id < (nearest?.id ?? Infinity))) {
+      nearest = e;
+      nearestDistance = distance;
+    }
+  }
+  return nearest ? Math.atan2(nearest.y - originY, nearest.x - p.x) : null;
 }
 
 /**
