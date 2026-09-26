@@ -2502,16 +2502,22 @@ export const BOSS_VOLLEY_MS = beats(8);
 const BOSS_BLADE_CHASE_MS = 3500;
 /** The rest after a turn, in beats, by phase; and up to this many more, drawn. */
 // Down from 7 / 6 / 5 and up to 2 more: played, the rests were long enough that the fight felt slack.
-const BOSS_REST_BEATS: Readonly<Record<number, number>> = { 1: 5, 2: 4, 3: 3 };
+// Phases I and II down again, by a beat: with the leap, the storm and the slam asked at any range the heavy
+// turns went from a quarter of his turns to two fifths, and turn to turn slowed by about a twelfth. Measured
+// on the bench's fights, turn to turn is now 4.4 s in both (4.5 and 4.7 before), phase II the quicker.
+const BOSS_REST_BEATS: Readonly<Record<number, number>> = { 1: 4, 2: 3, 3: 3 };
 const BOSS_REST_JITTER_BEATS = 1.5;
-/** After a heavy turn — a leap, a slam, a quake, a string of three — this many beats more: the big opening. */
-const BOSS_HEAVY_REST_BEATS = 3;
+/**
+ * After a heavy turn — a leap, a slam, a quake, a string of three — this many beats more: the big opening.
+ * Two in phases I and II, where heavy turns are now two in five; phase III keeps three.
+ */
+const BOSS_HEAVY_REST_BEATS: Readonly<Record<number, number>> = { 1: 2, 2: 2, 3: 3 };
 const BOSS_HEAVY_ACTS: ReadonlySet<string> = new Set(["leap", "slam", "quake", "storm"]);
 
 /** The rest after the turn that has just ended, ms. */
 function bossRestMs(w: World, e: Enemy): number {
   const heavy = BOSS_HEAVY_ACTS.has(e.bossLastAct) || e.bossStringN >= 3;
-  const n = (BOSS_REST_BEATS[e.phase] ?? 6) + w.rng.next() * BOSS_REST_JITTER_BEATS + (heavy ? BOSS_HEAVY_REST_BEATS : 0);
+  const n = (BOSS_REST_BEATS[e.phase] ?? 6) + w.rng.next() * BOSS_REST_JITTER_BEATS + (heavy ? BOSS_HEAVY_REST_BEATS[e.phase] ?? 3 : 0);
   return beats(n);
 }
 

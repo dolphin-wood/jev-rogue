@@ -941,7 +941,8 @@ describe("the boss", () => {
     }
     expect(restFrom).toBeGreaterThan(0);
     const rest = b.bossMoveMs;
-    expect(rest).toBeGreaterThanOrEqual(BEAT_MS * 5);
+    // Phase I's rest: four beats at the least (`BOSS_REST_BEATS`).
+    expect(rest).toBeGreaterThanOrEqual(BEAT_MS * 4);
     const shots = w.enemyBullets.filter((x) => x.alive).length;
     for (let i = 0; i < Math.floor(rest / STEP_MS) - 2; i++) {
       w.player.x = b.x;
