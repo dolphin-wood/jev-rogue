@@ -206,6 +206,26 @@ export class StemMusic {
     g.linearRampToValueAtTime(TRIM, now + DUCK_RECOVER_S);
   }
 
+  /**
+   * Holds the music down for a moment the effects own outright — the king's
+   * roar — rather than dipping it for a blow: down over a fifth of a second,
+   * held for `seconds`, and back over most of a second. The short ducks the
+   * fight throws meanwhile are refused (`duckedUntil`), so none of them lets
+   * it back up early.
+   */
+  hold(depth: number, seconds: number): void {
+    const now = this.ctx.currentTime;
+    const back = 0.9;
+    this.duckedUntil = now + seconds + back;
+    const floor = TRIM * (1 - Math.max(0, Math.min(0.9, depth)));
+    const g = this.out.gain;
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(g.value, now);
+    g.linearRampToValueAtTime(floor, now + 0.2);
+    g.setValueAtTime(floor, now + seconds);
+    g.linearRampToValueAtTime(TRIM, now + seconds + back);
+  }
+
   /** Where the boss piece should be, at audio time `at`: the fight's beat clock, run on from its last report. */
   private bossPosition(loopLen: number, at = this.ctx.currentTime): number | null {
     const c = this.bossClock;

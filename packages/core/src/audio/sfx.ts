@@ -1049,6 +1049,44 @@ const DEFS = {
     },
   },
 
+  /**
+   * **The king's roar** at a phase change (`Enemy.bossRoarMs`, five beats).
+   * A throat, not a tone: two low saws a fifth apart sliding down under a
+   * rough vibrato, a sub under them, and the whole voice fluttered at a
+   * jaw's rate so it growls rather than hums; through it, breath swept up
+   * the vowel of an "ah" and back. A blow of armour at its head, where the
+   * plates burst off him, and the hall's tail after, since it fills the room.
+   */
+  boss_roar: {
+    category: "combat", variants: 2, gain: 0.9, retriggerMs: 1500,
+    render: (r, j) => {
+      const len = 1.7;
+      const voice = buffer(len);
+      const shape = { attack: 0.16, hold: 0.9, curve: 1.2 };
+      mixInto(voice, tone({ wave: "saw", from: 96 * j, to: 68 * j, length: len, gain: 0.5, env: shape, vibrato: { hz: 6.5, cents: 38 } }), 0);
+      mixInto(voice, tone({ wave: "saw", from: 144 * j, to: 101 * j, length: len * 0.94, gain: 0.26, env: shape, vibrato: { hz: 5.3, cents: 30 } }), 0.02);
+      mixInto(voice, tone({ wave: "saw", from: 48 * j, to: 36 * j, length: len, gain: 0.34, env: shape }), 0);
+      // The flutter of a throat: amplitude shaken at a jaw's rate, a little unevenly.
+      for (let i = 0, ph = 0; i < voice.length; i++) {
+        ph += (26 + 6 * Math.sin(i / SAMPLE_RATE * 3.1)) / SAMPLE_RATE;
+        voice[i]! *= 0.62 + 0.38 * Math.sin(ph * Math.PI * 2);
+      }
+      const out = buffer(len + 0.9);
+      // The voice through the mouth: its vowel opened, over its own dark body.
+      mixInto(out, sweepBandpass(Float32Array.from(voice), 420 * j, 880 * j, 1.1), 0, 1.1);
+      mixInto(out, lowpass(voice, 520), 0, 0.8);
+      // Breath, swept up the vowel and back down.
+      const breath = noiseBurst(len * 0.95, r, 0.34, { attack: 0.2, hold: 0.8, curve: 1.4 });
+      mixInto(out, sweepBandpass(breath, 650 * j, 1500 * j, 1.4), 0.03);
+      mixInto(out, grit(r, len * 0.8, 380 * j, 0.22, 0.8), 0.05);
+      // The plates bursting off him as it begins.
+      mixInto(out, thump(92 * j, 30, 0.6, 0.45, 2), 0);
+      mixInto(out, click(r, 1600 * j, 0.03, 0.35), 0);
+      for (let k = 0; k < 4; k++) mixInto(out, grit(r, 0.05, (1500 + r() * 1800) * j, 0.14 + r() * 0.1, 2), 0.04 + r() * 0.3);
+      return finish(tail(out, 0.12, 0.45, 0.34, 1500), "combat", 1.6);
+    },
+  },
+
   /* --------------------------------- world -------------------------------- */
 
   /** Anything picked up that is not a coin and not health. */

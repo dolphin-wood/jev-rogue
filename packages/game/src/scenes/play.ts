@@ -7655,10 +7655,12 @@ export class PlayScene extends Phaser.Scene {
           if (ev.what?.startsWith("boss_phase:")) {
             const next = Number(ev.what.slice("boss_phase:".length));
             const king = this.world.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
-            // Going up a phase: the armour thrown off as the roar begins (`Enemy.bossRoarMs`), and the roar heard.
+            // Going up a phase: the armour thrown off as the roar begins (`Enemy.bossRoarMs`), and the roar heard,
+            // with the music held down under it for as long as it lasts.
             if (king && king.bossRoarMs > 0 && (next === 2 || next === 3)) {
               this.throwBossArmour(ev.x, ev.y, next);
-              sfx.play("boss_phase", 0.9);
+              sfx.play("boss_roar");
+              sfx.holdMusic(0.65, BOSS_ROAR_MS / 1000);
             }
           }
           const cue = this.telegraphFor(ev.what ?? "");

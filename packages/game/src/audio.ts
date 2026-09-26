@@ -290,6 +290,11 @@ export class Sfx {
     return this.pendingState.state;
   }
 
+  /** The music held down by `depth` for `seconds`, for a moment that is the effects' alone (`StemMusic.hold`). */
+  holdMusic(depth: number, seconds: number): void {
+    this.music?.hold(depth, seconds);
+  }
+
   /** The boss lab's slowed or paused fight: the music cannot slow with it, so it goes quiet. */
   setMusicHeld(on: boolean): void {
     if (on === this.musicHeld) return;
