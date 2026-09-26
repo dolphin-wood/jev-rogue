@@ -4,7 +4,7 @@ import {
   SPREAD_BASE, SWEEP_DEG, SWING_ACTIVE_MS, SWING_TOTAL_MS, SWING_WINDUP_MS,
   beginSwing, fullReach, makeSpin, makeSwingBox, manaPerHit, sectorHits,
   snapFacing, stepSwing, sweepFor, SWING_CHAIN_MS, swingMoveScale, swingPhase, totalCoverageDeg,
-  wallSlamSquareness, SWING_RUN, SWING_BREATH_MS, FINISH_DAMAGE, FINISH_ARC_DEG,
+  wallSlamSquareness, SWING_RUN, SWING_BREATH_MS, THRUST_DAMAGE, SWING_ORIGIN_LIFT,
 } from "./melee.ts";
 import { createWorld, step } from "./world.ts";
 import { NO_INPUT, PLAYER_RADIUS, STEP_MS } from "./types.ts";
@@ -97,7 +97,7 @@ describe("the swing's geometry", () => {
     // Widened from ALttP's measured 80 because that angle at this reach is a
     // stubby lozenge rather than a crescent, and the measured cost of widening
     // is about ten percent more enemies caught per swing.
-    expect(ARC_DEG).toBe(140);
+    expect(ARC_DEG).toBe(170);
     expect(BLADE_DEG + SWEEP_DEG).toBe(ARC_DEG);
     expect(ARC_REACH).toBeCloseTo(TILE_PX * 1.8, 6);
   });
@@ -166,29 +166,34 @@ describe("the swing's commitment", () => {
   });
 });
 
-describe("a run of swings: three cuts, one back across, then a rest", () => {
+describe("a run of swings: a cut, a cut back, a thrust, then a rest", () => {
   /** Swings once and lets it play out, then a few steps more: still inside the chain window. */
   const swingThrough = (w: ReturnType<typeof world>) => {
     beginSwing(w.player, w);
-    const s = { damage: w.swing.damage, reach: fullReach(w.swing), sweep: w.swing.sweep, arc: totalCoverageDeg(w.swing), started: w.player.swingMs > 0 };
+    const s = { damage: w.swing.damage, reach: fullReach(w.swing), sweep: w.swing.sweep, sweepDeg: w.swing.sweepDeg, thrust: w.swing.thrust, started: w.player.swingMs > 0 };
     for (let i = 0; i < 20; i++) stepSwing(w, STEP_MS);
     return s;
   };
 
-  it("cuts the same way three times and back across on the fourth", () => {
+  it("cuts twice alike and thrusts harder and further on the third", () => {
     const w = world();
-    w.player.facing = Math.PI;
-    const run = Array.from({ length: SWING_RUN }, () => swingThrough(w));
-    expect(run.map((s) => s.sweep)).toEqual([1, 1, 1, -1]);
-    // Every cut the same reach; the three alike, the last a little heavier.
-    for (const s of run) expect(s.reach).toBeCloseTo(run[0]!.reach, 6);
-    for (const s of run.slice(1, -1)) expect(s.damage).toBeCloseTo(run[0]!.damage, 6);
-    expect(run[SWING_RUN - 1]!.damage).toBeCloseTo(run[0]!.damage * FINISH_DAMAGE, 6);
-    // The three sweep the cut's arc; the last sweeps wider.
-    expect(run.map((s) => Math.round(s.arc))).toEqual([ARC_DEG, ARC_DEG, ARC_DEG, FINISH_ARC_DEG]);
+    const [a, b, c] = [swingThrough(w), swingThrough(w), swingThrough(w)];
+    expect(b.damage).toBeCloseTo(a.damage, 6);
+    expect(b.reach).toBeCloseTo(a.reach, 6);
+    expect(a.thrust || b.thrust).toBe(false);
+    expect(c.thrust).toBe(true);
+    expect(c.sweepDeg).toBe(0);
+    expect(c.damage).toBeCloseTo(a.damage * THRUST_DAMAGE, 6);
+    expect(c.reach).toBeGreaterThan(a.reach);
   });
 
-  it("rests after the run's last cut, then starts the run afresh", () => {
+  it("brings the second cut back the way the first came", () => {
+    const w = world();
+    w.player.facing = Math.PI;
+    expect([swingThrough(w).sweep, swingThrough(w).sweep]).toEqual([1, -1]);
+  });
+
+  it("rests after the thrust, then starts the run afresh", () => {
     const w = world();
     for (let n = 0; n < SWING_RUN; n++) swingThrough(w);
     // A press during the rest does nothing.
@@ -196,7 +201,63 @@ describe("a run of swings: three cuts, one back across, then a rest", () => {
     for (let i = 0; i < Math.ceil(SWING_BREATH_MS / STEP_MS); i++) stepSwing(w, STEP_MS);
     const next = swingThrough(w);
     expect(next.started).toBe(true);
+    expect(next.thrust).toBe(false);
     expect(w.swing.chained).toBe(false);
+  });
+
+  it("turns the thrust onto a body off the axis, and hits it", () => {
+    const w = world();
+    // 40 degrees off the east facing: outside a straight thrust's width.
+    const a = (40 * Math.PI) / 180;
+    // Placed about the swing's centre, which is lifted off the feet.
+    const e = put(w, 1, w.player.x + Math.cos(a) * 44, w.player.y - SWING_ORIGIN_LIFT + Math.sin(a) * 44);
+    e.speed = 0;
+    // Two cuts first, from far enough off that they miss: the thrust is the test.
+    const [x0, y0] = [e.x, e.y];
+    e.x = w.player.x - 200;
+    for (let n = 0; n < 2; n++) { beginSwing(w.player, w); for (let i = 0; i < 20; i++) stepSwing(w, STEP_MS); }
+    [e.x, e.y] = [x0, y0];
+    beginSwing(w.player, w);
+    expect(w.swing.thrust).toBe(true);
+    expect(w.swing.facing).toBeCloseTo(Math.atan2(e.y - w.swing.y, e.x - w.swing.x), 6);
+    let struck = false;
+    for (let i = 0; i < 20; i++) if (stepSwing(w, STEP_MS).includes(e)) struck = true;
+    expect(struck).toBe(true);
+  });
+
+  it("tracks a body through the thrust's windup, and locks once it strikes", () => {
+    const w = world();
+    const e = put(w, 1, w.player.x - 200, w.player.y);
+    e.speed = 0;
+    for (let n = 0; n < 2; n++) { beginSwing(w.player, w); for (let i = 0; i < 20; i++) stepSwing(w, STEP_MS); }
+    const at = (deg: number) => {
+      const a = (deg * Math.PI) / 180;
+      e.x = w.player.x + Math.cos(a) * 44;
+      e.y = w.player.y - SWING_ORIGIN_LIFT + Math.sin(a) * 44;
+    };
+    at(-10);
+    beginSwing(w.player, w);
+    // It steps during the windup: the thrust follows.
+    at(30);
+    stepSwing(w, STEP_MS);
+    expect(w.swing.facing).toBeCloseTo(Math.atan2(e.y - w.swing.y, e.x - w.swing.x), 6);
+    while (swingPhase(w.player) === "windup") stepSwing(w, STEP_MS);
+    const locked = w.swing.facing;
+    // Once the strike is driving it no longer turns.
+    at(-30);
+    stepSwing(w, STEP_MS);
+    expect(w.swing.facing).toBeCloseTo(locked, 6);
+  });
+
+  it("thrusts straight along the facing with nothing in its cone", () => {
+    const w = world();
+    const e = put(w, 1, w.player.x, w.player.y - 44); // due north: 90 degrees off
+    e.speed = 0;
+    for (let n = 0; n < 2; n++) { beginSwing(w.player, w); for (let i = 0; i < 20; i++) stepSwing(w, STEP_MS); }
+    e.x = w.player.x; e.y = w.player.y - 44;
+    beginSwing(w.player, w);
+    expect(w.swing.thrust).toBe(true);
+    expect(w.swing.facing).toBeCloseTo(0, 6);
   });
 
   it("marks a swing that follows closely as continuing the chain, and one after a pause as not", () => {
