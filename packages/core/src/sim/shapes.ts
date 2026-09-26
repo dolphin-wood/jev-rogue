@@ -323,7 +323,8 @@ export function throwWave(w: World): void {
   b.proc = en.proc;
   b.statusMult = en.statusMult;
   // A swing's, not a cast: not counted in `shotsFired` (see `stepOrbs`).
-  w.events.push({ kind: "spell", x: b.x, y: b.y, what: "wave", facing: box.facing });
+  // `amount` 2 for the run's last cut, whose wave is heard heavier (`shapeEventSound`).
+  w.events.push({ kind: "spell", x: b.x, y: b.y, what: "wave", facing: box.facing, amount: box.finisher ? 2 : 1 });
 }
 
 /**

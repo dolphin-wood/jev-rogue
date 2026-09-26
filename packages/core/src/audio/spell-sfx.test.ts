@@ -33,4 +33,12 @@ describe("shape event sounds", () => {
     const weak = shapeEventSound("stance_answer", 0.4);
     expect(full).not.toEqual(weak);
   });
+
+  it("hears the run's last cut's wave heavier than the others", () => {
+    const plain = shapeEventSound("wave", 1);
+    const last = shapeEventSound("wave", 2);
+    if (plain === null || last === null || plain === "cast" || last === "cast") throw new Error("a wave is heard");
+    expect(last.name).toBe(plain.name);
+    expect(last.pitch).toBeLessThan(plain.pitch);
+  });
 });

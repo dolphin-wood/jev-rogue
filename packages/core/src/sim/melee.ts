@@ -56,9 +56,11 @@ export const SWING_CHAIN_MS = 350;
  * the *run* is bounded instead: three cuts and a rest the enemies' attacks
  * land in, as Hyper Light Drifter's and Death's Door's are.
  *
- * All three are cuts, after Death's Door: the second crosses back the way
- * the first came, and the third crosses again, wider, a little further, and
- * heavier — its weight heard as well as seen. A thrust was the finisher
+ * All three are cuts, after Death's Door: two alike, and the third back the
+ * other way, wider, a little further, and heavier — its weight heard as well
+ * as seen. The first two do not alternate: a cut and a cut back over the same
+ * arc from the same pivot is a windscreen wiper, which is how an alternating
+ * swing read when it was first tried and again when the run brought it back. A thrust was the finisher
  * first, after Hades, and did not suit a top-down view with four facings: a
  * line where the cuts were a sweep, which needed aiming help to land and
  * read thin even when it did. The rest is after the third swing of a chain
@@ -475,10 +477,10 @@ export function beginSwing(p: Player, world: World): void {
   box.knockback = SWING_KNOCKBACK;
   box.sweep = sweepFor(p.swingFacing);
   box.finisher = false;
-  // The run's shape: the second cut comes back; the third crosses again, wider and heavier.
-  if (p.swingRun === 2) box.sweep = box.sweep === 1 ? -1 : 1;
-  else if (p.swingRun >= SWING_RUN) {
+  // The run's shape: two cuts alike, then the third back across, wider and heavier.
+  if (p.swingRun >= SWING_RUN) {
     box.finisher = true;
+    box.sweep = box.sweep === 1 ? -1 : 1;
     box.sweepDeg = FINISH_ARC_DEG - BLADE_DEG;
     box.spread *= FINISH_SPREAD;
     box.damage *= FINISH_DAMAGE;

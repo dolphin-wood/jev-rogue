@@ -166,7 +166,7 @@ describe("the swing's commitment", () => {
   });
 });
 
-describe("a run of swings: a cut, a cut back, a heavier cut, then a rest", () => {
+describe("a run of swings: two cuts alike, a heavier one back, then a rest", () => {
   /** Swings once and lets it play out, then a few steps more: still inside the chain window. */
   const swingThrough = (w: ReturnType<typeof world>) => {
     beginSwing(w.player, w);
@@ -189,11 +189,11 @@ describe("a run of swings: a cut, a cut back, a heavier cut, then a rest", () =>
     expect(c.damage).toBeCloseTo(a.damage * FINISH_DAMAGE, 6);
   });
 
-  it("brings the second cut back the way the first came, and the third across again", () => {
+  it("cuts the same way twice, then brings the third back across", () => {
     const w = world();
     w.player.facing = Math.PI;
-    // And the third crosses again the way the first did.
-    expect([swingThrough(w).sweep, swingThrough(w).sweep, swingThrough(w).sweep]).toEqual([1, -1, 1]);
+    // Two alike — a cut and a cut back read as a windscreen wiper — and the third back across.
+    expect([swingThrough(w).sweep, swingThrough(w).sweep, swingThrough(w).sweep]).toEqual([1, 1, -1]);
   });
 
   it("rests after the third cut, then starts the run afresh", () => {

@@ -201,7 +201,8 @@ export function shapeEventSound(what: string, share = 1): ShapeEventSound {
     case "orb_strike": return { name: "impact_storm", pitch: 1.35 };
     case "boomerang_turn": return { name: "swing_light", pitch: 1.45 };
     case "boomerang_caught": return { name: "cast_spirit", pitch: 1.6 };
-    case "wave": return { name: "cast_spirit", pitch: 1.45 };
+    // The run's last cut throws its wave heavier (`share` 2): the same voice, well down.
+    case "wave": return { name: "cast_spirit", pitch: share >= 2 ? 0.95 : 1.45 };
     case "stance_guard": return { name: "hit_armour", pitch: 1.15 };
     case "stance_answer": return { name: "swing_spin", pitch: share >= 1 ? 1 : 1.25 };
     default: return null;
