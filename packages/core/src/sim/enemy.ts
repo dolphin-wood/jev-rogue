@@ -3,7 +3,7 @@
  * pathfinding; firing expands the declared pattern over the step window, so
  * the shape of a volley is data and adding an enemy is adding a pattern.
  */
-import { BEAT_MS, untilGrid } from "./beat.ts";
+import { BEAT_MS, beats, untilGrid } from "./beat.ts";
 import { ENEMIES, baseArchetype, fillSubspecies, expandPattern, rampFor, resistOf } from "../encounters/index.ts";
 import type { BulletEmission } from "../encounters/patterns.ts";
 import type { BossPhase } from "../encounters/enemies.ts";
@@ -943,7 +943,7 @@ export function makeEnemy(
     phase: 1,
     gapPx: 9999,
     hastedMs: 0,
-    bossFightMs: 0, bossCast: "none", bossCastMs: 0, bossCastEndAt: 0, bossCommitAt: 0, bossBladeAt: 0, bossStartAt: -1, bossNext: "none", bossString: [], bossStringAt0: -1, bossStringN: 1, bossLinked: false, bossLinkedBlow: null, bossHooked: false, bossBolts: 0, bossComboFlip: false, bossMoveMs: 2600, bossMoveIndex: 0, bossBlade: null, bossPlanMs: 0, bossVolleyMs: 0, bossLastAct: "", bossBusy: false, bossAddsPhase: 1,
+    bossFightMs: 0, bossCast: "none", bossCastMs: 0, bossCastEndAt: 0, bossCommitAt: 0, bossBladeAt: 0, bossStartAt: -1, bossNext: "none", bossString: [], bossStringAt0: -1, bossStringN: 1, bossLinked: false, bossLinkedBlow: null, bossHooked: false, bossBolts: 0, bossComboFlip: false, bossMoveMs: 2600, bossMoveIndex: 0, bossBlade: null, bossPlanMs: 0, bossVolleyMs: 0, bossLastAct: "", bossBusy: false, bossAddsPhase: 1, bossRoarMs: 0, bossSummonMs: 0,
     bossTargetX: 0, bossTargetY: 0, airborne: false,
     bossFromX: 0, bossFromY: 0, bossLift: 0,
     pending: [],
@@ -2166,12 +2166,22 @@ export function bossStringHearts(i: number, n: number): number {
 /**
  * Advances the boss's phase from its health, and marks the change.
  *
- * A phase change is a beat: the volley in hand is dropped, the body stands
- * for most of a second, the room shakes, and the renderer swaps the sheet.
- * Without the pause the player is told "it is different now" while being
- * shot at, which is a message they cannot read.
+ * A phase change is a beat: the volley in hand is dropped, the room shakes,
+ * and the renderer swaps the sheet. Without the pause the player is told "it
+ * is different now" while being shot at, which is a message they cannot read.
+ *
+ * Going up a phase it is more than a beat: **the roar** (`BOSS_ROAR_MS`). He
+ * stops dead wherever he is — whatever he was doing is dropped — his armour
+ * breaks off him, and he roars, a dark shudder going out through the hall;
+ * for all of it he cannot be hurt, so the player's burst is not spent into a
+ * cutscene. Then **the call** (`stepBoss` in world.ts): the greatsword up,
+ * the phase's adds rising about him, and violet bolts called down after the
+ * player a beat apart, so the moment he stands still is not a free one.
  */
 const PHASE_CHANGE_PAUSE_MS = 800;
+/** The roar at a phase change, ms: five beats standing, armour off, unhurtable. */
+export const BOSS_ROAR_MS = beats(5);
+
 /** The king's sword wave: what share of its blow it costs, how thick and fast it runs, and the cleave's arc. */
 const BOSS_WAVE_SHARE = 0.5;
 const BOSS_WAVE_THICK_PX = 20;
@@ -2202,6 +2212,7 @@ function stepBossPhase(world: World, e: Enemy): void {
   if (e.archetype !== "boss" || e.hp <= 0) return;
   const next = bossPhaseAt(e.hp / Math.max(1, e.maxHp));
   if (next === e.phase) return;
+  const prev = e.phase;
   e.phase = next;
   e.bossCast = "none";
   e.bossCastMs = 0;
@@ -2219,6 +2230,24 @@ function stepBossPhase(world: World, e: Enemy): void {
   e.telegraphMs = 0;
   dropFireToken(world, e);
   e.attackCooldownMs = Math.max(e.attackCooldownMs, PHASE_CHANGE_PAUSE_MS);
+  if (next > prev) {
+    // Stopped dead: the blade in hand, the chain out, the stagger he was in, all dropped.
+    e.attack = "approach";
+    e.attackMs = 0;
+    e.swing.active = false;
+    e.swing.trackingMs = 0;
+    e.staggerMs = 0;
+    e.armourBreakMs = 0;
+    e.bossHooked = false;
+    e.bossPlanMs = 0;
+    e.velX = 0;
+    e.velY = 0;
+    dropToken(world, e);
+    for (const t of world.tethers) if (t.alive && t.from === e.id) t.alive = false;
+    e.bossRoarMs = BOSS_ROAR_MS;
+    e.bossSummonMs = 0;
+    e.bossBusy = true;
+  }
   world.trauma = Math.min(1, world.trauma + 0.5);
   world.events.push({ kind: "telegraph", x: e.x, y: e.y, what: `boss_phase:${next}` });
 }
@@ -2661,6 +2690,8 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
    * integer, and a tick is a thing the player can see and count.
    */
   e.dotShowMs -= dtMs;
+  // Nothing done to the king through his roar counts, the burn on him included (`Enemy.bossRoarMs`).
+  if (e.bossRoarMs > 0) e.dotShown = 0;
   if (e.dotShowMs <= 0) {
     e.dotShowMs = DOT_TICK_MS;
     /*
@@ -2696,6 +2727,16 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
   }
   if (e.hitFlashMs > 0) e.hitFlashMs -= dtMs;
   if (e.staggerImmuneMs > 0) e.staggerImmuneMs -= dtMs;
+  // The roar and the call: he stands where he is (`stepBossPhase`); `stepBoss` runs their clocks.
+  if (e.bossRoarMs > 0 || e.bossSummonMs > 0) {
+    e.velX = 0;
+    e.velY = 0;
+    e.knockX = 0;
+    e.knockY = 0;
+    e.nudge.x = 0;
+    e.nudge.y = 0;
+    return;
+  }
   /*
    * The threat clock. Anything the player can read as intent resets it: an
    * attack of any phase, a posed move, an aimed volley, a sidestep, and the

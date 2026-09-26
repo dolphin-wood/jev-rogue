@@ -76,7 +76,7 @@ const RIFT_SCAR_MS = 1500;
 
 export function castRift(
   w: World, x: number, y: number, angle: number, length: number,
-  opts: { width?: number; teleMs?: number; damage?: number; bolt?: boolean } = {},
+  opts: { width?: number; teleMs?: number; damage?: number; bolt?: boolean; summon?: boolean } = {},
 ): Rift {
   const r: Rift = {
     alive: true, x, y, angle, length,
@@ -85,6 +85,7 @@ export function castRift(
     activeMs: RIFT_ACTIVE_MS, scarMs: RIFT_SCAR_MS,
     damage: opts.damage ?? 1, struck: false,
     ...(opts.bolt ? { bolt: true } : {}),
+    ...(opts.bolt && opts.summon ? { summon: true } : {}),
   };
   w.rifts.push(r);
   w.events.push({ kind: "telegraph", x, y, what: r.bolt ? "bolt" : length > 0 ? "rift" : "burst" });

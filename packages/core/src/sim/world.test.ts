@@ -1168,6 +1168,8 @@ describe("enemy behaviour", () => {
     // The change is a pause, not a volley: nothing pending, a rest before it acts.
     expect(b.pending).toHaveLength(0);
     expect(b.attackCooldownMs).toBeGreaterThanOrEqual(700);
+    // Through the roar and the call before the next change can come.
+    for (let i = 0; i < 60 * 8 && (b.bossRoarMs > 0 || b.bossSummonMs > 0); i++) { w.player.hearts = 6; step(w, NO_INPUT); }
     b.hp = b.maxHp * 0.2;
     step(w, NO_INPUT);
     expect(b.phase).toBe(3);

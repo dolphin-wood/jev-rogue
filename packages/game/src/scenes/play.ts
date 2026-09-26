@@ -20,7 +20,7 @@ import {
   MUSKET_RANGE, MUSKET_SPREAD_DEG, MUSKET_WINDUP_MS, FLAME_ROLL_MS, FLAME_LIFE_MS, flameRays, muzzleOf,
   ELEMENT_TINT, spellLookOf,
   levelAt, withLevels, levelBonus, LEVEL_HP, swordAt,
-  HIT_FLASH_MS,
+  HIT_FLASH_MS, BOSS_ROAR_MS,
 } from "@jr/core";
 import type {
   Bullet, Enemy, EnemyId, Input, ItemInstance, Mood, Offer, OfferCard, Portal,
@@ -474,6 +474,11 @@ function shadowScale(
 const BOSS_FLOOR_PX = 91 / ART_SCALE;
 const BOSS_FOOT_PX = 10;
 const BOSS_DRAW_RISE_PX = BOSS_FLOOR_PX - BOSS_FOOT_PX;
+/** The king's call at a phase change: its glow and flares, and its bolts' tint — the storm's blue turned violet. */
+const BOSS_CALL_GLOW = 0xb07aff;
+const BOSS_CALL_BOLT = 0x9d5cff;
+/** How long the roar shows the unbinding drawing with its pieces still in it, ms, before the bare one. */
+const BOSS_UNBIND_BURST_MS = 100;
 /** A depth's sheet (`docs/art-workorder-biomes.md`): its floor slabs, decals, floor patches and wall lights. */
 const BIOME_FLOOR_VARIANTS = 4;
 const BIOME_DECO_VARIANTS = 8;
@@ -853,8 +858,8 @@ export class PlayScene extends Phaser.Scene {
   private labIcons = new Map<string, string>();
   private labMetronome = false;
   private labBeat = -1;
-  /** A short replacement drawing while armour pieces leave the phase body. */
-  private bossUnbind = new Map<number, { frame: string; until: number }>();
+  /** The king's roar at a phase change: its dark rings, drawn over the bodies and normal-blended, since they darken. */
+  private roarGfx!: Phaser.GameObjects.Graphics;
   /** Final three-frame collapse, held until the victory card replaces the fight. */
   private bossDeath: { x: number; y: number; startedAt: number } | null = null;
   private sfx!: Sfx;
@@ -1804,6 +1809,7 @@ export class PlayScene extends Phaser.Scene {
     // own marks, under the enemies' threats, so a threat is never hidden by a lure.
     this.spellFloorGfx = this.add.graphics().setDepth(2.2);
     this.airGfx = this.add.graphics().setDepth(9.55);
+    this.roarGfx = this.add.graphics().setDepth(9.5);
     this.ringGfx = this.add.graphics().setDepth(1.97).setBlendMode(Phaser.BlendModes.ADD);
     /*
      * The soil layer: **normal-blended**, and directly under the additive
@@ -7592,6 +7598,7 @@ export class PlayScene extends Phaser.Scene {
           if (what.startsWith("armour_break:")) { sfx.play("armour_break"); break; }
           if (what.startsWith("prop:")) { sfx.play("hit_light", 0.9); break; }
           if (what === "tether_cut") { sfx.play("hit_light", 1.35); break; }
+          if (what === "boss_immune") { sfx.play("hit_armour", 1.2); break; }
           const target = w.enemies.find((e) => Math.hypot(e.x - ev.x, e.y - ev.y) < e.radius + 8);
           // Armour first: steel eating a blow is its own answer, and the
           // player needs to hear that the damage did not land where they aimed.
@@ -7646,9 +7653,10 @@ export class PlayScene extends Phaser.Scene {
           if (ev.what?.startsWith("boss_phase:")) {
             const next = Number(ev.what.slice("boss_phase:".length));
             const king = this.world.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
-            if (king && (next === 2 || next === 3)) {
-              this.bossUnbind.set(king.id, { frame: `boss_unbind_${next - 1}`, until: this.time.now + 520 });
+            // Going up a phase: the armour thrown off as the roar begins (`Enemy.bossRoarMs`), and the roar heard.
+            if (king && king.bossRoarMs > 0 && (next === 2 || next === 3)) {
               this.throwBossArmour(ev.x, ev.y, next);
+              sfx.play("boss_phase", 0.9);
             }
           }
           const cue = this.telegraphFor(ev.what ?? "");
@@ -7662,6 +7670,8 @@ export class PlayScene extends Phaser.Scene {
           else if (what === "heavy_hit") sfx.play("hit_heavy");
           // The boss's ground strikes have their own voice: played as a low heavy hit they lost it to the player's hits.
           else if (what === "boss_land") sfx.play("boss_impact", 0.9);
+          // An add of his rising at the call.
+          else if (what === "boss_summon") sfx.play("cast_void", 0.8);
           else if (what.startsWith("boss_")) sfx.play("boss_impact");
           else if (what.startsWith("ram:")) sfx.play("hit_heavy", 0.78);
           // The boss's arms reaching the floor after their windup.
@@ -7876,6 +7886,40 @@ export class PlayScene extends Phaser.Scene {
     return "hit_light";
   }
 
+  /**
+   * **The roar** (`Enemy.bossRoarMs`): faint dark rings thrown out from his
+   * head one after another, as the Hollow Knight's bosses roar — a shudder
+   * through the air rather than a blast. Wide and soft, thinning and fading
+   * as they go, the edge wavering so they read as air, not as a drawn circle.
+   * Nothing in them hurts; they are how the player is told he cannot be.
+   */
+  private drawBossRoar(e: Enemy): void {
+    const g = this.roarGfx;
+    const since = BOSS_ROAR_MS - e.bossRoarMs;
+    const cx = e.x, cy = e.y - BOSS_DRAW_RISE_PX - 26;
+    const EVERY = 260, LIFE = 900;
+    for (let at = 60; at <= BOSS_ROAR_MS - LIFE * 0.6; at += EVERY) {
+      const t = (since - at) / LIFE;
+      if (t <= 0 || t >= 1) continue;
+      const r = 18 + 300 * (1 - (1 - t) ** 3);
+      const fade = (1 - t) ** 1.4;
+      const pts: { x: number; y: number }[] = [];
+      for (let i = 0; i < 56; i++) {
+        const a = (i / 56) * Math.PI * 2;
+        const wob = 1 + 0.035 * Math.sin(a * 7 + at * 0.013 + since * 0.004) + 0.02 * Math.sin(a * 13 - since * 0.006);
+        pts.push({ x: cx + Math.cos(a) * r * wob, y: cy + Math.sin(a) * r * wob * 0.92 });
+      }
+      g.lineStyle(4 + 20 * (1 - t), 0x07060d, 0.4 * fade);
+      g.strokePoints(pts, true);
+      g.lineStyle(2 + 6 * (1 - t), 0x07060d, 0.3 * fade);
+      g.strokePoints(pts.map((q) => ({ x: cx + (q.x - cx) * 0.9, y: cy + (q.y - cy) * 0.9 })), true);
+    }
+    // The air round him darkened while he roars, easing in and out.
+    const k = Math.min(1, since / 200, e.bossRoarMs / 300);
+    g.fillStyle(0x07060d, 0.14 * k);
+    g.fillCircle(cx, cy, 70);
+  }
+
   /** A telegraph event's sound and pitch, by what the body is about to do. */
   private throwBossArmour(x: number, y: number, nextPhase: number): void {
     const pieces = nextPhase === 2
@@ -7939,6 +7983,8 @@ export class PlayScene extends Phaser.Scene {
      * 100 Hz, which under the boss theme read as a hum rather than an event.
      */
     if (what.startsWith("boss_phase:")) return ["boss_impact", 0.8];
+    // The call: the sword going up, the storm's voice pitched down.
+    if (what === "boss_summon") return ["impact_storm", 0.7];
     if (what.startsWith("boss_")) return ["tele_slam", 0.85];
     if (what.startsWith("stir:")) return ["enemy_wake", 1.15];
     // A sidestep and a blink are movement, not a promise of damage;
@@ -8295,6 +8341,13 @@ export class PlayScene extends Phaser.Scene {
         } else if (ev.kind === "bullet_spent") {
           // Spent in the air: it pinches out rather than vanishing.
           this.playFx("fizzle", ev.x, ev.y, 0, 50, 7.1);
+        } else if (ev.kind === "hazard_tick" && ev.what === "boss_summon") {
+          // An add of the king's called up: a violet flare where it rises, under its own spawn rings.
+          this.burst(ev.x, ev.y, BOSS_CALL_GLOW, 12, 220, undefined, Math.PI * 2, 0.8);
+          this.ring(ev.x, ev.y, 4, 38, BOSS_CALL_GLOW, 420, 3);
+        } else if (ev.kind === "enemy_hit" && ev.what === "boss_immune") {
+          // The blow ringing off the roaring king: pale sparks, no wound.
+          this.burst(ev.x, ev.y - 20, 0xd8d0ff, 5, 160, undefined, Math.PI * 2, 0.5);
         } else if (ev.kind === "enemy_hit" && ev.what === "tether_cut") {
           // The cut: the line breaks into sparks along its length.
           this.burst(ev.x, ev.y, 0xd8f4ff, 14, 260, undefined, Math.PI * 2, 0.7);
@@ -13178,10 +13231,22 @@ export class PlayScene extends Phaser.Scene {
             const img = this.add.image(r.x, r.y, this.textureKey, boltFrame).setOrigin(0.5, 1).setDepth(10);
             img.setScale(1.4 / ART_SCALE, Math.max(1.4 / ART_SCALE, (r.y - this.cameras.main.worldView.y) / Math.max(1, img.height)));
             this.hazardMarks.push(img);
+            /*
+             * The call's bolts are his storm's, turned violet (`Rift.summon`).
+             * A multiplied tint cannot turn the drawn blue violet, so the bolt
+             * is filled violet and its own drawing laid over it thinner and
+             * added, for the white-hot core.
+             */
+            if (r.summon) {
+              img.setTintFill(BOSS_CALL_BOLT);
+              const core = this.add.image(r.x, r.y, this.textureKey, boltFrame).setOrigin(0.5, 1).setDepth(10.01)
+                .setScale(img.scaleX * 0.5, img.scaleY).setTint(0xf4e8ff).setBlendMode(Phaser.BlendModes.ADD);
+              this.hazardMarks.push(core);
+            }
           }
-          this.hazardGfx.fillStyle(0xe4f4ff, 0.75 * (1 - t));
+          this.hazardGfx.fillStyle(r.summon ? 0xeee4ff : 0xe4f4ff, 0.75 * (1 - t));
           this.hazardGfx.fillCircle(r.x, r.y, (r.width / 2) * (1 + 0.35 * t));
-          this.hazardGfx.lineStyle(2, 0x7fc8ff, 0.9 * (1 - t));
+          this.hazardGfx.lineStyle(2, r.summon ? BOSS_CALL_GLOW : 0x7fc8ff, 0.9 * (1 - t));
           this.hazardGfx.strokeCircle(r.x, r.y, (r.width / 2) * (1.1 + 0.5 * t));
         } else {
           this.hazardGfx.fillStyle(0x151320, 0.4 * Math.max(0, r.scarMs / 1500));
@@ -14321,12 +14386,21 @@ export class PlayScene extends Phaser.Scene {
     }
     const label = (k: string, x: number, y: number, t: string, st: Phaser.Types.GameObjects.Text.TextStyle) => this.ftext(k, x, y, t, st);
     this.drawKingGoblet(this.game.loop.delta * this.labSpeed);
+    this.roarGfx.clear();
     for (const e of w.enemies) {
       if (e.archetype === "boss" && e.hp <= 0) continue;
-      const unbind = this.bossUnbind.get(e.id);
-      if (unbind && unbind.until <= this.time.now) this.bossUnbind.delete(e.id);
+      /*
+       * The roar is held on the unbinding drawing of the phase he is breaking
+       * into, the whole of it: with its pieces for the instant they burst off
+       * him, then without them (`_bare`), since the pieces fly on as their own
+       * sprites (`throwBossArmour`) and drawn into a held frame they would hang
+       * in the air beside him for the rest of it.
+       */
+      const roaring = e.archetype === "boss" && e.bossRoarMs > 0;
+      if (roaring) this.drawBossRoar(e);
+      const unbind = `boss_unbind_${Math.min(2, Math.max(1, e.phase - 1))}`;
       drawEnemy(this, w, e, this.textureKey, this.atlas, this.sprites, label, this.subspecies,
-        unbind && unbind.until > this.time.now ? unbind.frame : undefined);
+        roaring ? (BOSS_ROAR_MS - e.bossRoarMs < BOSS_UNBIND_BURST_MS ? unbind : `${unbind}_bare`) : undefined);
     }
     if (this.bossDeath) {
       const { x, y, startedAt } = this.bossDeath;
@@ -15240,6 +15314,8 @@ function specialPose(w: World, e: Enemy): string | null {
     case "lancer":
       return e.spikeMs > 0 ? "burst" : null;
     case "boss":
+      // The call after the roar (`Enemy.bossSummonMs`): the storm's raise, the sword held up.
+      if (e.bossSummonMs > 0) return "storm";
       if (e.armourBreakMs > 0 || e.staggerMs > 0)
         return e.armourBreakMs > 0 || e.staggerMs > STAGGER_MS * .5 ? "stagger1" : "stagger0";
       /*
@@ -16079,14 +16155,16 @@ function drawEnemy(
    * larger on each pulse and fading as it swells, like a drop shadow of
    * light. Only while the storm is in hand.
    */
-  if (e.archetype === "boss" && e.bossCast === "storm") {
+  if (e.archetype === "boss" && (e.bossCast === "storm" || e.bossSummonMs > 0)) {
+    // The call's glow is the storm's, violet: the same raise, calling something else down.
+    const tint = e.bossSummonMs > 0 ? BOSS_CALL_GLOW : 0x7fc8ff;
     const beat = (w.tick % 24) / 24;
     for (const [k, a] of [[0, 0.55], [0.5, 0.35]] as const) {
       const t = (beat + k) % 1;
       const glow = scene.add.image(img.x, img.y, textureKey, name)
         .setOrigin(img.originX, img.originY).setFlipX(img.flipX).setRotation(img.rotation)
         .setScale(img.scaleX * (1.02 + 0.08 * t), img.scaleY * (1.02 + 0.08 * t))
-        .setTintFill(0x7fc8ff).setBlendMode(Phaser.BlendModes.ADD).setAlpha(a * (1 - t))
+        .setTintFill(tint).setBlendMode(Phaser.BlendModes.ADD).setAlpha(a * (1 - t))
         .setDepth(img.depth - 0.0005);
       group.add(glow);
     }

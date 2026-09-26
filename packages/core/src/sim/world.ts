@@ -69,7 +69,7 @@ import {
   STATUS_BREADTH_MULT, statusBreadth,
   meleeSpec,
   spikeVolley, SPIKE_SIZE, release, bossPhase, BOSS_POWER,
-  beginWindup, bossBehind, bossLevel,
+  beginWindup, bossBehind, bossLevel, BOSS_ROAR_MS,
 } from "./enemy.ts";
 import { feature } from "../rooms/features.ts";
 
@@ -1205,8 +1205,10 @@ function resolveSwing(w: World, dtMs: number): void {
   for (const e of struck) {
     // A blow of the swing proper, not the spin's: the one kind of kill a streak counts.
     w.swordBlow = w.player.swingStretch === 1;
-    const { broke } = hurtEnemy(w, e, box.damage, e.awake ? "" : "sneak", w.player);
+    const { broke, blocked } = hurtEnemy(w, e, box.damage, e.awake ? "" : "sneak", w.player);
     w.swordBlow = false;
+    // Off the roaring king: no damage, no gauge, no mana — only the clang and a jolt.
+    if (blocked) { impact(w, HITSTOP_HIT, TRAUMA_HIT); continue; }
     w.stats.damageDealt += box.damage;
     w.stats.swordDamage += box.damage;
     e.hitFlashMs = HIT_FLASH_MS;
@@ -1291,7 +1293,12 @@ const PROP_HIT_ID_BASE = -2;
  */
 export function hurtEnemy(
   w: World, e: Enemy, raw: number, tag = "", from?: { x: number; y: number },
-): { broke: boolean } {
+): { broke: boolean; blocked?: boolean } {
+  // The king roaring cannot be hurt (`Enemy.bossRoarMs`): the blow rings off him.
+  if (e.bossRoarMs > 0) {
+    if (raw > 0 && from) w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: "boss_immune" });
+    return { broke: false, blocked: true };
+  }
   /*
    * **Shatter.** The first hit on a frozen body breaks the ice and lands at
    * three times its damage: freezing is the setup, and this is the payoff
@@ -2660,13 +2667,22 @@ function bossStormMs(phase: number): number {
  * inside the hall. `late` is how far past its beat the stepped clock marked
  * it, given back out of the mark so the bolt still falls on the beat.
  */
-function stormBolt(w: World, e: Enemy, i: number, late: number): void {
+function stormBolt(w: World, e: Enemy, i: number, late: number, summon = false): void {
   const p = w.player;
   const lead = i % 2 === 1 ? BOSS_STORM_LEAD : 0;
   const ext = w.room.extent;
   const x = Math.max(TILE_PX * 1.5, Math.min((ext.w - 1.5) * TILE_PX, p.x + (p.x - e.lookX) * lead));
   const y = Math.max(TILE_PX * 1.5, Math.min((ext.h - 1.5) * TILE_PX, p.y + (p.y - e.lookY) * lead));
-  castRift(w, x, y, 0, 0, { width: BOSS_STORM_RADIUS * 2, teleMs: BOSS_STORM_MARK_MS - late, damage: BOSS_STORM_DAMAGE * e.damageMult, bolt: true });
+  castRift(w, x, y, 0, 0, { width: BOSS_STORM_RADIUS * 2, teleMs: BOSS_STORM_MARK_MS - late, damage: BOSS_STORM_DAMAGE * e.damageMult, bolt: true, summon });
+}
+
+/**
+ * How long the call holds him (`stepBossPhase`): a beat with the sword up,
+ * then the storm's bolts after the player — as many as the phase's storm —
+ * a beat apart, and the last one's mark and fall.
+ */
+function bossSummonMs(phase: number): number {
+  return BEAT_MS + ((BOSS_STORM_BOLTS[phase] ?? 3) - 1) * BEAT_MS + BOSS_STORM_MARK_MS + 250;
 }
 
 /** The boss's chain lies on the floor three beats: heavier than a snarecaster's 730 ms. */
@@ -2675,10 +2691,50 @@ const BOSS_HOOK_AIM_MS = beats(3);
 export const BOSS_HOOK_REACH_PX = TILE_PX * 11;
 const BOSS_QUAKE_REACH = TILE_PX * 5;
 const BOSS_QUAKE_SECOND_MS = beats(1.25);
-const BOSS_ADDS: Readonly<Record<number, readonly EnemyId[]>> = {
-  2: ["rusher", "rusher"],
-  3: ["lancer", "shooter"],
+/**
+ * **The call's adds**, by phase: the bodies every call brings (`sure`), and
+ * `more` of them drawn from a wider mix, so no two fights' calls are the same
+ * company. Phase II is a pack at his feet with a few things to watch past it;
+ * phase III is heavier, a body to be walked round and a line to break.
+ */
+const BOSS_ADDS: Readonly<Record<number, { sure: readonly EnemyId[]; mix: readonly EnemyId[]; more: number }>> = {
+  2: { sure: ["rusher", "rusher"], mix: ["lancer", "orbiter", "shooter", "cinderling", "wisp"], more: 2 },
+  3: { sure: ["lancer", "tank"], mix: ["shooter", "warden", "snarecaster", "pinner", "wisp", "fusilier"], more: 3 },
 };
+/** How far from him the call's adds rise, px, and how near the player one may. */
+const BOSS_SUMMON_RING_PX = 96;
+const BOSS_SUMMON_CLEAR_PX = 48;
+
+/** The call's company for `phase`: the sure bodies, and `more` drawn from the mix without repeats. */
+function bossAddsFor(w: World, phase: number): EnemyId[] {
+  const table = BOSS_ADDS[phase];
+  if (!table) return [];
+  const mix = [...table.mix];
+  const out = [...table.sure];
+  for (let i = 0; i < table.more && mix.length > 0; i++) out.push(mix.splice(Math.floor(w.rng.next() * mix.length), 1)[0]!);
+  return out;
+}
+
+/** Where the call's adds rise: a ring about him, each on its own floor cell, none on the player. */
+function bossSummonSpots(w: World, e: Enemy, n: number): { x: number; y: number }[] {
+  const spots: { x: number; y: number }[] = [];
+  const turn = w.rng.next() * Math.PI * 2;
+  for (let i = 0; i < n; i++) {
+    let best: { x: number; y: number } | null = null;
+    // Round the ring from its own place until a cell is free of the others and clear of the player.
+    for (let k = 0; k < 12 && !best; k++) {
+      const a = turn + ((i + k / 12) / n) * Math.PI * 2;
+      const r = BOSS_SUMMON_RING_PX + (k % 3) * 18;
+      const [gx, gy] = nearestFloor(w, e.x + Math.cos(a) * r, e.y + Math.sin(a) * r);
+      const x = (gx + 0.5) * TILE_PX, y = (gy + 0.5) * TILE_PX;
+      if (spots.some((s) => Math.hypot(s.x - x, s.y - y) < TILE_PX * 1.5)) continue;
+      if (Math.hypot(w.player.x - x, w.player.y - y) < BOSS_SUMMON_CLEAR_PX) continue;
+      best = { x, y };
+    }
+    if (best) spots.push(best);
+  }
+  return spots;
+}
 
 /**
  * The travelling band the slam throws out. Born at the sword's own reach, so
@@ -2742,7 +2798,7 @@ export const BOSS_MOVE_NAMES: readonly BossMove[] = ["slam", "quake", "leap", "h
  */
 export function queueBossMove(w: World, move: BossMove): boolean {
   const e = w.enemies.find((b) => b.archetype === "boss" && b.hp > 0);
-  if (!e || e.bossCast !== "none" || e.attack !== "approach" || e.airborne) return false;
+  if (!e || e.bossCast !== "none" || e.attack !== "approach" || e.airborne || e.bossRoarMs > 0 || e.bossSummonMs > 0) return false;
   const unit = BOSS_ON_DOWNBEAT.has(move) ? BAR_MS : BEAT_MS;
   const commitAt = e.bossFightMs + BOSS_COMMIT_MS[move];
   // It is his turn now, in place of whatever he had chosen.
@@ -2759,7 +2815,8 @@ export function queueBossMove(w: World, move: BossMove): boolean {
 /** The boss lab's blade on demand: `kind` wound up at the player now, on its beat. */
 export function forceBossBlade(w: World, kind: MeleeKind): boolean {
   const e = w.enemies.find((b) => b.archetype === "boss" && b.hp > 0);
-  if (!e || e.bossCast !== "none" || e.attack !== "approach" || e.airborne || e.bossNext !== "none") return false;
+  if (!e || e.bossCast !== "none" || e.attack !== "approach" || e.airborne || e.bossNext !== "none"
+    || e.bossRoarMs > 0 || e.bossSummonMs > 0) return false;
   e.attackCooldownMs = 0;
   beginWindup(w, e, w.player, kind);
   return true;
@@ -2784,20 +2841,61 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
    * longer rather than harder, and the length of it is doc 020's.
    */
   e.damageMult = BOSS_POWER * rampFor(w.roomIndex).power;
-  // Adds at a phase change, once per phase.
-  const addsFor = BOSS_ADDS[e.phase];
-  if (addsFor && e.bossAddsPhase < e.phase) {
-    e.bossAddsPhase = e.phase;
-    addsFor.forEach((id, i) => {
-      const a = (i / addsFor.length) * Math.PI * 2 + Math.PI / 4;
-      const [gx, gy] = nearestFloor(w, e.x + Math.cos(a) * 70, e.y + Math.sin(a) * 70);
-      const add = makeEnemy(w.nextEnemyId++, id, (gx + 0.5) * TILE_PX, (gy + 0.5) * TILE_PX, [], rampFor(w.roomIndex));
-      add.awake = true;
-      // The king's, like the king: nothing in this room pays experience,
-      // because the run ends in it (`run/levels.ts`).
-      add.summoned = true;
-      w.enemies.push(add);
-    });
+  /*
+   * **The roar, then the call** (`stepBossPhase`). Through the roar he only
+   * stands. As it ends, once per phase, he holds the greatsword up and calls:
+   * the phase's adds rise about him (each out of its own spawn, as any body
+   * arrives), and violet bolts are called down after the player a beat apart
+   * — the storm's, aimed the same way — so the call is not a free moment to
+   * stand at him and cut.
+   */
+  if (e.bossRoarMs > 0) {
+    e.bossRoarMs -= dtMs;
+    /*
+     * The hall shakes under it for the whole of it: a hard jolt as it opens,
+     * then a held rumble (the camera shakes by trauma squared, so 0.6 is a
+     * steady tremor, not a blow), let go over its last quarter.
+     */
+    const into = BOSS_ROAR_MS - e.bossRoarMs;
+    const rumble = into < 180 ? 0.85 : 0.6 * Math.min(1, e.bossRoarMs / (BOSS_ROAR_MS * 0.25));
+    w.trauma = Math.max(w.trauma, rumble);
+    if (e.bossRoarMs > 0) return;
+    e.bossRoarMs = 0;
+    const adds = e.bossAddsPhase < e.phase ? bossAddsFor(w, e.phase) : [];
+    e.bossAddsPhase = Math.max(e.bossAddsPhase, e.phase);
+    if (adds.length > 0) {
+      bossSummonSpots(w, e, adds.length).forEach((s, i) => {
+        const add = makeEnemy(w.nextEnemyId++, adds[i]!, s.x, s.y, [], rampFor(w.roomIndex));
+        add.awake = true;
+        // The king's, like the king: nothing in this room pays experience,
+        // because the run ends in it (`run/levels.ts`).
+        add.summoned = true;
+        w.enemies.push(add);
+        w.events.push({ kind: "hazard_tick", x: s.x, y: s.y, what: "boss_summon" });
+      });
+      e.bossSummonMs = bossSummonMs(e.phase);
+      e.bossBolts = 0;
+      // The first bolt marked on the beat after next, so they fall on the beats as the storm's do.
+      e.bossCommitAt = e.bossFightMs + BEAT_MS + untilGrid(e.bossFightMs + BEAT_MS, BEAT_MS);
+      w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: "boss_summon" });
+      return;
+    }
+    e.bossBusy = false;
+    e.bossMoveMs = 1400;
+    return;
+  }
+  if (e.bossSummonMs > 0) {
+    e.bossSummonMs -= dtMs;
+    const n = BOSS_STORM_BOLTS[e.phase] ?? 3;
+    while (e.bossBolts < n && e.bossFightMs >= e.bossCommitAt + e.bossBolts * BEAT_MS - 1e-6) {
+      stormBolt(w, e, e.bossBolts, Math.max(0, e.bossFightMs - (e.bossCommitAt + e.bossBolts * BEAT_MS)), true);
+      e.bossBolts++;
+    }
+    if (e.bossSummonMs > 0 || e.bossBolts < n) return;
+    e.bossSummonMs = 0;
+    e.bossBusy = false;
+    e.bossMoveMs = 1400;
+    return;
   }
 
   /*
