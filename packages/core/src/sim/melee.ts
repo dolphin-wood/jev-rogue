@@ -367,9 +367,14 @@ export function canSwing(p: Player): boolean {
    * `swift_hand` cuts the recovery: the last part of it can be cancelled into
    * the next swing. It multiplied `mods.swingRecovery` and nothing read it.
    * Never for the spin, whose recovery is its commitment.
+   *
+   * **Only the recovery.** From three stacks the window reached back past
+   * it into the active frames, so a held key cut each swing short: its hit
+   * window was clipped, and it never reached the end of its active frames,
+   * which is where the enchant's wave is thrown — three waves in ten swings.
    */
   const cut = SWING_RECOVER_MS * (1 - (p.mods?.swingRecovery ?? 1)) * 4;
-  return p.swingStretch === 1 && p.swingMs <= cut;
+  return p.swingStretch === 1 && swingPhase(p) === "recover" && p.swingMs <= cut;
 }
 
 /**
@@ -551,7 +556,8 @@ export function stepSwing(world: World, dtMs: number): Enemy[] {
     p.chainMs = SWING_CHAIN_MS;
     // The end of a run: the sword rests, and the chain after it starts afresh.
     if (p.swingRun >= SWING_RUN && p.swingStretch === 1) {
-      p.swingBreathMs = SWING_BREATH_MS;
+      // `swift_hand` shortens the rest by its own factor, as it does the recovery.
+      p.swingBreathMs = SWING_BREATH_MS * (p.mods?.swingRecovery ?? 1);
       p.swingRun = 0;
       p.chainMs = 0;
     }

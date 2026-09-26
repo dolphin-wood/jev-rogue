@@ -137,7 +137,7 @@ export const STAT_UPGRADES: readonly StatUpgrade[] = [
     family: "sword",
     magnitude: -0.1,
     description:
-      "The swing recovers sooner, so the sword swings more often.",
+      "The swing recovers sooner, and the pause after a combo is shorter.",
   },
 ];
 

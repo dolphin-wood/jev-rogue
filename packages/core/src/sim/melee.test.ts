@@ -7,7 +7,7 @@ import {
   wallSlamSquareness, SWING_RUN, SWING_BREATH_MS, THRUST_DAMAGE, SWING_ORIGIN_LIFT,
 } from "./melee.ts";
 import { createWorld, step } from "./world.ts";
-import { NO_INPUT, PLAYER_RADIUS, STEP_MS } from "./types.ts";
+import { NO_INPUT, PLAYER_RADIUS, STEP_MS, noMods } from "./types.ts";
 import type { Input, World } from "./types.ts";
 import { makeEnemy } from "./enemy.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
@@ -258,6 +258,40 @@ describe("a run of swings: a cut, a cut back, a thrust, then a rest", () => {
     beginSwing(w.player, w);
     expect(w.swing.thrust).toBe(true);
     expect(w.swing.facing).toBeCloseTo(0, 6);
+  });
+
+  it("with swift hand, cancels only the recovery, so every swing throws the enchant's wave", () => {
+    const g = generateRoom(
+      { space: "open_arena", symmetry: "mirrored", size: "vast", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
+      "S", "combat", src.stream("room"), { plain: true },
+    );
+    // Four stacks: the window reached back into the active frames from three.
+    const w = createWorld({
+      room: toRoomPlan(g, { id: "r", seed_key: "k", reward_kind: "item", params_source: "rule" }),
+      encounter: null, props: 0, staff: { slots: 6, mana_max: 999 },
+      mods: { ...noMods(), swingRecovery: 0.9 ** 4 },
+      slots: [plainInstance("crescent_edge"), null, null, null, null, null], hearts: 6, rng: src.stream("world"),
+    });
+    w.player.x = 336; w.player.y = 208; w.player.mana = 999;
+    step(w, input({ spell: 0 }));
+    for (let i = 0; i < 30; i++) step(w, input());
+    expect(w.player.enchant).not.toBeNull();
+    let swings = 0, waves = 0, prev = 0;
+    for (let i = 0; i < 180; i++) {
+      step(w, input({ swing: true }));
+      if (w.player.swingMs > prev) swings++;
+      prev = w.player.swingMs;
+      waves += w.events.filter((e) => e.kind === "spell" && e.what === "wave").length;
+    }
+    // The last swing may still be in the air when the run stops.
+    expect(waves).toBeGreaterThanOrEqual(swings - 1);
+  });
+
+  it("shortens the rest after a run by swift hand's factor", () => {
+    const w = world();
+    w.player.mods = { ...w.player.mods, swingRecovery: 0.9 };
+    for (let n = 0; n < SWING_RUN; n++) { beginSwing(w.player, w); for (let i = 0; i < 20 && w.player.swingMs > 0; i++) stepSwing(w, STEP_MS); }
+    expect(w.player.swingBreathMs).toBeCloseTo(SWING_BREATH_MS * 0.9, 6);
   });
 
   it("marks a swing that follows closely as continuing the chain, and one after a pause as not", () => {

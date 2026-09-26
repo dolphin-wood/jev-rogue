@@ -88,7 +88,7 @@ export const ZH_CONTENT: ContentTable = {
   leeching_edge: { name: "吸蓝刃", description: "挥剑命中时回复更多法力。" },
   keen_edge: { name: "利刃", description: "剑的伤害提高。" },
   long_reach: { name: "长刃", description: "挥剑的范围更大。" },
-  swift_hand: { name: "快剑", description: "挥剑后恢复更快，能砍得更勤。" },
+  swift_hand: { name: "快剑", description: "挥剑后恢复更快，连段之间的停顿也更短。" },
 
   /* -------------------------------- schools ------------------------------ */
   flame: { name: "火焰" },

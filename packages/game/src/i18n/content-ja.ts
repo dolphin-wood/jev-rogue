@@ -86,7 +86,7 @@ export const JA_CONTENT: ContentTable = {
   leeching_edge: { name: "吸魔の刃", description: "剣が当たったときのマナ回復が増える。" },
   keen_edge: { name: "鋭刃", description: "剣の威力が上がる。" },
   long_reach: { name: "長刃", description: "剣を振る範囲が広がる。" },
-  swift_hand: { name: "早業", description: "剣を振ったあとの隙が短くなる。" },
+  swift_hand: { name: "早業", description: "剣を振ったあとの隙と、連撃のあとの間が短くなる。" },
 
   /* -------------------------------- schools ------------------------------ */
   flame: { name: "炎" },
