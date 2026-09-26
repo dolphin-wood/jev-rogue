@@ -2669,8 +2669,9 @@ export const BOSS_LEAP_SKY_PX = 640;
 /** How fast the mark follows the player while he is up, px/s: their own walk, a little over. */
 export const BOSS_LEAP_HUNT_SPEED = PLAYER_SPEED * 1.1;
 /*
- * **The fall into phase III** (the meteor). No roar and no adds: he goes up
- * out of the hall as the leap goes, and while he is up the roof comes down —
+ * **The fall into phase III** (the meteor). The armour breaks and he roars,
+ * as into phase II; then, where phase II calls its adds, he goes up out of
+ * the hall as the leap goes, and while he is up the roof comes down —
  * stones marked on the floor a beat apart, one at the player and the rest
  * anywhere in the hall — and once the last has fallen his mark shows in the
  * middle, and he comes down there on the downbeat, with the biggest landing in the fight and the band. The music
@@ -3016,6 +3017,14 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
     w.trauma = Math.max(w.trauma, rumble);
     if (e.bossRoarMs > 0) return;
     e.bossRoarMs = 0;
+    // Into phase III, no call: the fall (`BOSS_METEOR_GATHER_MS`), set going on the next step.
+    if (e.phase >= 3) {
+      e.bossAddsPhase = Math.max(e.bossAddsPhase, e.phase);
+      e.bossCast = "meteor";
+      e.bossCastEndAt = -1;
+      w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: "boss_meteor" });
+      return;
+    }
     const adds = e.bossAddsPhase < e.phase ? bossAddsFor(w, e.phase) : [];
     e.bossAddsPhase = Math.max(e.bossAddsPhase, e.phase);
     if (adds.length > 0) {

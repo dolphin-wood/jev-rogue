@@ -7764,13 +7764,11 @@ export class PlayScene extends Phaser.Scene {
               sfx.play("boss_roar");
               sfx.holdMusic(0.65, BOSS_ROAR_MS / 1000);
             }
-            // Into phase III: the armour thrown off as he goes up, the roar, and the music held down under the
-            // whole fall, to come back at phase III's tempo with the landing (`BOSS_METEOR_GATHER_MS`).
-            if (king && king.bossCast === "meteor") {
-              this.throwBossArmour(ev.x, ev.y, next);
-              sfx.play("boss_roar");
-              sfx.holdMusic(0.75, (BOSS_METEOR_GATHER_MS + BOSS_METEOR_UP_MS + BOSS_METEOR_RAIN_MS) / 1000);
-            }
+          }
+          // After phase III's roar, the fall: the music held down under all of it, to come back at phase III's
+          // tempo with the landing (`BOSS_METEOR_GATHER_MS`).
+          if (ev.what === "boss_meteor") {
+            sfx.holdMusic(0.75, (BOSS_METEOR_GATHER_MS + BOSS_METEOR_UP_MS + BOSS_METEOR_RAIN_MS) / 1000);
           }
           const cue = this.telegraphFor(ev.what ?? "");
           if (cue) sfx.play(cue[0], cue[1]);

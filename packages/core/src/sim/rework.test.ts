@@ -366,7 +366,7 @@ describe("the boss", () => {
     expect(b.meleeKind).toBe("cleave");
   });
 
-  it("falls into phase III: no adds, up out of the hall, stones a beat apart, and down in the middle on the downbeat", () => {
+  it("falls into phase III: the roar, then no adds but up out of the hall, stones a beat apart, and down in the middle on the downbeat", () => {
     const w = world();
     const b = boss(w);
     b.hp = b.maxHp * 0.5;
@@ -379,8 +379,13 @@ describe("the boss", () => {
     w.player.y = b.y + 40;
     step(w, NO_INPUT);
     expect(b.phase).toBe(3);
+    // The armour breaks and he roars first, as into phase II, at the old tempo.
+    expect(b.bossRoarMs).toBeGreaterThan(0);
+    expect(bossTempo(b)).toBe(1);
+    expect(bossMusicPhase(b)).toBe(2);
+    for (let i = 0; i < 60 * 3 && b.bossRoarMs > 0; i++) { w.player.hearts = 6; w.player.invulnMs = 1e9; step(w, NO_INPUT); }
+    step(w, NO_INPUT);
     expect(b.bossCast).toBe("meteor");
-    expect(b.bossRoarMs).toBe(0);
     expect(bossTempo(b)).toBe(1);
     expect(bossMusicPhase(b)).toBe(2);
     let up = false, landedAt = -1, marks = 0, atPlayer = 0, pendingAtTell = -1;

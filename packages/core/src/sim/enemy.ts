@@ -2268,12 +2268,17 @@ export function bossDashWake(world: World, e: Enemy): void {
  * into it (`BOSS_METEOR_MS`) is still played at the old tempo.
  */
 export function bossTempo(e: Enemy): number {
-  return e.archetype === "boss" && e.phase >= 3 && !(e.bossCast === "meteor" && e.bossCastMs > 0) ? BOSS_RAGE_TEMPO : 1;
+  return e.archetype === "boss" && e.phase >= 3 && !bossFalling(e) ? BOSS_RAGE_TEMPO : 1;
 }
 
 /** The phase the boss piece plays: phase III's layers come in with the landing, as its tempo does. */
 export function bossMusicPhase(e: Enemy): number {
-  return e.phase >= 3 && e.bossCast === "meteor" && e.bossCastMs > 0 ? 2 : e.phase;
+  return e.phase >= 3 && bossFalling(e) ? 2 : e.phase;
+}
+
+/** Whether he is still on his way into phase III: the roar, or the fall before its landing. */
+function bossFalling(e: Enemy): boolean {
+  return e.bossRoarMs > 0 || e.bossCast === "meteor" && (e.bossCastMs > 0 || e.bossCastEndAt < 0);
 }
 
 function stepBossPhase(world: World, e: Enemy): void {
@@ -2317,17 +2322,8 @@ function stepBossPhase(world: World, e: Enemy): void {
     for (const t of world.tethers) if (t.alive && t.from === e.id) t.alive = false;
     e.bossSummonMs = 0;
     e.bossBusy = true;
-    /*
-     * Into phase III he does not roar and call: he goes up out of the hall,
-     * the roof comes down, and he comes down after it in the middle — the
-     * fall (`BOSS_METEOR_MS` in world.ts, which sets it going on its first
-     * step). Into phase II, the roar and the adds.
-     */
-    if (next >= 3) {
-      e.bossRoarMs = 0;
-      e.bossCast = "meteor";
-      e.bossCastEndAt = -1;
-    } else e.bossRoarMs = BOSS_ROAR_MS;
+    // The armour breaks off him and he roars; after it, the call (phase II) or the fall (phase III, `stepBoss`).
+    e.bossRoarMs = BOSS_ROAR_MS;
   }
   world.trauma = Math.min(1, world.trauma + 0.5);
   world.events.push({ kind: "telegraph", x: e.x, y: e.y, what: `boss_phase:${next}` });
