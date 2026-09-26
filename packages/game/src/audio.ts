@@ -53,6 +53,16 @@ const STYLED: readonly SfxName[] = [
   "pickup_coin",
 ];
 
+/**
+ * A style's own version played at another rate, where it sits wrong against
+ * the rest of its set. The 16-bit hurt is a yelp falling from about 680 Hz
+ * while every other hit in that set is under 350: heard as shrill, the one
+ * high thing in a fight of thuds. Four semitones down it sits with them.
+ */
+const STYLED_RATE: Partial<Record<MusicStyle, Partial<Record<SfxName, number>>>> = {
+  "16bit": { hurt: 0.78 },
+};
+
 const SFX_VOLUME_KEY = "jr.vol.sfx";
 const MUSIC_VOLUME_KEY = "jr.vol.music";
 
@@ -201,7 +211,8 @@ export class Sfx {
     const styled = `${this.style}:${name}_${v}`;
     const key = this.scene.cache.audio.exists(styled) ? styled : `${name}_${v}`;
     if (!this.scene.cache.audio.exists(key)) return;
-    const rate = (0.94 + Math.random() * 0.12) * pitch;
+    const styleRate = key === styled ? STYLED_RATE[this.style]?.[name] ?? 1 : 1;
+    const rate = (0.94 + Math.random() * 0.12) * pitch * styleRate;
     const buffer = this.scene.cache.audio.get(key) as { duration?: number } | undefined;
     const durationMs = ((buffer?.duration ?? 0.25) * 1000) / rate;
     const d = this.mixer.admit({ name, now: this.scene.time.now, durationMs, target });
