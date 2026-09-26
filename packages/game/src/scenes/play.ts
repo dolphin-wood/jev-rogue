@@ -83,9 +83,9 @@ import type { ViewBox } from "./ground.ts";
 import {
   ART_SCALE, TELE_HOT, TELE_RIM, drawAimLine, drawBlastRing, drawFlameCone, drawLeapMark,
   drawQuakeTell, drawRiftBurst, drawRiftCircle, drawRingTell, drawSectorTell,
-  drawSlamTell, drawStrikeMark,
+  drawSlamTell, drawStrikeMark, TELE_ROCK,
 } from "./telegraph.ts";
-import { BAR_MS, BEAT_MS, BOSS_PHASES, BOSS_SLAM_STOMP_PX, BOSS_METEOR_LAND_PX, BOSS_METEOR_MARK_MS, MELEE_ATTACKS, RUN_BOSS_ROOM, bossMusicPhase, bossSlamNext, bossTempo, forceBossBlade, propState, queueBossMove } from "@jr/core";
+import { BAR_MS, BEAT_MS, BOSS_PHASES, BOSS_SLAM_STOMP_PX, BOSS_METEOR_LAND_PX, BOSS_METEOR_LAND_TELL_MS, MELEE_ATTACKS, RUN_BOSS_ROOM, bossMusicPhase, bossSlamNext, bossTempo, forceBossBlade, propState, queueBossMove } from "@jr/core";
 import type { BossMove } from "@jr/core";
 import type { BossHold, BossLabFrame } from "../boss-lab.ts";
 import { SpellLab, spellLabAsked } from "../spell-lab.ts";
@@ -12737,14 +12737,18 @@ export class PlayScene extends Phaser.Scene {
          * out past where the shockwave is born.
          */
         // Only the blow that throws the band is marked: phase III's stomps before it (`BOSS_SLAM_III_STOMPS`)
-        // are told by the raise alone, and the mark fills over the gathering after the second.
+        // are told by the raise alone, and its mark starts as the second stomp lands and runs out from his
+        // feet to the edge of the heaved ground over the gathering.
         const next = bossSlamNext(e);
-        if (next?.last) drawSlamTell(this.threatGfx, e.x, e.y, 0, next.radius + 60 * next.t, next.t, tick, view);
+        if (next?.last) {
+          const r = e.phase >= 3 ? Math.max(6, next.radius * next.t) : next.radius + 60 * next.t;
+          drawSlamTell(this.threatGfx, e.x, e.y, 0, r, next.t, tick, view);
+        }
       }
-      // The fall's landing in the middle: its mark from the start, filling over the last two beats.
-      if (e.archetype === "boss" && e.bossCast === "meteor" && e.bossCastMs > 0 && e.bossCastEndAt > 0) {
-        const t = Math.max(0, 1 - e.bossCastMs / BOSS_METEOR_MARK_MS);
-        drawLeapMark(this.threatGfx, e.bossTargetX, e.bossTargetY, BOSS_METEOR_LAND_PX, 0, t, tick, view, { clock: t > 0 });
+      // The fall's landing in the middle: only once the stones have all come down (`BOSS_METEOR_LAND_TELL_MS`).
+      if (e.archetype === "boss" && e.bossCast === "meteor" && e.bossCastMs > 0 && e.bossCastMs <= BOSS_METEOR_LAND_TELL_MS) {
+        const t = 1 - e.bossCastMs / BOSS_METEOR_LAND_TELL_MS;
+        drawLeapMark(this.threatGfx, e.bossTargetX, e.bossTargetY, BOSS_METEOR_LAND_PX, 0, t, tick, view);
       }
       if (e.archetype === "boss" && e.bossCast === "leap" && e.bossCastMs > 0) {
         /*
@@ -13513,7 +13517,8 @@ export class PlayScene extends Phaser.Scene {
         const rad = r.width / 2;
         if (r.teleMs > 0) {
           const t = 1 - r.teleMs / r.teleMaxMs;
-          drawStrikeMark(this.hazardGfx, r.x, r.y, rad, r.teleMs / r.teleMaxMs, tick, this.teleView());
+          // Earth, not the storm's sky blue (`TELE_ROCK`): a stone and a bolt are different blows.
+          drawStrikeMark(this.hazardGfx, r.x, r.y, rad, r.teleMs / r.teleMaxMs, tick, this.teleView(), TELE_ROCK);
           this.hazardGfx.fillStyle(0x0d0b1f, 0.15 + 0.35 * t);
           this.hazardGfx.fillEllipse(r.x, r.y + 2, rad * 1.4 * t, rad * 0.7 * t);
           // The last fifth of a second: the stone itself, falling onto its shadow.

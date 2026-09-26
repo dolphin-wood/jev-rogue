@@ -2672,8 +2672,8 @@ export const BOSS_LEAP_HUNT_SPEED = PLAYER_SPEED * 1.1;
  * **The fall into phase III** (the meteor). No roar and no adds: he goes up
  * out of the hall as the leap goes, and while he is up the roof comes down —
  * stones marked on the floor a beat apart, one at the player and the rest
- * anywhere in the hall — then he comes down in the middle of it, on the
- * downbeat, with the biggest landing in the fight and the band. The music
+ * anywhere in the hall — and once the last has fallen his mark shows in the
+ * middle, and he comes down there on the downbeat, with the biggest landing in the fight and the band. The music
  * is held down under the fall and phase III's tempo (`BOSS_RAGE_TEMPO`) and
  * layers come in with the landing. Every answer in it is one the player has
  * already learned: leave the mark (the leap), keep moving (the storm), dash
@@ -2682,8 +2682,14 @@ export const BOSS_LEAP_HUNT_SPEED = PLAYER_SPEED * 1.1;
 /** Crouched, then up: a beat each. */
 export const BOSS_METEOR_GATHER_MS = beats(1);
 export const BOSS_METEOR_UP_MS = beats(1);
-/** The rain of stones, at least: two bars, and out to the next downbeat for the landing. */
-export const BOSS_METEOR_RAIN_MS = beats(8);
+/** The rain of stones and the landing's tell after it, at least: ten beats, and out to the next downbeat for the landing. */
+export const BOSS_METEOR_RAIN_MS = beats(10);
+/**
+ * The landing's own tell, after the last stone has fallen: the mark in the
+ * middle is only drawn once the roof has stopped coming down, so the two are
+ * never read at once, and it is long enough to walk out of from its centre.
+ */
+export const BOSS_METEOR_LAND_TELL_MS = beats(3);
 /** The drop onto the middle, the end of the rain. */
 const BOSS_METEOR_FALL_MS = beats(0.5);
 /** A stone's mark on the floor before it falls, its size, and what it costs. */
@@ -3482,10 +3488,10 @@ function stepBossMeteor(w: World, e: Enemy, before: number): void {
     }
     /*
      * The stones, a beat apart from the rain's start, while there is time for
-     * each to fall a beat before he does: one where the player is, and the
-     * rest anywhere on the floor.
+     * each to have fallen before the landing's tell (`BOSS_METEOR_LAND_TELL_MS`):
+     * one where the player is, and the rest anywhere on the floor.
      */
-    const lastMark = e.bossCastEndAt - BOSS_METEOR_MARK_MS - BEAT_MS;
+    const lastMark = e.bossCastEndAt - BOSS_METEOR_MARK_MS - BOSS_METEOR_LAND_TELL_MS;
     for (;;) {
       const markAt = e.bossStartAt + e.bossBolts * BEAT_MS;
       if (markAt > lastMark + 1e-6 || e.bossFightMs < markAt - 1e-6) break;

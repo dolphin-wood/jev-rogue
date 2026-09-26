@@ -3,7 +3,7 @@ import { rampFor } from "../encounters/ramp.ts";
 import { addPower, clearPowers } from "../content/tags.ts";
 import {
   createWorld, step, queueBossMove, forceBossBlade, hurtEnemy, BOSS_SLAM_MS, BOSS_LEAP_MS, BOSS_LEAP_RISE_MS, BOSS_QUAKE_MS,
-  BOSS_LEAP_UP_MS, BOSS_LEAP_HUNT_MS, BOSS_LEAP_LOCK_MS, BOSS_LEAP_FALL_MS, BOSS_LEAP_SKY_PX, BOSS_HOP_PX,
+  BOSS_LEAP_UP_MS, BOSS_LEAP_HUNT_MS, BOSS_LEAP_LOCK_MS, BOSS_LEAP_FALL_MS, BOSS_LEAP_SKY_PX, BOSS_HOP_PX, BOSS_METEOR_LAND_TELL_MS,
 } from "./world.ts";
 import { BAR_MS, BEAT_MS, BOSS_RAGE_TEMPO } from "./beat.ts";
 import { NO_INPUT, noMods } from "./types.ts";
@@ -293,7 +293,8 @@ describe("the boss", () => {
       let wasFlying = false;
       // A commit due inside a freeze lands as the freeze ends: the body is frozen, so that is when it can.
       let frozeBefore = false;
-      const tol = (): number => (frozeBefore ? 50 : 0) + STEP_MS * 1.01;
+      // In real ms, and his clock runs faster in phase III (`bossTempo`), so a freeze and a step cover more of it.
+      const tol = (): number => ((frozeBefore ? 50 : 0) + STEP_MS * 1.01) * bossTempo(b);
       // Two minutes: he takes a turn, then rests (`chooseBossAct`), and the ground strikes are drawn seldom.
       for (let i = 0; i < 60 * 120; i++) {
         // The player circles him, in close, at blade's length and across the hall by turns, so the fight uses every move it has.
@@ -382,12 +383,16 @@ describe("the boss", () => {
     expect(b.bossRoarMs).toBe(0);
     expect(bossTempo(b)).toBe(1);
     expect(bossMusicPhase(b)).toBe(2);
-    let up = false, landedAt = -1, marks = 0, atPlayer = 0;
+    let up = false, landedAt = -1, marks = 0, atPlayer = 0, pendingAtTell = -1;
     for (let i = 0; i < 60 * 8 && landedAt < 0; i++) {
       w.player.hearts = 6;
       w.player.invulnMs = 1e9;
       w.events.length = 0;
+      const castBefore = b.bossCastMs;
       step(w, NO_INPUT);
+      // The landing's mark is drawn from here: by then the roof has stopped coming down.
+      if (castBefore > BOSS_METEOR_LAND_TELL_MS && b.bossCastMs <= BOSS_METEOR_LAND_TELL_MS)
+        pendingAtTell = w.rifts.filter((r) => r.alive && r.rock && r.teleMs > 0).length;
       if (b.airborne && b.bossLift >= BOSS_LEAP_SKY_PX) up = true;
       for (const ev of w.events) {
         if (ev.kind === "telegraph" && ev.what === "rock") {
@@ -398,6 +403,7 @@ describe("the boss", () => {
       }
     }
     expect(up).toBe(true);
+    expect(pendingAtTell).toBe(0);
     // A stone a beat at the player, and more across the hall; none of them lightning.
     expect(atPlayer).toBeGreaterThanOrEqual(5);
     expect(marks).toBeGreaterThanOrEqual(atPlayer * 3);
