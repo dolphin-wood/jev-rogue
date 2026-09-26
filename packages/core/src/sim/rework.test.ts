@@ -757,9 +757,9 @@ describe("the boss", () => {
       close.add(nextTurn(world(), null, 0, 60, n));
       behind.add(nextTurn(world(), null, 0, -60, n));
     }
-    expect([...far].every((a) => ["leap", "dashcut", "hook", "storm", "volley", "quake", "greatslash"].includes(a))).toBe(true);
-    expect([...close].every((a) => ["greatsweep", "slam", "greatslash", "maul", "leap", "storm"].includes(a))).toBe(true);
-    expect([...behind].every((a) => ["maul", "slam", "leap", "storm"].includes(a))).toBe(true);
+    expect([...far].every((a) => ["leap", "dashcut", "hook", "storm", "volley", "quake", "slam", "greatslash"].includes(a))).toBe(true);
+    expect([...close].every((a) => ["greatsweep", "slam", "greatslash", "maul", "leap", "storm", "quake"].includes(a))).toBe(true);
+    expect([...behind].every((a) => ["maul", "slam", "leap", "storm", "quake"].includes(a))).toBe(true);
     // The leap goes up out of the hall and hunts them from there, so it is asked at any range.
     expect(far.has("leap") || close.has("leap") || behind.has("leap")).toBe(true);
     // Never one answer to a range.

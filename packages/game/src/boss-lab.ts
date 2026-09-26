@@ -64,8 +64,12 @@ export interface BossLabActions {
 
 /** The moves, in the order the panel offers them. */
 const MOVES = ["slam", "quake", "leap", "hook", "storm"] as const;
-/** The blades the boss can be asked for: what its phases choose, and the backhand. */
-const BLADES: readonly MeleeKind[] = ["greatslash", "greatsweep", "dashcut", "maul"];
+/**
+ * The blades the boss can be asked for: what its phases choose, and the
+ * backhand — and the greatcleave, which he never chooses (it read strangely
+ * in play) and is kept here only to be looked at for its rework.
+ */
+const BLADES: readonly MeleeKind[] = ["greatslash", "greatsweep", "dashcut", "maul", "greatcleave"];
 const SPEEDS: readonly [number, string][] = [[1, "1×"], [0.5, "½×"], [0.25, "¼×"], [0, "pause"]];
 
 const BTN = "background:#221d46;color:#c9cfe8;border:1px solid #2a2750;font:inherit;padding:1px 6px;margin:0 3px 3px 0;cursor:pointer;border-radius:2px";
@@ -106,7 +110,7 @@ export class BossLabPanel {
       + `<div>${MOVES.map((m) => `<button data-move="${m}" style="${BTN}">${m}</button>`).join("")}</div>`
       + `<h2 style="${HEAD}">blades</h2>`
       + `<div>${BLADES.map((b) => `<button data-blade="${b}" style="${BTN}">${b}</button>`).join("")}</div>`
-      + `<div style="${NOTE}">strings from phase II: greatslash is x--x----X (III: x--x--x-----X); sweep and dashcut are followed too</div>`
+      + `<div style="${NOTE}">strings from phase II: greatslash is x--x----X (III: x--x--x-----X); sweep and dashcut are followed too; greatcleave is lab-only, not in his turns</div>`
       + `<div data-say style="${NOTE};min-height:1.4em"></div>`
       + `<div style="${NOTE}">a move is queued to commit on its line — the ground strikes on a downbeat, the rest on a beat</div>`;
 

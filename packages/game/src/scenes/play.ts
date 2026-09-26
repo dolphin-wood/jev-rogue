@@ -1927,7 +1927,8 @@ export class PlayScene extends Phaser.Scene {
         hold: () => ({ ...this.labHold }),
         setHold: (hold) => { this.labHold = { ...hold }; if (this.labOn) this.world.bossHold = this.labHold; },
         move: (name) => queueBossMove(this.world, name as BossMove),
-        blade: (kind) => forceBossBlade(this.world, kind),
+        // The dashcut as his turn throws it: the hop back first.
+        blade: (kind) => forceBossBlade(this.world, kind, { hop: true }),
         speed: () => this.labSpeed,
         setSpeed: (speed) => this.setLabSpeed(speed),
         stepFrame: () => { this.setLabSpeed(0); this.labSteps++; },

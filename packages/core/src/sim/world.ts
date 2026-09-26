@@ -2470,14 +2470,16 @@ export type BossMove = "slam" | "leap" | "quake" | "hook" | "storm";
  * stalks back round to face them. When it runs out he chooses the next turn
  * from where they stand — the reach of the answer is the question:
  *
- * - **Close** (inside his sweep): the sweeps, the slam round his feet, the
- *   cleave at a player level with him, the backhand at one behind him.
- * - **Mid**: the cleave and the slash he steps into, the quake, the hook, the storm.
- * - **Far**: the hook, the storm, a volley.
+ * - **Close** (inside his sweep): the sweep and the slash across his front,
+ *   the backhand at a player beside or behind him.
+ * - **Mid**: the slash and the sweep he steps into, the hook, a volley.
+ * - **Far**: the long slash, the hook, a volley.
  *
  * The dashcut is in every band for a player level with him — its line is
  * sideways, its range is made by the hop back before it (`stepBossHop`).
  *
+ * The slam and the quake are in every band too: the slam's band crosses
+ * the whole hall, and the quake's cracks are turned off the player's line.
  * The leap and the storm are in every band, weighted low at his feet: the
  * leap goes up out of the hall and hunts the player from there, and the
  * storm hops back out of reach before the sword goes up, so where they stood
@@ -2535,11 +2537,14 @@ function chooseBossAct(w: World, e: Enemy): BossAct | null {
     // Beside him, where the sweeps do not reach, the backhand (the greatcleave was taken out: it read strangely).
     else if (level) opts.push(["maul", 4], ["slam", 1], ["dashcut", 1.5]);
     else opts.push(["greatsweep", 3], ["greatslash", 3], ["maul", 2], ["slam", 1]);
+    // The quake's cracks are turned so none runs under the player; at his feet they still have to find the gap.
+    opts.push(["quake", 0.8]);
     // The leap asks about the sky, not the range (`BOSS_LEAP_MS`), and the storm steps back out of
     // reach before it is called (`stepBossHop`): at his feet too, but seldom.
     opts.push(["leap", 0.6], ["storm", 0.6]);
   } else if (d < BOSS_FAR_PX) {
-    opts.push(["quake", 1], ["storm", 1], ["leap", 1]);
+    // The slam's band crosses the whole hall, so it is asked here too, not only of a player at his feet.
+    opts.push(["quake", 1], ["storm", 1], ["leap", 1], ["slam", 1]);
     // A player level with him is on the dashcut's line; it hops back for the room to run (`stepBossHop`).
     if (level) opts.push(["dashcut", 2]);
     if (ph >= 2) opts.push(["hook", 1.5]);
@@ -2547,7 +2552,7 @@ function chooseBossAct(w: World, e: Enemy): BossAct | null {
     opts.push(["greatslash", 3], ["greatsweep", 2]);
     opts.push(["volley", 1]);
   } else {
-    opts.push(["leap", 2], ["storm", 1.5], ["volley", 1.5], ["quake", 0.5], ["greatslash", 2]);
+    opts.push(["leap", 2], ["storm", 1.5], ["volley", 1.5], ["quake", 0.5], ["slam", 1], ["greatslash", 2]);
     if (level) opts.push(["dashcut", ph >= 2 ? 3 : 2]);
     if (ph >= 2) opts.push(["hook", 2]);
   }
@@ -2914,10 +2919,17 @@ export function queueBossMove(w: World, move: BossMove): boolean {
 }
 
 /** The boss lab's blade on demand: `kind` wound up at the player now, on its beat. */
-export function forceBossBlade(w: World, kind: MeleeKind): boolean {
+export function forceBossBlade(w: World, kind: MeleeKind, opts: { hop?: boolean } = {}): boolean {
   const e = w.enemies.find((b) => b.archetype === "boss" && b.hp > 0);
   if (!e || e.bossCast !== "none" || e.attack !== "approach" || e.airborne || e.bossNext !== "none"
-    || e.bossRoarMs > 0 || e.bossSummonMs > 0) return false;
+    || e.bossRoarMs > 0 || e.bossSummonMs > 0 || e.bossHopMs > 0) return false;
+  // The dashcut as his turn throws it, the hop back before the windup (`stepBossHop`).
+  if (kind === "dashcut" && opts.hop) {
+    aimBossHop(w, e);
+    e.bossHopMs = BOSS_HOP_MS;
+    e.bossBusy = true;
+    return true;
+  }
   e.attackCooldownMs = 0;
   beginWindup(w, e, w.player, kind);
   return true;
