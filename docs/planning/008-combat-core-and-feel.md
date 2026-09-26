@@ -59,7 +59,13 @@ Movement, collision, bullets, damage, elements, encounter waves and the spell ca
   one spell at a time still holds; that it is a little better than a hand
   press is the assist's to be, beside the damage multipliers. (It first
   waited for a gap — standing, or the sword's rest — which left a player
-  who fights on the move with no heavy spell cast for them.) Charge, stance
+  who fights on the move with no heavy spell cast for them.) An auto-cast
+  **picks its own target**: the nearest body awake, within 7 tiles and in
+  plain sight, and it aims along the line to it, held there through the
+  windup (a body that dies first hands the aim on). A hand press goes the
+  way the player faces because they chose the moment and could turn first;
+  the assist chose the moment, so it chooses the target, or a cast fired
+  while walking away from the fight lands on the empty floor. Charge, stance
   and `dash` spells (Blink Strike, Leap Slam: they move the body) are never
   auto-cast.
 - Dodge: K. A committed burst in the direction

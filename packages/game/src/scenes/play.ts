@@ -20,7 +20,7 @@ import {
   MUSKET_RANGE, MUSKET_SPREAD_DEG, MUSKET_WINDUP_MS, FLAME_ROLL_MS, FLAME_LIFE_MS, flameRays, muzzleOf,
   ELEMENT_TINT, spellLookOf,
   levelAt, withLevels, levelBonus, LEVEL_HP, swordAt,
-  HIT_FLASH_MS, BOSS_ROAR_MS, spellReady, castTiming,
+  HIT_FLASH_MS, BOSS_ROAR_MS, spellReady, castTiming, hasLineOfSight,
 } from "@jr/core";
 import type {
   Bullet, Enemy, EnemyId, Input, ItemInstance, Mood, Offer, OfferCard, Portal,
@@ -14420,8 +14420,10 @@ export class PlayScene extends Phaser.Scene {
       // Remembered even when the press is refused: the bar's cost tick
       // follows the key the player is actually using.
       this.lastSpellKey = i;
-      // The player's own key: the assist's waits start over (`AutoCaster`).
+      // The player's own key: the assist's waits start over (`AutoCaster`),
+      // and whatever it was aiming at is let go.
       this.autoCaster.noteManual(i, this.world.tick * STEP_MS);
+      this.autoTargetId = null;
       return i;
     }
     return null;
@@ -14453,7 +14455,7 @@ export class PlayScene extends Phaser.Scene {
     const w = this.world;
     const p = w.player;
     const free = p.castPending < 0 && p.castRecoverMs <= 0 && p.chargeKey < 0 && !p.stance && p.stunMs <= 0 && p.dashMs <= 0;
-    const target = w.enemies.some((e) => e.hp > 0 && e.awake && Math.hypot(e.x - p.x, e.y - p.y) <= AUTO_CAST_REACH_PX);
+    const target = this.autoTarget();
     const floor = w.staff.mana_max * AUTO_CAST_RESERVE;
     const keys = w.spells.map((slot) => {
       if (!slot || !target) return { eligible: false, coming: false };
@@ -14471,7 +14473,53 @@ export class PlayScene extends Phaser.Scene {
         coming: tap && back <= AUTO_CAST_SOON_MS && cost + floor <= w.staff.mana_max,
       };
     });
-    return this.autoCaster.pick(w.tick * STEP_MS, keys, free);
+    const key = this.autoCaster.pick(w.tick * STEP_MS, keys, free);
+    if (key !== null) this.autoTargetId = target!.id;
+    return key;
+  }
+
+  /** The body an auto-cast goes at, from its press until it has left the hand; null for none. */
+  private autoTargetId: number | null = null;
+
+  /**
+   * **What an auto-cast is cast at**: the nearest body awake, within reach,
+   * and in plain sight. A hand press goes the way the player faces, because
+   * they chose the moment and can turn first; the assist chose the moment,
+   * so it has to choose the target too, or a cast fired while the player
+   * walks away from the fight goes into the empty floor ahead. A body behind
+   * a wall is passed over: a bolt spent on stone is the same waste.
+   */
+  private autoTarget(): Enemy | null {
+    const w = this.world;
+    const p = w.player;
+    let best: Enemy | null = null;
+    let bestD = AUTO_CAST_REACH_PX;
+    for (const e of w.enemies) {
+      if (e.hp <= 0 || !e.awake || e.spawnFadeMs > 0) continue;
+      const d = Math.hypot(e.x - p.x, e.y - p.y);
+      if (d > bestD || !hasLineOfSight(w.room.grid, p.x, p.y, e.x, e.y)) continue;
+      best = e;
+      bestD = d;
+    }
+    return best;
+  }
+
+  /**
+   * The facing an auto-cast aims along on this step, or null to use the
+   * player's own. Held on its body **through the windup**, since the shot
+   * leaves at the end of it and the body keeps moving; a body that dies
+   * first hands the aim to the next nearest. Let go once the cast has left.
+   */
+  private autoAim(pressedNow: boolean): number | null {
+    if (this.autoTargetId === null) return null;
+    const p = this.world.player;
+    if (!pressedNow && p.castPending < 0) { this.autoTargetId = null; return null; }
+    let e = this.world.enemies.find((b) => b.id === this.autoTargetId && b.hp > 0);
+    if (!e) {
+      e = this.autoTarget() ?? undefined;
+      this.autoTargetId = e?.id ?? null;
+    }
+    return e ? Math.atan2(e.y - p.y, e.x - p.x) : null;
   }
 
   /**
@@ -14564,9 +14612,10 @@ export class PlayScene extends Phaser.Scene {
     const x = (down(k.D) || down(k.RIGHT) ? 1 : 0) - (down(k.A) || down(k.LEFT) ? 1 : 0);
     const y = (down(k.S) || down(k.DOWN) ? 1 : 0) - (down(k.W) || down(k.UP) ? 1 : 0);
 
-    // Aim is a point one reach ahead along the facing. Spells still travel
-    // along it until they are rebuilt to auto-target.
-    const f = this.world.player.facing;
+    // Aim is a point one reach ahead along the facing — or, through an
+    // auto-cast, along the line to the body it was cast at (`autoAim`).
+    const spell = this.spellInput();
+    const f = this.autoAim(!!spell.spellAuto) ?? this.world.player.facing;
     return {
       moveX: x, moveY: y,
       aimX: this.world.player.x + Math.cos(f) * 64,
@@ -14586,7 +14635,7 @@ export class PlayScene extends Phaser.Scene {
        * the edge is also what the sword does not need, since a held swing
        * queueing the next one is exactly right for a basic attack.
        */
-      ...this.spellInput(),
+      ...spell,
       dash: down(k.K),
       // An edge, like the spell index: taking a card and stepping through a
       // portal are both decisions that must cost one press, not one frame.
