@@ -64,7 +64,7 @@ function hexOf(data: Uint8Array | Uint8ClampedArray, i: number): string {
 
 describe("asset pipeline", () => {
   it("the checked-in delivery passes the spec", () => {
-    expect(checkAssets(DIR).violations).toEqual([]);
+    expect(checkAssets(DIR, { write: false }).violations).toEqual([]);
   });
 
   it("gives every walking expansion enemy a drawn cycle, every frame its own drawing", () => {

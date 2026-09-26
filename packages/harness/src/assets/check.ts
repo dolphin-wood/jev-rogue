@@ -206,7 +206,12 @@ export function grainShare(
 
 /* --------------------------------- check ---------------------------------- */
 
-export function checkAssets(dir: string): Report {
+/**
+ * `write: false` checks without touching `palette.json`, for a test run
+ * against the checked-in delivery: writing it there dirtied the tree on every
+ * `pnpm test`.
+ */
+export function checkAssets(dir: string, { write = true }: { write?: boolean } = {}): Report {
   // Only the names: composing every model frame to read its key was over
   // half of what a check cost.
   const composed = new Set(modelNames().flatMap((n) => modelFrameNames(loadModel(n))));
@@ -499,11 +504,15 @@ export function checkAssets(dir: string): Report {
 
   const ok = violations.length === 0;
   const placeholder = existsSync(join(dir, ".placeholder"));
-  if (ok)
+  if (ok && write) {
+    // Rounded, so the last digit of a platform's trigonometry does not flip
+    // the file between machines.
+    const hues = Object.fromEntries(Object.entries(dominant).map(([k, h]) => [k, Math.round(h * 100) / 100]));
     writeFileSync(
       join(dir, "palette.json"),
-      JSON.stringify({ art: "pixel-look-raster", artScale: ART_SCALE, dominantHue: dominant }, null, 2) + "\n",
+      JSON.stringify({ art: "pixel-look-raster", artScale: ART_SCALE, dominantHue: hues }, null, 2) + "\n",
     );
+  }
   return { ok, checked, placeholder, violations, dominantHue: dominant };
 }
 
