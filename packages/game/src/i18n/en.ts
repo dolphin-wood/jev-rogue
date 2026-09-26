@@ -121,7 +121,7 @@ export const EN = {
   "hint.newRun": "New run",
   "hint.title": "Title",
   "hint.retryBoss": "Retry the boss",
-  "hint.holdE": "[Hold E]",
+  "hint.holdX": "[Hold X]",
   "hint.gold": "{coin} {gold}",
   "hint.reroll": "Hold to reroll · {coin} {price}",
   "hint.rerolling": "Refreshing",
@@ -272,7 +272,7 @@ export const EN = {
   "prompt.pickUp": "Pick up {spell}",
   "prompt.pickUpLv": "Pick up {spell} Lv {level}",
   "prompt.levelUp": "Raise {spell}'s level",
-  "prompt.floorSpell": "[E] {tap}    Hold [E] Dismantle +{gold} {coin}",
+  "prompt.floorSpell": "[E] {tap}    Hold [X] Dismantle +{gold} {coin}",
   "prompt.portal": "[E] {what}",
   "prompt.portalOpening": "Opening…",
   "prompt.theMerchant": "The Merchant",
@@ -301,7 +301,7 @@ export const EN = {
   "toast.toLv": "{spell} to Lv {level}",
   /* The auto level-up banner: the level, then what it gave. */
   "toast.levelUp": "LEVEL {n}   +{hp} health · sword {from} → {to}",
-  "toast.alreadyMax": "{label} is already Lv {max}: hold E to dismantle",
+  "toast.alreadyMax": "{label} is already Lv {max}: hold X to dismantle",
   "toast.atTopLevel": "{label} is at the top level: +{gold} {coin}",
   "toast.affixOn": "{affix} on {spell}",
   /* Appended to `toast.affixOn` when the affix was already held and went up a tier. */

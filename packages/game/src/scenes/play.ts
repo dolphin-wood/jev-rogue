@@ -1294,13 +1294,12 @@ export class PlayScene extends Phaser.Scene {
   private drainSpots: { x: number; y: number }[] = [];
   /**
    * Spells taken off a key, lying on the floor with the level and affixes
-   * they had. A tap on E picks one up (onto a free key, or into the replace
-   * step); holding E takes it apart for gold.
+   * they had. E picks one up (onto a free key, or into the replace step);
+   * holding X takes it apart for gold.
    */
   private floorSpells: FloorSpell[] = [];
   /** The floor spell being put on a key through the replace step. */
   private floorPending: FloorSpell | null = null;
-  /** How long E has been held over a floor spell, and whether that hold already dismantled it. */
   /** Where the player is in the body band this frame; see `draw`. */
   private playerDepth = 8;
   /**
@@ -1354,19 +1353,13 @@ export class PlayScene extends Phaser.Scene {
    * that key's cost, so "how far off am I" is a glance rather than a sum.
    */
   private lastSpellKey: number | null = null;
+  /** Progress of a held X over a floor spell. */
   private floorHoldMs = 0;
-  /**
-   * Holding E on a card screen, and whether this press has already paid out.
-   *
-   * The world takes a floor spell apart on a held E; the card screens did
-   * the same on X, which is one action with two keys. They share this now.
-   */
+  /** Progress of a held X on a card screen, and whether it already paid out. */
   private modalHoldMs = 0;
   private modalHoldSpent = false;
   private dismantlePointerDown = false;
   private floorHoldSpent = false;
-  /** How long the current E press has lasted, to tell a tap from a hold. */
-  private floorPressMs = 0;
   private holdGfx!: Phaser.GameObjects.Graphics;
   /** The same bar, over a modal screen rather than over the room. */
   private modalHoldGfx!: Phaser.GameObjects.Graphics;
@@ -1925,13 +1918,12 @@ export class PlayScene extends Phaser.Scene {
      *
      * The list had grown a second and third key for half of them — Space and
      * Shift both dodged, Space and J both confirmed, 1/2/3 picked a card
-     * that A/D and Enter already picked, X dismantled what holding E
-     * dismantles everywhere else — and the controls page had become a page
+     * that A/D and Enter already picked — and the controls page had become a page
      * of synonyms. What is left is the set the game is actually played with;
      * the arrow keys stay for menus only, unlisted, because a menu is the
      * one place a player reaches for them without being told.
      */
-    this.keys = this.input.keyboard!.addKeys("W,A,S,D,UP,LEFT,DOWN,RIGHT,Q,E,R,J,K,L,U,I,O,ENTER,ESC,BACKTICK,TAB") as Record<string, Phaser.Input.Keyboard.Key>;
+    this.keys = this.input.keyboard!.addKeys("W,A,S,D,UP,LEFT,DOWN,RIGHT,Q,E,R,X,J,K,L,U,I,O,ENTER,ESC,BACKTICK,TAB") as Record<string, Phaser.Input.Keyboard.Key>;
     if (spellLabAsked()) this.spellLab = new SpellLab(this.spellLabHost());
     this.debug = new DebugPanel({
       ...(this.spellLab ? { spellLab: this.spellLab } : {}),
@@ -5738,7 +5730,7 @@ export class PlayScene extends Phaser.Scene {
     ["L", "keys.spin"],
     ["U I O", "keys.cast"],
     ["E", "keys.use"],
-    ["E", "keys.dismantle"],
+    ["X", "keys.dismantle"],
     ["R", "keys.reroll"],
     ["Enter", "keys.confirm"],
     ["Tab", "keys.characterScreen"],
@@ -6440,7 +6432,7 @@ export class PlayScene extends Phaser.Scene {
   }
 
   /**
-   * A tap on a floor spell: the same spell held is levelled up by it; a free
+   * Picking up a floor spell: the same spell held is levelled up by it; a free
    * key takes it; otherwise the replace step asks which key it goes on, and
    * the spell that comes off drops where this one lay.
    */
@@ -11051,7 +11043,7 @@ export class PlayScene extends Phaser.Scene {
       const by = view.bottom - 19;
       add(this.add.rectangle(bx, by, 220, 18, 0x161334, 0.96)
         .setStrokeStyle(1, 0x8a6a28, 1).setDepth(211));
-      add(this.fittedKeys(bx, by, `${t("hint.holdE")} ${t("hint.dismantleThis", {
+      add(this.fittedKeys(bx, by, `${t("hint.holdX")} ${t("hint.dismantleThis", {
         gold: this.floorPending?.value ?? dismantleValue(ui.card?.grade ?? 1), coin: "{coin}",
       })}`, 7, "#ffd45e", 212, 212));
       add(this.add.zone(bx, by, 220, 18).setDepth(213)
@@ -11100,10 +11092,10 @@ export class PlayScene extends Phaser.Scene {
     }
     // The spell in hand may be taken apart instead of put on a key.
     const replacing = ui.mode === "replace" && !!ui.card && (!!this.floorPending || !this.shopping);
-    const heldE = replacing ? this.holdingE() : 0;
+    const heldX = replacing ? this.holdingX() : 0;
     if (replacing) this.drawHoldBar(uiView().right - 122, uiView().bottom - 7, 220);
     else this.modalHoldGfx.clear();
-    if (ui.mode === "replace" && ui.card && this.floorPending && heldE >= 1) {
+    if (ui.mode === "replace" && ui.card && this.floorPending && heldX >= 1) {
       const f = this.floorPending;
       this.floorPending = null;
       this.payDismantle(f.x, f.y, f.value);
@@ -11115,7 +11107,7 @@ export class PlayScene extends Phaser.Scene {
       this.sfx.play("pickup");
       return;
     }
-    if (ui.mode === "replace" && ui.card && !this.shopping && heldE >= 1) {
+    if (ui.mode === "replace" && ui.card && !this.shopping && heldX >= 1) {
       const value = dismantleValue(ui.card.grade ?? 1);
       this.payDismantle(this.world.player.x, this.world.player.y, value);
       this.tookLabel = t("toast.dismantled", { label: contentName(ui.card.itemId ?? "", ui.card.label), gold: value, coin: "{coin}" });
@@ -11618,24 +11610,19 @@ export class PlayScene extends Phaser.Scene {
         : 0.22 + 0.08 * Math.sin(this.world.tick / 24));
     }
     if (spellNear && !this.offerUi && !this.staffUi) {
-      /*
-       * **Tap to pick up, hold to dismantle.** A dropped spell is a choice
-       * between two things, and the destructive one is the hold: a tap that
-       * turned a levelled, affixed spell into gold was a mistake one frame
-       * wide.
-       */
-      const e = this.keys.E;
-      this.interactPressed = false;
+      // E picks up; X confirms the destructive choice with a hold.
+      if (this.interactPressed) {
+        this.interactPressed = false;
+        this.floorHoldMs = 0;
+        this.holdGfx.clear();
+        this.pickFloorSpell(spellNear);
+        return;
+      }
+      const x = this.keys.X;
       const dt = this.game.loop.delta;
-      /*
-       * A tap is a press released within `FLOOR_TAP_MS`; only a press held
-       * past it starts filling the bar, and a bar let go drains back rather
-       * than snapping to nothing — so a hold abandoned halfway is seen to be
-       * abandoned, and a second hold picks up where it is.
-       */
-      if (e?.isDown && !this.floorHoldSpent) {
-        this.floorPressMs += dt;
-        if (this.floorPressMs > FLOOR_TAP_MS) this.floorHoldMs += dt;
+      // An abandoned hold drains back, and a second hold resumes its progress.
+      if (x?.isDown && !this.floorHoldSpent) {
+        this.floorHoldMs += dt;
         if (this.floorHoldMs >= FLOOR_HOLD_MS) {
           this.floorHoldSpent = true;
           this.payDismantle(spellNear.x, spellNear.y, spellNear.value);
@@ -11648,9 +11635,7 @@ export class PlayScene extends Phaser.Scene {
           this.holdGfx.clear();
           return;
         }
-      } else if (!e?.isDown) {
-        if (this.floorPressMs > 0 && this.floorPressMs <= FLOOR_TAP_MS && !this.floorHoldSpent) this.pickFloorSpell(spellNear);
-        this.floorPressMs = 0;
+      } else if (!x?.isDown) {
         this.floorHoldSpent = false;
         this.floorHoldMs = Math.max(0, this.floorHoldMs - dt * 1.5);
       }
@@ -11669,7 +11654,7 @@ export class PlayScene extends Phaser.Scene {
         const k = Math.min(1, this.floorHoldMs / FLOOR_HOLD_MS);
         this.holdGfx.fillStyle(0x0d0b1f, 0.9);
         this.holdGfx.fillRect(bx - 1, by - 1, W + 2, 5);
-        this.holdGfx.fillStyle(e?.isDown ? 0xffd45e : 0x9a7a3a, 1);
+        this.holdGfx.fillStyle(x?.isDown ? 0xffd45e : 0x9a7a3a, 1);
         this.holdGfx.fillRect(bx, by, W * k, 3);
       }
       // Clear of the hold bar drawn just under it, which the prompt's own
@@ -11678,7 +11663,7 @@ export class PlayScene extends Phaser.Scene {
       return;
     }
     // Away from any floor spell: the bar drains and the press is forgotten.
-    if (!this.keys.E?.isDown) { this.floorHoldSpent = false; this.floorPressMs = 0; }
+    if (!this.keys.X?.isDown) this.floorHoldSpent = false;
     this.floorHoldMs = Math.max(0, this.floorHoldMs - this.game.loop.delta * 1.5);
     this.holdGfx.clear();
     if (npcNear && !this.offerUi && !this.staffUi) {
@@ -11820,13 +11805,13 @@ export class PlayScene extends Phaser.Scene {
    * same frame.
    */
   /**
-   * How far a held E has got on a card screen, and `1` on the one frame it
+   * How far a held X has got on a card screen, and `1` on the one frame it
    * completes. Let go and it drains back, as the floor's does, so a hold
    * abandoned halfway is seen to be abandoned.
    */
-  private holdingE(): number {
+  private holdingX(): number {
     const dt = this.game.loop.delta;
-    if (!this.keys.E?.isDown && !this.dismantlePointerDown) {
+    if (!this.keys.X?.isDown && !this.dismantlePointerDown) {
       this.modalHoldSpent = false;
       this.modalHoldMs = Math.max(0, this.modalHoldMs - dt * 1.5);
       return 0;
@@ -11844,7 +11829,7 @@ export class PlayScene extends Phaser.Scene {
     this.modalHoldGfx.fillStyle(0x2a2750, 1);
     this.modalHoldGfx.fillRect(x - width / 2, y, width, 4);
     if (k <= 0) return;
-    this.modalHoldGfx.fillStyle(this.keys.E?.isDown || this.dismantlePointerDown ? 0xffd45e : 0x9a7a3a, 1);
+    this.modalHoldGfx.fillStyle(this.keys.X?.isDown || this.dismantlePointerDown ? 0xffd45e : 0x9a7a3a, 1);
     this.modalHoldGfx.fillRect(x - width / 2, y, width * k, 4);
   }
 
@@ -11860,10 +11845,10 @@ export class PlayScene extends Phaser.Scene {
   }
 
   /**
-   * What holding E on the offer screen pays, and whether it gives up the
+   * What holding X on the offer screen pays, and whether it gives up the
    * whole offer — or `null` when there is nothing to hold for.
    *
-   * A **spell** card is an object: holding E takes *that spell* apart, and it
+   * A **spell** card is an object: holding X takes *that spell* apart, and it
    * is worth what that spell is worth.
    *
    * An **affix** card is not an object yet — it is a tier waiting for a spell
@@ -11893,7 +11878,7 @@ export class PlayScene extends Phaser.Scene {
     const value = card.kind === "affix"
       ? Math.round(cards.reduce((n, c) => n + this.cardValue(c), 0) / cards.length)
       : this.cardValue(card);
-    return `${t("hint.holdE")} ${t(card.kind === "affix" ? "hint.dismantleAffix" : "hint.dismantleSpell",
+    return `${t("hint.holdX")} ${t(card.kind === "affix" ? "hint.dismantleAffix" : "hint.dismantleSpell",
       { gold: value, coin: "{coin}" })}`;
   }
 
@@ -11938,7 +11923,7 @@ export class PlayScene extends Phaser.Scene {
 
     if (this.tickRerollHold()) return;
     if (this.rerollLoading) {
-      for (const key of [k.A, k.D, k.LEFT, k.RIGHT, k.ENTER, k.ESC, k.R, k.E]) down(key);
+      for (const key of [k.A, k.D, k.LEFT, k.RIGHT, k.ENTER, k.ESC, k.R, k.X]) down(key);
       return;
     }
 
@@ -11957,7 +11942,7 @@ export class PlayScene extends Phaser.Scene {
       this.modalHoldSpent = false;
       this.modalHoldGfx.clear();
     }
-    if (deal && this.holdingE() >= 1) {
+    if (deal && this.holdingX() >= 1) {
       const c = ui.cards[ui.selected]!.card;
       this.payDismantle(this.world.player.x, this.world.player.y, deal.value);
       this.tookLabel = deal.whole
@@ -17665,8 +17650,6 @@ const PLAYER_SWING = 0.0004;
 const PLAYER_FLAME = 0.0005;
 
 const FLOOR_HOLD_MS = 600;
-/** A press released sooner than this is a tap: pick up, not the start of a hold. */
-const FLOOR_TAP_MS = 200;
 
 /**
  * The world prompt's panel, and the air it keeps under itself.
