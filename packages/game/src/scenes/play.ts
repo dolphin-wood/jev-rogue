@@ -687,8 +687,18 @@ const HUD_BOTTOM_Y = UI_H - HUD_INSET;
  */
 export const DPR = Math.min(typeof window === "undefined" ? 1 : window.devicePixelRatio || 1, 3);
 
-/** World units to backing-store pixels. */
-export const ZOOM = ART_SCALE * DPR;
+/**
+ * World units to text-texture pixels: the resolution every label is drawn at
+ * before a camera scales it to the canvas.
+ *
+ * Never below a retina screen's. The font floors (`MIN_BODY_PX`) are counted
+ * in these pixels, so at a DPR of 1 the same floor came to twice the layout
+ * units it does on retina, and 1.25 or 1.5 worse still: every body line was
+ * drawn at double size and overflowed the cards and panels laid out for it.
+ * The cameras set their own zoom from the canvas, so this only fixes the
+ * texture size, and with it the layout, to what retina shows.
+ */
+export const ZOOM = ART_SCALE * Math.max(2, DPR);
 /**
  * The permanent HUD control row's style, named because the row is **rebuilt**
  * when the language changes (`rebuildHintStrip`) and the two calls have to
