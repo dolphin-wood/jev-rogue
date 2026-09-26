@@ -20,7 +20,7 @@ import {
   MUSKET_RANGE, MUSKET_SPREAD_DEG, MUSKET_WINDUP_MS, FLAME_ROLL_MS, FLAME_LIFE_MS, flameRays, muzzleOf,
   ELEMENT_TINT, spellLookOf,
   levelAt, withLevels, levelBonus, LEVEL_HP, swordAt,
-  HIT_FLASH_MS, BOSS_ROAR_MS, spellReady,
+  HIT_FLASH_MS, BOSS_ROAR_MS, spellReady, castTiming,
 } from "@jr/core";
 import type {
   Bullet, Enemy, EnemyId, Input, ItemInstance, Mood, Offer, OfferCard, Portal,
@@ -14423,20 +14423,30 @@ export class PlayScene extends Phaser.Scene {
    * The key auto-cast presses on this step, or null (`auto-cast.ts`).
    *
    * Only a key that casts on a tap — a `charge` spell is a hold and a
-   * `stance` a guard, both the player's call — and only with a body awake
-   * within reach, so the assist never throws a spell at an empty room, and
-   * only while the bar stays above `AUTO_CAST_RESERVE` after paying.
+   * `stance` a guard, both the player's call — and never a `dash`, which
+   * moves the body: the game throwing the player across the room is the
+   * one thing an assist must not do. Only with a body awake within reach,
+   * so the assist never throws a spell at an empty room, and only while the
+   * bar stays above `AUTO_CAST_RESERVE` after paying.
+   *
+   * And only into a gap (`AutoCastKey.fits`): the player standing, not
+   * swinging, or the sword's rest between runs — unless the spell is light
+   * (`AUTO_CAST_LIGHT_MOVE`, no windup), whose cast does not break a stride.
    */
-  private autoSpell(): number | null {
+  private autoSpell(moving: boolean): number | null {
     if (!this.autoCast) return null;
     const w = this.world;
     const p = w.player;
-    const free = p.castPending < 0 && p.castRecoverMs <= 0 && p.chargeKey < 0 && !p.stance && p.stunMs <= 0;
+    const free = p.castPending < 0 && p.castRecoverMs <= 0 && p.chargeKey < 0 && !p.stance && p.stunMs <= 0 && p.dashMs <= 0;
+    const gap = (!moving && p.swingMs <= 0) || p.swingBreathMs > 0;
     const target = w.enemies.some((e) => e.hp > 0 && e.awake && Math.hypot(e.x - p.x, e.y - p.y) <= AUTO_CAST_REACH_PX);
     const floor = w.staff.mana_max * AUTO_CAST_RESERVE;
     const keys = w.spells.map((slot) => {
-      if (!slot || !target) return { eligible: false, coming: false };
-      const tap = chargeMsOf(ITEMS, slot.item.base) === 0 && ITEMS.get(slot.item.base)?.params?.["shape"] !== "stance";
+      if (!slot || !target) return { eligible: false, coming: false, fits: false };
+      const shape = ITEMS.get(slot.item.base)?.params?.["shape"];
+      const tap = chargeMsOf(ITEMS, slot.item.base) === 0 && shape !== "stance" && shape !== "dash";
+      const timing = castTiming(ITEMS, slot.item.base);
+      const light = timing.windupMs === 0 && timing.moveScale >= AUTO_CAST_LIGHT_MOVE;
       const cost = slotCost(slot, ITEMS, w.staff);
       // How long until the key is back: its cooldown, or its bank's next charge.
       const back = chargesOf(ITEMS, slot.item.base) > 0 && bankOf(slot, ITEMS) < 1
@@ -14447,6 +14457,7 @@ export class PlayScene extends Phaser.Scene {
         // Owed its turn whatever the bar says now, so the bar is saved up for
         // it — unless the bar could never pay for it above the floor.
         coming: tap && back <= AUTO_CAST_SOON_MS && cost + floor <= w.staff.mana_max,
+        fits: gap || light,
       };
     });
     return this.autoCaster.pick(w.tick * STEP_MS, keys, free);
@@ -14564,7 +14575,7 @@ export class PlayScene extends Phaser.Scene {
        * the edge is also what the sword does not need, since a held swing
        * queueing the next one is exactly right for a basic attack.
        */
-      spell: this.pressedSpell() ?? this.autoSpell(),
+      spell: this.pressedSpell() ?? this.autoSpell(x !== 0 || y !== 0),
       dash: down(k.K),
       // An edge, like the spell index: taking a card and stepping through a
       // portal are both decisions that must cost one press, not one frame.
@@ -17023,6 +17034,12 @@ const SETTINGS_TABS = ["menu.tabGeneral", "menu.assistHeading", "menu.jevHeading
 const SETTINGS_TAB_ROWS = 9;
 /** How near a body has to be for auto-cast to spend a spell on it: about the seeking bolts' useful range. */
 const AUTO_CAST_REACH_PX = 7 * TILE_PX;
+/**
+ * How little a spell may slow its caster to be auto-cast mid-stride: a cast
+ * with no windup that keeps this share of walking pace is not felt as a
+ * break in the rhythm. Everything heavier waits for a gap.
+ */
+const AUTO_CAST_LIGHT_MOVE = 0.85;
 const ROOM_PARAMS_KEY = "jr-room-params";
 /** Where the sound setting is remembered. Off unless it says otherwise. */
 /**

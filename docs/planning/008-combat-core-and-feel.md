@@ -52,8 +52,13 @@ Movement, collision, bullets, damage, elements, encounter waves and the spell ca
   cast weighs 0.1, growing back to 1 over 6 s. A key drawn while still
   cooling holds the turn (the bar saves up for it) for up to 3 s. Without
   the draw the cheap short-cooldown keys held the bar under what a dear
-  one cost, and an 8 s key cast twice in ten minutes. Charge and stance
-  spells are never auto-cast. Input only: the simulation sees a press.
+  one cost, and an 8 s key cast twice in ten minutes. A due key goes only
+  into a **gap in the player's rhythm** — standing still and not swinging,
+  or the sword's rest after a run — since a windup's slow dropped into a
+  walk or a run of swings is a stumble the player did not choose; a light
+  spell (no windup, at least 0.85 of walking pace) may go mid-stride.
+  Charge, stance and `dash` spells (Blink Strike, Leap Slam: they move the
+  body) are never auto-cast. Input only: the simulation sees a press.
 - Dodge: K. A committed burst in the direction
   already held: 110 ms at 580 px/s, about two tiles, then 420 ms of cooldown.
   It commits to the direction it started in so it is a decision rather than a
