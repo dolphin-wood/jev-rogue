@@ -148,6 +148,8 @@ const SPELL_STAGGER_WEIGHT = 1.2;
  */
 const FRAME_MS = 1000 / 60;
 const HITSTOP_HIT = FRAME_MS;
+/** The run's last cut landing (`SwingBox.finisher`): the heavy blow, held longer than a cut. */
+const HITSTOP_FINISH = FRAME_MS * 3;
 const HITSTOP_KILL = FRAME_MS * 3;
 const HITSTOP_PLAYER_HIT = FRAME_MS * 4;
 const HITSTOP_CAP = FRAME_MS * 6;
@@ -1240,7 +1242,7 @@ function resolveSwing(w: World, dtMs: number): void {
     wake(w, e);
     // Breaking its armour is the one blow that cancels what it had started.
     if (broke) { stagger(w, e); e.staggerImmuneMs = SWORD_STAGGER_IMMUNE_MS; } else swordStagger(w, e);
-    impact(w, HITSTOP_HIT, TRAUMA_HIT);
+    impact(w, box.finisher ? HITSTOP_FINISH : HITSTOP_HIT, TRAUMA_HIT);
 
     // The loop the whole design turns on: the sword pays for the spells, so
     // being in range is how the player affords being out of it.

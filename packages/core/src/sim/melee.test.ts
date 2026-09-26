@@ -4,7 +4,7 @@ import {
   SPREAD_BASE, SWEEP_DEG, SWING_ACTIVE_MS, SWING_TOTAL_MS, SWING_WINDUP_MS,
   beginSwing, fullReach, makeSpin, makeSwingBox, manaPerHit, sectorHits,
   snapFacing, stepSwing, sweepFor, SWING_CHAIN_MS, swingMoveScale, swingPhase, totalCoverageDeg,
-  wallSlamSquareness, SWING_RUN, SWING_BREATH_MS, FINISH_DAMAGE, FINISH_ARC_DEG,
+  wallSlamSquareness, SWING_RUN, SWING_BREATH_MS, FINISH_DAMAGE, FINISH_ARC_DEG, SWING_ORIGIN_LIFT,
 } from "./melee.ts";
 import { createWorld, step } from "./world.ts";
 import { NO_INPUT, PLAYER_RADIUS, STEP_MS, noMods } from "./types.ts";
@@ -194,6 +194,21 @@ describe("a run of swings: two cuts alike, a heavier one back, then a rest", () 
     w.player.facing = Math.PI;
     // Two alike — a cut and a cut back read as a windscreen wiper — and the third back across.
     expect([swingThrough(w).sweep, swingThrough(w).sweep, swingThrough(w).sweep]).toEqual([1, 1, -1]);
+  });
+
+  it("holds the run's last cut longer when it lands", () => {
+    const w = world();
+    // Bolted down, in reach along the facing, and not worth dying for.
+    put(w, 1, w.player.x + 30, w.player.y - SWING_ORIGIN_LIFT, "turret" as "rusher");
+    const stops: number[] = [];
+    for (let n = 0; n < SWING_RUN; n++) {
+      let most = 0;
+      step(w, input({ swing: true }));
+      for (let i = 0; i < 20 && w.player.swingMs > 0; i++) { step(w, input()); most = Math.max(most, w.hitstopMs); }
+      stops.push(most);
+    }
+    expect(stops[0]).toBeGreaterThan(0);
+    expect(stops[SWING_RUN - 1]).toBeGreaterThan(stops[0]!);
   });
 
   it("rests after the third cut, then starts the run afresh", () => {

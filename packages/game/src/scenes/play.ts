@@ -360,6 +360,9 @@ const CUT_KEYS = 3;
 const KEY_MS = 20;
 /** How long the trail takes to be eaten from the tail once the blade has landed. */
 const TRAIL_RETRACT_MS = 100;
+/** The run's last cut's trail: how much longer it lingers, and how much brighter it is (`drawConjuredSwing`). */
+const FINISH_TRAIL_LINGER = 1.6;
+const FINISH_TRAIL_BRIGHT = 1.4;
 /** How long the glint and streaks at the point last when the blade lands. */
 const LAND_FLASH_MS = 80;
 /** How far past the start of its arc the blade is wound back, radians. */
@@ -11880,7 +11883,15 @@ export class PlayScene extends Phaser.Scene {
      * was.
      */
     const headT = pose.u;
-    const retract = pose.stage === "held" ? Math.min(1, Math.max(0, since - (CUT_KEYS - 1) * KEY_MS) / TRAIL_RETRACT_MS) : 0;
+    /*
+     * **The run's last cut is drawn heavier** (`SwingBox.finisher`): the same
+     * blue and white, not a new colour — warm is the enemies' tell and every
+     * element has its hue — but a band reaching further in, brighter, with a
+     * heavier edge, and slower to be eaten away.
+     */
+    const heavy = box.finisher;
+    const retractMs = heavy ? TRAIL_RETRACT_MS * FINISH_TRAIL_LINGER : TRAIL_RETRACT_MS;
+    const retract = pose.stage === "held" ? Math.min(1, Math.max(0, since - (CUT_KEYS - 1) * KEY_MS) / retractMs) : 0;
     const tailT = headT * retract;
     if (headT - tailT > 0.02) {
       /*
@@ -11909,7 +11920,7 @@ export class PlayScene extends Phaser.Scene {
         q.root[0] + (q.point[0] - q.root[0]) * k,
         q.root[1] + (q.point[1] - q.root[1]) * k,
       ] as const;
-      const inner = (rel: number) => 0.7 * (1 - rel ** 1.1);
+      const inner = (rel: number) => (heavy ? 0.5 : 0.7) * (1 - rel ** 1.1);
       const fade = 1 - retract * 0.5;
       for (let i = 0; i < steps; i++) {
         const a0 = pts[i]!, a1 = pts[i + 1]!;
@@ -11918,13 +11929,13 @@ export class PlayScene extends Phaser.Scene {
         const [ix1, iy1] = at(a1, inner(a1.rel));
         const [ox0, oy0] = at(a0, 1);
         const [ox1, oy1] = at(a1, 1);
-        g.fillStyle(rel > 0.8 ? 0xcfeeff : 0x6fb8ff, (0.06 + 0.5 * rel ** 1.5) * fade);
+        g.fillStyle(rel > 0.8 ? 0xcfeeff : 0x6fb8ff, Math.min(1, (0.06 + 0.5 * rel ** 1.5) * fade * (heavy ? FINISH_TRAIL_BRIGHT : 1)));
         g.beginPath();
         g.moveTo(ix0, iy0); g.lineTo(ox0, oy0); g.lineTo(ox1, oy1); g.lineTo(ix1, iy1);
         g.closePath();
         g.fillPath();
         // The white edge along the point's path, heavy at the head.
-        g.lineStyle(rel > 0.7 ? 1.6 : 1, 0xffffff, rel ** 1.2 * fade);
+        g.lineStyle((rel > 0.7 ? 1.6 : 1) + (heavy ? 0.6 : 0), 0xffffff, rel ** 1.2 * fade);
         g.lineBetween(ox0, oy0, ox1, oy1);
         /*
          * **No dark line outside the trail.** There was one, to make the
