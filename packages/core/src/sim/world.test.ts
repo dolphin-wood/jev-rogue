@@ -1596,7 +1596,7 @@ describe("enemy behaviour", () => {
 
     // Past its flinch window, a hit lands as a hit on a body between attacks.
     run(w, 60);
-    // Back in reach: the run's thrust throws a body further than a cut.
+    // Back in reach: the run's last cut throws a body further than the others.
     e.x = w.player.x + 44;
     e.y = w.player.y;
     e.attack = "approach";

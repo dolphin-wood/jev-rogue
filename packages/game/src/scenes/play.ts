@@ -21,7 +21,6 @@ import {
   ELEMENT_TINT, spellLookOf,
   levelAt, withLevels, levelBonus, LEVEL_HP, swordAt,
   HIT_FLASH_MS, BOSS_ROAR_MS,
-  THRUST_BURST_RADIUS,
 } from "@jr/core";
 import type {
   Bullet, Enemy, EnemyId, Input, ItemInstance, Mood, Offer, OfferCard, Portal,
@@ -6826,7 +6825,6 @@ export class PlayScene extends Phaser.Scene {
       if (ev.kind === "shot" && ev.what === "free_strike") this.freeCutAt(ev.x, ev.y);
       else if (ev.kind === "shot" && ev.what === "land") this.landingAt(ev.x, ev.y);
       else if (ev.kind === "shot" && ev.what === "emit_burst") this.frostRingAt(ev.x, ev.y);
-      else if (ev.kind === "shot" && ev.what === "thrust_burst") this.thrustBurstAt(ev.x, ev.y);
       else if (ev.kind === "eruption" && ev.what === "doom") this.doomBurstAt(ev.x, ev.y);
       else if (ev.kind === "eruption" && ev.what === "collapse") this.collapseAt(ev.x, ev.y);
       else if (ev.kind === "eruption" && ev.what === "fire") {
@@ -7116,17 +7114,6 @@ export class PlayScene extends Phaser.Scene {
   }
 
   /** An orb's end: the ring of shards leaving it, and a spray of frost; the shards are the sim's own. */
-  /**
-   * **The thrust's burst at its point** (`THRUST_BURST_RADIUS`): a ring of
-   * the blade's light going out to the burst's own radius, so the ground it
-   * takes is the ground seen, and a spray of motes off it.
-   */
-  private thrustBurstAt(x: number, y: number): void {
-    this.ring(x, y, 3, THRUST_BURST_RADIUS, 0xcfeeff, 160, 2);
-    this.ring(x, y, 2, THRUST_BURST_RADIUS * 0.7, 0x5aa0ff, 120, 3);
-    this.burst(x, y, 0xe8f8ff, 10, 170, undefined, Math.PI * 2, 0.9);
-  }
-
   private frostRingAt(x: number, y: number): void {
     this.burst(x, y, 0xe8f8ff, 12, 200, undefined, Math.PI * 2, 0.9);
     this.burst(x, y, 0x8fdcff, 6, 90, undefined, Math.PI * 2, 1.4, 40);
@@ -7678,7 +7665,6 @@ export class PlayScene extends Phaser.Scene {
           else if (what === "free_strike") sfx.play("dash_strike", 1.1);
           else if (what === "land") sfx.play("impact_stone", 0.72);
           else if (what === "emit_burst") sfx.play("cast_nova", 1.2);
-          else if (what === "thrust_burst") sfx.play("hit_heavy", 1.25);
           else if (what === "contagion") sfx.play("cast_venom", 1.3);
           else if (PLAYER_SHOT_EVENTS.has(what)) break;
           else sfx.play("shoot_enemy");
@@ -7796,11 +7782,10 @@ export class PlayScene extends Phaser.Scene {
     // chained blow, which is exactly the blow that starts before the last
     // one has finished.
     if (p.swingMs > a.swingMs) {
-      // The spin is its own long whoosh; every other swing is the same swing.
-      // `chained` only says the conjured blade is already out — there is no
-      // combo whose last blow is heavier — so it must not pick the sound: a
-      // player swinging steadily is chained on every swing after the first.
-      sfx.play(p.swingStretch > 1 ? "swing_spin" : "swing_light");
+      // The spin is its own long whoosh, and the run's last cut is heard as
+      // the heavier one it is (`SWING_RUN`); every other swing is the same.
+      // Not `chained`, which only says the conjured blade is already out.
+      sfx.play(p.swingStretch > 1 ? "swing_spin" : w.swing.finisher ? "swing_heavy" : "swing_light");
     }
     // A leap is not a cut: its take-off is the spell's cast, and its landing is heard above.
     if (p.strikeMs > a.strikeMs && !p.landing) sfx.play("dash_strike");
@@ -11686,8 +11671,7 @@ export class PlayScene extends Phaser.Scene {
     const p = w.player;
     const half = ((Math.abs(box.sweepDeg) / 2) * Math.PI) / 180;
     const phase = swingPhase(p);
-    // A thrust is drawn back along its own line, not wound to one side.
-    if (phase === "windup") return { angle: box.facing - box.sweep * (box.thrust ? 0 : half + WOUND_EXTRA), u: 0, stage: "wound", key: -1 };
+    if (phase === "windup") return { angle: box.facing - box.sweep * (half + WOUND_EXTRA), u: 0, stage: "wound", key: -1 };
     const key = phase === "active" ? Math.min(CUT_KEYS - 1, Math.floor((swingElapsed(p) - SWING_WINDUP_MS) / KEY_MS)) : CUT_KEYS - 1;
     const t = (key + 1) / CUT_KEYS;
     return { angle: box.facing - box.sweep * half + box.sweep * 2 * half * t, u: t, stage: key < CUT_KEYS - 1 ? "cut" : "held", key };
@@ -11853,39 +11837,6 @@ export class PlayScene extends Phaser.Scene {
    * tail, and breaks up from the point in the recovery.
    * Between the swings of a chain the focus stays lit.
    */
-  /**
-   * **The thrust's trail** (the third swing of a run, `SWING_RUN`): it does
-   * not sweep, so there is no swept sheet to draw. The blade drives straight
-   * out as the reach spreads, and what it leaves is a spray of speed lines
-   * streaming back from the point along its line — the centre one white and
-   * longest, the outer ones shorter and blue — and a faint wedge between the
-   * staff and the point. Eaten from the back as the trail retracts.
-   */
-  private drawThrustStreak(r: { tipX: number; tipY: number; pointX: number; pointY: number }, retract: number): void {
-    const g = this.magicGfx;
-    const len = Math.hypot(r.pointX - r.tipX, r.pointY - r.tipY);
-    if (len < 2) return;
-    const ux = (r.pointX - r.tipX) / len, uy = (r.pointY - r.tipY) / len;
-    const nx = -uy, ny = ux;
-    const fade = 1 - retract;
-    if (fade <= 0) return;
-    // The wedge: narrow at the staff, widest just behind the point.
-    const back = len * (0.2 + 0.8 * retract);
-    const bx = r.tipX + ux * back, by = r.tipY + uy * back;
-    g.fillStyle(0x6fb8ff, 0.28 * fade);
-    g.fillTriangle(bx, by, r.pointX + nx * 4, r.pointY + ny * 4, r.pointX - nx * 4, r.pointY - ny * 4);
-    g.fillStyle(0xcfeeff, 0.35 * fade);
-    g.fillTriangle(bx, by, r.pointX + nx * 1.6, r.pointY + ny * 1.6, r.pointX - nx * 1.6, r.pointY - ny * 1.6);
-    // Speed lines from the point back along the line, longest in the middle.
-    for (const k of [-5, -2.5, 0, 2.5, 5] as const) {
-      const off = Math.abs(k);
-      const l = len * (1.25 - off * 0.09) * fade;
-      const sx = r.pointX + nx * k - ux * 2, sy = r.pointY + ny * k - uy * 2;
-      g.lineStyle(off === 0 ? 1.4 : 1, off === 0 ? 0xffffff : 0xa8dcff, (off === 0 ? 0.9 : 0.55 - off * 0.05) * fade);
-      g.lineBetween(sx, sy, sx - ux * l, sy - uy * l);
-    }
-  }
-
   private drawConjuredSwing(): void {
     const w = this.world;
     const p = w.player;
@@ -11931,8 +11882,7 @@ export class PlayScene extends Phaser.Scene {
     const headT = pose.u;
     const retract = pose.stage === "held" ? Math.min(1, Math.max(0, since - (CUT_KEYS - 1) * KEY_MS) / TRAIL_RETRACT_MS) : 0;
     const tailT = headT * retract;
-    if (box.thrust) this.drawThrustStreak(r, retract);
-    else if (headT - tailT > 0.02) {
+    if (headT - tailT > 0.02) {
       /*
        * **The trail is what the blade swept, sampled from the blade.**
        *

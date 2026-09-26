@@ -47,62 +47,31 @@ export const SWING_TOTAL_MS = SWING_WINDUP_MS + SWING_ACTIVE_MS + SWING_RECOVER_
 export const SWING_CHAIN_MS = 350;
 
 /**
- * **Three swings — a cut, a cut back, a thrust — then the sword rests.**
+ * **Three cuts — across, back, and a heavier one across — then the sword rests.**
  *
- * A held key used to swing forever at
- * one swing every 16 frames, faster than any windup in the roster, so a
- * player standing still and holding it killed most bodies before their first
- * turn and never had to move. Slowing the swing would cost what makes it feel
- * good, so each swing keeps its speed and the *run* is bounded instead, after
- * Hades, whose combo ends in a recovery the enemies' attacks land in.
+ * A held key used to swing forever at one swing every 16 frames, faster than
+ * any windup in the roster, so a player standing still and holding it killed
+ * most bodies before their first turn and never had to move. Slowing the
+ * swing would cost what makes it feel good, so each swing keeps its speed and
+ * the *run* is bounded instead: three cuts and a rest the enemies' attacks
+ * land in, as Hyper Light Drifter's and Death's Door's are.
  *
- * The run is a shape the player can see coming, after Hades' swing, chop and
- * thrust: the second cut crosses back the way the first came, and the third
- * is a thrust straight along the facing — narrower, longer, harder and
- * heavier, the finisher the rest follows. The rest is after the third swing
- * of a chain (`SWING_CHAIN_MS`) ends; the player walks at full pace through
- * it, and a dash clears it — so the way to keep the blade going is to move.
+ * All three are cuts, after Death's Door: the second crosses back the way
+ * the first came, and the third crosses again, wider, a little further, and
+ * heavier — its weight heard as well as seen. A thrust was the finisher
+ * first, after Hades, and did not suit a top-down view with four facings: a
+ * line where the cuts were a sweep, which needed aiming help to land and
+ * read thin even when it did. The rest is after the third swing of a chain
+ * (`SWING_CHAIN_MS`) ends; the player walks at full pace through it, and a
+ * dash clears it — so the way to keep the blade going is to move.
  */
 export const SWING_RUN = 3;
 export const SWING_BREATH_MS = 250;
-/**
- * The thrust. Its steel starts short and the reach is mostly spread, so the
- * blade is seen to drive out across the active frames; it ends about a sixth
- * further than a cut. Half a cut's width, since it does not sweep.
- */
-export const THRUST_STEEL = 0.8;
-export const THRUST_SPREAD = 1.6;
-/**
- * **The thrust finds its body.** A cut covers 170 degrees and a thrust a
- * narrow band, and the body faces only four ways, so a body a little off the
- * axis — any diagonal — was cut twice and then missed by the finisher. The thrust is
- * turned onto the nearest body within this far of the facing and within its
- * reach, the rule a single spell shot already follows; with nothing there it
- * goes straight along the facing.
- */
-export const THRUST_AIM_DEG = 50;
-/**
- * **The thrust is a band, not a wedge.** Its hitbox was the cut's sector
- * shape narrowed to 36 degrees, and an angle is narrowest where the fight
- * is: 12 px wide at 20 px out, so a body pressed against the player could be
- * grazed past. The band is as wide at the hand as at the point: anything
- * within this many px of the line from the swing's centre to the point (plus
- * its own radius) is struck.
- */
-export const THRUST_HALF_WIDTH = 15;
-/**
- * **And it bursts at the point.** A band still hits a line, and the cuts
- * before it hit a crowd, so the finisher was the lightest-feeling blow of
- * the run. As it reaches full length it bursts, striking every body within
- * this radius of the point that the blade itself did not, for this share of
- * the thrust's own damage.
- */
-// Twice the band's half-width: a burst no wider than the band's own rounded
-// end would strike nothing the blade had not.
-export const THRUST_BURST_RADIUS = TILE_PX * 0.9;
-export const THRUST_BURST_DAMAGE = 0.4;
-export const THRUST_DAMAGE = 1.5;
-export const THRUST_KNOCKBACK = 1.6;
+/** The run's last cut: its arc, its reach past the steel, its damage and its shove, against a cut's. */
+export const FINISH_ARC_DEG = 210;
+export const FINISH_SPREAD = 1.25;
+export const FINISH_DAMAGE = 1.5;
+export const FINISH_KNOCKBACK = 1.6;
 
 /**
  * Total coverage of one swing: the angle the blade's tip travels through.
@@ -291,10 +260,8 @@ export interface SwingBox {
   sweep: 1 | -1;
   /** Whether this swing continues a chain (`SWING_CHAIN_MS`): the conjured blade is already out. */
   chained: boolean;
-  /** The player's third swing of a run: a straight thrust, not a sweep (`SWING_RUN`). */
-  thrust: boolean;
-  /** Where a thrust burst at its point this step (`THRUST_BURST_RADIUS`), or null. Set by `stepSwing`. */
-  burstAt: Vec | null;
+  /** The player's last swing of a run: the wider, heavier cut (`SWING_RUN`). */
+  finisher: boolean;
   hitIds: number[];
   ageMs: number;
 }
@@ -303,7 +270,7 @@ export function makeSwingBox(): SwingBox {
   return {
     active: false, x: 0, y: 0, facing: 0, halfArc: 0, sweepDeg: 0, angle: 0, lastAngle: 0,
     trackingMs: 0, bladeReach: 0, spread: 0, reach: 0,
-    damage: 0, knockback: 0, sweep: 1, chained: false, thrust: false, burstAt: null, hitIds: [], ageMs: 0,
+    damage: 0, knockback: 0, sweep: 1, chained: false, finisher: false, hitIds: [], ageMs: 0,
   };
 }
 
@@ -324,7 +291,6 @@ function angleDelta(a: number, b: number): number {
  * standing next to without micro-adjusting in the heat of the moment.
  */
 export function sectorHits(box: SwingBox, p: Vec, r: number): boolean {
-  if (box.thrust) return thrustHits(box, p, r);
   const dx = p.x - box.x;
   const dy = p.y - box.y;
   const dist = Math.hypot(dx, dy);
@@ -336,20 +302,11 @@ export function sectorHits(box: SwingBox, p: Vec, r: number): boolean {
   return Math.abs(angleDelta(box.angle, Math.atan2(dy, dx))) <= box.halfArc + spread;
 }
 
-/** The thrust's band (`THRUST_HALF_WIDTH`): the segment from the centre out to the current reach, thickened. */
-export function thrustHits(box: SwingBox, p: Vec, r: number): boolean {
-  const ux = Math.cos(box.facing), uy = Math.sin(box.facing);
-  const dx = p.x - box.x, dy = p.y - box.y;
-  const along = Math.max(0, Math.min(box.reach, dx * ux + dy * uy));
-  return Math.hypot(dx - ux * along, dy - uy * along) <= THRUST_HALF_WIDTH + r;
-}
-
 /**
  * `sectorHits` over the arc the blade crossed this step, from `lastAngle` to
  * `angle`, rather than at the one angle it ended on.
  */
 export function sweptHits(box: SwingBox, p: Vec, r: number): boolean {
-  if (box.thrust) return thrustHits(box, p, r);
   const dx = p.x - box.x;
   const dy = p.y - box.y;
   const dist = Math.hypot(dx, dy);
@@ -517,47 +474,21 @@ export function beginSwing(p: Player, world: World): void {
   box.damage = SWING_DAMAGE * (p.mods?.swordDamage ?? 1);
   box.knockback = SWING_KNOCKBACK;
   box.sweep = sweepFor(p.swingFacing);
-  box.thrust = false;
-  // The run's shape: the second cut comes back, the third is the thrust.
+  box.finisher = false;
+  // The run's shape: the second cut comes back; the third crosses again, wider and heavier.
   if (p.swingRun === 2) box.sweep = box.sweep === 1 ? -1 : 1;
   else if (p.swingRun >= SWING_RUN) {
-    box.thrust = true;
-    box.sweepDeg = 0;
-    box.bladeReach *= THRUST_STEEL;
-    box.spread = SPREAD_BASE * THRUST_SPREAD * (p.mods?.swordReach ?? 1);
-    box.reach = box.bladeReach;
-    box.damage *= THRUST_DAMAGE;
-    box.knockback *= THRUST_KNOCKBACK;
-    const aim = thrustAim(world, box, p.swingFacing);
-    if (aim !== null) box.facing = box.angle = aim;
+    box.finisher = true;
+    box.sweepDeg = FINISH_ARC_DEG - BLADE_DEG;
+    box.spread *= FINISH_SPREAD;
+    box.damage *= FINISH_DAMAGE;
+    box.knockback *= FINISH_KNOCKBACK;
   }
   p.swung = true;
   box.chained = chained;
   box.lastAngle = bladeAngle(box, p);
   box.hitIds.length = 0;
   box.ageMs = 0;
-}
-
-/**
- * The angle to the nearest body a thrust from `box` would turn onto, or null
- * (`THRUST_AIM_DEG`). The cone is about the body's own `facing`, never the
- * thrust's turned one, so tracking cannot walk it round the player.
- */
-export function thrustAim(world: World, box: SwingBox, facing: number): number | null {
-  const cone = (THRUST_AIM_DEG * Math.PI) / 180;
-  let best: number | null = null;
-  let bestD = Infinity;
-  for (const e of world.enemies) {
-    if (e.hp <= 0 || e.spawnFadeMs > 0 || e.airborne) continue;
-    const dx = e.x - box.x, dy = e.y - box.y;
-    const d = Math.hypot(dx, dy);
-    if (d > fullReach(box) + e.radius || d >= bestD) continue;
-    const a = Math.atan2(dy, dx);
-    if (Math.abs(angleDelta(facing, a)) > cone) continue;
-    best = a;
-    bestD = d;
-  }
-  return best;
 }
 
 /**
@@ -599,16 +530,6 @@ export function stepSwing(world: World, dtMs: number): Enemy[] {
   box.x = p.x;
   box.y = p.y - SWING_ORIGIN_LIFT;
   const phase = swingPhase(p);
-  /*
-   * A thrust **tracks its body through the windup**: a body that steps in the
-   * four frames before the strike is still where the point goes. It locks as
-   * the strike starts, so the blade never bends while it is driving; a body
-   * that leaves the cone leaves the aim where it was.
-   */
-  if (box.thrust && phase === "windup") {
-    const aim = thrustAim(world, box, p.swingFacing);
-    if (aim !== null) box.facing = aim;
-  }
   const wasActive = box.active;
   box.active = phase === "active";
   box.lastAngle = wasActive ? box.angle : bladeAngle({ ...box }, { ...p, swingMs: p.swingMs + dtMs });
@@ -642,10 +563,6 @@ export function stepSwing(world: World, dtMs: number): Enemy[] {
    * window ends (a stance, a spin) has no finished arc and throws none.
    */
   if (wasActive && !box.active && p.swingMs > 0 && p.swingStretch === 1 && p.enchant) throwWave(world);
-  // The thrust bursts at its point as it reaches full length; `resolveSwing` deals it.
-  box.burstAt = wasActive && !box.active && box.thrust && p.swingMs > 0
-    ? { x: box.x + Math.cos(box.facing) * fullReach(box), y: box.y + Math.sin(box.facing) * fullReach(box) }
-    : null;
   if (!box.active) return [];
 
   const struck: Enemy[] = [];
