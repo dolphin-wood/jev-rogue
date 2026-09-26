@@ -64,7 +64,7 @@ export const SWING_CHAIN_MS = 350;
  * it, and a dash clears it — so the way to keep the blade going is to move.
  */
 export const SWING_RUN = 3;
-export const SWING_BREATH_MS = 400;
+export const SWING_BREATH_MS = 250;
 /**
  * The thrust. Its steel starts short and the reach is mostly spread, so the
  * blade is seen to drive out across the active frames; it ends about a sixth
