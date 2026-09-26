@@ -239,6 +239,8 @@ const WAVE_BODY_PX = 11;
  * Full white at the camera's zoom was a blinding block on every hit — the
  * flash has to say *that landed*, not light the screen.
  */
+/** How long an accepted invite code's line stays up before its dialog closes itself. */
+const INVITE_ACCEPTED_CLOSE_MS = 900;
 const HIT_FLASH_FILL = 0xd2c6cc;
 /** How strong the king's hit wash starts, added over him (`drawEnemy`'s boss flash). */
 const BOSS_FLASH_ALPHA = 0.35;
@@ -5152,6 +5154,15 @@ export class PlayScene extends Phaser.Scene {
     this.sfx.play(ui.status === "accepted" ? "ui_select" : "ui_deny");
     this.renderInvite();
     this.redrawMenus();
+    /*
+     * An accepted code closes the dialog: there is nothing left to do in it.
+     * The accepted line is left up for a moment first, so the player sees the
+     * code was taken rather than the dialog simply vanishing. Anything done
+     * in that moment — an edit, a clear, a close — keeps it open.
+     */
+    if (ui.status === "accepted") setTimeout(() => {
+      if (this.inviteUi === ui && !ui.closing && ui.checking === token && ui.status === "accepted") this.hideInvite();
+    }, INVITE_ACCEPTED_CLOSE_MS);
   }
 
   /** Forgets the code, and the arm with it if the code was what allowed it. */
