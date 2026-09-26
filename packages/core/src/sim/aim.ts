@@ -15,6 +15,7 @@
  */
 import type { World } from "./types.ts";
 import { TILE_PX } from "../types.ts";
+import { hasLineOfSight } from "./collide.ts";
 
 /** Half-angle of the assist cone. Wider than this and the game aims for you. */
 export const ASSIST_CONE_DEG = 14;
@@ -37,6 +38,8 @@ export const ASSIST_RANGE = 460;
  */
 export const SEEK_CONE_DEG = 52;
 export const SEEK_RANGE = 520;
+/** Added to a hidden body's score: more than any angle and distance can make. */
+const HIDDEN_LAST = 100;
 
 /**
  * The enemy a keyed spell will curve toward, or null.
@@ -58,8 +61,14 @@ export function seekTargets(
     if (dist > SEEK_RANGE || dist < 1) continue;
     const angle = angleBetween(dirX, dirY, dx / dist, dy / dist);
     if (angle > cone) continue;
-    // Angle first, distance as the tiebreaker, at about a degree per 40 px.
-    found.push({ id: e.id, x: e.x, y: e.y, score: angle + dist / 40 / 57.3 });
+    /*
+     * Angle first, distance as the tiebreaker, at about a degree per 40 px —
+     * and a body the caster cannot see after every body it can. Ranked by
+     * angle alone, one behind a pillar outranked one in the open beside it,
+     * and a homing shot curved into the pillar; it still counts, last.
+     */
+    const hidden = !hasLineOfSight(world.room.grid, x, y, e.x, e.y);
+    found.push({ id: e.id, x: e.x, y: e.y, score: angle + dist / 40 / 57.3 + (hidden ? HIDDEN_LAST : 0) });
   }
   found.sort((a, b) => a.score - b.score);
   return found.map(({ id, x: ex, y: ey }) => ({ id, x: ex, y: ey }));

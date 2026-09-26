@@ -14,6 +14,7 @@ import { createWorld, step } from "./world.ts";
 import { NO_INPUT, STEP_MS } from "./types.ts";
 import type { Enemy, Input, World } from "./types.ts";
 import { makeEnemy, ENEMY_POISON_MS } from "./enemy.ts";
+import { seekTargets } from "./aim.ts";
 import { attachAffix, bankOf, chargeMsOf, slotCost } from "./spells.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
 import { ITEMS, plainInstance } from "../spells/index.ts";
@@ -404,6 +405,41 @@ describe("telegraph (Meteor)", () => {
     run(w, at(e.x, e.y), Math.ceil((telegraph + 400) / STEP_MS), [e]);
     expect(hurt(e)).toBe(0);
   });
+});
+
+/*
+ * **A seeking spell prefers a body it can reach.** The seek cone ranked by
+ * angle and distance alone, so a body behind a pillar outranked one in the
+ * open beside it: a homing shot curved into the pillar, a line of spikes ran
+ * into it, and Cinder Geysers put every cell on the far side and had them
+ * all refused. A body behind a wall still counts; it just comes after every
+ * body the caster can see.
+ */
+describe("seeking past a pillar", () => {
+  const pillar = (() => {
+    const g2 = grid.slice();
+    const tx = Math.floor(PX / TILE_PX) + 3, ty = Math.floor(PY / TILE_PX);
+    for (const dy of [-1, 0, 1]) g2[(ty + dy) * GRID_W + tx] = Tile.Wall;
+    return g2;
+  })();
+
+  it("ranks the bodies it can see before the one behind a pillar", () => {
+    const w = arena("magic_bolt", "rank", pillar);
+    const hidden = body(w, 200, 0);
+    const seen = body(w, 150, 100);
+    const ranked = seekTargets(w, PX, PY, 1, 0).map((t) => t.id);
+    expect(ranked).toEqual([seen.id, hidden.id]);
+  });
+
+  for (const spell of ["magic_bolt", "earth_spikes", "cinder_geysers", "arc_lance"])
+    it(`${spell} reaches the body in the open, not the pillar`, () => {
+      const w = arena(spell, `pillar-${spell}`, pillar);
+      const hidden = body(w, 200, 0);
+      const seen = body(w, 150, 100);
+      step(w, at(hidden.x, hidden.y, { spell: 0 }));
+      run(w, at(hidden.x, hidden.y), Math.ceil(1500 / STEP_MS), [hidden, seen]);
+      expect(hurt(seen), spell).toBeGreaterThan(0);
+    });
 });
 
 describe("the ring pattern (Quake Ring)", () => {

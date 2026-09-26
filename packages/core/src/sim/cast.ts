@@ -725,7 +725,15 @@ export function fireUnit(
      * on the ground ahead, short of the first wall.
      */
     const sky = scatter && telegraph > 0;
-    const mark = sky && !free ? screenTargets(world, from.x, from.y, aim.x, aim.y)[0] ?? null : placed;
+    /*
+     * A scatter out of the floor (Cinder Geysers) still needs the caster's
+     * sight, so it takes the first body in the cone it can see: the cone's
+     * best could stand behind a pillar, and every cell round it was refused.
+     */
+    const mark = free ? placed
+      : sky ? screenTargets(world, from.x, from.y, aim.x, aim.y)[0] ?? null
+        : scatter ? marks.find((m) => hasLineOfSight(world.room.grid, from.x, from.y, m.x, m.y)) ?? null
+          : placed;
     const dir = mark ? normalise(mark.x - from.x, mark.y - from.y) : aim;
     const angle0 = Math.atan2(dir.y, dir.x);
     /*
