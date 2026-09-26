@@ -19,7 +19,7 @@ import {
   bucketRecentDamage, bucketRunProgress, emptyHistory, heldDominantTags, plainInstance, portalChoices,
   runStaff, STYLE_START,
 } from "@jr/core";
-import type { RunContext } from "@jr/core";
+import type { Archetype, RunContext } from "@jr/core";
 import { createDirector } from "@jr/director";
 import type { Evaluator } from "@jr/director";
 import { jevEvaluator } from "../play/jev.ts";
@@ -32,10 +32,13 @@ interface State {
   readonly extra: readonly string[];
   readonly observed?: Partial<NonNullable<RunContext["labels"]["observed"]>>;
   /** The style picked at the start; Barrage when left out. */
-  readonly style?: "spam" | "melee";
+  readonly style?: Archetype;
+  /** Hearts left of six, and hearts lost over the last two rooms. */
+  readonly hearts?: number;
+  readonly lost?: number;
 }
 
-const STATES: readonly State[] = [
+const INTENT_STATES: readonly State[] = [
   { name: "room1-zh-faster", index: 0, words: "想要更快的攻击速度", extra: [] },
   { name: "room1-en-faster", index: 0, words: "I want to attack faster", extra: [] },
   { name: "room1-no-words", index: 0, extra: [] },
@@ -52,6 +55,31 @@ const STATES: readonly State[] = [
   },
 ];
 
+/*
+ * **No words, every style, the whole run** (`AB_SET=nostyle`): the player who
+ * picked a style and typed nothing, which is most players. Finding 1's stat
+ * door won 99% of rooms on a label that never moved; the negative that held
+ * it back early is gone, so this is the grid it would show up on — the full
+ * staff mid and late, where "an empty key" never applied, and the player the
+ * new negative no longer covers, short of mana and health.
+ */
+const STYLES: readonly Archetype[] = ["spam", "nuke", "area", "dot", "melee"];
+const NOSTYLE_STATES: readonly State[] = STYLES.flatMap((style, i) => {
+  // Two spells from other styles, so each staff is a different one.
+  const extra = [STYLE_START[STYLES[(i + 1) % 5]!], STYLE_START[STYLES[(i + 2) % 5]!]];
+  return [
+    { name: `${style}-room1`, index: 0, extra: [], style },
+    { name: `${style}-room5-comfortable`, index: 5, extra: extra.slice(0, 1), style,
+      observed: { mana_refused: "never", hurt_by: "nothing" } },
+    { name: `${style}-room9-full-comfortable`, index: 9, extra, style,
+      observed: { mana_refused: "never", hurt_by: "nothing" } },
+    { name: `${style}-room9-full-struggling`, index: 9, extra, style, hearts: 2, lost: 2,
+      observed: { mana_refused: "often", mana_short_time: "most", hurt_by: "blades", damage_rate: "low" } },
+  ];
+});
+
+const STATES = process.env["AB_SET"] === "nostyle" ? NOSTYLE_STATES : INTENT_STATES;
+
 function ctxFor(s: State): RunContext {
   const staff = runStaff();
   const held = [plainInstance(STYLE_START[s.style ?? "spam"]), ...s.extra.map((b) => plainInstance(b))];
@@ -59,13 +87,13 @@ function ctxFor(s: State): RunContext {
   return {
     run_id: `ab-${s.name}`, seed: `ab-${s.name}`, room_index: s.index,
     labels: {
-      health: bucketHealth(6), recent_damage: bucketRecentDamage(0),
+      health: bucketHealth(s.hearts ?? 6), recent_damage: bucketRecentDamage(s.lost ?? 0),
       clear_speed: bucketClearSpeed(30_000, 30_000), movement_pressure_recent: bucketMovementPressure(0.5),
       run_progress: bucketRunProgress(s.index), gold: bucketGold(20),
       tension_cap: "peak_allowed", hazard_cap: "high", pressure_cap: 5,
       build: { range: "mid" },
       preference: { dominant: heldDominantTags(slots, ITEMS), consistency: "on_plan" },
-      build_shape: s.extra.length ? "forming" : "raw",
+      build_shape: s.extra.length >= 2 ? "formed" : s.extra.length ? "forming" : "raw",
       ...(s.observed ? { observed: { ...UNMEASURED, ...s.observed } } : {}),
     },
     staff, slots, inventory: [],
@@ -119,7 +147,16 @@ for (const s of STATES.filter((x) => !only || only.test(x.name))) {
   const runs = results[s.name]!;
   const mean = (k: string) => runs.reduce((a, p) => a + (p[k] ?? 0), 0) / Math.max(1, runs.length);
   console.log(`${s.name.padEnd(28)} n=${runs.length}  `
-    + ["spell", "affix", "stat", "gold", "fallback"].map((k) => `${k} ${mean(k).toFixed(2)}`).join("  "));
+    + ["spell", "affix", "stat", "gold", "fallback"].map((k) => `${k} ${mean(k).toFixed(2)}`).join("  ")
+    + `  top ${runs.map((p) => Object.entries(p).sort((a, b) => b[1] - a[1])[0]?.[0]).join(",")}`);
 }
+// Over every answer: how often each kind came out on top, and its mean mass.
+const all = Object.values(results).flat();
+const kinds = ["spell", "affix", "stat", "gold"];
+console.log(`ALL n=${all.length}  ` + kinds.map((k) => {
+  const top = all.filter((p) => Object.entries(p).sort((a, b) => b[1] - a[1])[0]?.[0] === k).length;
+  const mass = all.reduce((a, p) => a + (p[k] ?? 0), 0) / Math.max(1, all.length);
+  return `${k} top ${Math.round((100 * top) / Math.max(1, all.length))}% mass ${mass.toFixed(2)}`;
+}).join("  "));
 writeFileSync(out, JSON.stringify(results, null, 2));
 console.log(`Jev calls: ${ledger.calls}, failed ${ledger.failures}, refused ${ledger.refused}`);
