@@ -101,6 +101,8 @@ const VIEW_SLACK_Y = 20;
  */
 export function screenTargets(
   world: World, x: number, y: number, dirX: number, dirY: number,
+  /** Only the bodies inside the cone round `dir`: a side cast keeps to its own side. */
+  coneOnly = false,
 ): { id: number; x: number; y: number }[] {
   const cone = (SEEK_CONE_DEG * Math.PI) / 180;
   const roomW = world.room.extent.w * TILE_PX, roomH = world.room.extent.h * TILE_PX;
@@ -113,6 +115,7 @@ export function screenTargets(
     const dx = e.x - x, dy = e.y - y, dist = Math.hypot(dx, dy);
     const angle = dist < 1 ? 0 : angleBetween(dirX, dirY, dx / dist, dy / dist);
     const inCone = angle <= cone;
+    if (coneOnly && !inCone) continue;
     // In the cone: by distance, ahead of everything outside it (at most a screen's width, well under the offset).
     found.push({ id: e.id, x: e.x, y: e.y, score: inCone ? dist : OUTSIDE_CONE + angle + dist / 40 / 57.3 });
   }

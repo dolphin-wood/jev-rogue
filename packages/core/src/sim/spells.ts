@@ -31,6 +31,7 @@
  */
 import type { BaseItem, ItemInstance, Staff } from "../types.ts";
 import type { ItemRegistry } from "../spells/items.ts";
+import { num, str } from "../spells/items.ts";
 import { emptyScope, fireUnit, freeCastReach } from "./cast.ts";
 import { castAdditions, onCast, spreadDirections } from "./affix-hooks.ts";
 import { addPowers, dominantElement, noPowers } from "../content/tags.ts";
@@ -748,19 +749,44 @@ function release(
      * `repeat` went past five times the sword, because a bar that could not
      * keep up let the bank fill and every echo fired all of it again.
      */
-    world.echoes.push({ slot: pressed, delayMs: REPEAT_GAP_MS * i, n: i, charge: opts.charge });
+    world.echoes.push({ slot: pressed, delayMs: repeatGapMs(items, slot.item.base) * i, n: i, charge: opts.charge });
   onCast(world, slot);
   return { shots, refused: null };
 }
 
 /**
- * The gap between a cast and its `repeat` echo, and between echoes.
+ * The gap between a cast and its `repeat` echo, and between echoes, for a
+ * spell that is over when it leaves the hand: a bolt.
  *
- * Long enough to be two events to the eye and to land on a body that has
- * moved; short enough that the echo is still the same press. Sword swings
- * are about 400 ms apart, so this is a quarter of a swing.
+ * It was 110 ms for every spell, a quarter of a sword swing. Two bolts that
+ * close read as one shot stuttering rather than the spell cast twice; at
+ * 160 ms they are two beats.
  */
-export const REPEAT_GAP_MS = 110;
+export const REPEAT_GAP_MS = 160;
+/** A boomerang's: the second blade leaves once the first is clearly away. */
+const REPEAT_GAP_BOOMERANG_MS = 250;
+
+/**
+ * **An echo waits for the cast it repeats to be done.**
+ *
+ * A spell that plays out over time — a line of spikes going off cell by
+ * cell, geysers each on their own beat, a rock that lands after its mark —
+ * was echoed 110 ms in, while the first was still going: the second line
+ * chased the first down the same path, and a second meteor's mark came down
+ * on top of the first before either had landed, so "casts again" read as one
+ * muddled cast. The echo now starts as the last cell of the first goes off.
+ */
+export function repeatGapMs(items: ItemRegistry, base: string): number {
+  const params = items.get(base)?.params ?? {};
+  const shape = str(params, "shape", "bolt");
+  if (shape === "boomerang") return REPEAT_GAP_BOOMERANG_MS;
+  if (shape !== "eruption") return REPEAT_GAP_MS;
+  const count = Math.max(1, num(params, "count", 1));
+  const delay = num(params, "delay_ms", 70);
+  // A scatter's cells go off at random inside `delay × count`; a line's and a ring's one `delay` apart.
+  const span = str(params, "pattern", "line") === "scatter" ? delay * count : delay * (count - 1);
+  return Math.max(REPEAT_GAP_MS, span + num(params, "telegraph_ms", 0));
+}
 
 /**
  * The scope a **free** cast fires with: an echo, a `resonance` answer to a

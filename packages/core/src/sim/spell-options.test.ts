@@ -386,6 +386,64 @@ describe("telegraph (Meteor)", () => {
     expect(marked(w)[0]!.x).toBeCloseTo(near.x, 0);
   });
 
+  const withAffix = (w: World, id: string, tier = 1) => {
+    let slot = attachAffix(w.spells[0]!, id)!;
+    for (let t = 1; t < tier; t++) slot = attachAffix(slot, id)!;
+    w.spells[0] = slot;
+  };
+
+  it("a scatter's rock thrown behind seeks a body behind, not the bare floor", () => {
+    const w = arena("meteor", "behind-scatter");
+    withAffix(w, "scatter");
+    const front = body(w, 120, 0);
+    const back = body(w, -130, 40);
+    castAt(w, front.x, front.y, [front, back]);
+    const xs = marked(w).map((c) => Math.round(c.x)).sort((a, b) => a - b);
+    expect(xs).toEqual([Math.round(back.x), Math.round(front.x)].sort((a, b) => a - b));
+  });
+
+  it("does not bring a second rock down on a body one is already marked on, while another is free", () => {
+    const w = arena("meteor", "spread-out");
+    const a = body(w, 90, 0);
+    const b = body(w, 150, 30);
+    // A rock already coming down on the nearer body.
+    const slot = w.eruptions.find((c) => !c.alive)!;
+    Object.assign(slot, { alive: true, fired: false, x: a.x, y: a.y, radius: 34, delayMs: 5000, telegraphMs: 700, damage: 0 });
+    castAt(w, a.x, a.y, [a, b]);
+    const fresh = marked(w).filter((c) => c !== slot);
+    expect(fresh).toHaveLength(1);
+    expect(fresh[0]!.x).toBeCloseTo(b.x, 0);
+  });
+
+  it("echoes once the first rock is down, not while it is still coming", () => {
+    const w = arena("meteor", "echo");
+    withAffix(w, "repeat");
+    const e = body(w, 120, 0);
+    castAt(w, e.x, e.y, [e]);
+    run(w, at(e.x, e.y), Math.floor((telegraph - 100) / STEP_MS), [e]);
+    expect(marked(w)).toHaveLength(1);
+    run(w, at(e.x, e.y), Math.ceil(200 / STEP_MS), [e]);
+    expect(w.eruptions.some((c) => c.alive && c.fired)).toBe(true);
+    expect(marked(w)).toHaveLength(1);
+  });
+
+  it("shakes the room when the rock lands, which no other blow of the player's does", () => {
+    const w = arena("meteor", "shake");
+    const e = body(w, 120, 0);
+    castAt(w, e.x, e.y, [e]);
+    let peak = 0;
+    for (let i = 0; i < Math.ceil((telegraph + 200) / STEP_MS); i++) { run(w, at(e.x, e.y), 1, [e]); peak = Math.max(peak, w.trauma); }
+    expect(peak).toBeGreaterThanOrEqual(0.45);
+
+    const b = arena("magic_bolt", "no-shake");
+    const t = body(b, 120, 0);
+    step(b, at(t.x, t.y, { spell: 0 }));
+    let most = 0;
+    for (let i = 0; i < 60; i++) { run(b, at(t.x, t.y), 1, [t]); most = Math.max(most, b.trauma); }
+    expect(hurt(t)).toBeGreaterThan(0);
+    expect(most).toBe(0);
+  });
+
   it("does not reach a body off screen", () => {
     const w = arena("meteor", "far");
     const far = body(w, 400, 0);

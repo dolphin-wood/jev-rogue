@@ -9,7 +9,7 @@
 import type { ItemRegistry } from "../spells/items.ts";
 import { num, str } from "../spells/items.ts";
 import type { Element, ElementPowers, ItemInstance } from "../types.ts";
-import type { Bullet, Landing, World } from "./types.ts";
+import type { Bullet, Enemy, Landing, World } from "./types.ts";
 import { DASH_SPEED, PLAYER_RADIUS } from "./types.ts";
 import { ORB_OFFSET_PX } from "./shapes.ts";
 import { acquire } from "./bullets.ts";
@@ -729,8 +729,26 @@ export function fireUnit(
      * sight, so it takes the first body in the cone it can see: the cone's
      * best could stand behind a pillar, and every cell round it was refused.
      */
-    const mark = free ? placed
-      : sky ? screenTargets(world, from.x, from.y, aim.x, aim.y)[0] ?? null
+    /*
+     * **Every rock seeks on its own.** A rock cast at a body — `resonance`'s
+     * body struck, `retort`'s attacker — comes down on that body. Any other
+     * seeks: a press along the aim, and a `scatter` side cast, which is aimed
+     * at a bare point out along its own direction, along that direction and
+     * only inside its cone, so a rock thrown behind lands behind and not on
+     * the body in front. It used to land on the bare point whatever stood
+     * beside it. And a body a rock is already marked on comes after every
+     * body that is not, so the press and its side casts — or an echo coming
+     * down while the first is — spread over the room instead of stacking on
+     * one body; with no other body they stack.
+     */
+    const atBody = free && target !== undefined && world.enemies.includes(target as Enemy);
+    const skyMark = (): { x: number; y: number } | null => {
+      const ranked = screenTargets(world, from.x, from.y, aim.x, aim.y, free);
+      // Nothing on screen: a side cast lands on its point, a press on the ground ahead (below).
+      return ranked.find((t) => !underRock(world, t)) ?? ranked[0] ?? (free ? placed : null);
+    };
+    const mark = sky && !atBody ? skyMark()
+      : free ? placed
         : scatter ? marks.find((m) => hasLineOfSight(world.room.grid, from.x, from.y, m.x, m.y)) ?? null
           : placed;
     const dir = mark ? normalise(mark.x - from.x, mark.y - from.y) : aim;
@@ -1080,6 +1098,12 @@ const RING_CELL_SPACING = 1.5;
  * never on the far side of masonry. One cast between all the rings, so a
  * body is hit once however many cells it stands in.
  */
+/** Whether a rock already marked on the ground will come down on this body. */
+function underRock(world: World, t: { x: number; y: number }): boolean {
+  return world.eruptions.some((c) => c.alive && !c.fired && c.telegraphMs > 0
+    && Math.hypot(c.x - t.x, c.y - t.y) <= c.radius);
+}
+
 /** Whether a landing at this point is on floor a body could stand on, not in a wall or a pillar. */
 function onFloor(world: World, x: number, y: number): boolean {
   const t = tileAt(world.room.grid, x, y);

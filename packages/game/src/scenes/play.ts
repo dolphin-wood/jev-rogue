@@ -7154,9 +7154,9 @@ export class PlayScene extends Phaser.Scene {
    * up out of the whole circle (the fire cell's own flame pillar with it), a
    * skirt of dust, and the rock breaking into chips. No flash disc and no
    * ring line: a drawn impact is on the art work order. The ground it leaves
-   * burning is the sim's (`burn_ms`), drawn by `FireFx`. No camera shake:
-   * doc 008 keeps shake for the player being hurt, and the sim's hit stop
-   * already holds the flash.
+   * burning is the sim's (`burn_ms`), drawn by `FireFx`. The room shakes
+   * with it — the sim's (`TRAUMA_SKY_LANDING`), the one blow of the player's
+   * own that doc 008 lets shake.
    */
   private meteorImpactAt(x: number, y: number, r: number): void {
     void r;

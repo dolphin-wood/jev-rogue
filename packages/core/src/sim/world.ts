@@ -163,6 +163,16 @@ const HITSTOP_CAP = FRAME_MS * 6;
 const TRAUMA_HIT = 0;
 const TRAUMA_KILL = 0;
 const TRAUMA_PLAYER_HIT = 0.55;
+/**
+ * **The one blow of the player's own that shakes** (doc 008): a rock from
+ * above landing. Every other hit and kill the player lands keeps to the rule
+ * above; this is the exception the boss's cleave is on the enemy side — a
+ * blow the player waited most of a second for, on a long cooldown, rare
+ * enough that a shake from it cannot become the constant rumble the rule is
+ * there to stop. 0.5 because the camera moves by the square: at the reduced
+ * default it is about a pixel and a half, where 0.3 would be under half of one.
+ */
+const TRAUMA_SKY_LANDING = 0.5;
 /** Linear, and fast enough that a quiet second returns the camera to still. */
 const TRAUMA_DECAY_PER_S = 1.5;
 
@@ -4823,6 +4833,8 @@ function stepEruptions(w: World, dtMs: number): void {
     }
     if (c.burnMs > 0) lightFire(w, c.x, c.y, "player", { radius: c.radius, lifeMs: c.burnMs, damage: c.damage * 0.2 });
     if (hit) impact(w, HITSTOP_HIT * (1 + c.weight * 0.5), TRAUMA_HIT * Math.max(1, c.weight));
+    // A rock from above (a telegraphed cell, Meteor's) shakes the room when it lands, hit or miss.
+    if (c.telegraphMs > 0) w.trauma = Math.min(1, w.trauma + TRAUMA_SKY_LANDING);
     w.events.push({ kind: "eruption", x: c.x, y: c.y, what: c.kind });
   }
 }
