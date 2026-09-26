@@ -383,6 +383,8 @@ export interface DebugActions {
   readonly swapSpells: (a: number, b: number) => void;
   /** Put one body of this kind in front of the player, an elite if asked. */
   readonly spawnEnemy: (id: string, elite: boolean) => void;
+  /** Remove every enemy and queued wave so the room can clear on the next step. */
+  readonly clearEnemies: () => void;
   /** How large the floor's stones are drawn, and the switch for it. */
   readonly floorGrain: () => FloorGrain;
   readonly setFloorGrain: (grain: FloorGrain) => void;
@@ -576,11 +578,15 @@ export class DebugPanel {
       + `<div style="margin:2px 0"><select data-spawn-pick style="${BTN};margin-left:0">`
       + SPAWNABLE.map((id) => `<option value="${id}">${id}</option>`).join("")
       + `</select><button data-spawn="0" style="${BTN}">spawn</button><button data-spawn="1" style="${BTN}">spawn elite</button>`
-      + `<div style="color:#5a5f7a">appears a few tiles ahead of the player, awake</div></div>`;
+      + `<div style="color:#5a5f7a">appears a few tiles ahead of the player, awake</div></div>`
+      + `<div style="margin:6px 0"><button data-clear-enemies style="${BTN};margin-left:0">clear enemies</button>`
+      + `<div style="color:#5a5f7a">removes current enemies and queued waves; the room clears normally</div></div>`;
     const pick = this.spawnBox.querySelector<HTMLSelectElement>("select[data-spawn-pick]");
     pick?.addEventListener("change", () => { this.spawnPick = pick.value; });
     for (const btn of Array.from(this.spawnBox.querySelectorAll<HTMLButtonElement>("button[data-spawn]")))
       btn.addEventListener("click", () => this.actions.spawnEnemy(this.spawnPick, btn.dataset.spawn === "1"));
+    this.spawnBox.querySelector<HTMLButtonElement>("button[data-clear-enemies]")
+      ?.addEventListener("click", () => this.actions.clearEnemies());
 
     const scale = document.createElement("div");
     scale.innerHTML = h2("floor")

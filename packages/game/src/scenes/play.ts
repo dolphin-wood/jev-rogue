@@ -1897,6 +1897,7 @@ export class PlayScene extends Phaser.Scene {
       ...(this.spellLab ? { spellLab: this.spellLab } : {}),
       swapSpells: (a, b) => this.swapSpells(a, b),
       spawnEnemy: (id, elite) => this.debugSpawn(id, elite),
+      clearEnemies: () => this.debugClearEnemies(),
       floorGrain: () => floorGrain,
       setFloorGrain: (grain) => this.setFloorGrain(grain),
       resetFirstLaunch: () => {
@@ -2794,6 +2795,15 @@ export class PlayScene extends Phaser.Scene {
     e.awake = true;
     w.enemies.push(e);
     w.cleared = false;
+  }
+
+  /** Skip the encounter without kill rewards; the simulation handles the normal room-clear beat. */
+  private debugClearEnemies(): void {
+    const w = this.world;
+    if (this.entering || this.won || this.kingIntro || w.awaitingBoss) return;
+    w.enemies.length = 0;
+    w.pendingWaves.length = 0;
+    w.deathBursts.length = 0;
   }
 
   private spawnBoss(fightMs = 0): Enemy {
