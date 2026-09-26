@@ -1381,8 +1381,8 @@ export class PlayScene extends Phaser.Scene {
   private doorsOpening = false;
   /** True in the merchant's room, where the cards cost gold instead of a slot. */
   private shopping = false;
-  /** Paid refreshes reset on entering a room and get dearer within it. */
-  private rerollsThisRoom = 0;
+  /** Reward and merchant refreshes share one price counter for the whole run. */
+  private rerollsThisRun = 0;
   private rerollHoldMs = 0;
   private rerollHoldSpent = false;
   private rerollPointerDown = false;
@@ -2195,7 +2195,6 @@ export class PlayScene extends Phaser.Scene {
     this.entering = true;
     this.bossDeath = null;
     this.roomIndex = index;
-    this.rerollsThisRoom = 0;
     this.rerollHoldMs = 0;
     this.rerollHoldSpent = false;
     this.rerollPointerDown = false;
@@ -4436,6 +4435,7 @@ export class PlayScene extends Phaser.Scene {
     if (!ui) return;
     const text = ui.text.trim();
     this.intent = { preset: STYLES[ui.selected]!.id, ...(text ? { free_text: text } : {}) };
+    this.rerollsThisRun = 0;
     // The playtest log is of this run alone, and says who planned it.
     playtestLog.startRun({ director: directorArm(), style: this.intent.preset, ...(text ? { words: text } : {}) });
     this.hideIntent();
@@ -8957,6 +8957,7 @@ export class PlayScene extends Phaser.Scene {
       this.pickTags = [];
       this.runGold = 0;
       this.runGoldSpent = 0;
+      this.rerollsThisRun = 0;
       this.runKills = 0;
       this.runMs = 0;
       this.mods = noMods();
@@ -10445,7 +10446,7 @@ export class PlayScene extends Phaser.Scene {
       ? this.menuText(cx, cy, t("prompt.soldOut"), 10, "#8792b5").setDepth(202)
       : null;
     const rerollButton: Phaser.GameObjects.GameObject[] = [];
-    const price = rerollPrice(this.rerollsThisRoom);
+    const price = rerollPrice(this.rerollsThisRun);
     const afford = this.canAfford(price);
     const rx = cx + 202;
     const ry = top - 30;
@@ -10527,7 +10528,7 @@ export class PlayScene extends Phaser.Scene {
   private async rerollOffer(): Promise<void> {
     const ui = this.offerUi;
     if (!ui || this.rerollLoading) return;
-    const price = rerollPrice(this.rerollsThisRoom);
+    const price = rerollPrice(this.rerollsThisRun);
     if (!this.canAfford(price)) {
       this.tookLabel = t("toast.need", { price: price - this.goldHeld(), coin: "{coin}" });
       this.tookMs = 1400;
@@ -10536,7 +10537,7 @@ export class PlayScene extends Phaser.Scene {
     }
     const world = this.world;
     const index = this.roomIndex;
-    const roll = this.rerollsThisRoom + 1;
+    const roll = this.rerollsThisRun + 1;
     const purpose = `${this.shopping ? "reroll_shop" : "reroll_reward"}_${roll}`;
     const held = this.slots.flatMap((slot, i) => slot
       ? [heldSpell(ITEMS.get(slot.base), (this.spellAffixes[i] ?? []).map((a) => a.id))] : []);
@@ -10608,7 +10609,7 @@ export class PlayScene extends Phaser.Scene {
           label: `${purpose}:${request.pool.kind}`, ids: cardPlan.ids,
         }))];
       });
-      this.rerollsThisRoom = roll;
+      this.rerollsThisRun = roll;
       this.showRewards();
     } catch (error) {
       if (this.world !== world || this.roomIndex !== index) return;
@@ -11683,7 +11684,7 @@ export class PlayScene extends Phaser.Scene {
     if (npcNear && !this.offerUi && !this.staffUi) {
       this.prompt.setVisible(true);
       this.prompt.setText(npcNear.kind === "merchant"
-        ? (this.shopStock.length > 0 || this.canAfford(rerollPrice(this.rerollsThisRoom))
+        ? (this.shopStock.length > 0 || this.canAfford(rerollPrice(this.rerollsThisRun))
           ? t("prompt.merchant") : t("prompt.soldOut"))
         /*
          * The fountain says which of three things it is before the player
@@ -11702,7 +11703,7 @@ export class PlayScene extends Phaser.Scene {
       if (this.interactPressed) {
         this.interactPressed = false;
         if (npcNear.kind === "merchant") {
-          if (this.shopStock.length > 0 || this.canAfford(rerollPrice(this.rerollsThisRoom))) this.showRewards();
+          if (this.shopStock.length > 0 || this.canAfford(rerollPrice(this.rerollsThisRun))) this.showRewards();
         }
         else if (npcNear.kind === "fountain") this.drinkFountain(npcNear.x, npcNear.y);
         else this.showStaff("smith", null);
@@ -11918,7 +11919,7 @@ export class PlayScene extends Phaser.Scene {
     bar.fillStyle(0x2a2750, 1);
     bar.fillRect(-79, 11, 158, 4);
     if (this.rerollHoldMs > 0) {
-      bar.fillStyle(this.canAfford(rerollPrice(this.rerollsThisRoom)) ? 0xffd45e : 0xff6a5a, 1);
+      bar.fillStyle(this.canAfford(rerollPrice(this.rerollsThisRun)) ? 0xffd45e : 0xff6a5a, 1);
       bar.fillRect(-79, 11, 158 * Math.min(1, this.rerollHoldMs / FLOOR_HOLD_MS), 4);
     }
     if (this.rerollLoading || !held || this.rerollHoldSpent || this.rerollHoldMs < FLOOR_HOLD_MS) return false;

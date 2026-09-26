@@ -7,7 +7,7 @@ const card = (id: string, promised = false) => ({
 });
 
 describe("paid offer rerolls", () => {
-  it("raises the price for each reroll in the same room", () => {
+  it("raises the price for each reroll across rewards and shops", () => {
     expect([0, 1, 2, 3].map(rerollPrice)).toEqual([16, 32, 64, 128]);
   });
 

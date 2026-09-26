@@ -1,8 +1,8 @@
 import type { CardCandidate, CardPool } from "@jr/core";
 
-/** Refreshes double in price within a room and reset in the next one. */
-export function rerollPrice(rollsThisRoom: number): number {
-  return 16 * 2 ** Math.max(0, rollsThisRoom);
+/** Refreshes double in price across the whole run. */
+export function rerollPrice(rollsThisRun: number): number {
+  return 16 * 2 ** Math.max(0, rollsThisRun);
 }
 
 /** Keep a reroll visibly fresh without breaking a door promise or a card guarantee. */
