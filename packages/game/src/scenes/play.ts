@@ -31,7 +31,7 @@ import { createDirector, createEvaluator, EvaluatorError } from "@jr/director";
 import type {
   Decision, Director, DirectorArm, RoomPlanResult, DoorPlan, PortalPlan, CardPlan, CardRequest, ObservedRequest, OfferPlan, OfferRequest,
 } from "@jr/director";
-import { buildReadout, CATEGORIES, categoryOf, groupRequest, requestKey } from "../director-readout.ts";
+import { buildReadout, CATEGORIES, categoryOf, DOOR_IN, DOORS_OUT, groupRequest, requestKey } from "../director-readout.ts";
 import type { NoteKey } from "../director-readout.ts";
 import { bakeFxTextures, FX_TEXTURE } from "../fx/textures.ts";
 import { LAVA_FRAMES } from "../fx/sheets.ts";
@@ -8543,13 +8543,24 @@ export class PlayScene extends Phaser.Scene {
     if (this.world.exited && !this.won && !this.entering) void this.leaveThrough(this.world.exited);
   }
 
-  /** Forgets the last room's Director requests: the next room's are about to be made. */
-  private clearDirectorLog(): void {
-    this.requestStats = new Map();
+  /**
+   * Forgets the last room's Director requests: the next room's are about to be made.
+   *
+   * With `throughDoor`, the request that decided the doors is kept, renamed
+   * as the door the player came in by. The next room's cards were chosen in
+   * it, so without it the room those cards are on shows no card question at
+   * all — and in the room it was asked in, it stood on the readout only from
+   * the reward being taken until the player walked out.
+   */
+  private clearDirectorLog(throughDoor = false): void {
+    const kept = throughDoor ? this.directorLog.filter((r) => r.meta.purpose === DOORS_OUT) : [];
+    const record = this.planRecords.get(DOORS_OUT);
+    const stats = throughDoor ? [...this.requestStats].filter(([k]) => k.startsWith(`${DOORS_OUT}:`)) : [];
+    this.requestStats = new Map(stats.map(([k, v]) => [`${DOOR_IN}${k.slice(DOORS_OUT.length)}`, v]));
     this.roomUsedJev = false;
     this.roomFellBack = null;
-    this.directorLog = [];
-    this.planRecords = new Map();
+    this.directorLog = kept.map((r) => ({ ...r, meta: { ...r.meta, purpose: DOOR_IN } }));
+    this.planRecords = new Map(kept.length && record ? [[DOOR_IN, record]] : []);
   }
 
   /** A new run from room one: everything the run carried is dropped. */
@@ -8734,7 +8745,7 @@ export class PlayScene extends Phaser.Scene {
     const staff = this.world.staff;
     this.showTransition();
     if (this.transitionUi) this.transitionUi.to = this.roomIndex + 1;
-    this.clearDirectorLog();
+    this.clearDirectorLog(true);
     const doorStart = performance.now();
     const doors = await this.director.planDoors(
       this.directorContext(this.roomIndex, this.world.player.hearts, staff),
@@ -10823,17 +10834,31 @@ export class PlayScene extends Phaser.Scene {
     try {
       const plan = await this.director.planOffer(ctx, {
         portals: portalChoices(run, src.stream("portal-count"), this.portalCount), cards: requests,
+        purpose: DOORS_OUT,
       });
       if (plan.portals) {
         this.portalPlan = plan.portals;
-        this.planRecords.set("portals", { decisions: plan.portals.decisions });
         playtestLog.decide(index, "portals", plan.portals.decisions);
       }
       // The cards behind every kind a door could have been, and how each was chosen, named by the kind.
-      plan.cards.forEach((p, i) => {
+      const cardDecisions = plan.cards.flatMap((p, i) => {
         const prefix = `door_${kinds[i]}__`;
-        playtestLog.decide(index, "portals", p.decisions.map((d) => ({ ...d, question: `${prefix}${d.question ?? ""}` })));
+        return p.decisions.map((d) => ({ ...d, question: `${prefix}${d.question ?? ""}` }));
       });
+      playtestLog.decide(index, "portals", cardDecisions);
+      /*
+       * **Recorded under the request's own name**, so the readout joins each
+       * answer to the question it answered. It was kept as `portals` while
+       * the request went out as `offer`: nothing joined, so the doors'
+       * questions showed no answer and the cards behind them no blend.
+       */
+      if (this.world === world && this.roomIndex === index)
+        this.planRecords.set(DOORS_OUT, {
+          decisions: [...(plan.portals?.decisions ?? []), ...cardDecisions],
+          offers: plan.cards.map((p, i) => ({
+            prefix: `door_${kinds[i]}__`, label: `${kinds[i]} door`, blended: p.blended, ids: p.ids,
+          })),
+        });
       doors = (plan.portals?.doors ?? ruleDoors(run, src.stream("offer"), this.portalCount)).map((d) => {
         if (d.npc || d.reward === "gold") return d;
         const ids = plan.cards[kinds.indexOf(d.reward as (typeof kinds)[number])]?.ids ?? [];
@@ -17461,6 +17486,8 @@ function requestTitle(purpose: string, round: number): string {
   if (purpose === "staff") return t("term.req.staff");
   if (purpose === "doors") return t("term.req.doors");
   if (purpose === "offer") return t("term.req.offer");
+  if (purpose === DOORS_OUT) return t("term.req.doorsOut");
+  if (purpose === DOOR_IN) return t("term.req.doorIn");
   if (purpose === "portals") return t("term.req.portals");
   if (purpose.startsWith("cards:")) {
     const [, kind, shelf] = purpose.split(":");

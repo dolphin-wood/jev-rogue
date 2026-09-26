@@ -136,6 +136,13 @@ export interface RoomPlanResult {
 export interface OfferRequest {
   readonly portals?: PortalChoices;
   readonly cards?: readonly CardRequest[];
+  /**
+   * What the request is named on the readout (`RequestMeta.purpose`); `offer`
+   * when left out. A vendor's room asks its shelf and, once the player turns
+   * to go, its doors: two requests of this shape in one room, which a caller
+   * that keeps them apart has to name apart.
+   */
+  readonly purpose?: string;
 }
 
 export interface OfferPlan {

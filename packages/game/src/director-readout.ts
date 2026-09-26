@@ -73,6 +73,14 @@ export interface ReadoutRequest {
   };
 }
 
+/**
+ * The request that opens a room's doors, once its reward is taken: which
+ * kinds of door, and the cards behind every kind a door could be (`openDoors`).
+ */
+export const DOORS_OUT = "doors_out";
+/** The same request, carried into the room its door led to: that room's cards were chosen in it. */
+export const DOOR_IN = "door_in";
+
 /** How a request is identified across the log and the stats recorded beside it. */
 export function requestKey(purpose: string, round: number): string {
   return `${purpose}:${round}`;
@@ -83,7 +91,9 @@ function subjectsOf(purpose: string, round: number): string {
   if (purpose === "room") return round === 1 ? "room, portals, cards" : "zones, encounter, door promises";
   if (purpose === "staff") return "the starting staff";
   if (purpose === "doors") return "the next room's tension";
-  if (purpose === "offer") return "portals and the merchant's shelf";
+  if (purpose === "offer") return "the merchant's shelf";
+  if (purpose === DOORS_OUT) return "the doors out, and the cards behind each kind";
+  if (purpose === DOOR_IN) return "this room's cards, with the door that brought them";
   if (purpose === "portals") return "the portals out";
   if (purpose.startsWith("cards:")) {
     const [, kind, shelf] = purpose.split(":");
@@ -152,10 +162,11 @@ export function buildReadout(
       };
     });
     // Answers code drew itself, recorded with the plan (an elite affix set).
-    // A room's two rounds share one plan, so they go under round 2, which is
-    // when they were drawn.
-    const all = new Set(log.filter((r) => r.meta.purpose === purpose).flatMap((r) => Object.keys(r.questions)));
-    if (purpose !== "room" || req.meta.round === 2)
+    // A request's rounds share one plan, so they go under its last round,
+    // which is when they were drawn.
+    const rounds = log.filter((r) => r.meta.purpose === purpose);
+    const all = new Set(rounds.flatMap((r) => Object.keys(r.questions)));
+    if (req.meta.round === Math.max(...rounds.map((r) => r.meta.round)))
       for (const d of plan?.decisions ?? []) {
         const name = d.question ?? "";
         if (!name || all.has(name)) continue;
@@ -277,7 +288,9 @@ function titleOf(purpose: string, round: number): string {
   if (purpose === "staff") return "run start: the starting staff";
   if (purpose === "doors") return "leaving the last room: next tension";
   if (purpose === "room") return round === 1 ? "room, round 1: space, symmetry, mood, portals, cards" : "room, round 2: zones, encounter, door promises";
-  if (purpose === "offer") return "this room's offer: portals and the merchant's shelf";
+  if (purpose === "offer") return "this room's offer: the merchant's shelf";
+  if (purpose === DOORS_OUT) return "reward taken: the doors out, and the cards behind each kind";
+  if (purpose === DOOR_IN) return "the door taken in: this room's cards, asked in the room before";
   if (purpose === "portals") return "the portals out of this room";
   if (purpose.startsWith("cards:")) {
     const [, kind, shelf] = purpose.split(":");
