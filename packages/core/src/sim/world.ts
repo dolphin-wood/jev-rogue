@@ -2587,18 +2587,26 @@ export const BOSS_SLAM_MS = beats(3);
  * only a delay, and crossing it needs the i-frames rather than a gap.
  *
  * It comes out of the floor where the sword went in, at his feet, so there
- * is no ground near him it has not already crossed. Phase III sends a second
- * band a beat behind the first, into the ground the player used to dodge the
- * first.
+ * is no ground near him it has not already crossed. Phase III stomps twice
+ * before it (`BOSS_SLAM_III_STOMPS`).
  */
 const BOSS_SHOCK_SPEED: Readonly<Record<number, number>> = { 1: 230, 2: 260, 3: 290 };
 /**
- * The phase III second band, two beats behind the first. It was a beat and a
- * half — 536 ms, which is the dash's own recovery (110 + 420 ms) to within a
- * frame, so the second band could only be dashed by a player who had pressed
- * on the first frame both times.
+ * **The phase III slam is three blows, `o---o-----O`.** Two stomps two
+ * beats apart, then three beats of gathering before the third. The stomps
+ * throw no band: they heave up the ground round his feet only, wider than
+ * the earlier phases' slam (`BOSS_SLAM_STOMP_PX`). The third is the slam
+ * as it is in every phase — the struck ground and the band — and it is the
+ * one on the downbeat, so the two stomps come before it, 5 and 3 beats out.
+ * These are how long before the third each stomp falls.
  */
-const BOSS_SHOCK_SECOND_MS = beats(2);
+export const BOSS_SLAM_III_STOMPS: readonly number[] = [beats(5), beats(3)];
+/**
+ * How far each of the phase III slam's blows strikes the ground, px from his
+ * centre — the two stomps and the third alike: the floor heaved up round him
+ * two and a half tiles out, where phases I and II strike `BOSS_SLAM_IMPACT_PX`.
+ */
+export const BOSS_SLAM_STOMP_PX = 84;
 /**
  * Half a heart — ten health at the boss's power — where it was a whole one:
  * a band that reaches the whole hall and is answered only by a timed dash
@@ -2906,14 +2914,14 @@ export function queueBossMove(w: World, move: BossMove): boolean {
   const e = w.enemies.find((b) => b.archetype === "boss" && b.hp > 0);
   if (!e || e.bossCast !== "none" || e.attack !== "approach" || e.airborne || e.bossRoarMs > 0 || e.bossSummonMs > 0) return false;
   const unit = BOSS_ON_DOWNBEAT.has(move) ? BAR_MS : BEAT_MS;
-  const commitAt = e.bossFightMs + BOSS_COMMIT_MS[move];
+  const commitAt = e.bossFightMs + bossCommitMs(move, e.phase);
   // It is his turn now, in place of whatever he had chosen.
   e.bossBlade = null;
   e.bossVolleyMs = 0;
   e.bossLastAct = move;
   e.bossNext = move;
   // To the next line strictly, as the rotation queues (the start is still ahead).
-  e.bossStartAt = commitAt + untilGrid(commitAt, unit) - BOSS_COMMIT_MS[move];
+  e.bossStartAt = commitAt + untilGrid(commitAt, unit) - bossCommitMs(move, e.phase);
   e.bossMoveMs = 0;
   return true;
 }
@@ -3079,14 +3087,14 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
        */
       const next = act as BossMove;
       const unit = BOSS_ON_DOWNBEAT.has(next) ? BAR_MS : BEAT_MS;
-      const commitAt = e.bossFightMs + BOSS_COMMIT_MS[next];
+      const commitAt = e.bossFightMs + bossCommitMs(next, e.phase);
       e.bossNext = next;
       // To the next line strictly: the start is still ahead, so there is no stepped clock to allow for yet.
-      e.bossStartAt = commitAt + untilGrid(commitAt, unit) - BOSS_COMMIT_MS[next];
+      e.bossStartAt = commitAt + untilGrid(commitAt, unit) - bossCommitMs(next, e.phase);
     }
     if (e.bossFightMs < e.bossStartAt) return;
     const move = e.bossNext as Exclude<Enemy["bossNext"], "none">;
-    const commitIn = BOSS_COMMIT_MS[move];
+    const commitIn = bossCommitMs(move, e.phase);
     /*
      * The stepped clock arrives at or past the start — by a step, or by a
      * freeze when hitstop jumped it — and the telegraph gives that back, so
@@ -3101,7 +3109,7 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
     if (trim > BOSS_MAX_TRIM_MS) { e.bossLastAct = ""; e.bossBusy = false; e.bossMoveMs = 0; return; }
     e.bossMoveIndex++;
     e.bossCast = move;
-    e.bossCastMs = (move === "slam" ? BOSS_SLAM_MS
+    e.bossCastMs = (move === "slam" ? bossCommitMs("slam", e.phase)
       : move === "quake" ? BOSS_QUAKE_MS
         : move === "storm" ? bossStormMs(e.phase)
           : BOSS_LEAP_MS) - trim;
@@ -3156,27 +3164,39 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
   keepBossOnBeat(w, e);
   if (e.bossCast === "slam") {
     /*
-     * Phase III: a second band behind the first. Two bands is the one place
-     * the slam asks for a second dash rather than a longer one.
+     * Phase III: the two stomps first (`BOSS_SLAM_III_STOMPS`), the ground
+     * round his feet struck and nothing thrown.
      *
      * **No bullet ring.** The slam threw one with each band, and the dash
      * that crossed the band came out of its i-frames into the bullets: two
      * questions whose answers cancel, which read as "dodged it and got hit
      * anyway". The band is the move.
      */
-    if (e.phase >= 3 && before > -BOSS_SHOCK_SECOND_MS && e.bossCastMs <= -BOSS_SHOCK_SECOND_MS)
-      bossShock(w, e);
+    if (e.phase >= 3) {
+      for (const at of BOSS_SLAM_III_STOMPS) {
+        if (!(before > at && e.bossCastMs <= at)) continue;
+        if (Math.hypot(w.player.x - e.x, w.player.y - e.y) <= BOSS_SLAM_STOMP_PX + PLAYER_RADIUS)
+          hurtPlayer(w, e.x, e.y, "melee:boss", 0, BOSS_SLAM_IMPACT_DAMAGE * e.damageMult);
+        bossStrikesProps(w, (q) => Math.hypot(q.x - e.x, q.y - e.y) <= BOSS_SLAM_STOMP_PX + q.radius, []);
+        impact(w, BOSS_STRIKE_STOP_MS * 0.5, BOSS_STRIKE_TRAUMA * 0.6);
+        w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "boss_stomp" });
+        // The floor heaved up out to the struck ground's edge: drawn, not heard (the stomp is).
+        w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "heave", amount: BOSS_SLAM_STOMP_PX });
+      }
+    }
     if (before > 0 && e.bossCastMs <= 0) {
-      // The sword into the floor at his feet: the ground round them is struck.
-      if (Math.hypot(w.player.x - e.x, w.player.y - e.y) <= BOSS_SLAM_IMPACT_PX + PLAYER_RADIUS)
+      // The sword into the floor at his feet: the ground round them is struck (wider in phase III).
+      const struck = e.phase >= 3 ? BOSS_SLAM_STOMP_PX : BOSS_SLAM_IMPACT_PX;
+      if (Math.hypot(w.player.x - e.x, w.player.y - e.y) <= struck + PLAYER_RADIUS)
         hurtPlayer(w, e.x, e.y, "melee:boss", 0, BOSS_SLAM_IMPACT_DAMAGE * e.damageMult);
-      bossStrikesProps(w, (q) => Math.hypot(q.x - e.x, q.y - e.y) <= BOSS_SLAM_IMPACT_PX + q.radius, []);
+      bossStrikesProps(w, (q) => Math.hypot(q.x - e.x, q.y - e.y) <= struck + q.radius, []);
       bossShock(w, e);
       // A greatsword driven into stone: a long freeze and the room shaking, so it lands like one.
       impact(w, BOSS_STRIKE_STOP_MS, BOSS_STRIKE_TRAUMA);
       w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "boss_slam" });
+      if (e.phase >= 3) w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "heave", amount: struck });
     }
-    if (e.bossCastMs <= (e.phase >= 3 ? -BOSS_SHOCK_SECOND_MS : 0) - BOSS_KNEEL_MS) finishBossMove(e);
+    if (e.bossCastMs <= -BOSS_KNEEL_MS) finishBossMove(e);
     return;
   }
   if (e.bossCast === "quake") {
@@ -3324,6 +3344,31 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
 const BOSS_COMMIT_MS: Readonly<Record<Exclude<Enemy["bossCast"], "none">, number>> = {
   slam: BOSS_SLAM_MS, quake: BOSS_QUAKE_MS, leap: BOSS_LEAP_MS, hook: BOSS_HOOK_AIM_MS, storm: BOSS_STORM_RAISE_MS,
 };
+/**
+ * The slam's next blow, for the renderer: how far it strikes, how far
+ * through its gathering he is (0 to 1), how long since the last blow fell
+ * (for the drive frame), and whether it is the one that throws the band; or
+ * null once the last has fallen.
+ */
+export function bossSlamNext(e: Enemy): { radius: number; t: number; since: number; last: boolean } | null {
+  if (e.bossCast !== "slam" || e.bossCastMs <= 0) return null;
+  const falls = e.phase >= 3 ? [...BOSS_SLAM_III_STOMPS, 0] : [0];
+  const total = bossCommitMs("slam", e.phase);
+  let from = total, since = Infinity;
+  for (let i = 0; i < falls.length; i++) {
+    const at = falls[i]!;
+    if (e.bossCastMs > at) {
+      return { radius: e.phase >= 3 ? BOSS_SLAM_STOMP_PX : BOSS_SLAM_IMPACT_PX, t: Math.max(0, Math.min(1, (from - e.bossCastMs) / (from - at))), since, last: at === 0 };
+    }
+    from = at;
+    since = at - e.bossCastMs;
+  }
+  return null;
+}
+/** The commit of `move` at `phase`: the phase III slam's is its third, charged blow (`BOSS_SLAM_III_STOMPS`). */
+function bossCommitMs(move: Exclude<Enemy["bossCast"], "none">, phase: number): number {
+  return move === "slam" && phase >= 3 ? BOSS_SLAM_MS + BOSS_SLAM_III_STOMPS[0]! : BOSS_COMMIT_MS[move];
+}
 /**
  * What the boss's ground strikes cost the frame: four frames of freeze and a
  * shake. The roster's hits freeze a frame and never shake (`TRAUMA_HIT`); a

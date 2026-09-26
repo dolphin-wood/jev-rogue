@@ -362,6 +362,46 @@ describe("the boss", () => {
     expect(b.meleeKind).toBe("cleave");
   });
 
+  it("slams three times in phase III, o---o-----O: two stomps at his feet, then the band on the downbeat", () => {
+    const w = world();
+    const b = boss(w);
+    b.hp = b.maxHp * 0.2;
+    step(w, NO_INPUT);
+    settle(w, b);
+    expect(b.phase).toBe(3);
+    w.enemies = w.enemies.filter((x) => x === b);
+    w.bossHold = { moves: true, blades: true, volleys: true };
+    w.shockwaves.length = 0;
+    b.attack = "approach";
+    // Two tiles off: out of the earlier phases' struck ground, inside phase III's heave.
+    w.player.x = b.x + 64;
+    w.player.y = b.y + 20;
+    expect(queueBossMove(w, "slam")).toBe(true);
+    const strikes: { what: string; at: number; hurt: boolean; bands: number }[] = [];
+    for (let i = 0; i < 60 * 8 && strikes.length < 3; i++) {
+      w.player.hearts = 6;
+      w.player.invulnMs = 0;
+      w.events.length = 0;
+      step(w, NO_INPUT);
+      const hurt = w.player.hearts < 6;
+      for (const ev of w.events) {
+        if (ev.kind === "hazard_tick" && (ev.what === "boss_stomp" || ev.what === "boss_slam"))
+          strikes.push({ what: ev.what, at: b.bossFightMs, hurt, bands: w.shockwaves.filter((x) => x.alive).length });
+      }
+    }
+    expect(strikes.map((x) => x.what)).toEqual(["boss_stomp", "boss_stomp", "boss_slam"]);
+    // Two beats, then three.
+    expect(Math.abs(strikes[1]!.at - strikes[0]!.at - 2 * BEAT_MS)).toBeLessThanOrEqual(STEP_MS * 1.01);
+    expect(Math.abs(strikes[2]!.at - strikes[1]!.at - 3 * BEAT_MS)).toBeLessThanOrEqual(STEP_MS * 1.01);
+    // Each strikes the ground at his feet; only the third throws the band, and it is on the downbeat.
+    expect(strikes.every((x) => x.hurt)).toBe(true);
+    expect(strikes[0]!.bands).toBe(0);
+    expect(strikes[1]!.bands).toBe(0);
+    expect(strikes[2]!.bands).toBe(1);
+    const off = ((strikes[2]!.at % BAR_MS) + BAR_MS) % BAR_MS;
+    expect(Math.min(off, BAR_MS - off)).toBeLessThanOrEqual(STEP_MS * 1.01);
+  });
+
   it("slams: the band comes out of the floor at his feet, and no ring of shots with it", () => {
     const w = world();
     const b = boss(w);

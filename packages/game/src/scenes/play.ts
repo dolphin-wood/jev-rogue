@@ -47,7 +47,7 @@ import {
 } from "@jr/core";
 import type { BaseItem, CardNeeds, DoorOffer, NpcKind, OfferPromise, RoomStage, RunShape, WorldEvent } from "@jr/core";
 import {
-  BOSS_LEAP_RISE_MS, BOSS_LEAP_LOCK_MS, BOSS_SLAM_MS, BOSS_SLAM_IMPACT_PX, BOSS_LEAP_RADIUS, BOSS_QUAKE_MS, SLAM_SHOCK_RADIUS,
+  BOSS_LEAP_RISE_MS, BOSS_LEAP_LOCK_MS, BOSS_SLAM_IMPACT_PX, BOSS_LEAP_RADIUS, BOSS_QUAKE_MS, SLAM_SHOCK_RADIUS,
   BOSS_POWER,
   withLevel, levelDamageMult, dismantleValue, spellDetail, offerStatParts, slotStatParts, statusForecast, SPELL_DAMAGE_SCALE, rarityOf, STAT_UPGRADES, statById, SPELL_LEVEL_MAX, SCHOOL_COLOUR, schoolOf, spellSound, shapeEventSound, offerCards,
   slotCooldownMs, DASH_COOLDOWN_MS, DASH_MS,
@@ -85,7 +85,7 @@ import {
   drawQuakeTell, drawRiftBurst, drawRiftCircle, drawRingTell, drawSectorTell,
   drawSlamTell, drawStrikeMark,
 } from "./telegraph.ts";
-import { BAR_MS, BEAT_MS, BOSS_PHASES, MELEE_ATTACKS, RUN_BOSS_ROOM, forceBossBlade, propState, queueBossMove } from "@jr/core";
+import { BAR_MS, BEAT_MS, BOSS_PHASES, BOSS_SLAM_STOMP_PX, MELEE_ATTACKS, RUN_BOSS_ROOM, bossSlamNext, forceBossBlade, propState, queueBossMove } from "@jr/core";
 import type { BossMove } from "@jr/core";
 import type { BossHold, BossLabFrame } from "../boss-lab.ts";
 import { SpellLab, spellLabAsked } from "../spell-lab.ts";
@@ -8304,6 +8304,33 @@ export class PlayScene extends Phaser.Scene {
          * chips — because the sword arriving is the whole of the move, and a
          * puff beside a body that barely moved was what made it read as soft.
          */
+        // Phase III's stomps: the sword into stone as the slam's, a flash and a ring (the heave below is the rest).
+        if (ev.kind === "hazard_tick" && ev.what === "boss_stomp") {
+          const y = ev.y + BOSS_FOOT_PX;
+          this.impacts.push({ x: ev.x, y, ms: IMPACT_MS * 1.2, scale: 2.2 });
+          this.ring(ev.x, y, 5, 40, 0xffffff, 200, 4);
+        }
+        /*
+         * **The floor heaved up** (phase III's slam, every blow): the struck
+         * ground drawn as ground — cracks broken open in a ring out to its
+         * edge, slabs of stone thrown up off it and dust rolling out past it —
+         * so the reach the blow has is the floor that moved.
+         */
+        if (ev.kind === "hazard_tick" && ev.what === "heave") {
+          const y = ev.y + BOSS_FOOT_PX;
+          const r = ev.amount ?? BOSS_SLAM_STOMP_PX;
+          this.ring(ev.x, y, 8, r, 0xffc890, 320, 5);
+          for (let k = 0; k < 10; k++) {
+            const a = (k / 10) * Math.PI * 2 + (k % 2) * 0.2;
+            const d = r * (k % 2 ? 0.55 : 0.85);
+            const cx = ev.x + Math.cos(a) * d, cy = y + Math.sin(a) * d * 0.7;
+            this.eruptCracks.push({ x: cx, y: cy, ms: 0, variant: k % 2 });
+            // A slab of the floor thrown up, and its dust.
+            this.burst(cx, cy - 4, 0x6f6252, 3, 160, -Math.PI / 2, 1.1, 1.6, 240);
+            this.burst(cx, cy, 0x9a8a78, 3, 120, a, 0.6, 1.2, 160);
+          }
+          for (let k = 0; k < 8; k++) this.shards.push({ x: ev.x + Math.cos(k) * r * 0.5, y: y + Math.sin(k) * r * 0.35, a: (k / 8) * Math.PI * 2, ms: 0 });
+        }
         if (ev.kind === "hazard_tick" && (ev.what === "boss_slam" || ev.what === "boss_quake")) {
           const y = ev.y + BOSS_FOOT_PX;
           this.impacts.push({ x: ev.x, y, ms: IMPACT_MS * 1.6, scale: 2.9 });
@@ -12692,8 +12719,11 @@ export class PlayScene extends Phaser.Scene {
          * there is no safe circle any more (`BOSS_SLAM_IMPACT_PX`) — growing
          * out past where the shockwave is born.
          */
-        const t = 1 - e.bossCastMs / BOSS_SLAM_MS;
-        drawSlamTell(this.threatGfx, e.x, e.y, 0, BOSS_SLAM_IMPACT_PX + 60 * t, t, tick, view);
+        // Phase III's stomps first (`BOSS_SLAM_III_STOMPS`): each its own ground, filling to its fall.
+        const next = bossSlamNext(e);
+        if (next) {
+          drawSlamTell(this.threatGfx, e.x, e.y, 0, next.radius + (next.last ? 60 * next.t : 0), next.t, tick, view);
+        }
       }
       if (e.archetype === "boss" && e.bossCast === "leap" && e.bossCastMs > 0) {
         /*
@@ -15524,6 +15554,8 @@ function specialPose(w: World, e: Enemy): string | null {
       if (e.bossVolleyMs > 0)
         return ((w.tick / 24) | 0) % 2 === 0 ? "tele" : "tele1";
       // Lifted through the raise (`slam_lift`), driven in on the commit (`slam_drive`), knelt on while it rings out (`slam`).
+      // Phase III's stomps drive in and lift again for the next (`bossSlamNext`).
+      if (e.bossCast === "slam" && e.bossCastMs > 0) return (bossSlamNext(e)?.since ?? Infinity) < BOSS_DRIVE_MS ? "slam_drive" : "slam_lift";
       if (e.bossCast === "slam" || e.bossCast === "quake")
         return e.bossCastMs > 0 ? "slam_lift" : -e.bossCastMs < BOSS_DRIVE_MS ? "slam_drive" : "slam";
       // The storm: the greatsword held straight up over his head for all of it (art order B8, `storm`).
