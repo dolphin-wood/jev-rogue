@@ -3331,8 +3331,34 @@ export class PlayScene extends Phaser.Scene {
       const r = wr * k;
       return px + r > x && px - r < x + w && py + r > y && py - r < y + h;
     };
+    const underBox = (x0: number, y0: number, x1: number, y1: number) => {
+      const [ax, ay] = toUi(x0, y0);
+      const [bx, by] = toUi(x1, y1);
+      return bx > x && ax < x + w && by > y && ay < y + h;
+    };
     return under(world.player.x, world.player.y - BODY_LIFT, 14)
-      || world.enemies.some((e) => e.hp > 0 && under(e.x, e.y, e.radius));
+      || world.enemies.some((e) => e.hp > 0 && (e.archetype === "boss"
+        ? this.bossUnder(e, underBox)
+        : under(e.x, e.y, e.radius)));
+  }
+
+  /**
+   * The king against a HUD rectangle, by the body he is **drawn** as.
+   *
+   * His collision circle is 22 px round his feet and his drawing rises some
+   * 80 px above it, so tested by the circle he stood in a corner with his
+   * whole body behind the boss bar or the health bar and the HUD stayed
+   * solid over him. The box is his phase's idle frame's opaque pixels, drawn
+   * where `drawEnemy` draws it.
+   */
+  private bossUnder(e: Enemy, underBox: (x0: number, y0: number, x1: number, y1: number) => boolean): boolean {
+    const name = [`boss_p${e.phase}_idle0`, "boss_p1_idle0"].find((n) => this.atlas.has(n));
+    if (!name) return underBox(e.x - e.radius, e.y - e.radius, e.x + e.radius, e.y + e.radius);
+    const f = this.atlas.frame(name);
+    const cy = e.y - BOSS_DRAW_RISE_PX;
+    const halfW = this.atlas.contentWidth(name) / 2 / ART_SCALE;
+    return underBox(e.x - halfW, cy + (this.atlas.contentTop(name) - f.h / 2) / ART_SCALE,
+      e.x + halfW, cy + (this.atlas.contentBottom(name) - f.h / 2) / ART_SCALE);
   }
 
   private drawActionBar(w: World): void {
@@ -8333,6 +8359,16 @@ export class PlayScene extends Phaser.Scene {
     const dead = this.world.player.hearts <= 0 && !this.won && !this.entering;
     if (dead && !this.gameOverUi) this.showGameOver();
     if (this.modalOpen || dead) this.accumulator = 0;
+    /*
+     * A menu over the boss fight stops the boss piece with the fight. It
+     * played on while the fight's beat clock stood still, and was re-seated a
+     * menu's length back when the menu closed. Not for the cards that end a
+     * run, the title or a transition: those are the music moving on.
+     */
+    this.sfx.setMusicPaused(!dead && !this.pauseFromTitle
+      && !!(this.pauseUi || this.staffUi || this.offerUi || this.hintsUi)
+      && !this.titleUi && !this.gameOverUi && !this.victoryUi && !this.transitionUi
+      && this.sfx.musicState() === "boss");
     while (this.accumulator >= STEP_MS) {
       stepped = true;
       const shotsBefore = this.world.stats.shotsFired;

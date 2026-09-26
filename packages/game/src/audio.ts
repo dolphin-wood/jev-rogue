@@ -128,6 +128,7 @@ export class Sfx {
   private sfxVolume = storedVolume(SFX_VOLUME_KEY, 0.8);
   private musicVolume = storedVolume(MUSIC_VOLUME_KEY, 0.5);
   private musicHeld = false;
+  private musicPaused = false;
   private music: StemMusic | null = null;
   private ambience: RoomAmbience | null = null;
   private musicOut: GainNode | null = null;
@@ -264,6 +265,7 @@ export class Sfx {
       this.music = new StemMusic(ctx, this.musicOut);
       this.applyMusicVolume();
       this.music.setState(this.pendingState.state, this.pendingState.mood, this.pendingState.bossPhase);
+      this.music.setPaused(this.musicPaused);
       this.music.setStyle(this.style === "off" ? null : this.style);
       this.ambience = new RoomAmbience(ctx, ctx.destination);
       this.ambience.setVolume(this.sfxVolume);
@@ -293,6 +295,12 @@ export class Sfx {
   /** The music held down by `depth` for `seconds`, for a moment that is the effects' alone (`StemMusic.hold`). */
   holdMusic(depth: number, seconds: number): void {
     this.music?.hold(depth, seconds);
+  }
+
+  /** The music stopped where it stands, and resumed from there (`StemMusic.setPaused`). */
+  setMusicPaused(on: boolean): void {
+    this.musicPaused = on;
+    this.music?.setPaused(on);
   }
 
   /** The boss lab's slowed or paused fight: the music cannot slow with it, so it goes quiet. */

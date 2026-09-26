@@ -77,6 +77,8 @@ const OPEN = 20000;
 /** How long a state change takes, and how long the room and the boss pieces take to trade places. */
 const RAMP_S = 1.2;
 const PIECE_FADE_S = 1.6;
+/** How quickly the music stops for a menu and comes back after it: short, so it reads as a pause, not a transition. */
+const PAUSE_FADE_S = 0.12;
 /** How long the music takes to come back up after an effect ducked it. */
 const DUCK_RECOVER_S = 0.75;
 /** Headroom: the stems are mastered hot, and this bus sits under the effects. */
@@ -108,6 +110,8 @@ export class StemMusic {
   /** Where each piece was when it was last faded out, in seconds into its loop. */
   private readonly resumeAt = new Map<Piece, number>();
   private reseating = false;
+  /** Stopped where it stood for a menu that froze the fight; see `setPaused`. */
+  private paused = false;
   private variant: Variant = { harm: "harm", drums: "drums" };
   /** The loop boundary the next variant has already been scheduled for. */
   private variantAt = 0;
@@ -164,6 +168,7 @@ export class StemMusic {
     if (style === this.style) return;
     this.style = style;
     const epoch = ++this.epoch;
+    if (this.paused) return;
     if (!style) {
       if (this.playing) this.resumeAt.set(this.playing.piece, this.position(this.playing));
       this.fadeOut(this.playing, PIECE_FADE_S * 0.5);
@@ -182,7 +187,7 @@ export class StemMusic {
     if (state === "fight" && this.state !== "fight") this.fightSince = this.ctx.currentTime;
     if (state !== "fight") { this.fightSince = Infinity; this.counterOn = false; }
     this.state = state; this.mood = mood; this.bossPhase = bossPhase;
-    if (!this.style) return;
+    if (!this.style || this.paused) return;
     if (pieceChanged) {
       const epoch = this.epoch;
       if (this.playing) this.resumeAt.set(this.playing.piece, this.position(this.playing));
@@ -192,6 +197,33 @@ export class StemMusic {
     } else {
       this.apply(RAMP_S);
     }
+  }
+
+  /**
+   * Stops the music where it stands, and starts it again from that place.
+   *
+   * For a menu opened over the boss fight. The menu freezes the fight and
+   * its beat clock, and the boss piece played on without it; closed again,
+   * the music was a whole menu's length ahead of the fight and was re-seated
+   * on the clock — a jump back, heard as the music breaking. Stopped with
+   * the fight, it is still on the clock when the fight goes on.
+   */
+  setPaused(on: boolean): void {
+    if (on === this.paused) return;
+    this.paused = on;
+    const epoch = ++this.epoch;
+    if (on) {
+      if (this.playing) this.resumeAt.set(this.playing.piece, this.position(this.playing));
+      this.fadeOut(this.playing, PAUSE_FADE_S);
+      this.playing = null;
+      return;
+    }
+    // The clock's last report is from before the menu; run on from there it
+    // would put the piece a menu's length ahead. The fight reports afresh.
+    this.bossClock = null;
+    if (!this.style) return;
+    const piece = this.pieceFor(this.state);
+    void this.startPiece(piece, epoch, this.resumeAt.get(piece) ?? 0, PAUSE_FADE_S);
   }
 
   /** Steps the music aside for a moment. The recovery is slower than the dip, so it is heard as room being made, not as a pump. */
@@ -309,13 +341,13 @@ export class StemMusic {
    * whatever point the piece already playing has reached, crossing over from
    * it; that is the style switch, and the two styles share one timeline.
    */
-  private async startPiece(piece: Piece, epoch: number, offset: number | "align" | "clock"): Promise<void> {
+  private async startPiece(piece: Piece, epoch: number, offset: number | "align" | "clock", fadeIn?: number): Promise<void> {
     const style = this.style;
     if (!style) return;
     let buffers: Partial<Record<Layer, AudioBuffer>>;
     try { buffers = await this.load(style, piece); } catch { return; }
     // Superseded while it downloaded: another style, another piece, or off.
-    if (epoch !== this.epoch || this.style !== style || this.pieceFor(this.state) !== piece) return;
+    if (epoch !== this.epoch || this.style !== style || this.paused || this.pieceFor(this.state) !== piece) return;
     const old = this.playing;
     if (old && offset !== "align" && offset !== "clock") return;
     const loopLen = Object.values(buffers)[0]?.duration ?? 1;
@@ -346,7 +378,7 @@ export class StemMusic {
     this.apply(0.05);
     // A style switch is a crossover in place, so it can be quick; a new piece fades in at its own pace.
     // A re-seat is the same music a few tens of ms apart, so it crosses fast or it would flam.
-    const fade = offset === "clock" ? 0.08 : old ? PIECE_FADE_S * 0.6 : PIECE_FADE_S;
+    const fade = fadeIn ?? (offset === "clock" ? 0.08 : old ? PIECE_FADE_S * 0.6 : PIECE_FADE_S);
     out.gain.setValueAtTime(0, when);
     out.gain.linearRampToValueAtTime(1, when + fade);
     if (old) this.fadeOut(old, fade);
