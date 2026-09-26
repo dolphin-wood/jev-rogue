@@ -80,7 +80,7 @@ const NEXT_SET = ((): boolean => {
 const NEXT_GAIN: Partial<Record<SfxName, number>> = {
   wall_hit: 0.12, hit_enemy: 0.36, hit_light: 0.28, hit_armour: 0.32,
   swing_heavy: 0.26, swing_light: 0.19, cast_arcane: 0.22, cast_windup: 0.22,
-  pickup_coin: 0.38, impact_frost: 0.36, impact_venom: 0.36, tele_aim: 0.30,
+  pickup_coin: 0.38, impact_frost: 0.36, impact_venom: 0.36, tele_aim: 0.18, fizzle: 0.16,
   ui_move: 0.34,
 };
 

@@ -920,8 +920,13 @@ const DEFS = {
    * to be told from the two movement telegraphs while several of each are
    * running, so it is the only one that does not move in pitch.
    */
+  /*
+   * Quiet and spaced: with a few shooters aiming at once its two square
+   * beeps ran together into a constant beeping, the loudest thing in a
+   * fight that was not the player's. It is still a tell, so it is kept.
+   */
   tele_aim: {
-    category: "combat", variants: 2, gain: 0.34, retriggerMs: 200,
+    category: "combat", variants: 2, gain: 0.2, retriggerMs: 400,
     render: (r, j) => {
       const out = buffer(0.4);
       mixInto(out, tone({ wave: "square", from: 1180 * j, length: 0.1, gain: 0.2, env: { attack: 0.004, curve: 2 } }), 0);
@@ -1292,7 +1297,7 @@ const DEFS = {
 
   /** A shot running out in the air: it pinches out rather than stopping. */
   fizzle: {
-    category: "world", variants: 2, gain: 0.26, retriggerMs: 60,
+    category: "world", variants: 2, gain: 0.16, retriggerMs: 120,
     render: (r, j) => {
       const out = buffer(0.2);
       mixInto(out, tone({ from: 900 * j, to: 2400 * j, length: 0.1, gain: 0.3, env: { attack: 0.004, curve: 3 } }), 0);
