@@ -14,6 +14,19 @@
  * a key whose cost would take the bar below that share, so a spell the
  * player reaches for is still paid for.
  *
+ * **Which key, by a weighted draw.** Left to "whichever is ready first",
+ * the key with the shortest cooldown wins every time: it comes back first,
+ * and — cheap as short-cooldown spells are — it keeps the bar under what
+ * the dearer keys cost, so they never become affordable either. So when a
+ * key is due, the turn is **drawn** among every key that is ready *or
+ * nearly back* (`AUTO_CAST_SOON_MS`, whatever the bar says), each weighted
+ * by how long since it last cast (`recencyWeight`): a key just cast weighs
+ * `AUTO_CAST_MIN_WEIGHT`, and it grows back to 1 over
+ * `AUTO_CAST_FORGET_MS`. A key drawn while still coming back **holds the
+ * turn** — nothing else is auto-cast, and the bar saves up for it — until it
+ * is ready, or until `AUTO_CAST_YIELD_MS` passes and the turn is drawn
+ * again, so a key that keeps not arriving never stalls the rest.
+ *
  * Input only. It decides which key to report as pressed and nothing else;
  * the simulation sees a press, exactly as if the player had made it.
  */
@@ -24,6 +37,24 @@ export const AUTO_CAST_DELAY_MS = 700;
 export const AUTO_CAST_SPREAD_MS = 900;
 /** The share of the bar an auto-cast never spends into. */
 export const AUTO_CAST_RESERVE = 0.3;
+/** How near its return a key has to be to be in the draw while not yet ready. */
+export const AUTO_CAST_SOON_MS = 1500;
+/** The longest a drawn key holds the turn before it is drawn again. */
+export const AUTO_CAST_YIELD_MS = 3000;
+/** A key's weight in the draw the moment after it casts. */
+export const AUTO_CAST_MIN_WEIGHT = 0.1;
+/** How long after a cast a key's weight takes to grow back to 1. */
+export const AUTO_CAST_FORGET_MS = 6000;
+
+/**
+ * A key's weight in the draw: `AUTO_CAST_MIN_WEIGHT` just after it cast,
+ * rising in a straight line to 1 over `AUTO_CAST_FORGET_MS`; 1 for a key
+ * that has not cast at all.
+ */
+export function recencyWeight(sinceMs: number): number {
+  const k = Math.max(0, Math.min(1, sinceMs / AUTO_CAST_FORGET_MS));
+  return AUTO_CAST_MIN_WEIGHT + (1 - AUTO_CAST_MIN_WEIGHT) * k;
+}
 
 /** What the scene says about one key on this step. */
 export interface AutoCastKey {
@@ -33,25 +64,41 @@ export interface AutoCastKey {
    * reserve, and there is a body to cast at.
    */
   readonly eligible: boolean;
+  /**
+   * Whether this key is **in the draw**: a tap-cast spell with a body to
+   * cast at, back within `AUTO_CAST_SOON_MS`, and one the bar could ever pay
+   * for above the reserve — whether or not it can pay now. Eligible implies
+   * coming.
+   */
+  readonly coming: boolean;
 }
 
 export class AutoCaster {
   /** When each key may press itself, or null while it is not waiting. */
   private readonly due: (number | null)[] = [];
+  /** When each key last cast, by the assist or by the player. */
+  private readonly last: number[] = [];
+  /** The key the draw gave the turn to, and when. */
+  private turn: { key: number; at: number } | null = null;
 
   constructor(private readonly random: () => number = Math.random) {}
 
   /**
    * The player pressed a spell key themselves: every wait starts over, so
-   * the assist never casts on top of a choice just made.
+   * the assist never casts on top of a choice just made, and that key has
+   * had its turn.
    */
-  noteManual(): void {
+  noteManual(key: number, now: number): void {
     this.due.fill(null);
+    this.last[key] = now;
+    this.turn = null;
   }
 
   /** Forgets every wait: a new room, a paused fight, the assist switched off. */
   reset(): void {
     this.due.length = 0;
+    this.last.length = 0;
+    this.turn = null;
   }
 
   /**
@@ -62,13 +109,30 @@ export class AutoCaster {
    * charge or guard running — so a key never presses into a refusal.
    */
   pick(now: number, keys: readonly AutoCastKey[], free: boolean): number | null {
-    let best: number | null = null;
     keys.forEach((k, i) => {
-      if (!k.eligible) { this.due[i] = null; return; }
-      const due = this.due[i] ??= now + AUTO_CAST_DELAY_MS + this.random() * AUTO_CAST_SPREAD_MS;
-      if (free && due <= now && (best === null || due < this.due[best]!)) best = i;
+      if (!k.eligible) this.due[i] = null;
+      else this.due[i] ??= now + AUTO_CAST_DELAY_MS + this.random() * AUTO_CAST_SPREAD_MS;
     });
-    if (best !== null) this.due[best] = null;
-    return best;
+    const ready = (i: number) => keys[i]!.eligible && this.due[i]! <= now;
+    // A turn given to a key that has dropped out of the draw, or waited too long, is drawn again.
+    if (this.turn && (!keys[this.turn.key]?.coming || now - this.turn.at > AUTO_CAST_YIELD_MS)) this.turn = null;
+    // The draw happens when some key is ready to go, among every key in it.
+    if (!this.turn && keys.some((_, i) => ready(i))) {
+      const pool = keys.flatMap((k, i) => (k.coming ? [i] : []));
+      const weights = pool.map((i) => recencyWeight(now - (this.last[i] ?? -Infinity)));
+      let r = this.random() * weights.reduce((a, b) => a + b, 0);
+      let key = pool[pool.length - 1]!;
+      for (let n = 0; n < pool.length; n++) {
+        r -= weights[n]!;
+        if (r < 0) { key = pool[n]!; break; }
+      }
+      this.turn = { key, at: now };
+    }
+    if (!free || !this.turn || !ready(this.turn.key)) return null;
+    const key = this.turn.key;
+    this.turn = null;
+    this.due[key] = null;
+    this.last[key] = now;
+    return key;
   }
 }

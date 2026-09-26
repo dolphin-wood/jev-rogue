@@ -106,7 +106,7 @@ import { layoutDecisionTable, maxScrollFor } from "../ui/plan-table.ts";
 import { questionAsked, questionBase, questionName } from "../ui/question-names.ts";
 import type { TableRow } from "../ui/plan-table.ts";
 import type { AtlasJson } from "../assets/atlas.ts";
-import { AUTO_CAST_RESERVE, AutoCaster } from "../auto-cast.ts";
+import { AUTO_CAST_RESERVE, AUTO_CAST_SOON_MS, AutoCaster } from "../auto-cast.ts";
 
 /**
  * **Art pixels per world pixel**, declared in `telegraph.ts` and re-exported
@@ -14331,7 +14331,7 @@ export class PlayScene extends Phaser.Scene {
       // follows the key the player is actually using.
       this.lastSpellKey = i;
       // The player's own key: the assist's waits start over (`AutoCaster`).
-      this.autoCaster.noteManual();
+      this.autoCaster.noteManual(i, this.world.tick * STEP_MS);
       return i;
     }
     return null;
@@ -14353,9 +14353,19 @@ export class PlayScene extends Phaser.Scene {
     const target = w.enemies.some((e) => e.hp > 0 && e.awake && Math.hypot(e.x - p.x, e.y - p.y) <= AUTO_CAST_REACH_PX);
     const floor = w.staff.mana_max * AUTO_CAST_RESERVE;
     const keys = w.spells.map((slot) => {
-      if (!slot || !target) return { eligible: false };
+      if (!slot || !target) return { eligible: false, coming: false };
       const tap = chargeMsOf(ITEMS, slot.item.base) === 0 && ITEMS.get(slot.item.base)?.params?.["shape"] !== "stance";
-      return { eligible: tap && spellReady(slot, ITEMS) && p.mana - slotCost(slot, ITEMS, w.staff) >= floor };
+      const cost = slotCost(slot, ITEMS, w.staff);
+      // How long until the key is back: its cooldown, or its bank's next charge.
+      const back = chargesOf(ITEMS, slot.item.base) > 0 && bankOf(slot, ITEMS) < 1
+        ? chargeIntervalMs(ITEMS, slot.item.base) - (slot.bankMs ?? 0)
+        : Math.max(0, slot.cooldownMs);
+      return {
+        eligible: tap && spellReady(slot, ITEMS) && p.mana - cost >= floor,
+        // Owed its turn whatever the bar says now, so the bar is saved up for
+        // it — unless the bar could never pay for it above the floor.
+        coming: tap && back <= AUTO_CAST_SOON_MS && cost + floor <= w.staff.mana_max,
+      };
     });
     return this.autoCaster.pick(w.tick * STEP_MS, keys, free);
   }

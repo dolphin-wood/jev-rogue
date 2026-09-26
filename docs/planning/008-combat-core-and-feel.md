@@ -47,9 +47,14 @@ Movement, collision, bullets, damage, elements, encounter waves and the spell ca
 - **Auto-cast** (an assist, off by default, under Settings → Assists): a
   ready tap-cast spell presses itself after a random 0.7–1.6 s, only with a
   body within reach and only while the bar stays above 30% after paying;
-  the player's own spell press restarts every wait. Charge and stance
+  the player's own spell press restarts every wait. Which key goes is a
+  **weighted draw** among the keys ready or back within 1.5 s: a key just
+  cast weighs 0.1, growing back to 1 over 6 s. A key drawn while still
+  cooling holds the turn (the bar saves up for it) for up to 3 s. Without
+  the draw the cheap short-cooldown keys held the bar under what a dear
+  one cost, and an 8 s key cast twice in ten minutes. Charge and stance
   spells are never auto-cast. Input only: the simulation sees a press.
-- Dodge: K, space, shift or right mouse. A committed burst in the direction
+- Dodge: K. A committed burst in the direction
   already held: 110 ms at 580 px/s, about two tiles, then 420 ms of cooldown.
   It commits to the direction it started in so it is a decision rather than a
   steering aid, and it is cut short of crossing the arena because a dodge
