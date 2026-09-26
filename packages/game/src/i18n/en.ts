@@ -266,6 +266,7 @@ export const EN = {
   "prompt.levelUp": "Raise {spell}'s level",
   "prompt.floorSpell": "[E] {tap}    Hold [E] Dismantle +{gold} {coin}",
   "prompt.portal": "[E] {what}",
+  "prompt.portalOpening": "Opening…",
   "prompt.theMerchant": "The Merchant",
   "prompt.theBlacksmith": "The Blacksmith",
   "prompt.theFountain": "The Fountain",

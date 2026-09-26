@@ -549,13 +549,49 @@ export interface RunJournalEntry {
   readonly passed_over?: readonly string[];
   /** A room whose reward was a purse rather than a card. */
   readonly took_gold_instead?: boolean;
+  /** The room's size as it was built. */
+  readonly size?: RoomSize;
   /**
-   * **What the Director answered for this room**, question by question: the
-   * room's shape, its encounter, the doors out and what they promised. Given
-   * back to Jev in the briefing (`yourAnswers`), so it can see the run of its
-   * own answers rather than having each room's question arrive as the first.
+   * **The fight as it was assembled**: the roster's shape, where it came in
+   * from, which variant bodies it showed and how many it hid enraged. What
+   * code built rather than what the Director asked for — the two differ
+   * wherever the ramp or the commit check stepped in.
    */
-  readonly decided?: Readonly<Record<string, string>>;
+  readonly encounter?: EncounterProfile;
+  /**
+   * **The doors out as they stood**, each with what it promised: a spell
+   * door's school, a stat door's family, whether it was elite, its grade.
+   * `doors_offered` keeps only the kinds, and a run of storm spell doors is
+   * three words "spell" in it.
+   */
+  readonly doors?: readonly JournalDoor[];
+}
+
+/** One door out of a room, as the journal keeps it: its kind and what it promised. */
+export interface JournalDoor {
+  /** The reward kind, or the vendor's room the door leads to. */
+  readonly kind: string;
+  /** Every school, or family, among the door's cards, in the Director's order. */
+  readonly schools?: readonly string[];
+  readonly families?: readonly string[];
+  readonly elite?: boolean;
+  /** 1 ordinarily; 2 or 3 is a reward graded up. */
+  readonly grade?: number;
+}
+
+/** A door as the journal keeps it, from either shape a door is held in. */
+export function journalDoor(d: {
+  readonly reward: string; readonly npc?: string; readonly schools?: readonly string[]; readonly families?: readonly string[];
+  readonly grade?: number; readonly elite?: boolean; readonly difficulty?: string;
+}): JournalDoor {
+  const elite = d.elite ?? d.difficulty === "elite";
+  return {
+    kind: d.npc ?? d.reward,
+    ...(!d.npc && d.schools?.length ? { schools: d.schools } : {}),
+    ...(!d.npc && d.families?.length ? { families: d.families } : {}),
+    ...(elite ? { elite: true } : {}),
+    ...(!d.npc && d.grade && d.grade > 1 ? { grade: d.grade } : {}),
+  };
 }
 
 export interface RunHistory {

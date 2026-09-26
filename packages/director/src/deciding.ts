@@ -38,8 +38,6 @@ const GROUPS: readonly { readonly phrase: string; readonly matches: (name: strin
     phrase: "whether one of those doors leads to an elite fight, and how far its reward is graded up",
     matches: (n) => ["elite_portal", "elite_grade", "normal_grade"].includes(n),
   },
-  { phrase: "which school a spell door promises", matches: (n) => n === "spell_school" },
-  { phrase: "which family a stat door promises", matches: (n) => n === "stat_family" },
   {
     phrase: "which cards this room's reward screen shows, and how widely the offer spreads",
     matches: (n) => ["overall", "for_style", "for_needs", "variety", "temptation"].includes(n),

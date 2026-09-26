@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { RngSource } from "../rng.ts";
 import {
   RUN_BOSS_ROOM, RUN_COMBAT_ROOMS, REWARD_KINDS, RUN_SHOP_ROOM,
-  bossExit, fixedExit, legalDifficulties, NPC_OFFERS_MAX, portalChoices, ruleDoors, shopExit, stageFor,
+  bossExit, fixedExit, legalDifficulties, cardTypesOf, NPC_OFFERS_MAX, portalChoices, ruleDoors, shopExit, stageFor,
 } from "./doors.ts";
 
 const rng = (seed = "d"): ReturnType<RngSource["stream"]> => new RngSource(seed).stream("doors");
@@ -149,5 +149,18 @@ describe("the portals offered", () => {
     for (const seed of ["a", "b", "c"])
       for (const d of ruleDoors(run(), rng(seed)))
         expect(REWARD_KINDS).toContain(d.reward);
+  });
+});
+
+describe("what a door's badge names", () => {
+  it("is every school or family among its cards, once each, in the offer's order", () => {
+    expect(cardTypesOf("spell", ["shock_arc", "ember_dart", "spark_spray"])).toEqual({ schools: ["storm", "flame"] });
+    expect(cardTypesOf("spell", ["ember_dart", "shock_arc", "frost_needle"])).toEqual({ schools: ["flame", "storm", "frost"] });
+    expect(cardTypesOf("stat", ["vigour", "fleet"]).families?.length).toBeGreaterThan(0);
+  });
+
+  it("names nothing for a kind whose cards have no school or family", () => {
+    expect(cardTypesOf("affix", ["chain", "pierce", "fork"])).toEqual({});
+    expect(cardTypesOf("spell", [])).toEqual({});
   });
 });

@@ -4,7 +4,6 @@
  * Jev's distribution would be. Editing it changes the control, so it changes
  * the experiment.
  */
-import { SPELL_SCHOOLS, STYLE_SCHOOLS } from "@jr/core";
 import type { WeightTable } from "./source.ts";
 import { FREE_TEXT_WEIGHT, laneFromText } from "./questions/affixes.ts";
 
@@ -349,19 +348,6 @@ export const ruleTable: WeightTable = (scopedQuestion, option, scopedState) => {
       return option === "best" ? 0.35 : 0.65;
     case "normal_grade":
       return option === "raised" ? 0.25 : 0.75;
-    case "spell_school": {
-      // Half the mass on the schools that hold the chosen style, half even.
-      const leaning = STYLE_SCHOOLS[label(state, "intent.preset")] ?? [];
-      const even = 0.5 / SPELL_SCHOOLS.length;
-      return leaning.includes(option as never) ? even + 0.5 / leaning.length : leaning.length ? even : 1;
-    }
-    case "stat_family":
-      if (option === "survival") return hurt(state) ? 2.2 : 1;
-      if (option === "mana") return label(state, "mana_short_time") === "most" ? 1.8
-        : label(state, "cast_rate") === "slow" ? 1.4 : 1;
-      if (option === "sword") return label(state, "sword_share") === "most" ? 2
-        : label(state, "intent.preset") === "melee" ? 1.8 : 1;
-      return 1;
     /*
      * Doc 007's three axes over one kind's legal cards, read off the facts
      * code attached to each card. The same shape as the doc's control table:

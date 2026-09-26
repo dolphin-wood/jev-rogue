@@ -51,8 +51,9 @@ describe("the Director's portals (doc 003)", () => {
       expect(elites.length).toBeLessThanOrEqual(1);
       if (plan.doors.length > 1) expect(plan.doors[0]!.difficulty).toBe("normal");
       for (const x of plan.doors) {
-        if (x.reward === "spell" && !x.npc) expect(x.school).toBeTruthy();
-        if (x.reward === "stat") expect(x.family).toBeTruthy();
+        // A door promises nothing beyond its kind; its badge is read off its cards later.
+        expect(x.schools).toBeUndefined();
+        expect(x.families).toBeUndefined();
         expect([1, 2, 3]).toContain(x.grade);
         if (x.difficulty === "elite") expect(x.grade).toBeGreaterThanOrEqual(2);
       }
@@ -143,42 +144,25 @@ describe("the Director's portals (doc 003)", () => {
     }
   });
 
-  it("asks the school and the family in round 2, and only for the doors that exist", async () => {
+  it("asks nothing after the kinds: a room's portals ride in its round 1 alone", async () => {
     const d = createDirector("rule", { observe: (r) => seen.push(r) });
     const seen: import("./director.ts").ObservedRequest[] = [];
-    let sawSchool = 0;
-    let sawFamily = 0;
-    let rooms = 0;
-    for (let seed = 0; seed < 40; seed++) {
+    for (let seed = 0; seed < 20; seed++) {
       seen.length = 0;
       const choices = portalChoices(run(6), new RngSource(`q${seed}`).stream("c"), 3);
       const room = await d.planRoom(
         ctx(6, { seed: `q${seed}` }), { room_index: 6, door_slot: 0, room_type: "combat" }, "build",
         { portals: choices },
       );
-      rooms++;
       const round1 = seen.find((r) => r.meta.round === 1)!;
       const round2 = seen.find((r) => r.meta.round === 2)!;
-      expect(Object.keys(round1.questions)).not.toContain("spell_school");
-      expect(Object.keys(round1.questions)).not.toContain("stat_family");
-      const doors = room.offer?.portals?.doors ?? [];
-      const wantsSchool = doors.some((x) => x.reward === "spell" && !x.npc);
-      const wantsFamily = doors.some((x) => x.reward === "stat" && !x.npc);
-      expect({ seed, asked: "spell_school" in round2.questions }).toEqual({ seed, asked: wantsSchool });
-      expect({ seed, asked: "stat_family" in round2.questions }).toEqual({ seed, asked: wantsFamily });
-      // And the promise on the door is the one that was answered.
-      for (const x of doors) {
-        if (x.reward === "spell" && !x.npc) expect(x.school).toBeTruthy();
-        if (x.reward === "stat" && !x.npc) expect(x.family).toBeTruthy();
+      expect(Object.keys(round1.questions)).toContain("portal_need");
+      for (const r of [round1, round2]) {
+        expect(Object.keys(r.questions)).not.toContain("spell_school");
+        expect(Object.keys(r.questions)).not.toContain("stat_family");
       }
-      if (wantsSchool) sawSchool++;
-      if (wantsFamily) sawFamily++;
+      expect(room.offer?.portals?.doors.length).toBe(3);
     }
-    // Both cases really occur, or the assertions above are vacuous.
-    expect(sawSchool).toBeGreaterThan(0);
-    expect(sawSchool).toBeLessThan(rooms);
-    expect(sawFamily).toBeGreaterThan(0);
-    expect(sawFamily).toBeLessThan(rooms);
   });
 
   it("falls back to the rule table when Jev fails, per portal question", async () => {
@@ -193,17 +177,17 @@ describe("the Director's portals (doc 003)", () => {
     const declining: Evaluator = async (req) => ({
       answers: Object.fromEntries(Object.entries(req.questions).map(([name, q]) => {
         const keys = Object.keys(q.criteria);
-        const choice = name === "stat_family" ? FALLBACK : keys.find((k) => k !== FALLBACK)!;
+        const choice = name === "normal_grade" ? FALLBACK : keys.find((k) => k !== FALLBACK)!;
         return [name, { choice, probabilities: Object.fromEntries(keys.map((k) => [k, k === choice ? 1 : 0])), confidence: null }];
       })),
       usage: { input_tokens: null },
     });
     const d = createDirector("jev", { evaluate: declining });
-    const plan = await d.planPortals(ctx(5), portalChoices(run(5), new RngSource("f").stream("c"), 3));
+    // Late in the run, where a normal door's grade is asked beside the need.
+    const plan = await d.planPortals(ctx(12), portalChoices(run(12), new RngSource("f").stream("c"), 3));
     const by = Object.fromEntries(plan.decisions.map((x) => [x.question, x]));
-    expect(by["stat_family"]).toMatchObject({ source: "rule", fallback_path: "declined" });
+    expect(by["normal_grade"]).toMatchObject({ source: "rule", fallback_path: "declined" });
     expect(by["portal_need"]?.source).toBe("jev");
-    expect(by["spell_school"]?.source).toBe("jev");
   });
 });
 
@@ -275,10 +259,9 @@ describe("the Director's readout hook", () => {
     await d.planPortals(ctx(5), portalChoices(run(5), new RngSource("o").stream("c"), 3));
     const pool = cardPool(ITEMS, [], "stat", [], {}, { hurt: true });
     await d.planCards(ctx(5), { room_index: 5, pool, count: 3, pity: false, temptation: false, salt: "shop-stat" });
-    // Asked alone, the portals cost a second round for their promises; asked
-    // inside a room they ride in its round 2 and cost nothing (see below).
+    // Asked alone, the portals are one request: there is no promise to ask after the kinds.
     expect(seen.map((r) => `${r.meta.purpose}:${r.meta.round}`))
-      .toEqual(["portals:1", "portals:2", "cards:stat:shop-stat:1"]);
+      .toEqual(["portals:1", "cards:stat:shop-stat:1"]);
     for (const r of seen) {
       expect(r.state.health).toBeTruthy();
       for (const name of Object.keys(r.questions)) expect(Object.keys(r.dists[name] ?? {}).length).toBeGreaterThan(0);

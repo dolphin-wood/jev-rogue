@@ -25,7 +25,7 @@ import { BASE_ITEMS } from "../spells/items.ts";
 import { ARCHETYPES } from "../content/tags.ts";
 import type { BaseItem } from "../types.ts";
 import type { SpellSchool } from "../spells/schools.ts";
-import { STAT_FAMILIES } from "./stats.ts";
+import { STAT_FAMILIES, STAT_UPGRADES } from "./stats.ts";
 import type { StatFamily } from "./stats.ts";
 export type Difficulty = "normal" | "elite";
 
@@ -33,14 +33,21 @@ export interface DoorOffer {
   readonly reward: RewardCardKind;
   readonly difficulty: Difficulty;
   /**
-   * What the badge promises beyond the kind. A spell door names a **school**
-   * (doc 003's portal question with the build asked at the door), a stat door
-   * a **family**, and every door a **grade**: 1 ordinarily, 2 or 3 behind an
-   * elite, occasionally 2 late in the run.
+   * What the badge names beyond the kind: every school a spell door's cards
+   * belong to, every family a stat door's do, in the Director's order
+   * (`cardTypesOf`) — read off the cards, not promised ahead of them — and
+   * every door a **grade**: 1 ordinarily, 2 or 3 behind an elite,
+   * occasionally 2 late in the run.
    */
-  readonly school?: SpellSchool;
-  readonly family?: StatFamily;
+  readonly schools?: readonly SpellSchool[];
+  readonly families?: readonly StatFamily[];
   readonly grade: number;
+  /**
+   * **The cards behind the door**, decided when the door opened, by id and in
+   * the Director's order. Absent for a door whose room pays no cards (gold, a
+   * vendor, a fixed exit) and for one decided before cards travelled with it.
+   */
+  readonly cards?: readonly string[];
   /**
    * A door to a **room with no fight** instead of one: the merchant, the
    * blacksmith or the fountain alone, met mid-run. Never the only way on.
@@ -91,16 +98,13 @@ function gradeFor(elite: boolean, roomIndex: number, rng: Rng): number {
   return roomIndex >= 8 && rng.next() < 0.25 ? 2 : 1;
 }
 
-function dressDoor(reward: RewardCardKind, difficulty: Difficulty, roomIndex: number, rng: Rng, style?: string): DoorOffer {
-  const grade = gradeFor(difficulty === "elite", roomIndex, rng);
-  if (reward === "spell") {
-    // Half the time, a school that holds a spell of the player's style.
-    const leaning = style ? STYLE_SCHOOLS[style] ?? [] : [];
-    const pool = leaning.length > 0 && rng.next() < 0.5 ? leaning : SPELL_SCHOOLS;
-    return { reward, difficulty, grade, school: pool[rng.int(pool.length)]! };
-  }
-  if (reward === "stat") return { reward, difficulty, grade, family: STAT_FAMILIES[rng.int(STAT_FAMILIES.length)]! };
-  return { reward, difficulty, grade };
+/**
+ * A rule door's kind, difficulty and grade. It names no school or family: a
+ * badge names what the cards behind it are (`cardTypesOf`), and a rule door's
+ * cards are only drawn when its room is entered.
+ */
+function dressDoor(reward: RewardCardKind, difficulty: Difficulty, roomIndex: number, rng: Rng, _style?: string): DoorOffer {
+  return { reward, difficulty, grade: gradeFor(difficulty === "elite", roomIndex, rng) };
 }
 
 export const REWARD_KINDS: readonly RewardCardKind[] = ["stat", "spell", "affix", "gold"];
@@ -479,8 +483,6 @@ export interface PortalAnswers {
   readonly eliteGrade: 2 | 3;
   /** A normal door's grade late in the run. */
   readonly normalGrade: 1 | 2;
-  readonly school: SpellSchool;
-  readonly family: StatFamily;
   readonly npc: NpcKind | null;
 }
 
@@ -499,11 +501,7 @@ export function assemblePortals(a: PortalAnswers): DoorOffer[] {
   const doors: DoorOffer[] = kinds.map((reward) => {
     const elite = reward === a.eliteKind;
     const grade = elite ? a.eliteGrade : a.normalGrade;
-    return {
-      reward, difficulty: elite ? "elite" : "normal", grade,
-      ...(reward === "spell" ? { school: a.school } : {}),
-      ...(reward === "stat" ? { family: a.family } : {}),
-    };
+    return { reward, difficulty: elite ? "elite" : "normal", grade };
   });
   if (a.npc) {
     /*
@@ -520,6 +518,27 @@ export function assemblePortals(a: PortalAnswers): DoorOffer[] {
       }
   }
   return doors;
+}
+
+/**
+ * **What a door shows is what is behind it.**
+ *
+ * The door's cards are decided when it opens, and its badge names every
+ * school among a spell offer's cards (every family among a stat offer's), once
+ * each, in the offer's order — which is the Director's. It named only the
+ * commonest, the first card breaking a tie, and with three schools in three
+ * cards that was one card of three: a spam player's doors read "storm" door
+ * after door over offers that were two thirds something else. Before that it
+ * was a promise decided on its own and forced onto the cards, which repeats
+ * whenever the Director's taste is steady however varied the cards are.
+ */
+export function cardTypesOf(kind: RewardCardKind, ids: readonly string[]): { schools?: SpellSchool[]; families?: StatFamily[] } {
+  const of = (id: string): string | undefined => kind === "spell" ? schoolOf(id) ?? undefined
+    : kind === "stat" ? STAT_UPGRADES.find((u) => u.id === id)?.family : undefined;
+  const seen: string[] = [];
+  for (const id of ids) { const t = of(id); if (t && !seen.includes(t)) seen.push(t); }
+  if (seen.length === 0) return {};
+  return kind === "spell" ? { schools: seen as SpellSchool[] } : { families: seen as StatFamily[] };
 }
 
 /**
@@ -575,9 +594,10 @@ export function doorSpecs(doors: readonly DoorOffer[], roomIndex: number): Porta
   return doors.map((d) => ({
     reward: d.reward,
     elite: d.difficulty === "elite",
-    ...(d.school ? { school: d.school } : {}),
-    ...(d.family ? { family: d.family } : {}),
+    ...(d.schools ? { schools: d.schools } : {}),
+    ...(d.families ? { families: d.families } : {}),
     ...(d.npc ? { npc: d.npc } : {}),
+    ...(d.cards ? { cards: d.cards } : {}),
     grade: d.grade,
     // The stage of the room the portal leads *into*: the last combat room's
     // portals open onto the merchant, and the merchant's onto the boss. A

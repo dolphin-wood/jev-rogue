@@ -371,8 +371,8 @@ export interface DebugSnapshot {
     /** The style the player chose, and their own words if any. */
     readonly style?: string;
     readonly words?: string;
-    /** What the Director answered for each room so far — the record the briefing gives Jev. */
-    readonly decided?: readonly { readonly room: number; readonly decided: Readonly<Record<string, string>> }[];
+    /** Each room so far as it was built — the run the briefing gives Jev. */
+    readonly built?: readonly { readonly room: number; readonly facts: Readonly<Record<string, string>> }[];
   };
   /** Every Director request for this room: its state and every question, all options. */
   readonly director: readonly ReadoutRequest[];
@@ -766,12 +766,12 @@ export class DebugPanel {
       ["rooms", snap.history.rooms.join(" › ") || dim("—")],
       ["tensions", snap.history.tensions.join(" › ") || dim("—")],
     ]));
-    // The Director's own answers, room by room: what the briefing hands Jev as its record of the run.
-    const decided = snap.history.decided ?? [];
-    parts.push(`<div style="color:#5f86a8;margin:6px 0 2px">director answers so far (in Jev's briefing)</div>`);
-    parts.push(decided.length === 0 ? dim("none yet") : decided.map((d) =>
+    // Each room as it was built, doors and all: the run the briefing hands Jev.
+    const built = snap.history.built ?? [];
+    parts.push(`<div style="color:#5f86a8;margin:6px 0 2px">the run as built (in Jev's briefing)</div>`);
+    parts.push(built.length === 0 ? dim("none yet") : built.map((d) =>
       `<div style="margin:2px 0;font-size:11px"><b style="color:#ffe9a8">#${d.room}</b> `
-      + Object.entries(d.decided).map(([k, v]) => `<span style="color:#8792b5">${esc(k)}</span>=${esc(v)}`).join(" · ")
+      + Object.entries(d.facts).map(([k, v]) => `<span style="color:#8792b5">${esc(k)}</span>=${esc(v)}`).join(" · ")
       + `</div>`).join(""));
     return parts;
   }

@@ -26,7 +26,8 @@ import {
   baseXp, LEVEL_HP, LEVEL_SWORD_DAMAGE, LEVEL_MANA, swordAt,
 } from "@jr/core";
 import type {
-  BaseItem, HeldKey, Mood, ObservedLabels, RunContext, RunJournalEntry, SpaceArchetypeId, StatFamily,
+  BaseItem, EncounterProfile, HeldKey, JournalDoor, Mood, ObservedLabels, RunContext, RunJournalEntry,
+  SpaceArchetypeId, StatFamily,
 } from "@jr/core";
 import { AFFIX_LANES, laneFromText } from "./questions/affixes.ts";
 import { clampFreeText } from "./questions/common.ts";
@@ -631,6 +632,8 @@ function runLines(rooms: readonly RunJournalEntry[], maxHealth: number): string[
       doors ? `doors taken ${doors}` : null,
       picks ? `cards kept ${picks}` : null,
     )}`);
+    const promised = promisesRolledUp(earlier);
+    if (promised) out.push(`  - ${promised}`);
   }
   const lastTwo = new Set(rooms.slice(-BRIEFING_PASSED_OVER_ROOMS).map((r) => r.index));
   for (const r of recent) {
@@ -646,12 +649,14 @@ function runLines(rooms: readonly RunJournalEntry[], maxHealth: number): string[
       r.tension ?? null,
       // Past rooms get the space's name only: the archetype's sentence is a
       // paragraph a room, and what the alternation needs is the name.
-      r.space ? r.space.replace(/_/g, " ") : null,
+      r.space ? `${r.size ? `${r.size} ` : ""}${r.space.replace(/_/g, " ")}` : null,
       r.symmetry ?? null,
       r.mood ? `${r.mood.temperature}, ${r.mood.brightness}, ${r.mood.particle_intensity}` : null,
     )}${went ? `; ${went}` : ""}`);
+    if (r.encounter) out.push(`  - ${fightWords(r.encounter, r.enemies ?? [])}`);
     const chose = phrases(
-      r.doors_offered?.length ? `doors out ${r.doors_offered.join(", ")}` : null,
+      r.doors?.length ? `doors out ${r.doors.map(doorWords).join(", ")}`
+        : r.doors_offered?.length ? `doors out ${r.doors_offered.join(", ")}` : null,
       r.door_taken ? `took ${r.door_taken}` : null,
       r.took_gold_instead ? "the reward was a purse, not cards" : null,
       r.picked?.length ? `kept ${r.picked.map(nameOf).join(", ")}` : null,
@@ -676,23 +681,6 @@ function runLines(rooms: readonly RunJournalEntry[], maxHealth: number): string[
     out.push(`- Pitch of each fight so far, oldest first: ${fights.map((r) => r.tension).join(", ")}`);
   out.push(`- Fights since the run last let up (a release room, or a room with no fight in it): ${
     trailingRun(rooms, (r) => r.tension !== undefined && r.tension !== "release")}`);
-  /*
-   * **The Director's own answers, room by room** (`RunJournalEntry.decided`).
-   *
-   * Each request is answered on its own, so without these every room's
-   * questions arrived as if they were the run's first: six ranged-heavy
-   * rosters running for a sword player, a sparse room after most fights,
-   * the same school on door after door — none of it visible from inside
-   * any one answer. They are given as the record they are, one object a
-   * room, and with nothing said about what to make of them: a sentence
-   * asking for variety measured as *more* streaking (finding 5), and a
-   * verdict in the state decides the answer before Jev does (finding 16).
-   */
-  const answered = rooms.filter((r) => r.decided && Object.keys(r.decided).length > 0);
-  if (answered.length) {
-    out.push("- The Director's answers for each room so far, oldest first, one JSON object a room:");
-    for (const r of answered) out.push(`  ${JSON.stringify({ room: r.index, ...r.decided })}`);
-  }
   /*
    * **The look of the rooms, as a run of rooms.**
    *
@@ -735,6 +723,60 @@ function runLines(rooms: readonly RunJournalEntry[], maxHealth: number): string[
    * looked like and stops there.
    */
   return out;
+}
+
+/**
+ * **A room's fight as it was built**, in the words its questions answer in:
+ * the roster, how many, how the waves came, where from, what anchored it,
+ * which variant bodies it showed and how many it hid enraged. Read off the
+ * assembled encounter, not off the answers that asked for it — the ramp and
+ * the commit check can each step in between.
+ */
+function fightWords(e: EncounterProfile, enemies: readonly string[]): string {
+  const variants = enemies.filter((id) => enemyNote(id) !== "");
+  return `fight as built: ${[
+    `${e.composition.replace(/_/g, " ")} roster`,
+    `density ${e.density}`,
+    `${e.wave_structure} waves`,
+    `entering ${ENTRY_WORDS[e.entry] ?? e.entry.replace(/_/g, " ")}`,
+    e.anchor === "none" ? "no anchor" : `anchored by a ${e.anchor}`,
+    variants.length ? `variants ${variants.join(" and ")}` : "no variants",
+    e.elite_presence && e.elite_presence !== "none" ? `${e.elite_presence} enraged` : "none enraged",
+  ].join(", ")}`;
+}
+
+const ENTRY_WORDS: Readonly<Record<string, string>> = {
+  flanks: "from the flanks", far_front: "from the far side", surround: "from all around",
+};
+
+/**
+ * A door and what was behind it: "spell (storm, void)", "stat (movement;
+ * elite, grade 2)" — every school or family among the door's cards, in the
+ * Director's order (`cardTypesOf`), not a promise the cards were held to.
+ */
+function doorWords(d: JournalDoor): string {
+  const types = d.schools ?? d.families ?? [];
+  const marks = [d.elite ? "elite" : null, d.grade && d.grade > 1 ? `grade ${d.grade}` : null].filter(Boolean);
+  const inside = [types.length ? types.join(", ") : null, marks.length ? marks.join(", ") : null].filter(Boolean);
+  return `${d.kind}${inside.length ? ` (${inside.join("; ")})` : ""}`;
+}
+
+/**
+ * What the rolled-up rooms' doors held, tallied: the recent rooms' lines
+ * carry each door, and without this the run's first spell doors drop out of
+ * the briefing as soon as they are more than five rooms old.
+ */
+function promisesRolledUp(rooms: readonly RunJournalEntry[]): string | null {
+  const doors = rooms.flatMap((r) => r.doors ?? []);
+  const schools = doors.flatMap((d) => (d.kind === "spell" ? d.schools ?? [] : []));
+  const families = doors.flatMap((d) => (d.kind === "stat" ? d.families ?? [] : []));
+  const elite = doors.filter((d) => d.elite).map((d) => d.kind);
+  if (doors.length === 0) return null;
+  return [
+    schools.length ? `spell doors held ${counted(schools)}` : null,
+    families.length ? `stat doors held ${counted(families)}` : null,
+    elite.length ? `elite doors: ${counted(elite)}` : "no elite doors",
+  ].filter(Boolean).join("; ");
 }
 
 /**
@@ -1118,25 +1160,6 @@ export interface BriefingExtra {
   readonly room?: BriefingRoomNow;
   readonly cards?: readonly BriefingCardPool[];
   readonly roomType?: string;
-}
-
-/**
- * The questions whose answers are kept in a room's journal entry (`decided`)
- * and read back to Jev: what the room was and what it held and promised. Not
- * the card draws (a card offer's blend is not an answer anyone reads back) nor
- * the floor features, which are many and say little about the run's shape.
- */
-const DECIDED_KEPT: ReadonlySet<string> = new Set([
-  "next_tension", "space", "size", "symmetry", "mood_temperature", "mood_brightness", "mood_particles",
-  "composition", "density", "wave_structure", "anchor", "entry", "subspecies_weight", "subspecies",
-  "elite_presence", "portal_need", "elite_portal", "spell_school", "stat_family", "affix_intent", "variety",
-]);
-
-/** A room's Director decisions as the journal keeps them: each kept question and its answer. */
-export function decidedOf(decisions: readonly { readonly question?: string; readonly choice: string }[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const d of decisions) if (d.question && DECIDED_KEPT.has(d.question)) out[d.question] = d.choice;
-  return out;
 }
 
 export function briefingFrom(ctx: RunContext, extra: BriefingExtra): string {

@@ -2,7 +2,7 @@
 
 [English](architecture.md) · **简体中文** · [日本語](architecture.ja.md)
 
-本文说明目前**已经实现**的决策流程。设计依据见[002：Jev 集成原则](planning/002-jev-integration-principles.md)，整体系统见[009：技术架构](planning/009-technical-architecture.md)。问题设计背后的实测结果与失败尝试记录在 [Jev findings](research/jev-findings.md)。
+本文说明目前**已经实现**的决策流程。设计依据见[002：Jev 集成原则](planning/002-jev-integration-principles.md)，整体系统见[009：技术架构](planning/009-technical-architecture.md)。问题设计背后的实测结果与失败尝试记录在 [Jev findings](research/jev-findings.zh-CN.md)。
 
 ## 职责边界
 
@@ -30,9 +30,9 @@ Jev 是**选择模型**，不是关卡生成器，也不运行游戏循环。游
 
 ## 何时做决定
 
-Director 在房间边界规划，而不是每帧调用。战斗房间分两轮：第一轮决定战斗强度、空间类型、大小、对称性和氛围等整体属性。门与卡牌问题若互不依赖、读取同一战局，就可以共用这次请求。第二轮读取第一轮形成的房间，再决定遭遇与区域细节，例如敌人组合、密度、波次、核心敌人、入场方式、变体和精英。固定的休整站没有战斗房间计划，奖励会单独规划。具体有哪些问题，取决于当时还剩哪些合法选项（[`questions/room.ts`](../packages/director/src/questions/room.ts)、[`director.ts`](../packages/director/src/director.ts)）。
+Director 在房间边界规划，而不是每帧调用。战斗房间开始时分两轮：第一轮决定战斗强度、空间类型、大小、对称性和氛围等整体属性；第二轮读取第一轮形成的房间，再决定遭遇与区域细节，例如敌人组合、密度、波次、核心敌人、入场方式、变体和精英。这一房的卡在玩家选门时就已定好，所以两轮都不再问卡（第一房除外）。出口打开时——领取奖励、金币房撒出金币、进入商人等房间——门先以待定状态升起，再用一次请求决定门，以及每种门背后那一房会给出的卡。每扇门保留自己那类卡，并标出其中所有法术系别或属性类别（[发现 34](research/jev-findings.zh-CN.md#finding-34)）。具体有哪些问题，取决于当时还剩哪些合法选项（[`questions/room.ts`](../packages/director/src/questions/room.ts)、[`director.ts`](../packages/director/src/director.ts)）。
 
-同一次请求里的问题彼此独立。代码不会要求 Jev 让其中一个回答以同次请求的另一个回答为条件。如果后续选择依赖先前选择，就等上一轮结束再构造。例如，代码先问该提供哪些门；只有法术门或属性门真的被选中，才继续问法术流派或属性类别。
+同一次请求里的问题彼此独立。代码不会要求 Jev 让其中一个回答以同次请求的另一个回答为条件。如果后续选择依赖先前选择，就等上一轮结束再构造：房间形态确定后才问遭遇。能合并时，代码会把预备性的问题一起问——门的请求会问每种可能的门背后的卡，再只取选中的门需要的那几组。
 
 ## Jev 收到什么
 
@@ -104,7 +104,7 @@ Director 在房间边界规划，而不是每帧调用。战斗房间分两轮�
 }
 ```
 
-调用器检查每道题都有回答、`choice` 属于提供的 ID、概率键与选项完全对应，且数值构成有效分布（[`evaluator.ts`](../packages/director/src/evaluator.ts)）。`choice` **不会自动成为游戏的最终选择**。如果 Jev 选中 `fallback`，或给它超过一半的概率，只有这道题交给规则表。否则，代码移除 `fallback`、重新归一化其余概率、执行该决策专用的调整，再用战局种子导出的确定性随机流抽样。对 `portal_need`，第一扇门从较集中的分布抽取，其余不同的门从较宽的分布抽取；其他问题有各自的抽样规则（[`source.ts`](../packages/director/src/source.ts)、[`director.ts`](../packages/director/src/director.ts)）。
+调用器检查每道题都有回答、`choice` 属于提供的 ID、概率键与选项完全对应，且数值构成有效分布（[`evaluator.ts`](../packages/director/src/evaluator.ts)）。如果 Jev 选中 `fallback`，或给它超过一半的概率，只有这道题交给规则表。否则，代码移除 `fallback`、重新归一化其余概率，并执行该决策专用的调整（例如对重复上一房外观的惩罚）。只选一个答案的问题按 TypeSafe 文档读取 Choice 的方式处理：置信度不低于 0.5 时采用 Jev 的 `choice`，低于时用战局种子导出的确定性随机流，按 Jev 的原始分布抽样（[发现 33](research/jev-findings.zh-CN.md#finding-33)）。排序类问题用抽样：`portal_need` 的第一扇门从较集中的分布抽取，其余不同的门从较宽的分布抽取；卡牌从 Jev 的综合排序中抽取。规则表与随机两个对照组使用逐题的温度抽样（[`source.ts`](../packages/director/src/source.ts)、[`director.ts`](../packages/director/src/director.ts)）。
 
 最终计划仍须通过代码校验。遭遇压力、可用资源、合法门集合等硬约束不会交给提示词保证。超时、HTTP 错误、响应格式错误、拒答或最终计划校验失败都会记录回退原因，并由**规则版**回答，而非均匀随机。请求期限、有限重试和响应校验由调用器管理；追踪记录保存状态、问题、分布、回答来源与最终决策（[`trace.ts`](../packages/director/src/trace.ts)、[011：遥测](planning/011-telemetry-and-evaluation.md)）。
 
@@ -112,6 +112,6 @@ Director 在房间边界规划，而不是每帧调用。战斗房间分两轮�
 
 ## 为什么问题这样设计
 
-Jev 判断当前状态和提供的选项，不保存跨请求的战局记忆。因此代码先整理历史：近期战斗、上一间房的外观、奖励出现次数、玩家拿走或跳过的内容，以及当前构筑。重复出现同类门的上限等**序列性质**也由代码执行。这样 Jev 只需解释当前情况，不必阅读长日志、计数，或仅凭文字保证不变量。
+Jev 判断当前状态和提供的选项，不保存跨请求的战局记忆。因此代码先把战局写下来：近期每一房实际生成的样子——战斗如何组成、每扇出口门背后是什么——玩家拿走或跳过的内容、近期战斗和当前构筑。给出的是房间实际的样子，而不是 Director 自己之前的回答列表，后者会被 Jev 当作应当延续的先例（[发现 31](research/jev-findings.zh-CN.md#finding-31)）。Jev 无法应对的序列性质（例如同类门重复出现的上限）仍由代码执行；当 state 已写出这段历史时，可以在 instruction 里用一句原则请 Jev 参考它（[发现 32](research/jev-findings.zh-CN.md#finding-32)）。
 
-项目用两种基线检验效果。`rule` 在相同合法选项和生成器上使用手写权重；`random` 使用均匀权重，忽略状态。无界面模拟与请求追踪让我们比较所生成的房间和完整战局。具体实验，包括有些措辞反而让决策变差的例子，见 [Jev findings](research/jev-findings.md)。
+项目用两种基线检验效果。`rule` 在相同合法选项和生成器上使用手写权重；`random` 使用均匀权重，忽略状态。无界面模拟与请求追踪让我们比较所生成的房间和完整战局。具体实验，包括有些措辞反而让决策变差的例子，见 [Jev findings](research/jev-findings.zh-CN.md)。

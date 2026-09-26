@@ -52,9 +52,9 @@ import {
 } from "./props.ts";
 import { COIN_VALUE, MANA_ORB, drop, makePickupPool, stepPickups } from "./pickups.ts";
 import {
-  enteredPortal, placeRewardNear, portalsBefore, raisePortals, stepPortals, stepReward,
+  enteredPortal, makePortal, placeRewardNear, portalsBefore, raisePortals, stepPortals, stepReward,
 } from "./exits.ts";
-import type { RoomOffer } from "./exits.ts";
+import type { PortalSpec, RoomOffer } from "./exits.ts";
 import type { Destructible } from "./props.ts";
 import type { SpellSlot } from "./spells.ts";
 import type { BulletEmission } from "../encounters/patterns.ts";
@@ -343,6 +343,30 @@ export function answerOffer(w: World): void {
   w.portals = portalsBefore(w.room.grid, w.room.extent, w.portalSpecs, w.player, [], hazardCells(w), w.viewHalf);
   raisePortals(w.portals);
   w.events.push({ kind: "portals_open", x: w.player.x, y: w.player.y });
+}
+
+/**
+ * **The doors, decided.** The portals stood pending while the Director
+ * answered; each takes its spec where it stands, keeping its place and its
+ * rise, so what the player sees is the same door becoming a particular one.
+ * Before the way out has opened there is nothing standing, and the specs are
+ * what it will open with. A count that changed — a fallback that drew its
+ * own — lays the row out again.
+ */
+export function resolvePortals(w: World, specs: readonly PortalSpec[]): void {
+  w.portalSpecs = specs;
+  if (w.portals.length === 0) return;
+  if (w.portals.length !== specs.length) {
+    w.portals = portalsBefore(w.room.grid, w.room.extent, specs, w.player, [], hazardCells(w), w.viewHalf);
+    raisePortals(w.portals);
+    return;
+  }
+  w.portals = w.portals.map((p, i) => {
+    const next = makePortal(specs[i]!, p.x, p.y);
+    next.open = p.open;
+    next.riseMs = p.riseMs;
+    return next;
+  });
 }
 
 /**
