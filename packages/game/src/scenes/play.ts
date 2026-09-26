@@ -241,6 +241,14 @@ const WAVE_BODY_PX = 11;
  */
 /** How long an accepted invite code's line stays up before its dialog closes itself. */
 const INVITE_ACCEPTED_CLOSE_MS = 900;
+/**
+ * Health as the HUD writes it: **rounded up**, so a sliver left shows as 1
+ * and 0 only ever means dead. Rounded to nearest, 0.04 of a heart read 0 on
+ * a body still standing. The epsilon keeps a whole number whole.
+ */
+function shownHp(hearts: number): number {
+  return Math.max(0, Math.ceil(hearts * HP_PER_HEART - 1e-6));
+}
 const HIT_FLASH_FILL = 0xd2c6cc;
 /** How strong the king's hit wash starts, added over him (`drawEnemy`'s boss flash). */
 const BOSS_FLASH_ALPHA = 0.35;
@@ -10203,7 +10211,7 @@ export class PlayScene extends Phaser.Scene {
     // on the row rather than recognised from the label, which stopped being
     // possible the moment the label was translated.
     const attrs: { k: string; v: string; changed: boolean; live?: true }[] = [
-      { k: t("attr.health"), v: `${Math.round(p.hearts * HP_PER_HEART)}/${(MAX_HEARTS + m.maxHearts) * HP_PER_HEART}`, changed: m.maxHearts !== 0, live: true },
+      { k: t("attr.health"), v: `${shownHp(p.hearts)}/${(MAX_HEARTS + m.maxHearts) * HP_PER_HEART}`, changed: m.maxHearts !== 0, live: true },
       { k: t("attr.mana"), v: `${Math.floor(p.mana)}/${this.world.staff.mana_max}${m.manaMax !== 1 ? `  (${pct(m.manaMax)})` : ""}`, changed: m.manaMax !== 1, live: true },
       { k: t("attr.rage"), v: t("attr.segments", { now: Math.floor(p.rage), max: m.rageMax }), changed: false, live: true },
       /*
@@ -15063,7 +15071,7 @@ export class PlayScene extends Phaser.Scene {
     const topFade = this.fadeMark();
     this.sprites.add(topBacking);
     const hpMax = (MAX_HEARTS + w.player.mods.maxHearts) * HP_PER_HEART;
-    const hp = Math.max(0, Math.round(w.player.hearts * HP_PER_HEART));
+    const hp = shownHp(w.player.hearts);
     const HP_Y = HUD_TOP_Y;
     this.sprites.add(this.add.rectangle(HUD_BAR_X, HP_Y, HUD_BAR_W, 7, 0x2a1418, 1).setOrigin(0, 0.5).setDepth(100));
     this.sprites.add(

@@ -1274,9 +1274,13 @@ const DEFS = {
     },
   },
 
-  /** A shot meeting stone: a chip off the wall and nothing behind it. */
+  /**
+   * A shot meeting stone: a chip off the wall and nothing behind it. Quiet
+   * and sparse: a volley meeting a wall played it up to twenty times a
+   * second, a bright tinkling over the whole fight.
+   */
   wall_hit: {
-    category: "world", variants: 3, gain: 0.3, retriggerMs: 45,
+    category: "world", variants: 3, gain: 0.18, retriggerMs: 140,
     render: (r, j) => {
       const out = buffer(0.1);
       mixInto(out, click(r, 5400 * j, 0.01, 1), 0);
