@@ -739,7 +739,7 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   // A charge being held goes out with it, unpaid: a stun is not a release.
   if (w.player.stunMs > 0 && w.player.chargeKey >= 0) cancelCharge(w.player);
   const pressedSpell = w.player.stunMs > 0 ? null : input.spell ?? null;
-  const cast = stepSpells(w, items, dtMs, pressedSpell);
+  const cast = stepSpells(w, items, dtMs, pressedSpell, !!input.spellAuto);
   /*
    * A press that produced nothing is said out loud, so the renderer can
    * answer it. `stepSpells` already knows why — the whole point of

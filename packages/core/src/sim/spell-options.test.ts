@@ -193,6 +193,26 @@ describe("a kept press (SPELL_BUFFER_MS)", () => {
     expect(w.player.mana).toBeGreaterThanOrEqual(mana - 0.01);
   });
 
+  it("keeps an auto-cast's windup and recovery but not its slow", () => {
+    const walk = (auto: boolean) => {
+      const w = three();
+      const e = body(w, 150, 0);
+      const x0 = w.player.x;
+      run(w, at(e.x, e.y, { moveY: 1, spell: 2, spellAuto: auto }), 1, [e]);
+      const timing = { windup: w.player.castPending === 2, scale: w.player.castMoveScale };
+      run(w, at(e.x, e.y, { moveY: 1 }), 20, [e]);
+      return { ...timing, travelled: Math.hypot(w.player.x - x0, 0) + Math.abs(w.player.y - PY) };
+    };
+    const hand = walk(false);
+    const auto = walk(true);
+    // Stone Shard is heavy: a windup either way.
+    expect(hand.windup).toBe(true);
+    expect(auto.windup).toBe(true);
+    expect(hand.scale).toBeLessThan(0.6);
+    expect(auto.scale).toBe(1);
+    expect(auto.travelled).toBeGreaterThan(hand.travelled + 10);
+  });
+
   it("does not cast a kept press while the caster is stunned", () => {
     const w = three();
     const e = body(w, 150, 0);

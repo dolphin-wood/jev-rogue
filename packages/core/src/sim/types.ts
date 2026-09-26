@@ -1910,6 +1910,15 @@ export interface Input {
    * decision arriving twice.
    */
   readonly spell?: number | null;
+  /**
+   * The `spell` press came from the **auto-cast assist**, not the player's
+   * hand. Its cast keeps its windup and recovery — the timing, and one
+   * spell at a time — but does not slow the caster: a stride the player is
+   * making is not the assist's to break. The assist is opted into, beside
+   * the damage multipliers, so being a little better than a hand press is
+   * its to be.
+   */
+  readonly spellAuto?: boolean;
   /** The melee swing. Free, always available, and the mana source. */
   readonly swing?: boolean;
   /** Aim a newly started melee swing at the nearest enemy within its reach. */

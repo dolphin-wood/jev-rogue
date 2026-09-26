@@ -447,6 +447,8 @@ export function stepSpells(
   items: ItemRegistry,
   dtMs: number,
   pressed: number | null,
+  /** The press is the auto-cast assist's: its cast does not slow the caster (`Input.spellAuto`). */
+  auto = false,
 ): SpellStep {
   const p = world.player;
   const staff = world.staff;
@@ -597,6 +599,8 @@ export function stepSpells(
   if (p.mana < cost) { if (key === buffered) p.spellBuffer = -1; return { shots: [], refused: "mana", key }; }
   // The cast goes: whatever was kept for it is spent.
   if (key === p.spellBuffer) p.spellBuffer = -1;
+  // How the caster moves through it: at the spell's weight, or at full pace for the assist's press.
+  const moveScale = (base: string) => (auto && key === pressed ? 1 : castTiming(items, base).moveScale);
 
   /*
    * **The key going down starts a charge, and costs nothing yet** (doc 006).
@@ -608,7 +612,7 @@ export function stepSpells(
   if (chargeMsOf(items, slot.item.base) > 0) {
     p.chargeKey = key;
     p.chargeMs = 0;
-    p.castMoveScale = castTiming(items, slot.item.base).moveScale;
+    p.castMoveScale = moveScale(slot.item.base);
     return { shots: [], refused: null };
   }
 
@@ -624,14 +628,14 @@ export function stepSpells(
     const volley = bankOf(slot, items);
     slot.bank = 0;
     slot.bankMs = 0;
-    p.castMoveScale = castTiming(items, slot.item.base).moveScale;
+    p.castMoveScale = moveScale(slot.item.base);
     return release(world, items, slot, key, cost, { volley });
   }
   // Against the baseline pool, not this staff's: a cooldown that shortened
   // because the player found a deeper well would make the well twice a reward.
   slot.cooldownMs = slotCooldownMs(slot, items, cost);
   const timing = castTiming(items, slot.item.base);
-  p.castMoveScale = timing.moveScale;
+  p.castMoveScale = moveScale(slot.item.base);
   if (timing.windupMs > 0) {
     p.castPending = key;
     p.castWindupMs = timing.windupMs;

@@ -4,11 +4,9 @@ import {
   AutoCaster, recencyWeight,
 } from "./auto-cast.ts";
 
-const on = { eligible: true, coming: true, fits: true };
-const soon = { eligible: false, coming: true, fits: true };
-const off = { eligible: false, coming: false, fits: false };
-/** Ready, but the player is mid-stride. */
-const busy = { eligible: true, coming: true, fits: false };
+const on = { eligible: true, coming: true };
+const soon = { eligible: false, coming: true };
+const off = { eligible: false, coming: false };
 
 describe("auto-cast", () => {
   it("waits a random moment after a key is ready, never pressing it at once", () => {
@@ -41,16 +39,6 @@ describe("auto-cast", () => {
     a.pick(0, [on], true);
     expect(a.pick(AUTO_CAST_DELAY_MS, [on], false)).toBe(null);
     expect(a.pick(AUTO_CAST_DELAY_MS + 16, [on], true)).toBe(0);
-  });
-
-  it("waits for a gap in the rhythm, without starting its delay again", () => {
-    const a = new AutoCaster(() => 0);
-    a.pick(0, [busy], true);
-    // Due, but mid-stride the whole time.
-    expect(a.pick(AUTO_CAST_DELAY_MS, [busy], true)).toBe(null);
-    expect(a.pick(AUTO_CAST_DELAY_MS + 1000, [busy], true)).toBe(null);
-    // The first gap: it goes at once, its delay long since served.
-    expect(a.pick(AUTO_CAST_DELAY_MS + 1016, [on], true)).toBe(0);
   });
 
   it("weighs a key just cast low, growing back to full over the forget time", () => {
@@ -98,7 +86,7 @@ describe("auto-cast", () => {
     let mana = 100;
     for (let now = 0; now < 600_000; now += 16) {
       mana = Math.min(100, mana + 6 * 0.016);
-      const keys = cd.map((_, i) => ({ eligible: back[i]! <= now && mana - cost[i]! >= 30, coming: back[i]! - now <= 1500, fits: true }));
+      const keys = cd.map((_, i) => ({ eligible: back[i]! <= now && mana - cost[i]! >= 30, coming: back[i]! - now <= 1500 }));
       const k = a.pick(now, keys, true);
       if (k !== null) { casts[k]!++; back[k] = now + cd[k]!; mana -= cost[k]!; }
     }

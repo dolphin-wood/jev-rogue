@@ -27,14 +27,12 @@
  * is ready, or until `AUTO_CAST_YIELD_MS` passes and the turn is drawn
  * again, so a key that keeps not arriving never stalls the rest.
  *
- * **It waits for a gap in the player's rhythm.** A spell's windup and
- * recovery slow the caster, so a cast dropped into a walk or a run of
- * swings is a stumble the player did not choose. A due key therefore goes
- * only when it **fits** (`AutoCastKey.fits`): the player standing still, or
- * the sword's rest after a run of swings, when the body is not going
- * anywhere anyway — or at any moment for a spell light enough that its
- * cast costs the stride nothing. The wait for a gap does not restart the
- * key's random delay: the delay runs on readiness, the gap only says when.
+ * **It does not break the player's stride.** A spell's windup and recovery
+ * slow the caster, and a slow the player did not choose, dropped into a
+ * walk or a run of swings, is a stumble. So the press goes as
+ * `Input.spellAuto` and its cast keeps its timing but not its slow. (It
+ * first waited for a gap — standing, or the sword's rest — which left a
+ * player who fights on the move with no heavy spell cast for them at all.)
  *
  * Input only. It decides which key to report as pressed and nothing else;
  * the simulation sees a press, exactly as if the player had made it.
@@ -80,12 +78,6 @@ export interface AutoCastKey {
    * coming.
    */
   readonly coming: boolean;
-  /**
-   * Whether a cast of this key would **fit the rhythm now**: the player is
-   * standing or resting between swings, or the spell is light enough to cast
-   * mid-stride. A ready, due key waits for it.
-   */
-  readonly fits: boolean;
 }
 
 export class AutoCaster {
@@ -143,7 +135,7 @@ export class AutoCaster {
       }
       this.turn = { key, at: now };
     }
-    if (!free || !this.turn || !ready(this.turn.key) || !keys[this.turn.key]!.fits) return null;
+    if (!free || !this.turn || !ready(this.turn.key)) return null;
     const key = this.turn.key;
     this.turn = null;
     this.due[key] = null;
