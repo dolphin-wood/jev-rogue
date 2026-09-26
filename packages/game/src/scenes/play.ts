@@ -8095,6 +8095,8 @@ export class PlayScene extends Phaser.Scene {
     if (what.startsWith("boss_phase:")) return ["boss_impact", 0.8];
     // The call: the sword going up, the storm's voice pitched down.
     if (what === "boss_summon") return ["impact_storm", 0.7];
+    // The fall into phase III starts silent: the roar before it was the sound, and the music is held down under it.
+    if (what === "boss_meteor") return null;
     if (what.startsWith("boss_")) return ["tele_slam", 0.85];
     if (what.startsWith("stir:")) return ["enemy_wake", 1.15];
     // A sidestep and a blink are movement, not a promise of damage;
