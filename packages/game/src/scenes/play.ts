@@ -20,7 +20,7 @@ import {
   MUSKET_RANGE, MUSKET_SPREAD_DEG, MUSKET_WINDUP_MS, FLAME_ROLL_MS, FLAME_LIFE_MS, flameRays, muzzleOf,
   ELEMENT_TINT, spellLookOf,
   levelAt, withLevels, levelBonus, LEVEL_HP, swordAt,
-  HIT_FLASH_MS, BOSS_ROAR_MS,
+  HIT_FLASH_MS, BOSS_ROAR_MS, spellReady,
 } from "@jr/core";
 import type {
   Bullet, Enemy, EnemyId, Input, ItemInstance, Mood, Offer, OfferCard, Portal,
@@ -106,6 +106,7 @@ import { layoutDecisionTable, maxScrollFor } from "../ui/plan-table.ts";
 import { questionAsked, questionBase, questionName } from "../ui/question-names.ts";
 import type { TableRow } from "../ui/plan-table.ts";
 import type { AtlasJson } from "../assets/atlas.ts";
+import { AUTO_CAST_RESERVE, AutoCaster } from "../auto-cast.ts";
 
 /**
  * **Art pixels per world pixel**, declared in `telegraph.ts` and re-exported
@@ -1338,6 +1339,8 @@ export class PlayScene extends Phaser.Scene {
   private cooldownCueMs = 0;
   private cooldownCueGapMs = COOLDOWN_CUE_EVERY_MS;
   private cooldownCueText = "";
+  /** The cooldown cue's colour: its pale gold, or the rage orange when it is the spin's "not yet". */
+  private cooldownCueColour = "#ffd98a";
   private readonly lastRefusalAt = new Map<number, number>();
   /**
    * The spell key last pressed, whether or not it fired: the mana bar marks
@@ -1526,6 +1529,9 @@ export class PlayScene extends Phaser.Scene {
   private dealtMult = readSetting(DEALT_KEY, 1);
   private takenMult = readSetting(TAKEN_KEY, 1);
   private autoMeleeAim = (() => { try { return localStorage.getItem(AUTO_MELEE_AIM_KEY) === "1"; } catch { return false; } })();
+  /** The auto-cast assist (`auto-cast.ts`): off unless the player turns it on. */
+  private autoCast = (() => { try { return localStorage.getItem(AUTO_CAST_KEY) === "1"; } catch { return false; } })();
+  private readonly autoCaster = new AutoCaster();
   /** Settings: take no damage at all. For testing a room without dying in it. */
   /** Screen shake: on, reduced (the default) or off. See `holdCamera`. */
   private shakeSetting: ShakeSetting = (() => {
@@ -3398,6 +3404,7 @@ export class PlayScene extends Phaser.Scene {
       // The spin's slot fills from the bottom as the next charge is earned.
       cooling: charges > 0 ? 0 : 1 - (p.rage - charges), usable: charges > 0,
       corner: `${charges}`, accent: 0xff7a4a, ring: 0xff7a4a,
+      refused: this.refusalOn(SPIN_SLOT),
     });
 
     /*
@@ -5443,16 +5450,28 @@ export class PlayScene extends Phaser.Scene {
       this.autoMeleeAim = !this.autoMeleeAim;
       try { localStorage.setItem(AUTO_MELEE_AIM_KEY, this.autoMeleeAim ? "1" : "0"); } catch { /* still applies */ }
     };
+    const setAutoCast = () => {
+      this.autoCast = !this.autoCast;
+      this.autoCaster.reset();
+      try { localStorage.setItem(AUTO_CAST_KEY, this.autoCast ? "1" : "0"); } catch { /* still applies */ }
+    };
     if (ui.page === "settings") return [
-      { label: t("menu.damageDealt"), value: `x${this.dealtMult}`, act: () => setDealt(this.dealtMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setDealt },
-      { label: t("menu.damageTaken"), value: `x${this.takenMult}`, act: () => setTaken(this.takenMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setTaken },
       { label: t("menu.damageNumbers"), value: t(this.damageNumbersOn ? "menu.on" : "menu.off"), act: setNumbers, adjust: setNumbers },
-      { label: t("menu.autoMeleeAim"), value: t(this.autoMeleeAim ? "menu.on" : "menu.off"), act: setAutoMeleeAim, adjust: setAutoMeleeAim },
       this.roomPlanRow(),
       { label: t("menu.screenShake"), value: t(`shake.${this.shakeSetting}` as "shake.off"), act: () => setShake(1), adjust: setShake },
       this.soundRow(),
       ...this.volumeRows(),
       this.languageRow(),
+      /*
+       * **Assists** under their own heading: the switches that make the fight
+       * easier to play rather than change how it looks or sounds. Together, so
+       * a player looking for help finds all of it in one place, and apart, so
+       * nobody turns one on while looking for the volume.
+       */
+      { heading: t("menu.assistHeading"), label: t("menu.damageDealt"), value: `x${this.dealtMult}`, act: () => setDealt(this.dealtMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setDealt },
+      { label: t("menu.damageTaken"), value: `x${this.takenMult}`, act: () => setTaken(this.takenMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setTaken },
+      { label: t("menu.autoMeleeAim"), value: t(this.autoMeleeAim ? "menu.on" : "menu.off"), act: setAutoMeleeAim, adjust: setAutoMeleeAim },
+      { label: t("menu.autoCast"), value: t(this.autoCast ? "menu.on" : "menu.off"), act: setAutoCast, adjust: setAutoCast },
       /*
        * The Jev rows under their own heading: who plans the run is one
        * subject, and mixed in among the damage multipliers it reads as one
@@ -5919,7 +5938,7 @@ export class PlayScene extends Phaser.Scene {
       "cooldown-cue", p.x, p.y - 28 - 5 * Math.sqrt(k), this.cooldownCueText,
       {
         fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(6, ZOOM) * ZOOM)}px`,
-        color: "#ffd98a", stroke: "#0d0b1f", strokeThickness: 2 * ZOOM,
+        color: this.cooldownCueColour, stroke: "#0d0b1f", strokeThickness: 2 * ZOOM,
       },
     ).setOrigin(0.5).setScale(1 / ZOOM).setAlpha(k > 0.55 ? (1 - k) / 0.45 : 1).setDepth(9.95);
   }
@@ -8244,6 +8263,7 @@ export class PlayScene extends Phaser.Scene {
       for (const ev of this.world.events) {
         if (this.damageNumbersOn) this.noteDamage(ev);
         if (ev.kind === "cast_refused") this.noteRefusal(ev.what ?? "", ev.amount ?? -1);
+        if (ev.kind === "spin_refused") this.noteSpinRefusal();
         // A heavy shot's landing: a larger burst than a hit's.
         if (ev.kind === "hazard_tick" && ev.what?.startsWith("ram:")) {
           /*
@@ -14310,9 +14330,57 @@ export class PlayScene extends Phaser.Scene {
       // Remembered even when the press is refused: the bar's cost tick
       // follows the key the player is actually using.
       this.lastSpellKey = i;
+      // The player's own key: the assist's waits start over (`AutoCaster`).
+      this.autoCaster.noteManual();
       return i;
     }
     return null;
+  }
+
+  /**
+   * The key auto-cast presses on this step, or null (`auto-cast.ts`).
+   *
+   * Only a key that casts on a tap — a `charge` spell is a hold and a
+   * `stance` a guard, both the player's call — and only with a body awake
+   * within reach, so the assist never throws a spell at an empty room, and
+   * only while the bar stays above `AUTO_CAST_RESERVE` after paying.
+   */
+  private autoSpell(): number | null {
+    if (!this.autoCast) return null;
+    const w = this.world;
+    const p = w.player;
+    const free = p.castPending < 0 && p.castRecoverMs <= 0 && p.chargeKey < 0 && !p.stance && p.stunMs <= 0;
+    const target = w.enemies.some((e) => e.hp > 0 && e.awake && Math.hypot(e.x - p.x, e.y - p.y) <= AUTO_CAST_REACH_PX);
+    const floor = w.staff.mana_max * AUTO_CAST_RESERVE;
+    const keys = w.spells.map((slot) => {
+      if (!slot || !target) return { eligible: false };
+      const tap = chargeMsOf(ITEMS, slot.item.base) === 0 && ITEMS.get(slot.item.base)?.params?.["shape"] !== "stance";
+      return { eligible: tap && spellReady(slot, ITEMS) && p.mana - slotCost(slot, ITEMS, w.staff) >= floor };
+    });
+    return this.autoCaster.pick(w.tick * STEP_MS, keys, free);
+  }
+
+  /**
+   * **The spin pressed with no charge banked** (`spin_refused`).
+   *
+   * It was silent: the key did nothing and said nothing, so a player who
+   * pressed a beat before the gauge filled could not tell a missing charge
+   * from a dropped key. It answers as a cooldown does — *not yet*, not
+   * *not enough* — because the gauge fills on its own as the fight goes on:
+   * the L slot flashes, the menu tick sounds an octave down, and "No rage"
+   * rises over the head in the gauge's orange.
+   */
+  private noteSpinRefusal(): void {
+    this.refusedKey = SPIN_SLOT;
+    this.refusedWhy = "cooldown";
+    this.refusedMs = REFUSED_COOLDOWN_MS;
+    this.sfx.play("ui_move", 0.5);
+    if (this.cooldownCueGapMs >= COOLDOWN_CUE_EVERY_MS) {
+      this.cooldownCueMs = COOLDOWN_CUE_MS;
+      this.cooldownCueGapMs = 0;
+      this.cooldownCueText = t("cue.noRage");
+      this.cooldownCueColour = "#ff9a6a";
+    }
   }
 
   /**
@@ -14355,6 +14423,7 @@ export class PlayScene extends Phaser.Scene {
         this.cooldownCueMs = COOLDOWN_CUE_MS;
         this.cooldownCueGapMs = 0;
         this.cooldownCueText = t("cue.cooldown", { s: (Math.ceil(left / 100) / 10).toFixed(1) });
+        this.cooldownCueColour = "#ffd98a";
       }
     }
   }
@@ -14403,7 +14472,7 @@ export class PlayScene extends Phaser.Scene {
        * the edge is also what the sword does not need, since a held swing
        * queueing the next one is exactly right for a basic attack.
        */
-      spell: this.pressedSpell(),
+      spell: this.pressedSpell() ?? this.autoSpell(),
       dash: down(k.K),
       // An edge, like the spell index: taking a card and stepping through a
       // portal are both decisions that must cost one press, not one frame.
@@ -16855,6 +16924,9 @@ const STYLES: readonly { id: "spam" | "nuke" | "area" | "dot" | "melee"; name: s
 
 const DAMAGE_NUMBERS_KEY = "jr-damage-numbers";
 const AUTO_MELEE_AIM_KEY = "jr-auto-melee-aim";
+const AUTO_CAST_KEY = "jr-auto-cast";
+/** How near a body has to be for auto-cast to spend a spell on it: about the seeking bolts' useful range. */
+const AUTO_CAST_REACH_PX = 7 * TILE_PX;
 const ROOM_PARAMS_KEY = "jr-room-params";
 /** Where the sound setting is remembered. Off unless it says otherwise. */
 /**
@@ -16953,6 +17025,8 @@ const REFUSED_COOLDOWN_MS = 480;
  * the sound and the mark over the head answer presses, not frames.
  */
 const REFUSAL_FRESH_MS = 120;
+/** The spin's place in `refusedKey`, beside the spell keys' 0 to 2. */
+const SPIN_SLOT = -2;
 /** The cooldown's mark over the head: how long it lasts, and the least gap between two. */
 const COOLDOWN_CUE_MS = 420;
 const COOLDOWN_CUE_EVERY_MS = 700;

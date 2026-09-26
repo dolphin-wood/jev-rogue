@@ -65,6 +65,8 @@ export const ZH: Table = {
   "menu.damageTaken": "受到伤害",
   "menu.damageNumbers": "伤害数字",
   "menu.autoMeleeAim": "近战自动索敌",
+  "menu.autoCast": "自动施法",
+  "menu.assistHeading": "辅助功能",
   "menu.roomPlan": "每层开始前显示规划",
   "menu.screenShake": "画面震动",
   "shake.off": "关",
@@ -277,6 +279,7 @@ export const ZH: Table = {
   /* ------------------------------ world cues ---------------------------- */
   "cue.noMana": "法力不足",
   "cue.cooldown": "冷却中 {s}s",
+  "cue.noRage": "怒气不足",
 
   /* -------------------------------- toasts ------------------------------ */
   "toast.jevUnavailable": "Jev 导演暂时用不了，改由规则导演安排。",

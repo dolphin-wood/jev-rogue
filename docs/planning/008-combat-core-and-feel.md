@@ -30,8 +30,25 @@ Movement, collision, bullets, damage, elements, encounter waves and the spell ca
   decision, one key. A held key casts again when the spell's cooldown clears,
   sized to its cost, rather than asking the player's hand to drum a rhythm the
   game can keep for them.
+- **A press that cannot cast yet is kept, not dropped.** A spell key tapped
+  while the last spell is still winding up or recovering, or a beat before
+  its cooldown ends, is held for 200 ms (`SPELL_BUFFER_MS`, not counting the
+  caster's own windup and recovery) and cast the moment it can. One slot,
+  newest press wins: three keys tapped through one recovery cast the last of
+  them, not all three in a row, because a queue spends the bar on spells the
+  player has already changed their mind about. A refusal the kept press will
+  outlive is not announced; one it will not (a long cooldown, the bar short)
+  is, at once.
 - Spin attack: L. Spends one banked rage charge, so it is read as a press and
-  never as a hold — a finger resting on the key must not empty the gauge.
+  never as a hold — a finger resting on the key must not empty the gauge. A
+  press is kept for 180 ms (the window waits out a dash), and a press with no
+  charge banked says so (`spin_refused`: the slot flashes, "No rage" rises)
+  rather than doing nothing in silence.
+- **Auto-cast** (an assist, off by default, under Settings → Assists): a
+  ready tap-cast spell presses itself after a random 0.7–1.6 s, only with a
+  body within reach and only while the bar stays above 30% after paying;
+  the player's own spell press restarts every wait. Charge and stance
+  spells are never auto-cast. Input only: the simulation sees a press.
 - Dodge: K, space, shift or right mouse. A committed burst in the direction
   already held: 110 ms at 580 px/s, about two tiles, then 420 ms of cooldown.
   It commits to the direction it started in so it is a decision rather than a

@@ -805,6 +805,31 @@ describe("the spin answers at once", () => {
   });
 });
 
+describe("a spin press that cannot go at once", () => {
+  it("is said when no charge is banked, and still spins if one lands in the window", () => {
+    const w = world();
+    w.player.rage = 0.9;
+    step(w, { ...NO_INPUT, spin: true });
+    expect(w.events.some((ev) => ev.kind === "spin_refused")).toBe(true);
+    expect(w.player.swingStretch).toBe(1);
+    w.player.rage = 1;
+    step(w, NO_INPUT);
+    expect(w.player.swingStretch).toBe(3);
+  });
+
+  it("waits out a long dash rather than running down under it", () => {
+    const w = world();
+    w.player.rage = 1;
+    step(w, { ...NO_INPUT, dash: true });
+    // Longer than the window: the press must outlast it.
+    w.player.dashMs = 400;
+    step(w, { ...NO_INPUT, spin: true });
+    for (let i = 0; i < 40 && w.player.swingStretch === 1; i++) step(w, NO_INPUT);
+    expect(w.player.swingStretch).toBe(3);
+    expect(w.events.some((ev) => ev.kind === "spin_refused")).toBe(false);
+  });
+});
+
 describe("a dash across ice", () => {
   it("travels about as far as a dash on stone, not at dash pace after it ends", () => {
     const travel = (icy: boolean) => {

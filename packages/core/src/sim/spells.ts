@@ -386,7 +386,17 @@ export interface SpellStep {
   readonly shots: readonly FiredShot[];
   /** Set when a key was pressed and the cast did not happen, and why. */
   readonly refused: "cooldown" | "mana" | "empty" | "busy" | null;
+  /** The key the refusal is about, when it is not the one held (a kept press). */
+  readonly key?: number;
 }
+
+/**
+ * How long a spell press is kept when it cannot cast yet (`Player.spellBuffer`).
+ * The caster's own windup and recovery do not count against it. Long enough
+ * to cover a tap that lands a beat early; short enough that a press never
+ * fires so late it reads as the game acting on its own.
+ */
+export const SPELL_BUFFER_MS = 200;
 
 /**
  * Binds an item to a key as a self-contained spell: its behaviour depends on
@@ -467,6 +477,56 @@ export function stepSpells(
     if (Number.isFinite(cheapest) && p.mana < cheapest) world.stats.manaBelowKeyMs += dtMs;
   }
 
+  /*
+   * **The press, read first**, before anything that can swallow it.
+   *
+   * A spell key tapped while the last spell was still winding up or
+   * recovering used to be lost: the windup returned before the key was
+   * looked at, and the recovery refused it as `busy` — and a tap is up again
+   * before either ends. So a fresh press is **kept** (`Player.spellBuffer`)
+   * and goes the moment the caster is free.
+   *
+   * One slot, and **the newest press wins**. Three keys tapped through one
+   * recovery cast the last of them, not all three in a row: a queue would
+   * spend the bar on spells the player has already changed their mind about
+   * and root them through casts they no longer want, where the last press is
+   * the one that says what they want now.
+   */
+  const fresh = pressed !== null && pressed !== world.lastSpellKey;
+  world.lastSpellKey = pressed;
+  // The window waits out the caster's own cast, which the player cannot hurry;
+  // it runs down against everything else.
+  const casting = p.castPending >= 0 || p.castRecoverMs > 0 || p.chargeKey >= 0;
+  if (!casting) p.spellBufferMs = Math.max(0, p.spellBufferMs - dtMs);
+  if (p.spellBufferMs <= 0) p.spellBuffer = -1;
+  const pressedSlot = pressed === null ? null : world.spells[pressed] ?? null;
+  if (fresh && pressedSlot) {
+    p.spellBuffer = pressed;
+    p.spellBufferMs = SPELL_BUFFER_MS;
+    /*
+     * **Counted on the press, not on the cast** (doc 011).
+     *
+     * Every press of a key that holds a spell counts, and a press whose cost the
+     * bar cannot meet counts as refused — whatever else would also have stopped
+     * it. Counting only presses that were otherwise ready measured the wrong
+     * thing twice over: the browser's player presses anyway and wants to know
+     * why nothing came out, and the reference model *declines* to press what it
+     * cannot afford, so the refusal rate came back 0 of 27,978 and said mana was
+     * free when the bar was the reason the model stayed quiet.
+     *
+     * The bar rarely reaches zero, which is the other half of the report: it
+     * sits in single figures and the cast is refused because what is left is
+     * under the key's cost. So the test is against **the cost of the key
+     * pressed**, never against zero.
+     *
+     * On the key going down only. The input carries a held key every step, so
+     * counting each step counted sixty presses a second of holding — a room
+     * read 290 presses and 27 refusals for 22 casts.
+     */
+    world.stats.castPresses++;
+    if (p.mana < slotCost(pressedSlot, items, staff)) world.stats.castRefusedMana++;
+  }
+
   // A windup running: the spell leaves when it ends, already paid for.
   if (p.castPending >= 0) {
     p.castWindupMs -= dtMs;
@@ -477,10 +537,6 @@ export function stepSpells(
     if (!held) return { shots: [], refused: null };
     return release(world, items, held, at, p.castCost);
   }
-
-  // A press is the key going down: the same key held from last step is not one.
-  const fresh = pressed !== null && pressed !== world.lastSpellKey;
-  world.lastSpellKey = pressed;
 
   // A charge put out by a dash or a stun: its key does nothing until it comes up.
   if (p.chargeVoid >= 0) {
@@ -505,47 +561,42 @@ export function stepSpells(
     return releaseCharge(world, items, held, at);
   }
 
-  if (pressed === null) return { shots: [], refused: null };
-  const slot = world.spells[pressed];
-  if (!slot) return { shots: [], refused: "empty" };
-
   /*
-   * **Counted on the press, not on the cast** (doc 011).
-   *
-   * Every press of a key that holds a spell counts, and a press whose cost the
-   * bar cannot meet counts as refused — whatever else would also have stopped
-   * it. Counting only presses that were otherwise ready measured the wrong
-   * thing twice over: the browser's player presses anyway and wants to know
-   * why nothing came out, and the reference model *declines* to press what it
-   * cannot afford, so the refusal rate came back 0 of 27,978 and said mana was
-   * free when the bar was the reason the model stayed quiet.
-   *
-   * The bar rarely reaches zero, which is the other half of the report: it
-   * sits in single figures and the cast is refused because what is left is
-   * under the key's cost. So the test is against **the cost of the key
-   * pressed**, never against zero.
+   * The key to try: the kept press while it lasts, else the key held. A held
+   * key casts again when it can (`pressedSpell` in the game), and a newer tap
+   * of another key goes first rather than waiting behind it.
    */
+  const buffered = p.spellBuffer >= 0 && p.stunMs <= 0 ? p.spellBuffer : null;
+  const key = buffered ?? pressed;
+  if (key === null) return { shots: [], refused: null };
+  const slot = world.spells[key];
+  if (!slot) { p.spellBuffer = -1; return { shots: [], refused: "empty", key }; }
   const cost = slotCost(slot, items, staff);
   /*
-   * On the key going down only. The input carries a held key every step, so
-   * counting each step counted sixty presses a second of holding — a room
-   * read 290 presses and 27 refusals for 22 casts.
+   * A refusal the kept press will outlive is not said: the cast is coming.
+   * One it will not — a cooldown longer than the window, the bar short —
+   * is said at once and the press let go, so the key held (if any) is
+   * tried again and the player hears why.
    */
-  if (fresh) {
-    world.stats.castPresses++;
-    if (p.mana < cost) world.stats.castRefusedMana++;
-  }
+  const wait = (why: "busy" | "cooldown", leftMs: number): SpellStep => {
+    if (key === buffered && (why === "busy" || leftMs <= p.spellBufferMs)) return { shots: [], refused: null };
+    if (key === buffered) p.spellBuffer = -1;
+    return { shots: [], refused: why, key };
+  };
 
   // One spell at a time: nothing is cast while another recovers.
-  if (p.castRecoverMs > 0) return { shots: [], refused: "busy" };
-  if (slot.cooldownMs > 0) return { shots: [], refused: "cooldown" };
+  if (p.castRecoverMs > 0) return wait("busy", p.castRecoverMs);
+  if (slot.cooldownMs > 0) return wait("cooldown", slot.cooldownMs);
   /*
    * An empty bank is a cooldown in all but name: the key comes back when a
    * charge does, and the player is told so in the same words.
    */
   const banked = chargesOf(items, slot.item.base) > 0;
-  if (banked && bankOf(slot, items) < 1) return { shots: [], refused: "cooldown" };
-  if (p.mana < cost) return { shots: [], refused: "mana" };
+  if (banked && bankOf(slot, items) < 1)
+    return wait("cooldown", chargeIntervalMs(items, slot.item.base) - (slot.bankMs ?? 0));
+  if (p.mana < cost) { if (key === buffered) p.spellBuffer = -1; return { shots: [], refused: "mana", key }; }
+  // The cast goes: whatever was kept for it is spent.
+  if (key === p.spellBuffer) p.spellBuffer = -1;
 
   /*
    * **The key going down starts a charge, and costs nothing yet** (doc 006).
@@ -555,7 +606,7 @@ export function stepSpells(
    * held (`stepPlayer`).
    */
   if (chargeMsOf(items, slot.item.base) > 0) {
-    p.chargeKey = pressed;
+    p.chargeKey = key;
     p.chargeMs = 0;
     p.castMoveScale = castTiming(items, slot.item.base).moveScale;
     return { shots: [], refused: null };
@@ -574,7 +625,7 @@ export function stepSpells(
     slot.bank = 0;
     slot.bankMs = 0;
     p.castMoveScale = castTiming(items, slot.item.base).moveScale;
-    return release(world, items, slot, pressed, cost, { volley });
+    return release(world, items, slot, key, cost, { volley });
   }
   // Against the baseline pool, not this staff's: a cooldown that shortened
   // because the player found a deeper well would make the well twice a reward.
@@ -582,12 +633,12 @@ export function stepSpells(
   const timing = castTiming(items, slot.item.base);
   p.castMoveScale = timing.moveScale;
   if (timing.windupMs > 0) {
-    p.castPending = pressed;
+    p.castPending = key;
     p.castWindupMs = timing.windupMs;
     p.castCost = cost;
     return { shots: [], refused: null };
   }
-  return release(world, items, slot, pressed, cost);
+  return release(world, items, slot, key, cost);
 }
 
 /**

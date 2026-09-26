@@ -1667,6 +1667,15 @@ export interface Player {
   /** A spin press waiting for the moment it can start; see `SPIN_BUFFER_MS`. */
   spinBufferMs: number;
   /**
+   * The last spell key pressed, **kept for a moment** when the press could
+   * not cast yet — another spell still recovering, a cooldown about to end —
+   * so it goes the moment it can; -1 for none. One slot: a newer press
+   * replaces it. See `SPELL_BUFFER_MS`.
+   */
+  spellBuffer: number;
+  /** What is left of `spellBuffer`'s window, in ms. */
+  spellBufferMs: number;
+  /**
    * The **dash strike**: a spell that spends mana to move the body through
    * the bodies in its way, hurting each once, with mercy frames for the
    * travel. `strikeMs` is what is left of it; `strikeHits` the ids already
@@ -1855,6 +1864,12 @@ export type WorldEventKind =
    * point or two under the cost looked exactly like a dropped input.
    */
   | "cast_refused"
+  /**
+   * The spin key was pressed with no rage charge banked. `what` is `rage`.
+   * Said for the same reason as `cast_refused`: a key that does nothing
+   * without a word reads as a dropped input.
+   */
+  | "spin_refused"
   /**
    * **A spell shape doing something that is not a hit** (doc 006), for the
    * renderer and the mixer: `what` is `orb` (an orb cast), `orb_strike` (an

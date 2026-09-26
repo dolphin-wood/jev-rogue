@@ -30,7 +30,7 @@ import {
 } from "./collide.ts";
 import {
   autoMeleeFacing, beginSwing, canSwing, cancelSwing, makeSwingBox, manaPerHit, sectorHits, snapFacing,
-  stepStrike, stepSwing, strikeHits, swingMoveScale, beginSpin,
+  stepStrike, stepSwing, strikeHits, swingMoveScale, beginSpin, SPIN_RAGE,
 } from "./melee.ts";
 import { CLOUD_TICK_MS, FIRE_ENEMY_DAMAGE, FIRE_TICK_MS, GROUND_STATUS_POWER, lightFire, makeFirePool, makeScorchPool, scorch, stepFires, stepScorches } from "./fire.ts";
 import { eruptRing, fireUnit, PROC_MIN } from "./cast.ts";
@@ -513,7 +513,7 @@ export function createWorld(input: CreateWorldOptions): World {
       dashMs: 0, dashIframeMs: 0, dashCooldownMs: 0, dashX: 0, dashY: 0,
       hurtX: 0, hurtY: 0, hurtMs: 0,
       burnBuild: 0, poisonBuild: 0, burnFedMs: 0, poisonFedMs: 0, burnMs: 0, poisonMs: 0, dotTickMs: 0,
-      rage: Math.max(0, Math.min(o.mods?.rageMax ?? Infinity, o.rage ?? 0)), swingStretch: 1, spinTurn: 0, spinBufferMs: 0,
+      rage: Math.max(0, Math.min(o.mods?.rageMax ?? Infinity, o.rage ?? 0)), swingStretch: 1, spinTurn: 0, spinBufferMs: 0, spellBuffer: -1, spellBufferMs: 0,
       strikeMs: 0, strikeDamage: 0, strikeRadius: 0,
       strikeElement: "none" as const, strikeElementPower: 1, strikePowers: noPowers(), strikeProc: 1, strikeStatusMult: 1, strikeHits: [],
       stunMs: 0, dragMs: 0, dragX: 0, dragY: 0, slipMs: 0, slideX: 0, slideY: 0,
@@ -747,8 +747,9 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
    * the browser's player with a key that silently did nothing whenever the
    * bar sat just under the cost.
    */
-  if (cast.refused !== null && pressedSpell !== null)
-    w.events.push({ kind: "cast_refused", x: w.player.x, y: w.player.y, what: cast.refused, amount: pressedSpell });
+  const refusedKey = cast.key ?? pressedSpell;
+  if (cast.refused !== null && refusedKey !== null)
+    w.events.push({ kind: "cast_refused", x: w.player.x, y: w.player.y, what: cast.refused, amount: refusedKey });
   w.stats.shotsFired += cast.shots.length;
   for (const shot of cast.shots) emit(w, shot.x, shot.y, "muzzle", 2);
   for (const shot of stepEchoes(w, items, dtMs)) emit(w, shot.x, shot.y, "muzzle", 2);
@@ -1135,7 +1136,16 @@ function stepPlayer(w: World, input: Input, dtMs: number): void {
   const spun = p.spinBufferMs > 0 && !stunned && beginSpin(p, w);
   if (spun) p.spinBufferMs = 0;
   else {
-    p.spinBufferMs = Math.max(0, p.spinBufferMs - dtMs);
+    /*
+     * A press with no charge banked is **said**, not dropped in silence: the
+     * key did nothing, and a key that does nothing without a word reads as
+     * a dropped input — the same lesson `cast_refused` taught the spells.
+     * Still kept, so a charge landing in the window spins.
+     */
+    if (input.spin && p.rage < SPIN_RAGE) w.events.push({ kind: "spin_refused", x: p.x, y: p.y, what: "rage" });
+    // A dash is the player's own commitment, and short: the press waits it
+    // out rather than running down under it.
+    if (p.dashMs <= 0) p.spinBufferMs = Math.max(0, p.spinBufferMs - dtMs);
     if (input.swing && !stunned) {
       if (input.autoMeleeAim && canSwing(p)) {
         const facing = autoMeleeFacing(w);

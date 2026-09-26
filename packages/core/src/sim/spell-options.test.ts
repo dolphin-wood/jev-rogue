@@ -15,7 +15,7 @@ import { NO_INPUT, STEP_MS } from "./types.ts";
 import type { Enemy, Input, World } from "./types.ts";
 import { makeEnemy, ENEMY_POISON_MS } from "./enemy.ts";
 import { seekTargets } from "./aim.ts";
-import { attachAffix, bankOf, chargeMsOf, slotCost } from "./spells.ts";
+import { attachAffix, bankOf, castTiming, chargeMsOf, slotCost, SPELL_BUFFER_MS } from "./spells.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
 import { ITEMS, plainInstance } from "../spells/index.ts";
 import { RngSource } from "../rng.ts";
@@ -114,13 +114,93 @@ describe("charges (Mana Darts)", () => {
     const w = arena("mana_darts");
     const e = body(w, 150, 0);
     step(w, at(e.x, e.y, { spell: 0 }));
-    // Past the cast's recovery and short of one charge's time.
-    run(w, at(e.x, e.y), 14, [e]);
+    // Past the cast's recovery, and further from the next charge than a
+    // kept press would wait (`SPELL_BUFFER_MS`).
+    run(w, at(e.x, e.y), 9, [e]);
     expect(w.player.castRecoverMs).toBeLessThanOrEqual(0);
     expect(bankOf(w.spells[0]!, ITEMS)).toBe(0);
     step(w, at(e.x, e.y, { spell: 0 }));
     const refused = w.events.find((ev) => ev.kind === "cast_refused");
     expect(refused?.what).toBe("cooldown");
+  });
+});
+
+describe("a kept press (SPELL_BUFFER_MS)", () => {
+  /** Three bolts, one on each key, with a bar deep enough for all of them. */
+  function three(): World {
+    const w = createWorld({
+      room, encounter: null, props: 0,
+      staff: { slots: 3, mana_max: 300 },
+      slots: [plainInstance("magic_bolt"), plainInstance("frost_needle"), plainInstance("stone_shard")],
+      hearts: 6, rng: src.stream("w", "kept"),
+    });
+    w.player.x = PX;
+    w.player.y = PY;
+    w.player.facing = 0;
+    w.player.mana = 300;
+    return w;
+  }
+  const cast = (w: World, k: number) => (w.spells[k]?.cooldownMs ?? 0) > 0;
+  /** Steps until the caster's windup and recovery are over. */
+  const settle = (w: World, e: Enemy) => {
+    for (let i = 0; i < 120 && (w.player.castPending >= 0 || w.player.castRecoverMs > 0); i++) run(w, at(e.x, e.y), 1, [e]);
+  };
+
+  it("casts a tap made while another spell recovers, once the recovery ends", () => {
+    const w = three();
+    const e = body(w, 150, 0);
+    run(w, at(e.x, e.y, { spell: 0 }), 1, [e]);
+    // The key is up again long before the first spell is done with.
+    run(w, at(e.x, e.y, { spell: 1 }), 1, [e]);
+    expect(cast(w, 1)).toBe(false);
+    expect(w.events.some((ev) => ev.kind === "cast_refused")).toBe(false);
+    settle(w, e);
+    run(w, at(e.x, e.y), 2, [e]);
+    expect(cast(w, 1)).toBe(true);
+  });
+
+  it("casts only the newest of several keys tapped through one recovery", () => {
+    const w = three();
+    const e = body(w, 150, 0);
+    // Which keys went, read off each step as its cooldown starts.
+    const went: number[] = [];
+    const go = (input: Input, n: number) => {
+      for (let i = 0; i < n; i++) {
+        const before = w.spells.map((s) => s?.cooldownMs ?? 0);
+        run(w, input, 1, [e]);
+        w.spells.forEach((s, k) => { if ((s?.cooldownMs ?? 0) > before[k]!) went.push(k); });
+      }
+    };
+    go(at(e.x, e.y, { spell: 2 }), 1);
+    go(at(e.x, e.y, { spell: 0 }), 1);
+    go(at(e.x, e.y), 1);
+    go(at(e.x, e.y, { spell: 1 }), 1);
+    go(at(e.x, e.y), 90);
+    expect(went).toEqual([2, 1]);
+  });
+
+  it("lets a tap go, and says why, when the cooldown outlasts the window", () => {
+    const w = three();
+    const e = body(w, 150, 0);
+    run(w, at(e.x, e.y, { spell: 0 }), 1, [e]);
+    settle(w, e);
+    w.spells[0]!.cooldownMs = SPELL_BUFFER_MS + 300;
+    const mana = w.player.mana;
+    step(w, at(e.x, e.y, { spell: 0 }));
+    expect(w.events.find((ev) => ev.kind === "cast_refused")?.what).toBe("cooldown");
+    // Nothing goes later on the press's account.
+    run(w, at(e.x, e.y), Math.ceil(w.spells[0]!.cooldownMs / STEP_MS) + 10, [e]);
+    expect(w.player.mana).toBeGreaterThanOrEqual(mana - 0.01);
+  });
+
+  it("does not cast a kept press while the caster is stunned", () => {
+    const w = three();
+    const e = body(w, 150, 0);
+    run(w, at(e.x, e.y, { spell: 0 }), 1, [e]);
+    run(w, at(e.x, e.y, { spell: 1 }), 1, [e]);
+    w.player.stunMs = 2000;
+    run(w, at(e.x, e.y), Math.ceil(castTiming(ITEMS, "magic_bolt").recoverMs / STEP_MS) + 30, [e]);
+    expect(cast(w, 1)).toBe(false);
   });
 });
 

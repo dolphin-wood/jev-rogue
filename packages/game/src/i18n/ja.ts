@@ -64,6 +64,8 @@ export const JA: Table = {
   "menu.damageTaken": "被ダメージ",
   "menu.damageNumbers": "ダメージ表示",
   "menu.autoMeleeAim": "近接攻撃の自動照準",
+  "menu.autoCast": "自動詠唱",
+  "menu.assistHeading": "アシスト",
   "menu.roomPlan": "階の開始前にプランを表示",
   "menu.screenShake": "画面の揺れ",
   "shake.off": "オフ",
@@ -276,6 +278,7 @@ export const JA: Table = {
   /* ------------------------------ world cues ---------------------------- */
   "cue.noMana": "マナが足りない",
   "cue.cooldown": "クールダウン中 {s}s",
+  "cue.noRage": "怒りが足りない",
 
   /* -------------------------------- toasts ------------------------------ */
   "toast.jevUnavailable": "Jev ディレクターが使えないため、ルールディレクターで進める。",

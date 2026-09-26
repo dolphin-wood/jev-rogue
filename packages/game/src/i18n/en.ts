@@ -65,6 +65,8 @@ export const EN = {
   "menu.damageTaken": "Damage taken",
   "menu.damageNumbers": "Damage numbers",
   "menu.autoMeleeAim": "Melee auto-target",
+  "menu.autoCast": "Auto-cast",
+  "menu.assistHeading": "Assists",
   "menu.roomPlan": "Plan page before each floor",
   "menu.screenShake": "Screen shake",
   "shake.off": "Off",
@@ -282,6 +284,7 @@ export const EN = {
   /* The mark over the player's head when the bar refuses a key; see `drawManaCue`. */
   "cue.noMana": "Not enough mana",
   "cue.cooldown": "Cooldown {s}s",
+  "cue.noRage": "No rage",
 
   /* -------------------------------- toasts ------------------------------ */
   "toast.jevUnavailable": "Jev Director unavailable. Playing the rule Director.",
