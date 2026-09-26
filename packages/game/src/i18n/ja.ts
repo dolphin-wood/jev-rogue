@@ -120,8 +120,8 @@ export const JA: Table = {
   "hint.title": "タイトルへ",
   "hint.retryBoss": "再挑戦",
   "hint.holdE": "[E 長押し]",
-  "hint.gold": "ゴールド {gold}",
-  "hint.reroll": "リロール · {price} G",
+  "hint.gold": "{coin} {gold}",
+  "hint.reroll": "長押しで再抽選 · {coin} {price}",
   "hint.rerolling": "再抽選中",
 
   /* -------------------------------- title ------------------------------- */

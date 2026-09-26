@@ -397,6 +397,9 @@ export interface DebugActions {
    */
   readonly invincible: () => boolean;
   readonly setInvincible: (on: boolean) => void;
+  /** Buy, forge and refresh without spending gold while testing. */
+  readonly infiniteGold: () => boolean;
+  readonly setInfiniteGold: (on: boolean) => void;
   /**
    * Forgets that the first-launch key guide was seen, so it can be looked at
    * again. It shows once per browser, which makes it the one screen that is
@@ -602,6 +605,8 @@ export class DebugPanel {
     cheats.innerHTML = h2("testing")
       + `<div style="margin:2px 0"><label style="cursor:pointer"><input type="checkbox" data-invincible> invincible</label>`
       + `<div style="color:#5a5f7a">the player takes no damage; remembered per browser</div>`
+      + `<div style="margin-top:4px"><label style="cursor:pointer"><input type="checkbox" data-infinite-gold> infinite gold</label></div>`
+      + `<div style="color:#5a5f7a">purchases, forging and rerolls cost nothing; remembered per browser</div>`
       + `<div style="margin-top:4px"><button data-reset-hints style="${BTN};margin-left:0">reset first-launch hints</button></div>`
       + `<div style="color:#5a5f7a">the key guide shows again on the next first room</div>`
       + `<div style="margin-top:4px"><button data-skip-room style="${BTN};margin-left:0">skip to the next room</button></div>`
@@ -656,6 +661,9 @@ export class DebugPanel {
     const inv = cheats.querySelector<HTMLInputElement>("input[data-invincible]")!;
     inv.checked = this.actions.invincible();
     inv.addEventListener("change", () => this.actions.setInvincible(inv.checked));
+    const gold = cheats.querySelector<HTMLInputElement>("input[data-infinite-gold]")!;
+    gold.checked = this.actions.infiniteGold();
+    gold.addEventListener("change", () => this.actions.setInfiniteGold(gold.checked));
     cheats.querySelector<HTMLButtonElement>("button[data-reset-hints]")
       ?.addEventListener("click", () => this.actions.resetFirstLaunch());
     cheats.querySelector<HTMLButtonElement>("button[data-skip-room]")

@@ -1363,6 +1363,7 @@ export class PlayScene extends Phaser.Scene {
    */
   private modalHoldMs = 0;
   private modalHoldSpent = false;
+  private dismantlePointerDown = false;
   private floorHoldSpent = false;
   /** How long the current E press has lasted, to tell a tap from a hold. */
   private floorPressMs = 0;
@@ -1382,6 +1383,9 @@ export class PlayScene extends Phaser.Scene {
   private shopping = false;
   /** Paid refreshes reset on entering a room and get dearer within it. */
   private rerollsThisRoom = 0;
+  private rerollHoldMs = 0;
+  private rerollHoldSpent = false;
+  private rerollPointerDown = false;
   private rerollLoading: { objects: Phaser.GameObjects.GameObject[]; label: Phaser.GameObjects.Text; ms: number } | null = null;
   /** Set once the boss is down. The run is over; nothing loads after it. */
   private won = false;
@@ -1390,6 +1394,7 @@ export class PlayScene extends Phaser.Scene {
   private tookLabel = "";
   /** What the offer screen's hint row currently says; see `paintSelection`. */
   private offerHintStr = "";
+  private dismantleHintStr = "";
   /** Rebuilt per room: portals with their type badge, and the reward cards. */
   /** "ELITE" over the portals that lead to one. Rebuilt with the portals. */
   /** The marks over a door that show and fade with it: its elite mark, and a star a grade step. */
@@ -1406,6 +1411,9 @@ export class PlayScene extends Phaser.Scene {
     heading: Phaser.GameObjects.Text;
     hint: Phaser.GameObjects.Container;
     rerollButton: Phaser.GameObjects.GameObject[];
+    rerollBar: Phaser.GameObjects.Graphics;
+    dismantleButton: Phaser.GameObjects.GameObject[];
+    dismantleLabel: Phaser.GameObjects.Container | null;
     empty: Phaser.GameObjects.Text | null;
     /** Which card Enter or the attack key would take. */
     selected: number;
@@ -1553,6 +1561,7 @@ export class PlayScene extends Phaser.Scene {
     } catch { return "reduced"; }
   })();
   private invincible = (() => { try { return localStorage.getItem(INVINCIBLE_KEY) === "1"; } catch { return false; } })();
+  private debugInfiniteGold = (() => { try { return localStorage.getItem(INFINITE_GOLD_KEY) === "1"; } catch { return false; } })();
   /** The pause menu (Esc), or the first-run assist confirmation. */
   /** `tab` is which of the settings page's tabs is up (`SETTINGS_TABS`). */
   private pauseUi: { page: "main" | "settings" | "controls" | "firstAssist"; selected: number; tab: number; objects: Phaser.GameObjects.GameObject[] } | null = null;
@@ -1963,6 +1972,13 @@ export class PlayScene extends Phaser.Scene {
         this.world.invincible = on;
         try { localStorage.setItem(INVINCIBLE_KEY, on ? "1" : "0"); } catch { /* still applies */ }
       },
+      infiniteGold: () => this.debugInfiniteGold,
+      setInfiniteGold: (on) => {
+        this.debugInfiniteGold = on;
+        try { localStorage.setItem(INFINITE_GOLD_KEY, on ? "1" : "0"); } catch { /* still applies */ }
+        if (this.offerUi && !this.rerollLoading) this.showRewards();
+        if (this.staffUi) this.renderStaff();
+      },
     });
     this.tiles = this.add.group();
     this.sprites = new FrameLayer(this);
@@ -2180,6 +2196,9 @@ export class PlayScene extends Phaser.Scene {
     this.bossDeath = null;
     this.roomIndex = index;
     this.rerollsThisRoom = 0;
+    this.rerollHoldMs = 0;
+    this.rerollHoldSpent = false;
+    this.rerollPointerDown = false;
     // A new room, a new reward screen: what was kept in the last one belongs
     // to the last one's journal entry, which has already been written.
     this.pickedThisRoom = null;
@@ -2595,7 +2614,7 @@ export class PlayScene extends Phaser.Scene {
     const clearedMs = now?.clearedMs ?? this.clearedMs;
     const measures = now?.measures ?? this.measures;
     const nearShare = now?.nearShare ?? this.lastNearShare;
-    const gold = now?.gold ?? this.runGold;
+    const gold = this.debugInfiniteGold ? 9999 : (now?.gold ?? this.runGold);
     const history = now?.history ?? this.history;
     // Doc 003's pacing rule: no hazards when the player is critical or has
     // just taken heavy damage.
@@ -6165,6 +6184,22 @@ export class PlayScene extends Phaser.Scene {
   /** Gold the player holds right now: the run's, and what this room has paid so far. */
   private goldHeld(): number {
     return this.runGold + this.world.gold;
+  }
+
+  private goldShown(): string {
+    return this.debugInfiniteGold ? "∞" : String(this.goldHeld());
+  }
+
+  private canAfford(price: number): boolean {
+    return this.debugInfiniteGold || this.goldHeld() >= price;
+  }
+
+  /** Returns the amount actually charged, so an interrupted refresh can refund it. */
+  private spendGold(price: number): number {
+    if (this.debugInfiniteGold) return 0;
+    this.runGold -= price;
+    this.runGoldSpent += price;
+    return price;
   }
 
   /** Every coin the run took in, spent or not: what the end cards report. */
@@ -10055,7 +10090,7 @@ export class PlayScene extends Phaser.Scene {
     // hold pays a different amount on a spell than on an affix, and it used
     // to name the first spell card's value whichever card was under the
     // highlight.
-    this.offerHintStr = this.offerHint(cards, 0);
+    this.offerHintStr = this.offerHint();
     const hint = this.keys_(cx, 0, this.offerHintStr, 8, "#8792b5", 201);
     const heading = this.add.text(cx, cy - 104, t(this.shopping ? "head.merchant" : "head.chooseOne"), {
       fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(14, ZOOM) * ZOOM)}px`, color: "#ffe9a8",
@@ -10316,7 +10351,7 @@ export class PlayScene extends Phaser.Scene {
       const extras: Phaser.GameObjects.GameObject[] = [];
       if (this.shopping) {
         const price = MERCHANT_PRICE[card.kind] ?? 0;
-        const afford = this.goldHeld() >= price;
+        const afford = this.canAfford(price);
         // Inside the corner tick, clear of it.
         const px = x + CARD_W / 2 - 11;
         const py = top + cardH - 13;
@@ -10411,17 +10446,42 @@ export class PlayScene extends Phaser.Scene {
       : null;
     const rerollButton: Phaser.GameObjects.GameObject[] = [];
     const price = rerollPrice(this.rerollsThisRoom);
-    const afford = this.goldHeld() >= price;
+    const afford = this.canAfford(price);
     const rx = cx + 202;
     const ry = top - 30;
     rerollButton.push(this.add.rectangle(rx, ry, 158, 18, 0x161334, 0.96)
       .setStrokeStyle(1, afford ? 0x8a6a28 : 0x7a2a2a, 1).setDepth(201));
     rerollButton.push(this.keys_(rx, ry, `[R] ${t("hint.reroll", { price })}`, 7,
       afford ? "#ffd45e" : "#ff6a5a", 202));
+    const rerollBar = this.add.graphics().setPosition(rx, ry).setDepth(202.5);
+    rerollButton.push(rerollBar);
     rerollButton.push(this.add.zone(rx, ry, 158, 18).setDepth(203)
-      .setInteractive({ useHandCursor: true }).on("pointerdown", () => { void this.rerollOffer(); }));
+      .setInteractive({ useHandCursor: true })
+      .on("pointerdown", () => { this.rerollPointerDown = true; })
+      .on("pointerup", () => { this.rerollPointerDown = false; })
+      .on("pointerupoutside", () => { this.rerollPointerDown = false; })
+      .on("pointerout", () => { this.rerollPointerDown = false; }));
 
-    this.offerUi = { dim, heading, hint, rerollButton, empty, cards: built, selected: 0 };
+    const dismantleButton: Phaser.GameObjects.GameObject[] = [];
+    const dismantleHint = this.dismantleHint(cards, 0);
+    this.dismantleHintStr = dismantleHint ?? "";
+    const dx = cx - 202;
+    const dy = top - 30;
+    let dismantleLabel: Phaser.GameObjects.Container | null = null;
+    if (dismantleHint) {
+      dismantleButton.push(this.add.rectangle(dx, dy, 190, 18, 0x161334, 0.96)
+        .setStrokeStyle(1, 0x8a6a28, 1).setDepth(201));
+      dismantleLabel = this.fittedKeys(dx, dy, dismantleHint, 7, "#ffd45e", 182, 202);
+      dismantleButton.push(dismantleLabel);
+      dismantleButton.push(this.add.zone(dx, dy, 190, 18).setDepth(203)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerdown", () => { this.dismantlePointerDown = true; })
+        .on("pointerup", () => { this.dismantlePointerDown = false; })
+        .on("pointerupoutside", () => { this.dismantlePointerDown = false; })
+        .on("pointerout", () => { this.dismantlePointerDown = false; }));
+    }
+
+    this.offerUi = { dim, heading, hint, rerollButton, rerollBar, dismantleButton, dismantleLabel, empty, cards: built, selected: 0 };
     this.paintSelection();
     this.sfx.play("ui_select");
   }
@@ -10429,10 +10489,16 @@ export class PlayScene extends Phaser.Scene {
   private hideRewards(): void {
     if (!this.offerUi) return;
     this.hideRerollLoading();
+    this.rerollPointerDown = false;
+    this.rerollHoldMs = 0;
+    this.dismantlePointerDown = false;
+    this.modalHoldMs = 0;
+    this.modalHoldGfx.clear();
     this.offerUi.dim.destroy();
     this.offerUi.heading.destroy();
     this.offerUi.hint.destroy();
     for (const object of this.offerUi.rerollButton) object.destroy();
+    for (const object of this.offerUi.dismantleButton) object.destroy();
     this.offerUi.empty?.destroy();
     for (const c of this.offerUi.cards) {
       c.panel.destroy();
@@ -10462,7 +10528,7 @@ export class PlayScene extends Phaser.Scene {
     const ui = this.offerUi;
     if (!ui || this.rerollLoading) return;
     const price = rerollPrice(this.rerollsThisRoom);
-    if (this.goldHeld() < price) {
+    if (!this.canAfford(price)) {
       this.tookLabel = t("toast.need", { price: price - this.goldHeld(), coin: "{coin}" });
       this.tookMs = 1400;
       this.sfx.play("ui_deny");
@@ -10495,8 +10561,7 @@ export class PlayScene extends Phaser.Scene {
       return;
     }
 
-    this.runGold -= price;
-    this.runGoldSpent += price;
+    const charged = this.spendGold(price);
     this.showRerollLoading();
     const loading = this.rerollLoading;
     try {
@@ -10548,8 +10613,8 @@ export class PlayScene extends Phaser.Scene {
     } catch (error) {
       if (this.world !== world || this.roomIndex !== index) return;
       console.warn("[director] reroll failed:", error);
-      this.runGold += price;
-      this.runGoldSpent -= price;
+      this.runGold += charged;
+      this.runGoldSpent -= charged;
       this.hideRerollLoading();
       this.tookLabel = t("toast.rerollFailed");
       this.tookMs = 1800;
@@ -10597,6 +10662,9 @@ export class PlayScene extends Phaser.Scene {
 
   private hideStaff(): void {
     if (!this.staffUi) return;
+    this.dismantlePointerDown = false;
+    this.modalHoldMs = 0;
+    this.modalHoldGfx.clear();
     for (const o of this.staffUi.objects) o.destroy();
     this.staffUi = null;
   }
@@ -10620,6 +10688,7 @@ export class PlayScene extends Phaser.Scene {
   private renderStaff(): void {
     const ui = this.staffUi;
     if (!ui) return;
+    this.dismantlePointerDown = false;
     for (const o of ui.objects) o.destroy();
     ui.objects = [];
     const add = <T extends Phaser.GameObjects.GameObject>(o: T): T => { ui.objects.push(o); return o; };
@@ -10914,8 +10983,8 @@ export class PlayScene extends Phaser.Scene {
            * other hint row in the game is (`fittedKeys`).
            */
           const priceRow = add(this.fittedKeys(
-            rightX, 0, t("char.price", { coin: "{coin}", price, held: this.goldHeld() }),
-            6.5, this.goldHeld() >= price ? "#ffd45e" : "#ff8877", footW, 211,
+            rightX, 0, t("char.price", { coin: "{coin}", price, held: this.goldShown() }),
+            6.5, this.canAfford(price) ? "#ffd45e" : "#ff8877", footW, 211,
           ));
           // "Lv 4" and the pips, in that order, as the panel's own header
           // says it: a row of five squares alone is not a number.
@@ -10970,11 +11039,27 @@ export class PlayScene extends Phaser.Scene {
     const hint = ui.mode === "attach"
       ? `[W][S] ${t("hint.choose")}     [Enter] ${t("hint.attach")}     [Esc] ${t("hint.backToCards")}`
       : ui.mode === "replace"
-        ? `[W][S] ${t("hint.choose")}     [Enter] ${t("hint.replace")}     ${t("hint.holdE")} ${t("hint.dismantleThis", { gold: this.floorPending?.value ?? dismantleValue(ui.card?.grade ?? 1), coin: "{coin}" })}     [Esc] ${t("hint.back")}`
+        ? `[W][S] ${t("hint.choose")}     [Enter] ${t("hint.replace")}     [Esc] ${t("hint.back")}`
         : ui.mode === "smith"
           ? `[W][S] ${t("hint.choose")}     [Enter] ${t("hint.raiseLevel")}     [Esc] ${t("hint.close")}`
           : `[W][S] ${t("hint.choose")}     [Enter] ${t("hint.pickUpSwap")}     [Tab] / [Esc] ${t("hint.close")}`;
-    ui.objects.push(this.fittedKeys(cx, view.bottom - 16, hint, 8, "#8792b5", view.width - 40, 211));
+    ui.objects.push(this.fittedKeys(ui.mode === "replace" ? cx - 100 : cx, view.bottom - 16,
+      hint, 8, "#8792b5", ui.mode === "replace" ? view.width - 280 : view.width - 40, 211));
+    if (ui.mode === "replace") {
+      const bx = view.right - 122;
+      const by = view.bottom - 19;
+      add(this.add.rectangle(bx, by, 220, 18, 0x161334, 0.96)
+        .setStrokeStyle(1, 0x8a6a28, 1).setDepth(211));
+      add(this.fittedKeys(bx, by, `${t("hint.holdE")} ${t("hint.dismantleThis", {
+        gold: this.floorPending?.value ?? dismantleValue(ui.card?.grade ?? 1), coin: "{coin}",
+      })}`, 7, "#ffd45e", 212, 212));
+      add(this.add.zone(bx, by, 220, 18).setDepth(213)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerdown", () => { this.dismantlePointerDown = true; })
+        .on("pointerup", () => { this.dismantlePointerDown = false; })
+        .on("pointerupoutside", () => { this.dismantlePointerDown = false; })
+        .on("pointerout", () => { this.dismantlePointerDown = false; }));
+    }
   }
 
   private readStaffKeys(): void {
@@ -11015,7 +11100,7 @@ export class PlayScene extends Phaser.Scene {
     // The spell in hand may be taken apart instead of put on a key.
     const replacing = ui.mode === "replace" && !!ui.card && (!!this.floorPending || !this.shopping);
     const heldE = replacing ? this.holdingE() : 0;
-    if (replacing) this.drawHoldBar(uiView().centerX, uiView().bottom - 26);
+    if (replacing) this.drawHoldBar(uiView().right - 122, uiView().bottom - 7, 220);
     else this.modalHoldGfx.clear();
     if (ui.mode === "replace" && ui.card && this.floorPending && heldE >= 1) {
       const f = this.floorPending;
@@ -11051,9 +11136,8 @@ export class PlayScene extends Phaser.Scene {
         const level = this.spellLevels[i] ?? 1;
         const price = SMITH_PRICE[level] ?? 0;
         if (!slot || level >= SPELL_LEVEL_MAX) { this.sfx.play("ui_deny"); return; }
-        if (this.goldHeld() < price) { this.tookLabel = t("toast.need", { price, coin: "{coin}" }); this.tookMs = 1400; this.sfx.play("ui_deny"); return; }
-        this.runGold -= price;
-        this.runGoldSpent += price;
+        if (!this.canAfford(price)) { this.tookLabel = t("toast.need", { price, coin: "{coin}" }); this.tookMs = 1400; this.sfx.play("ui_deny"); return; }
+        this.spendGold(price);
         this.spellLevels[i] = level + 1;
         this.world.spells[i] = withLevel(slot, level + 1);
         this.tookLabel = t("toast.toLv", { spell: contentName(slot.item.base, titleOfId(slot.item.base)), level: level + 1 });
@@ -11142,7 +11226,7 @@ export class PlayScene extends Phaser.Scene {
      */
     if (this.shopping) {
       const price = MERCHANT_PRICE[card.kind] ?? 0;
-      if (this.goldHeld() < price) {
+      if (!this.canAfford(price)) {
         this.tookLabel = t("toast.need", { price, coin: "{coin}" });
         this.tookMs = 1400;
         return;
@@ -11236,8 +11320,7 @@ export class PlayScene extends Phaser.Scene {
     this.shopPending = null;
     if (bought && this.shopping) {
       const price = MERCHANT_PRICE[bought.kind] ?? 0;
-      this.runGold -= price;
-      this.runGoldSpent += price;
+      this.spendGold(price);
       this.shopStock = this.shopStock.filter((c) => c !== bought);
     }
     this.hideRewards();
@@ -11600,7 +11683,7 @@ export class PlayScene extends Phaser.Scene {
     if (npcNear && !this.offerUi && !this.staffUi) {
       this.prompt.setVisible(true);
       this.prompt.setText(npcNear.kind === "merchant"
-        ? (this.shopStock.length > 0 || this.goldHeld() >= rerollPrice(this.rerollsThisRoom)
+        ? (this.shopStock.length > 0 || this.canAfford(rerollPrice(this.rerollsThisRoom))
           ? t("prompt.merchant") : t("prompt.soldOut"))
         /*
          * The fountain says which of three things it is before the player
@@ -11619,7 +11702,7 @@ export class PlayScene extends Phaser.Scene {
       if (this.interactPressed) {
         this.interactPressed = false;
         if (npcNear.kind === "merchant") {
-          if (this.shopStock.length > 0 || this.goldHeld() >= rerollPrice(this.rerollsThisRoom)) this.showRewards();
+          if (this.shopStock.length > 0 || this.canAfford(rerollPrice(this.rerollsThisRoom))) this.showRewards();
         }
         else if (npcNear.kind === "fountain") this.drinkFountain(npcNear.x, npcNear.y);
         else this.showStaff("smith", null);
@@ -11742,7 +11825,7 @@ export class PlayScene extends Phaser.Scene {
    */
   private holdingE(): number {
     const dt = this.game.loop.delta;
-    if (!this.keys.E?.isDown) {
+    if (!this.keys.E?.isDown && !this.dismantlePointerDown) {
       this.modalHoldSpent = false;
       this.modalHoldMs = Math.max(0, this.modalHoldMs - dt * 1.5);
       return 0;
@@ -11753,16 +11836,15 @@ export class PlayScene extends Phaser.Scene {
     return this.modalHoldMs / FLOOR_HOLD_MS;
   }
 
-  /** The hold's bar, centred under a card screen's hint row. */
-  private drawHoldBar(x: number, y: number): void {
+  /** The hold's bar, directly below the operation that the hold confirms. */
+  private drawHoldBar(x: number, y: number, width: number): void {
     this.modalHoldGfx.clear();
-    if (this.modalHoldMs <= 0) return;
-    const W = 60;
     const k = Math.min(1, this.modalHoldMs / FLOOR_HOLD_MS);
-    this.modalHoldGfx.fillStyle(0x0d0b1f, 0.9);
-    this.modalHoldGfx.fillRect(x - W / 2 - 1, y - 1, W + 2, 5);
-    this.modalHoldGfx.fillStyle(this.keys.E?.isDown ? 0xffd45e : 0x9a7a3a, 1);
-    this.modalHoldGfx.fillRect(x - W / 2, y, W * k, 3);
+    this.modalHoldGfx.fillStyle(0x2a2750, 1);
+    this.modalHoldGfx.fillRect(x - width / 2, y, width, 4);
+    if (k <= 0) return;
+    this.modalHoldGfx.fillStyle(this.keys.E?.isDown || this.dismantlePointerDown ? 0xffd45e : 0x9a7a3a, 1);
+    this.modalHoldGfx.fillRect(x - width / 2, y, width * k, 4);
   }
 
   /**
@@ -11802,17 +11884,48 @@ export class PlayScene extends Phaser.Scene {
     return { value: Math.round(values.reduce((a, b) => a + b, 0) / values.length), whole: true };
   }
 
-  /** The offer screen's hint row, which names what the hold is currently worth. */
-  private offerHint(cards: readonly OfferCard[], selected: number): string {
-    if (this.shopping)
-      return `[A][D] ${t("hint.move")}     [Enter] ${t("hint.buy")}     [Esc] ${t("hint.leave")}     ${t("hint.gold", { gold: this.goldHeld() })}`;
+  /** The reward's separate hold button, with the amount it pays. */
+  private dismantleHint(cards: readonly OfferCard[], selected: number): string | null {
+    if (this.shopping) return null;
     const card = cards[selected];
-    const value = card && card.kind === "affix"
-      ? Math.round(cards.reduce((n, c) => n + this.cardValue(c), 0) / Math.max(1, cards.length))
-      : card && card.kind === "spell" ? this.cardValue(card) : null;
-    const hold = value === null || !card ? "" : `     ${t("hint.holdE")} ${
-      t(card.kind === "affix" ? "hint.dismantleAffix" : "hint.dismantleSpell", { gold: value, coin: "{coin}" })}`;
-    return `[A][D] ${t("hint.move")}     [Enter] ${t("hint.take")}${hold}`;
+    if (!card || (card.kind !== "spell" && card.kind !== "affix")) return null;
+    const value = card.kind === "affix"
+      ? Math.round(cards.reduce((n, c) => n + this.cardValue(c), 0) / cards.length)
+      : this.cardValue(card);
+    return `${t("hint.holdE")} ${t(card.kind === "affix" ? "hint.dismantleAffix" : "hint.dismantleSpell",
+      { gold: value, coin: "{coin}" })}`;
+  }
+
+  /** The offer screen's navigation and main action, clear of the hold button. */
+  private offerHint(): string {
+    if (this.shopping)
+      return `[A][D] ${t("hint.move")}     [Enter] ${t("hint.buy")}     [Esc] ${t("hint.leave")}     ${t("hint.gold", { gold: this.goldShown() })}`;
+    return `[A][D] ${t("hint.move")}     [Enter] ${t("hint.take")}`;
+  }
+
+  /** Keyboard and pointer share one hold meter, so a refresh cannot fire on a stray tap. */
+  private tickRerollHold(): boolean {
+    const ui = this.offerUi;
+    if (!ui) return false;
+    const held = !!this.keys.R?.isDown || this.rerollPointerDown;
+    if (!held) this.rerollHoldSpent = false;
+    if (this.rerollLoading) this.rerollHoldMs = 0;
+    else if (!held) this.rerollHoldMs = Math.max(0, this.rerollHoldMs - this.game.loop.delta * 1.5);
+    else if (!this.rerollHoldSpent) this.rerollHoldMs += this.game.loop.delta;
+
+    const bar = ui.rerollBar;
+    bar.clear();
+    bar.fillStyle(0x2a2750, 1);
+    bar.fillRect(-79, 11, 158, 4);
+    if (this.rerollHoldMs > 0) {
+      bar.fillStyle(this.canAfford(rerollPrice(this.rerollsThisRoom)) ? 0xffd45e : 0xff6a5a, 1);
+      bar.fillRect(-79, 11, 158 * Math.min(1, this.rerollHoldMs / FLOOR_HOLD_MS), 4);
+    }
+    if (this.rerollLoading || !held || this.rerollHoldSpent || this.rerollHoldMs < FLOOR_HOLD_MS) return false;
+    this.rerollHoldSpent = true;
+    this.rerollHoldMs = 0;
+    void this.rerollOffer();
+    return true;
   }
 
   private readOfferKeys(): void {
@@ -11822,11 +11935,11 @@ export class PlayScene extends Phaser.Scene {
     const down = (key?: Phaser.Input.Keyboard.Key): boolean =>
       !!key && Phaser.Input.Keyboard.JustDown(key);
 
+    if (this.tickRerollHold()) return;
     if (this.rerollLoading) {
       for (const key of [k.A, k.D, k.LEFT, k.RIGHT, k.ENTER, k.ESC, k.R, k.E]) down(key);
       return;
     }
-    if (down(k.R)) { void this.rerollOffer(); return; }
 
     const count = ui.cards.length;
     if (this.shopping && down(k.ESC)) { this.hideRewards(); return; }
@@ -11838,6 +11951,11 @@ export class PlayScene extends Phaser.Scene {
      * the same way out; see `offerDismantle` for what it is worth.
      */
     const deal = this.offerDismantle();
+    if (!deal) {
+      this.modalHoldMs = 0;
+      this.modalHoldSpent = false;
+      this.modalHoldGfx.clear();
+    }
     if (deal && this.holdingE() >= 1) {
       const c = ui.cards[ui.selected]!.card;
       this.payDismantle(this.world.player.x, this.world.player.y, deal.value);
@@ -11849,7 +11967,8 @@ export class PlayScene extends Phaser.Scene {
       this.finishTake();
       return;
     }
-    this.drawHoldBar(uiView().centerX, uiView().centerY + 116);
+    if (deal && ui.dismantleLabel)
+      this.drawHoldBar(ui.dismantleLabel.x, ui.dismantleLabel.y + 11, 190);
     if (down(k.A) || down(k.LEFT)) ui.selected = (ui.selected + count - 1) % count;
     if (down(k.D) || down(k.RIGHT)) ui.selected = (ui.selected + 1) % count;
 
@@ -11875,16 +11994,21 @@ export class PlayScene extends Phaser.Scene {
   private paintSelection(): void {
     const ui = this.offerUi;
     if (!ui) return;
-    /*
-     * The hint row names what the hold is worth, and that is a property of
-     * the highlighted card, so it is rebuilt with the highlight — but only
-     * when it would say something different, because this runs every frame
-     * and a key line is a dozen fresh `Text` objects.
-     */
-    const hint = this.offerHint(ui.cards.map((c) => c.card), ui.selected);
+    // The purse in the merchant hint and the dismantle value on the selected
+    // reward can change. Rebuild those labels only when their words change.
+    const hint = this.offerHint();
     if (hint !== this.offerHintStr) {
       this.offerHintStr = hint;
       fillKeyLine(this, ui.hint, hint, { px: 8, colour: "#8792b5", zoom: ZOOM, depth: 201 });
+    }
+    const dismantle = this.dismantleHint(ui.cards.map((c) => c.card), ui.selected) ?? "";
+    if (dismantle !== this.dismantleHintStr && ui.dismantleLabel) {
+      this.dismantleHintStr = dismantle;
+      const old = ui.dismantleLabel;
+      const next = this.fittedKeys(old.x, old.y, dismantle, 7, "#ffd45e", 182, 202);
+      ui.dismantleButton[ui.dismantleButton.indexOf(old)] = next;
+      ui.dismantleLabel = next;
+      old.destroy();
     }
     ui.cards.forEach((c, i) => {
       const on = i === ui.selected;
@@ -15954,7 +16078,7 @@ export class PlayScene extends Phaser.Scene {
     // Right-aligned to the same inset the minimap under it uses, so the two
     // share an edge instead of each finding their own.
     const goldFade = this.fadeMark();
-    const goldText = this.ftext("hud:gold", UI_W - HUD_INSET - 4, HUD_TOP_Y, `${this.runGold + w.gold}`, {
+    const goldText = this.ftext("hud:gold", UI_W - HUD_INSET - 4, HUD_TOP_Y, this.goldShown(), {
       fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(9, ZOOM) * ZOOM)}px`, color: "#ffd45e",
     }).setScale(1 / ZOOM).setOrigin(1, 0.5).setDepth(102);
     const goldX = UI_W - HUD_INSET - 4 - goldText.displayWidth - 8;
@@ -17516,6 +17640,7 @@ const SHAKE_MAX_PX = 4;
 const DEALT_KEY = "jr-damage-dealt";
 const TAKEN_KEY = "jr-damage-taken";
 const INVINCIBLE_KEY = "jr-invincible";
+const INFINITE_GOLD_KEY = "jr-infinite-gold";
 
 /** One hit spark; see `PlayScene.drawFx`. */
 interface FxSpark {

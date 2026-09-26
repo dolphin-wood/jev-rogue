@@ -122,8 +122,8 @@ export const EN = {
   "hint.title": "Title",
   "hint.retryBoss": "Retry the boss",
   "hint.holdE": "[Hold E]",
-  "hint.gold": "Gold {gold}",
-  "hint.reroll": "Reroll · {price} gold",
+  "hint.gold": "{coin} {gold}",
+  "hint.reroll": "Hold to reroll · {coin} {price}",
   "hint.rerolling": "Refreshing",
 
   /* -------------------------------- title ------------------------------- */

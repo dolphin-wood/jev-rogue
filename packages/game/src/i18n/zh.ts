@@ -121,8 +121,8 @@ export const ZH: Table = {
   "hint.title": "回到标题",
   "hint.retryBoss": "重新挑战",
   "hint.holdE": "[长按 E]",
-  "hint.gold": "金币 {gold}",
-  "hint.reroll": "刷新 · {price} 金币",
+  "hint.gold": "{coin} {gold}",
+  "hint.reroll": "长按刷新 · {coin} {price}",
   "hint.rerolling": "正在刷新",
 
   /* -------------------------------- title ------------------------------- */
