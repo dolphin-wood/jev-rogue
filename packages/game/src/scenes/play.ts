@@ -1125,6 +1125,9 @@ export class PlayScene extends Phaser.Scene {
   /** The Director's portals out of this room and its cards in it (docs 003, 007). */
   private portalPlan: PortalPlan | null = null;
   private cardPlan: CardPlan | null = null;
+  /** Card plans made when this room's doors opened, carried to the chosen door's room. */
+  private doorCardPlans = new Map<RewardCardKind, CardPlan>();
+  private roomCardPlan: CardPlan | null = null;
   /** A room with no fight met mid-run: which of them stands in it, or null for a fight. */
   private npcRoom: NpcKind | null = null;
   private npcRooms = 0;
@@ -2153,7 +2156,13 @@ export class PlayScene extends Phaser.Scene {
       ...(through?.families ? { families: through.families } : {}),
       grade: through?.grade ?? 1,
     };
-    this.roomCards = through?.cards ?? null;
+    const roomCards = through?.cards ?? null;
+    this.roomCards = roomCards;
+    const carried = through ? this.doorCardPlans.get(through.reward) : null;
+    this.roomCardPlan = carried && roomCards
+      && carried.ids.length === roomCards.length
+      && carried.ids.every((id, i) => id === roomCards[i]) ? carried : null;
+    this.doorCardPlans.clear();
     this.doorsOpening = false;
     this.lastWasElite = this.elite;
     this.elite = through?.elite ?? false;
@@ -2480,6 +2489,7 @@ export class PlayScene extends Phaser.Scene {
       const cardPlan = plan.cards[0];
       if (fight && kind !== "gold" && this.roomCards) {
         // Decided with the door the player came through, against the build they carried through it.
+        this.cardPlan = this.roomCardPlan;
         cards = cardsFor(ITEMS, kind, this.roomCards, promise);
         const shown = this.roomCards;
         playtestLog.attach(run.roomIndex, (r) => { r.offers = [...(r.offers ?? []), { label: kind, ids: [...shown] }]; });
@@ -2677,9 +2687,12 @@ export class PlayScene extends Phaser.Scene {
             kind: c.kind, label: c.label, stats: c.stats, origin: this.cardPlan?.origins[i] ?? "",
           })),
           cardsBy: this.cardPlan
-            ? `Director (${this.cardPlan.source}), asked with the room, variety ${this.cardPlan.variety}`
+            ? `Director (${this.cardPlan.source}), asked with ${this.roomCardPlan === this.cardPlan ? "the previous room's doors" : "the room"}, variety ${this.cardPlan.variety}`
             : this.offer.cards.length ? "rule code (fallback)" : "no cards",
-          portalsBy: this.portalPlan ? `Director (${this.portalPlan.source})` : this.offer.doors.length ? "rule code (the merchant's doors to the boss)" : "no portals",
+          portalsBy: this.portalPlan ? `Director (${this.portalPlan.source})`
+            : this.offer.doors.some((d) => d.pending) ? "pending (decided after the reward)"
+            : this.offer.doors.length && this.offer.doors.every((d) => d.onward || d.boss) ? "fixed by run layout"
+            : this.offer.doors.length ? "rule code (fallback)" : "no portals",
           portals: this.offer.doors.map((d) => ({
             reward: d.npc ? `${d.npc} (no fight)` : d.reward, elite: d.elite, type: d.type,
             promise: [...(d.schools ?? d.families ?? []), (d.grade ?? 1) > 1 ? `grade ${d.grade}` : ""].filter(Boolean).join(" · "),
@@ -8614,6 +8627,8 @@ export class PlayScene extends Phaser.Scene {
       this.doorPlan = null;
       this.portalPlan = null;
       this.cardPlan = null;
+      this.roomCardPlan = null;
+      this.doorCardPlans.clear();
       this.npcRoom = null;
       this.npcRooms = 0;
       this.npcOffers = 0;
@@ -10855,6 +10870,7 @@ export class PlayScene extends Phaser.Scene {
       count: CARDS_PER_OFFER, pity: this.needMisses >= 3, temptation: this.offersMade % 4 === 3, salt: `door_${k}`,
     }));
     let doors: DoorOffer[];
+    let nextCardPlans = new Map<RewardCardKind, CardPlan>();
     try {
       const plan = await this.director.planOffer(ctx, {
         portals: portalChoices(run, src.stream("portal-count"), this.portalCount), cards: requests,
@@ -10874,11 +10890,16 @@ export class PlayScene extends Phaser.Scene {
         const ids = plan.cards[kinds.indexOf(d.reward as (typeof kinds)[number])]?.ids ?? [];
         return ids.length ? { ...d, ...cardTypesOf(d.reward, ids), cards: ids } : d;
       });
+      nextCardPlans = new Map(kinds.flatMap((kind, i) => {
+        const cardPlan = plan.cards[i];
+        return cardPlan?.ids.length ? [[kind, cardPlan] as const] : [];
+      }));
     } catch {
       doors = ruleDoors(run, src.stream("offer"), this.portalCount);
     }
     // The player may have died, or the run restarted, while the doors turned.
     if (this.world !== world || this.roomIndex !== index) return;
+    this.doorCardPlans = nextCardPlans;
     const specs = doorSpecs(doors, index);
     playtestLog.attach(index, (r) => {
       r.doors = specs.map((d) => d.npc ? `npc:${d.npc}` : `${d.reward}${(d.schools ?? d.families)?.length ? `:${(d.schools ?? d.families)!.join("/")}` : ""}${d.onward ? " (onward)" : ""}`);
