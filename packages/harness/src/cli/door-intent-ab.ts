@@ -36,6 +36,8 @@ interface State {
   /** Hearts left of six, and hearts lost over the last two rooms. */
   readonly hearts?: number;
   readonly lost?: number;
+  /** Spell levels and attached affixes per key; absent is three bare keys at level 1. */
+  readonly power?: NonNullable<RunContext["power"]>;
 }
 
 const INTENT_STATES: readonly State[] = [
@@ -78,7 +80,31 @@ const NOSTYLE_STATES: readonly State[] = STYLES.flatMap((style, i) => {
   ];
 });
 
-const STATES = process.env["AB_SET"] === "nostyle" ? NOSTYLE_STATES : INTENT_STATES;
+/*
+ * **A staff that has been built** (`AB_SET=raised`): every state above holds
+ * bare keys at level 1, and the door question says "a staff whose levels have
+ * never moved is a staff a spell door raises" — so the spell door topping all
+ * forty of them may be those states rather than the question. Here the keys
+ * are full, raised and partly fitted, as a real mid and late run's are.
+ */
+const RAISED_STATES: readonly State[] = STYLES.flatMap((style, i) => {
+  const extra = [STYLE_START[STYLES[(i + 1) % 5]!], STYLE_START[STYLES[(i + 2) % 5]!]];
+  const some = { levels: [3, 2, 2], affixes: [[{ id: "chain", tier: 1 }], [], []], mana_max: 90 };
+  const most = {
+    levels: [4, 3, 3],
+    affixes: [[{ id: "chain", tier: 2 }, { id: "pierce", tier: 1 }], [{ id: "repeat", tier: 1 }], [{ id: "pierce", tier: 1 }]],
+    mana_max: 90,
+  };
+  return [
+    { name: `${style}-room9-raised`, index: 9, extra, style, power: some,
+      observed: { mana_refused: "never", hurt_by: "nothing" } },
+    { name: `${style}-room12-raised-fitted`, index: 12, extra, style, power: most,
+      observed: { mana_refused: "never", hurt_by: "nothing" } },
+  ];
+});
+
+const STATES = process.env["AB_SET"] === "nostyle" ? NOSTYLE_STATES
+  : process.env["AB_SET"] === "raised" ? RAISED_STATES : INTENT_STATES;
 
 function ctxFor(s: State): RunContext {
   const staff = runStaff();
@@ -97,6 +123,7 @@ function ctxFor(s: State): RunContext {
       ...(s.observed ? { observed: { ...UNMEASURED, ...s.observed } } : {}),
     },
     staff, slots, inventory: [],
+    ...(s.power ? { power: s.power } : {}),
     history: {
       ...emptyHistory(),
       rooms: Array(s.index).fill("combat"), tensions: Array(s.index).fill("build"),
