@@ -407,11 +407,24 @@ describe("briefingFrom", () => {
   it("reads the player's own words for an affix lane and says which", () => {
     expect(briefingFrom(ctx, { deciding: ["x"] })).toContain("names the wider affix lane");
   });
+
+  it("quotes words no keyword matches without a line discounting them", () => {
+    const zh = { ...ctx, intent: { ...ctx.intent, free_text: "想要更快的攻击速度" } };
+    const text = briefingFrom(zh, { deciding: ["x"] });
+    expect(text).toContain('"想要更快的攻击速度"');
+    expect(text).not.toContain("keyword read");
+  });
 });
 
 /* ------------------------------------------------------------ the specs */
 
 describe("the option specs", () => {
+  it("names what each stat family raises, and holds the stat door back for no state every early room is in", () => {
+    for (const thing of ["recovers sooner", "faster refill", "more health", "dash"])
+      expect(KIND_SPEC.stat!.what).toContain(thing);
+    expect(KIND_SPEC.stat!.not_for).not.toMatch(/empty key/);
+  });
+
   it("say what an option is not for, which a fit clause cannot", () => {
     for (const [id, spec] of Object.entries(KIND_SPEC)) {
       expect(spec.what.length, id).toBeGreaterThan(40);

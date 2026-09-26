@@ -583,7 +583,19 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
           "a staff whose levels have never moved is a staff a spell door raises. Then weigh what the last " +
           "rooms measured: how many bodies each shot hit, how often the bar refused a cast, how much of the " +
           "fight it spent under the cheapest key, how fast the casts and the damage came, and what took the " +
-          "most health. " + INTENT_CLAUSE,
+          "most health. " +
+          /*
+           * **The player's own words are one of the needs.** The briefing has
+           * always carried them, but this question never said to read them,
+           * and the one sentence it had about them (`INTENT_CLAUSE`) only
+           * fenced them in — so a player who typed "faster attacks" met a
+           * question that ranked from the staff and the last rooms and set
+           * their sentence aside. The kind whose cards do what they asked
+           * for is named here as a need among the others, not above them.
+           */
+          "If the player typed what they want, read it as a need beside those: the door whose cards "
+          + "give them what they asked for — whatever language they wrote it in — is one they need. "
+          + INTENT_CLAUSE,
         options: needOptions,
       }),
     };

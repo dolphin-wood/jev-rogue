@@ -27,6 +27,7 @@
     "answer-stats": "node --experimental-strip-types packages/harness/src/cli/answer-stats.ts",
     "route-review:jev": "NODE_USE_ENV_PROXY=1 node --no-warnings --env-file-if-exists=.env.local --experimental-strip-types packages/harness/src/cli/route-review.ts jev",
     "jev-run": "NODE_USE_ENV_PROXY=1 node --no-warnings --env-file-if-exists=.env.local --experimental-strip-types packages/harness/src/cli/jev-run.ts",
+    "door-intent-ab": "NODE_USE_ENV_PROXY=1 node --no-warnings --env-file-if-exists=.env.local --experimental-strip-types packages/harness/src/cli/door-intent-ab.ts",
     "jev-probe": "NODE_USE_ENV_PROXY=1 node --no-warnings --env-file-if-exists=.env.local --experimental-strip-types packages/harness/src/cli/jev-probe.ts",
     "variety": "node --experimental-strip-types packages/harness/src/cli/variety.ts",
     "frame": "node --experimental-strip-types packages/harness/src/cli/frame.ts",

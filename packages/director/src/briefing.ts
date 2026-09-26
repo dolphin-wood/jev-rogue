@@ -302,10 +302,18 @@ function playerLines(p: BriefingPlayer): string[] {
   if (p.ownWords?.trim()) {
     out.push("- In their own words, typed before the run:");
     out.push(`  - "${p.ownWords.trim()}"`);
-    out.push(p.ownWordsLane
-      ? `  - A keyword read of those words names the ${p.ownWordsLane} affix lane`
-      : "  - A keyword read of those words names no affix lane in particular");
-    if (p.ownWordsLane && p.ownWordsLaneMeans) out.push(`  - That lane is: ${p.ownWordsLaneMeans}`);
+    /*
+     * **A keyword read that found nothing says nothing.** It used to print
+     * "names no affix lane in particular", which reads as the game's verdict
+     * on the words — that they ask for nothing — when all it means is that no
+     * English keyword matched: every sentence typed in Chinese or Japanese got
+     * it, and the words themselves were left standing under a line
+     * discounting them.
+     */
+    if (p.ownWordsLane) {
+      out.push(`  - A keyword read of those words names the ${p.ownWordsLane} affix lane`);
+      if (p.ownWordsLaneMeans) out.push(`  - That lane is: ${p.ownWordsLaneMeans}`);
+    }
   } else {
     out.push("- In their own words: they typed nothing");
   }

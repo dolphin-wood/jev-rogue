@@ -113,11 +113,28 @@ export const KIND_SPEC: Readonly<Record<string, OptionSpec>> = {
     not_for: "A staff with no affix slot left anywhere, where the card can only raise the tier of an "
       + "affix already attached.",
   },
+  /*
+   * **What each family raises, by name**, because a player asks for these in
+   * their own words — "faster attacks", "more health" — and "movement,
+   * survival, mana or the sword" gave a request like that nothing to meet:
+   * the swing recovering sooner is on this door and nowhere said so.
+   *
+   * **And a negative that tells states apart.** It was "a run with an empty
+   * key", which every early room is: the first room always has two, so the
+   * clause was a standing verdict against the stat door for the opening of
+   * every run rather than a reason in any one state (finding 20's converse).
+   * It is written now from the four things the door raises, and holds only
+   * where none of them has been what stopped the player.
+   */
   stat: {
-    what: "A stat door. It raises the player rather than a spell: movement, survival, mana or the sword; "
-      + "the mana family makes the bar bigger or refill faster. It fills no key and no affix slot. The "
-      + "build section says how filled in the build is and which stats the run has already taken.",
-    not_for: "A run with an empty key, where the card leaves the key empty and raises a number beside it.",
+    what: "A stat door. It raises the player rather than a spell. Movement: faster walking, the dash back "
+      + "sooner or further. Survival: more health, longer safety after a hit, one more rage segment. Mana: "
+      + "a bigger bar, faster refill, more mana back from each sword hit. The sword: harder hits, a longer "
+      + "reach, a swing that recovers sooner. It fills no key and no affix slot. The build section says "
+      + "which stats the run has already taken.",
+    not_for: "A player whose mana has not refused a cast, whose health has held and whose own words ask "
+      + "nothing of speed, health, mana or the sword, where the card raises a number that was not what "
+      + "stopped them.",
   },
   /*
    * **One claim, like the other three.** This carried two sentences making
