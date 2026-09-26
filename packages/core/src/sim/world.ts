@@ -29,7 +29,7 @@ import {
   circleHitsWall, circlesOverlap, entryPosition, hasLineOfSight, moveSliding, normalise,
 } from "./collide.ts";
 import {
-  beginSwing, cancelSwing, makeSwingBox, manaPerHit, sectorHits, snapFacing,
+  beginSwing, cancelSwing, makeSwingBox, manaPerHit, sectorHits, snapFacing, THRUST_BURST_DAMAGE, THRUST_BURST_RADIUS,
   stepStrike, stepSwing, strikeHits, swingMoveScale, beginSpin,
 } from "./melee.ts";
 import { CLOUD_TICK_MS, FIRE_ENEMY_DAMAGE, FIRE_TICK_MS, GROUND_STATUS_POWER, lightFire, makeFirePool, makeScorchPool, scorch, stepFires, stepScorches } from "./fire.ts";
@@ -1203,18 +1203,37 @@ function resolveSwing(w: World, dtMs: number): void {
   // Scenery is checked whether or not a body was hit, so a swing into a crate
   // is not wasted just because nothing was standing behind it.
   breakProps(w);
-  if (struck.length === 0) return;
-
   const box = w.swing;
-  for (const e of struck) {
+  /*
+   * The thrust's burst at its point (`THRUST_BURST_RADIUS`): the bodies
+   * around it that the blade did not strike, at a share of its damage, and
+   * shoved out from the point. A blow of the sword like any other — mana,
+   * rage, flinch — so it is struck through the same loop.
+   */
+  const burst: Enemy[] = [];
+  const at = box.burstAt;
+  if (at) {
+    w.events.push({ kind: "shot", x: at.x, y: at.y, what: "thrust_burst" });
+    for (const e of w.enemies) {
+      if (e.hp <= 0 || e.spawnFadeMs > 0 || e.airborne || box.hitIds.includes(e.id)) continue;
+      if (Math.hypot(e.x - at.x, e.y - at.y) > THRUST_BURST_RADIUS + e.radius) continue;
+      box.hitIds.push(e.id);
+      burst.push(e);
+    }
+  }
+  if (struck.length === 0 && burst.length === 0) return;
+
+  for (const e of [...struck, ...burst]) {
+    const fromBurst = burst.includes(e);
+    const damage = fromBurst ? box.damage * THRUST_BURST_DAMAGE : box.damage;
     // A blow of the swing proper, not the spin's: the one kind of kill a streak counts.
     w.swordBlow = w.player.swingStretch === 1;
-    const { broke, blocked } = hurtEnemy(w, e, box.damage, e.awake ? "" : "sneak", w.player);
+    const { broke, blocked } = hurtEnemy(w, e, damage, e.awake ? "" : "sneak", w.player);
     w.swordBlow = false;
     // Off the roaring king: no damage, no gauge, no mana — only the clang and a jolt.
     if (blocked) { impact(w, HITSTOP_HIT, TRAUMA_HIT); continue; }
-    w.stats.damageDealt += box.damage;
-    w.stats.swordDamage += box.damage;
+    w.stats.damageDealt += damage;
+    w.stats.swordDamage += damage;
     e.hitFlashMs = HIT_FLASH_MS;
     // The sword fills the rage gauge: a little per connecting blow, more for
     // the one that kills. A spin's own hits do not refund it.
@@ -1227,8 +1246,9 @@ function resolveSwing(w: World, dtMs: number): void {
     // A stationary body is bolted down. A turret that slides when struck is a
     // turret the player has to chase, and chasing an emplacement is absurd.
     if (ENEMIES[e.archetype].behaviour !== "stationary") {
-      const dx = e.x - box.x;
-      const dy = e.y - box.y;
+      const from = fromBurst && at ? at : box;
+      const dx = e.x - from.x;
+      const dy = e.y - from.y;
       const d = Math.hypot(dx, dy) || 1;
       const push = box.knockback / Math.max(1, e.radius / 10);
       e.knockX += (dx / d) * push;
@@ -1246,7 +1266,7 @@ function resolveSwing(w: World, dtMs: number): void {
     // being in range is how the player affords being out of it.
     w.player.mana = Math.min(w.staff.mana_max, w.player.mana + manaPerHit(w.staff.mana_max) * w.player.mods.manaPerHit);
 
-    w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: e.archetype, amount: box.damage });
+    w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: e.archetype, amount: damage });
     emit(w, e.x, e.y, "hit", 4);
     // Not `onEnemyKilled` here. The death filter in `step` is the one place a
     // body leaves the world, and calling the handler from the sword as well

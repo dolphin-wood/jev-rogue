@@ -4,7 +4,7 @@ import {
   SPREAD_BASE, SWEEP_DEG, SWING_ACTIVE_MS, SWING_TOTAL_MS, SWING_WINDUP_MS,
   beginSwing, fullReach, makeSpin, makeSwingBox, manaPerHit, sectorHits,
   snapFacing, stepSwing, sweepFor, SWING_CHAIN_MS, swingMoveScale, swingPhase, totalCoverageDeg,
-  wallSlamSquareness, SWING_RUN, SWING_BREATH_MS, THRUST_DAMAGE, SWING_ORIGIN_LIFT,
+  wallSlamSquareness, SWING_RUN, SWING_BREATH_MS, THRUST_DAMAGE, SWING_ORIGIN_LIFT, thrustHits, THRUST_BURST_DAMAGE, SWING_DAMAGE,
 } from "./melee.ts";
 import { createWorld, step } from "./world.ts";
 import { NO_INPUT, PLAYER_RADIUS, STEP_MS, noMods } from "./types.ts";
@@ -249,6 +249,43 @@ describe("a run of swings: a cut, a cut back, a thrust, then a rest", () => {
     expect(w.swing.facing).toBeCloseTo(locked, 6);
   });
 
+  it("strikes with a band as wide at the hand as at the point", () => {
+    const box = { ...makeSwingBox(), thrust: true, x: 0, y: 0, facing: 0, reach: 60 };
+    // Pressed close and well off the line: a narrow wedge grazed past it.
+    expect(thrustHits(box, { x: 10, y: 20 }, 8)).toBe(true);
+    // Out to the side at the point, beyond the band.
+    expect(thrustHits(box, { x: 50, y: 30 }, 8)).toBe(false);
+    // Past the point.
+    expect(thrustHits(box, { x: 90, y: 0 }, 8)).toBe(false);
+  });
+
+  it("bursts at the point, striking a body beside it that the blade missed", () => {
+    const w = world();
+    // Turrets: bolted down, so the geometry holds still through the run.
+    const primary = put(w, 1, w.player.x - 300, w.player.y, "turret" as "rusher");
+    const beside = put(w, 2, w.player.x - 300, w.player.y + 60, "turret" as "rusher");
+    for (let i = 0; i < 60 && w.player.swingRun < 2; i++) step(w, input({ swing: true }));
+    while (w.player.swingMs > 0) step(w, input());
+    // Along the facing, then one off the band's side but beside the point.
+    const oy = w.player.y - SWING_ORIGIN_LIFT;
+    [primary.x, primary.y] = [w.player.x + 44, oy];
+    // Above the line: below it, this room has a wall.
+    [beside.x, beside.y] = [w.player.x + 70, oy - 36];
+    const before = beside.hp;
+    step(w, input({ swing: true }));
+    expect(w.swing.thrust).toBe(true);
+    let burst = false;
+    for (let i = 0; i < 20; i++) {
+      step(w, input());
+      if (w.events.some((e) => e.kind === "shot" && e.what === "thrust_burst")) burst = true;
+    }
+    expect(burst).toBe(true);
+    // The burst's share, not the blade's: health is whole, so within a point of it.
+    const burstDamage = SWING_DAMAGE * THRUST_DAMAGE * THRUST_BURST_DAMAGE;
+    expect(before - beside.hp).toBeGreaterThan(burstDamage - 1);
+    expect(before - beside.hp).toBeLessThan(SWING_DAMAGE * THRUST_DAMAGE - 1);
+  });
+
   it("thrusts straight along the facing with nothing in its cone", () => {
     const w = world();
     const e = put(w, 1, w.player.x, w.player.y - 44); // due north: 90 degrees off
@@ -285,6 +322,33 @@ describe("a run of swings: a cut, a cut back, a thrust, then a rest", () => {
     }
     // The last swing may still be in the air when the run stops.
     expect(waves).toBeGreaterThanOrEqual(swings - 1);
+  });
+
+  it("throws the enchant's wave along the thrust's aim, not the facing", () => {
+    const g = generateRoom(
+      { space: "open_arena", symmetry: "mirrored", size: "vast", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
+      "S", "combat", src.stream("room"), { plain: true },
+    );
+    const w = createWorld({
+      room: toRoomPlan(g, { id: "r", seed_key: "k", reward_kind: "item", params_source: "rule" }),
+      encounter: null, props: 0, staff: { slots: 6, mana_max: 999 }, mods: noMods(),
+      slots: [plainInstance("crescent_edge"), null, null, null, null, null], hearts: 6, rng: src.stream("world"),
+    });
+    w.player.x = 336; w.player.y = 208; w.player.facing = 0; w.player.mana = 999;
+    step(w, input({ spell: 0 }));
+    for (let i = 0; i < 30; i++) step(w, input());
+    w.player.facing = 0;
+    // 35 degrees up off the east facing, inside the thrust's cone and off its line.
+    const a = (-35 * Math.PI) / 180;
+    const t = put(w, 1, w.player.x + Math.cos(a) * 44, w.player.y - SWING_ORIGIN_LIFT + Math.sin(a) * 44, "turret" as "rusher");
+    const waves: number[] = [];
+    for (let i = 0; i < 90 && waves.length < SWING_RUN; i++) {
+      step(w, input({ swing: true, aimX: 1, aimY: 0 }));
+      for (const e of w.events) if (e.kind === "spell" && e.what === "wave") waves.push(e.facing ?? NaN);
+    }
+    expect(waves.length).toBe(SWING_RUN);
+    const aim = Math.atan2(t.y - (w.player.y - SWING_ORIGIN_LIFT), t.x - w.player.x);
+    expect(waves[SWING_RUN - 1]!).toBeCloseTo(aim, 2);
   });
 
   it("shortens the rest after a run by swift hand's factor", () => {

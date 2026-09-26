@@ -21,6 +21,7 @@ import {
   ELEMENT_TINT, spellLookOf,
   levelAt, withLevels, levelBonus, LEVEL_HP, swordAt,
   HIT_FLASH_MS, BOSS_ROAR_MS,
+  THRUST_BURST_RADIUS,
 } from "@jr/core";
 import type {
   Bullet, Enemy, EnemyId, Input, ItemInstance, Mood, Offer, OfferCard, Portal,
@@ -6825,6 +6826,7 @@ export class PlayScene extends Phaser.Scene {
       if (ev.kind === "shot" && ev.what === "free_strike") this.freeCutAt(ev.x, ev.y);
       else if (ev.kind === "shot" && ev.what === "land") this.landingAt(ev.x, ev.y);
       else if (ev.kind === "shot" && ev.what === "emit_burst") this.frostRingAt(ev.x, ev.y);
+      else if (ev.kind === "shot" && ev.what === "thrust_burst") this.thrustBurstAt(ev.x, ev.y);
       else if (ev.kind === "eruption" && ev.what === "doom") this.doomBurstAt(ev.x, ev.y);
       else if (ev.kind === "eruption" && ev.what === "collapse") this.collapseAt(ev.x, ev.y);
       else if (ev.kind === "eruption" && ev.what === "fire") {
@@ -7114,6 +7116,17 @@ export class PlayScene extends Phaser.Scene {
   }
 
   /** An orb's end: the ring of shards leaving it, and a spray of frost; the shards are the sim's own. */
+  /**
+   * **The thrust's burst at its point** (`THRUST_BURST_RADIUS`): a ring of
+   * the blade's light going out to the burst's own radius, so the ground it
+   * takes is the ground seen, and a spray of motes off it.
+   */
+  private thrustBurstAt(x: number, y: number): void {
+    this.ring(x, y, 3, THRUST_BURST_RADIUS, 0xcfeeff, 160, 2);
+    this.ring(x, y, 2, THRUST_BURST_RADIUS * 0.7, 0x5aa0ff, 120, 3);
+    this.burst(x, y, 0xe8f8ff, 10, 170, undefined, Math.PI * 2, 0.9);
+  }
+
   private frostRingAt(x: number, y: number): void {
     this.burst(x, y, 0xe8f8ff, 12, 200, undefined, Math.PI * 2, 0.9);
     this.burst(x, y, 0x8fdcff, 6, 90, undefined, Math.PI * 2, 1.4, 40);
@@ -7665,6 +7678,7 @@ export class PlayScene extends Phaser.Scene {
           else if (what === "free_strike") sfx.play("dash_strike", 1.1);
           else if (what === "land") sfx.play("impact_stone", 0.72);
           else if (what === "emit_burst") sfx.play("cast_nova", 1.2);
+          else if (what === "thrust_burst") sfx.play("hit_heavy", 1.25);
           else if (what === "contagion") sfx.play("cast_venom", 1.3);
           else if (PLAYER_SHOT_EVENTS.has(what)) break;
           else sfx.play("shoot_enemy");
