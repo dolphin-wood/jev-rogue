@@ -3315,7 +3315,14 @@ function applyElementsTo(e: Enemy, powers: ElementPowers, mult = 1, proc = 1): v
  * whatever lit it.
  */
 function applyElementTo(e: Enemy, element: string, power: number, mult = 1): void {
-  // An immune body takes no status either; a resistant one builds it slower.
+  /*
+   * An immune body takes no status either; a resistant one builds it slower.
+   * The king roaring is immune to everything (`hurtEnemy`), and only his
+   * damage was refused: the hits still filled his burn, poison and chill, so
+   * a roar spent pouring fire into him came out of it with a full burn to
+   * spend as soon as it ended.
+   */
+  if (e.bossRoarMs > 0) return;
   const resist = resistOf(e.archetype, element);
   if (resist === 0) return;
   const add = ENEMY_BUILD_PER_HIT * Math.max(0.5, power || 1) * resist;
@@ -3662,14 +3669,15 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
          * hit is a hit, not a second payoff. A `contagion` hit that leaves
          * the body poisoned makes it a carrier for as long as the poison runs.
          */
-        if (b.doomMs > 0 && e.doomMs <= 0 && e.hp > 0) {
+        // Neither lands on the king roaring: a mark put on him then went off once he could be hurt.
+        if (b.doomMs > 0 && e.doomMs <= 0 && e.hp > 0 && e.bossRoarMs <= 0) {
           e.doomMs = b.doomMs;
           e.doomDamage = b.doomDamage;
           e.doomRadius = b.doomRadius;
           e.doomSpell = b.spellIndex;
           w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "doom_mark" });
         }
-        if (b.contagion > 0 && e.poisonMs > 0) {
+        if (b.contagion > 0 && e.poisonMs > 0 && e.bossRoarMs <= 0) {
           e.contagion = Math.max(e.contagion, b.contagion);
           e.contagionReach = Math.max(e.contagionReach, b.contagionReach);
         }
@@ -4958,7 +4966,9 @@ function spreadContagion(w: World, e: Enemy): void {
   e.contagion = 0;
   if (n <= 0 || e.poisonMs <= 0) return;
   const near = w.enemies
-    .filter((o) => o !== e && o.hp > 0 && isActive(o) && o.contagion <= 0 && resistOf(o.archetype, "poison") > 0)
+    // Not onto the king roaring: nothing lands on him then (`applyElementTo`).
+    .filter((o) => o !== e && o.hp > 0 && isActive(o) && o.contagion <= 0 && o.bossRoarMs <= 0
+      && resistOf(o.archetype, "poison") > 0)
     .map((o) => ({ o, d: Math.hypot(o.x - e.x, o.y - e.y) }))
     .filter((c) => c.d <= e.contagionReach + c.o.radius)
     .sort((a, b) => a.d - b.d)
