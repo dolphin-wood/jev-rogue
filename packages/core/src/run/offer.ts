@@ -1145,11 +1145,12 @@ export function ruleOffer(
   kind: RewardCardKind,
   held: readonly HeldSpell[] = [],
   promise: OfferPromise = {},
+  portalCount?: number,
 ): Offer {
   // The boss's room ends the run: no reward to open, and no way on.
   if (stageFor(run.roomIndex) === "boss") return { cards: [], doors: [], coins: 0 };
   promise = { ...promise, style: promise.style ?? run.style };
-  const doors = ruleDoors(run, rng);
+  const doors = ruleDoors(run, rng, portalCount);
   return {
     cards: offerCards(items, rng, owned, kind, held, promise),
     // A graded gold door pays its grade over.

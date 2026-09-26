@@ -2547,7 +2547,7 @@ export class PlayScene extends Phaser.Scene {
     } catch (err) {
       console.warn("[director] offer fell back to the rules:", err);
       const fallbackOffer = ruleOffer(ITEMS, src.stream("offer"), this.owned, run,
-        stage === "shop" ? shopKind(src.stream("shop")) : kind, held, promise);
+        stage === "shop" ? shopKind(src.stream("shop")) : kind, held, promise, this.portalCount);
       const fixed = fixedExit(run.roomIndex);
       const offer = fixed ? { ...fallbackOffer, doors: fixed } : fallbackOffer;
       const stockRng = src.stream("stock");

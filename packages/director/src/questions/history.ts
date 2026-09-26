@@ -149,9 +149,9 @@ export function doorOfferedRunning(offered: readonly (readonly string[])[] | und
  * on the live model with the fact in the state, one run still put an affix
  * badge on twelve consecutive offers and a spell badge on nine. A badge shown
  * four rooms running has stopped being a choice whatever the reason for it, so
- * the fourth is where code stops offering it — a safety bound of the kind doc
- * 002 reserves for code, and one that still leaves three reward kinds and any
- * vendor on the list.
+ * the fourth is where code tries to stop offering it — a safety bound of the
+ * kind doc 002 reserves for code. The caller keeps enough reward kinds to fill
+ * the already-drawn number of doors.
  */
 export const DOOR_STREAK_CAP = 4;
 
@@ -173,10 +173,9 @@ export function doorStreaksSpent(offered: readonly (readonly string[])[] | undef
   const run = (kind: DoorKind) => trailingOffers(rooms, kind);
   return DOOR_KINDS.filter((kind) => run(kind) >= DOOR_STREAK_CAP)
     // Longest first, because three kinds can trip the cap at once and only so
-    // many may leave a list that still has to be a choice: the caller withholds
-    // from the front of this and stops at two kinds. With four kinds and three
-    // doors that is rare — measured, one room of 128 — and there the badge that
-    // runs on is the one that has run on least.
+    // many may leave a list that still has to fill every door: the caller
+    // withholds from the front of this until the drawn count would be short.
+    // Then the badge that runs on is the one that has run on least.
     .sort((a, b) => run(b) - run(a));
 }
 

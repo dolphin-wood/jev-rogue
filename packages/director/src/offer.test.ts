@@ -145,6 +145,22 @@ describe("the Director's portals (doc 003)", () => {
     }
   });
 
+  it("keeps enough kinds for three doors when two badges have reached the streak cap", async () => {
+    const seen: import("./director.ts").ObservedRequest[] = [];
+    const d = createDirector("rule", { observe: (r) => seen.push(r) });
+    const base = ctx(12, { seed: "muiew8ni-yrz-12" });
+    const history = { ...base.history, doors_offered: [
+      ["affix", "stat"], ["affix", "stat"],
+      ["affix", "gold", "stat"], ["affix", "spell", "stat"],
+    ] };
+    const choices = portalChoices(
+      run(12, { lastWasNpc: true }), new RngSource("muiew8ni-yrz-12").stream("portal-count"), 3,
+    );
+    const plan = await d.planPortals({ ...base, history }, choices);
+    expect(Object.keys(seen[0]!.questions.portal_need!.criteria).filter((id) => id !== "fallback")).toHaveLength(3);
+    expect(plan.doors).toHaveLength(3);
+  });
+
   it("asks nothing after the kinds: a room's portals ride in its round 1 alone", async () => {
     const d = createDirector("rule", { observe: (r) => seen.push(r) });
     const seen: import("./director.ts").ObservedRequest[] = [];

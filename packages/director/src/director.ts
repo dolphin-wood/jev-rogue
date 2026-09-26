@@ -575,15 +575,14 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
      * player could have wanted.
      */
     /*
-     * Two of the four are often spent at once, and both leave the list — but
-     * never so many that the ranking has nothing to rank: two reward kinds
-     * stay whatever the history, which with the vendors is still a choice.
-     * Where three have tripped the cap together, the two with the longest runs
-     * go and the third is allowed a fifth offer.
+     * Two of the four are often spent at once. Withhold only as many as leave
+     * enough reward kinds to fill the already-drawn portal count; a vendor is
+     * optional and cannot make up a missing door. When three have tripped the
+     * cap together, the longest runs go first and the others continue.
      */
     const withheld = new Set<string>();
     for (const kind of doorStreaksSpent(ctx.history.doors_offered)) {
-      if (choices.kinds.length - withheld.size <= 2) break;
+      if (choices.kinds.length - withheld.size <= Math.max(2, choices.count)) break;
       withheld.add(kind);
     }
     choices = { ...choices, kinds: choices.kinds.filter((k) => !withheld.has(k)) };

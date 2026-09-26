@@ -5,7 +5,7 @@ import { makeSpell, slotCost } from "../sim/spells.ts";
 import { plainInstance } from "../spells/index.ts";
 
 const STAFF_FOR_COST = { slots: 6, mana_max: 120 };
-import { affixFitsHeld, cardPool, emptyHistory, fittingAffixes, heldSpell, offerCards, offerDoors, offerStatParts, offerStats } from "./offer.ts";
+import { affixFitsHeld, cardPool, emptyHistory, fittingAffixes, heldSpell, offerCards, offerDoors, offerStatParts, offerStats, ruleOffer } from "./offer.ts";
 import { affixFits, affixFitsSpell, SPELL_AFFIXES, spellAffixById } from "../spells/affixes.ts";
 import { PLAYER_TEXT } from "../content/player-text.ts";
 import { STAT_UPGRADES } from "./stats.ts";
@@ -18,6 +18,15 @@ const item = (id: string) => {
   if (!base) throw new Error(`no item ${id}`);
   return base;
 };
+
+describe("ruleOffer", () => {
+  it("keeps the portal count already drawn before an offer fallback", () => {
+    const run = { roomIndex: 5, lastWasElite: false, critical: false };
+    // This stream would draw three doors if ruleOffer chose a fresh count.
+    const offer = ruleOffer(ITEMS, new RngSource("muiew8ni-yrz-12").stream("offer"), [], run, "spell", [], {}, 2);
+    expect(offer.doors).toHaveLength(2);
+  });
+});
 
 describe("offerStats", () => {
   it("leads with the cost, because that is what decides affordability", () => {
