@@ -121,6 +121,8 @@ export const JA: Table = {
   "hint.retryBoss": "再挑戦",
   "hint.holdE": "[E 長押し]",
   "hint.gold": "ゴールド {gold}",
+  "hint.reroll": "リロール · {price} G",
+  "hint.rerolling": "再抽選中",
 
   /* -------------------------------- title ------------------------------- */
   "title.hints": "[W][S] {choose}    [A][D] {change}    [Enter] {select}",
@@ -285,6 +287,8 @@ export const JA: Table = {
   /* -------------------------------- toasts ------------------------------ */
   "toast.jevUnavailable": "Jev ディレクターが使えないため、ルールディレクターで進める。",
   "toast.need": "{coin} {price} 足りない",
+  "toast.rerollFailed": "再抽選に失敗。ゴールドを返却しました。",
+  "toast.noRerolls": "ほかに再抽選できる候補がありません。",
   "toast.dismantled": "「{label}」を分解  +{gold} {coin}",
   "toast.gaveUpReward": "報酬を手放した  +{gold} {coin}",
   "toast.onKey": "「{label}」→ {key}",
@@ -343,6 +347,7 @@ export const JA: Table = {
   "keys.dodge": "回避",
   "keys.use": "調べる：報酬・ポータル・商人・落ちている呪文",
   "keys.dismantle": "長押し：呪文カードを分解してゴールドに",
+  "keys.reroll": "クリア報酬か商人の品揃えを再抽選（ゴールド消費）",
   "keys.confirm": "決定 · 開始 · カードを取る",
   "keys.characterScreen": "キャラクター画面",
   "keys.pauseMenu": "ポーズメニュー · 戻る",

@@ -718,7 +718,14 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
          * written on the badge.
          */
         const legal = restrictTo(dists.portal_need!, [...choices.kinds, ...choices.npcKinds]);
-        const need = withTemperature(legal, PORTAL_NEED_TEMPERATURE);
+        // A run gets at most one optional vendor room. Jev tended to spend it
+        // on the smith, while the merchant lets the player choose among three
+        // kinds and refresh the shelf. Keep the model's ranking, but make the
+        // more flexible vendor win close calls when both are legal.
+        const rankedNeed = source === "jev" && choices.npcKinds.includes("merchant") && choices.npcKinds.includes("smith")
+          ? reweight(legal, (id) => id === "merchant" ? 1.5 : id === "smith" ? 0.4 : 1)
+          : legal;
+        const need = withTemperature(rankedNeed, PORTAL_NEED_TEMPERATURE);
         /*
          * **The first door sharp, the rest spread** (`PORTAL_TAIL_TEMPERATURE`).
          * One temperature cannot do both: sharp enough that the top need wins
@@ -729,7 +736,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
          */
         const first = sampleOne(need, rng);
         const rest = sampleWithoutReplacement(
-          withTemperature(legal, PORTAL_TAIL_TEMPERATURE), Object.keys(legal).length, rng,
+          withTemperature(rankedNeed, PORTAL_TAIL_TEMPERATURE), Object.keys(rankedNeed).length, rng,
         );
         const ranked = [first, ...rest.filter((k) => k !== first)];
         const npcSet = new Set<string>(choices.npcKinds);
@@ -1637,7 +1644,8 @@ const KIND_CLAUSE: Readonly<Record<string, string>> = {
 const NPC_CLAUSE: Readonly<Record<string, string>> = {
   merchant: grounded(
     "The merchant, who sells a spell, an affix or a stat for gold: the player buys whichever the purse " +
-    "covers instead of keeping one of three cards dealt. There is no fight, so it costs the room's reward.",
+    "covers and can pay to refresh the shelf instead of keeping one of three cards dealt. There is no fight, " +
+    "so it costs the room's reward.",
     ["build_shape", "raw", "forming"], ["gold", "ok", "rich"],
   ),
   smith: grounded(

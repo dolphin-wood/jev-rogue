@@ -107,6 +107,7 @@ import { questionAsked, questionBase, questionName } from "../ui/question-names.
 import type { TableRow } from "../ui/plan-table.ts";
 import type { AtlasJson } from "../assets/atlas.ts";
 import { AUTO_CAST_RESERVE, AUTO_CAST_SOON_MS, AutoCaster } from "../auto-cast.ts";
+import { freshRerollPool, rerollPrice } from "../offer-reroll.ts";
 
 /**
  * **Art pixels per world pixel**, declared in `telegraph.ts` and re-exported
@@ -1379,6 +1380,9 @@ export class PlayScene extends Phaser.Scene {
   private doorsOpening = false;
   /** True in the merchant's room, where the cards cost gold instead of a slot. */
   private shopping = false;
+  /** Paid refreshes reset on entering a room and get dearer within it. */
+  private rerollsThisRoom = 0;
+  private rerollLoading: { objects: Phaser.GameObjects.GameObject[]; label: Phaser.GameObjects.Text; ms: number } | null = null;
   /** Set once the boss is down. The run is over; nothing loads after it. */
   private won = false;
   /** The last reward taken, shown briefly so a pickup reads as an acquisition. */
@@ -1401,6 +1405,8 @@ export class PlayScene extends Phaser.Scene {
     dim: Phaser.GameObjects.Rectangle;
     heading: Phaser.GameObjects.Text;
     hint: Phaser.GameObjects.Container;
+    rerollButton: Phaser.GameObjects.GameObject[];
+    empty: Phaser.GameObjects.Text | null;
     /** Which card Enter or the attack key would take. */
     selected: number;
     cards: {
@@ -1916,7 +1922,7 @@ export class PlayScene extends Phaser.Scene {
      * the arrow keys stay for menus only, unlisted, because a menu is the
      * one place a player reaches for them without being told.
      */
-    this.keys = this.input.keyboard!.addKeys("W,A,S,D,UP,LEFT,DOWN,RIGHT,Q,E,J,K,L,U,I,O,ENTER,ESC,BACKTICK,TAB") as Record<string, Phaser.Input.Keyboard.Key>;
+    this.keys = this.input.keyboard!.addKeys("W,A,S,D,UP,LEFT,DOWN,RIGHT,Q,E,R,J,K,L,U,I,O,ENTER,ESC,BACKTICK,TAB") as Record<string, Phaser.Input.Keyboard.Key>;
     if (spellLabAsked()) this.spellLab = new SpellLab(this.spellLabHost());
     this.debug = new DebugPanel({
       ...(this.spellLab ? { spellLab: this.spellLab } : {}),
@@ -2173,6 +2179,7 @@ export class PlayScene extends Phaser.Scene {
     this.entering = true;
     this.bossDeath = null;
     this.roomIndex = index;
+    this.rerollsThisRoom = 0;
     // A new room, a new reward screen: what was kept in the last one belongs
     // to the last one's journal entry, which has already been written.
     this.pickedThisRoom = null;
@@ -5713,6 +5720,7 @@ export class PlayScene extends Phaser.Scene {
     ["U I O", "keys.cast"],
     ["E", "keys.use"],
     ["E", "keys.dismantle"],
+    ["R", "keys.reroll"],
     ["Enter", "keys.confirm"],
     ["Tab", "keys.characterScreen"],
     ["Esc", "keys.pauseMenu"],
@@ -8360,6 +8368,10 @@ export class PlayScene extends Phaser.Scene {
   override update(_time: number, delta: number): void {
     // The transition animates while the next room is being planned.
     if (this.transitionUi) this.tickTransition(delta);
+    if (this.rerollLoading) {
+      this.rerollLoading.ms += delta;
+      this.rerollLoading.label.setText(`${t("hint.rerolling")}${".".repeat(Math.floor(this.rerollLoading.ms / 300) % 4)}`);
+    }
     // No world yet, or one being replaced: nothing to step or draw.
     if (!this.world || this.entering) return;
     if (this.keys.BACKTICK && Phaser.Input.Keyboard.JustDown(this.keys.BACKTICK)) this.debug.toggle();
@@ -10026,7 +10038,7 @@ export class PlayScene extends Phaser.Scene {
      * simulation scatters coins on clearing and raises the portals itself;
      * there is no object to open and no screen to show.
      */
-    if (cards.length === 0) return;
+    if (cards.length === 0 && !this.shopping) return;
 
     /*
      * On the HUD's camera, in the room's own coordinates (`uiView`). It was
@@ -10394,16 +10406,34 @@ export class PlayScene extends Phaser.Scene {
     // Under the row, quiet: it is instruction, not content.
     hint.setY(top + cardH + 18);
 
-    this.offerUi = { dim, heading, hint, cards: built, selected: 0 };
+    const empty = cards.length === 0
+      ? this.menuText(cx, cy, t("prompt.soldOut"), 10, "#8792b5").setDepth(202)
+      : null;
+    const rerollButton: Phaser.GameObjects.GameObject[] = [];
+    const price = rerollPrice(this.rerollsThisRoom);
+    const afford = this.goldHeld() >= price;
+    const rx = cx + 202;
+    const ry = top - 30;
+    rerollButton.push(this.add.rectangle(rx, ry, 158, 18, 0x161334, 0.96)
+      .setStrokeStyle(1, afford ? 0x8a6a28 : 0x7a2a2a, 1).setDepth(201));
+    rerollButton.push(this.keys_(rx, ry, `[R] ${t("hint.reroll", { price })}`, 7,
+      afford ? "#ffd45e" : "#ff6a5a", 202));
+    rerollButton.push(this.add.zone(rx, ry, 158, 18).setDepth(203)
+      .setInteractive({ useHandCursor: true }).on("pointerdown", () => { void this.rerollOffer(); }));
+
+    this.offerUi = { dim, heading, hint, rerollButton, empty, cards: built, selected: 0 };
     this.paintSelection();
     this.sfx.play("ui_select");
   }
 
   private hideRewards(): void {
     if (!this.offerUi) return;
+    this.hideRerollLoading();
     this.offerUi.dim.destroy();
     this.offerUi.heading.destroy();
     this.offerUi.hint.destroy();
+    for (const object of this.offerUi.rerollButton) object.destroy();
+    this.offerUi.empty?.destroy();
     for (const c of this.offerUi.cards) {
       c.panel.destroy();
       c.deco.destroy();
@@ -10412,6 +10442,119 @@ export class PlayScene extends Phaser.Scene {
       for (const o of c.extras) o.destroy();
     }
     this.offerUi = null;
+  }
+
+  private showRerollLoading(): void {
+    const { centerX: cx, centerY: cy } = uiView();
+    const objects = this.modalPanel(210, 62, { depth: 204, dim: 0.6, cy });
+    const label = this.menuText(cx, cy, t("hint.rerolling"), 10, "#ffe9a8").setDepth(205);
+    objects.push(label);
+    this.rerollLoading = { objects, label, ms: 0 };
+  }
+
+  private hideRerollLoading(): void {
+    for (const object of this.rerollLoading?.objects ?? []) object.destroy();
+    this.rerollLoading = null;
+  }
+
+  /** One paid refresh of either the reward's three cards or the whole merchant shelf. */
+  private async rerollOffer(): Promise<void> {
+    const ui = this.offerUi;
+    if (!ui || this.rerollLoading) return;
+    const price = rerollPrice(this.rerollsThisRoom);
+    if (this.goldHeld() < price) {
+      this.tookLabel = t("toast.need", { price: price - this.goldHeld(), coin: "{coin}" });
+      this.tookMs = 1400;
+      this.sfx.play("ui_deny");
+      return;
+    }
+    const world = this.world;
+    const index = this.roomIndex;
+    const roll = this.rerollsThisRoom + 1;
+    const purpose = `${this.shopping ? "reroll_shop" : "reroll_reward"}_${roll}`;
+    const held = this.slots.flatMap((slot, i) => slot
+      ? [heldSpell(ITEMS.get(slot.base), (this.spellAffixes[i] ?? []).map((a) => a.id))] : []);
+    const before = this.directorContext(index, world.player.hearts, world.staff, this.roomSoFar());
+    const needs = this.cardNeeds(before);
+    const current = this.shopping ? this.shopStock : this.offer?.cards ?? [];
+    const kinds: readonly RewardCardKind[] = this.shopping ? SHELF_KINDS : [this.roomReward];
+    const requests = kinds.flatMap((kind): CardRequest[] => {
+      const shown = current.filter((card) => card.kind === kind).map((card) => card.itemId ?? "");
+      const promise: OfferPromise = this.shopping ? {} : { grade: this.roomPromise.grade, style: this.intent.preset };
+      const base = cardPool(ITEMS, this.ownedFor(kind), kind, held, promise, needs);
+      const pool = freshRerollPool(base, shown, this.shopping ? 1 : CARDS_PER_OFFER);
+      return pool ? [{
+        room_index: index, pool, count: this.shopping ? 1 : CARDS_PER_OFFER,
+        pity: false, temptation: false, salt: `${purpose}_${kind}`,
+      }] : [];
+    });
+    if (requests.length === 0) {
+      this.tookLabel = t("toast.noRerolls");
+      this.tookMs = 1400;
+      this.sfx.play("ui_deny");
+      return;
+    }
+
+    this.runGold -= price;
+    this.runGoldSpent += price;
+    this.showRerollLoading();
+    const loading = this.rerollLoading;
+    try {
+      // One extra Jev request: merchant kinds travel together, while a reward
+      // asks only for its own kind. The salt gives this draw a new seed.
+      const ctx = this.directorContext(index, world.player.hearts, world.staff, this.roomSoFar());
+      const plan = await this.director.planOffer(ctx, { cards: requests, purpose });
+      if (this.world !== world || this.roomIndex !== index || this.offerUi !== ui || this.rerollLoading !== loading) return;
+      const outcomes = plan.cards.map((cardPlan, i) => ({ request: requests[i]!, cardPlan }));
+      if (outcomes.length !== requests.length || outcomes.some(({ cardPlan }) => cardPlan.ids.length === 0))
+        throw new Error("reroll returned no cards");
+      const decisions = outcomes.flatMap(({ request, cardPlan }) => cardPlan.decisions.map((decision) => ({
+        ...decision, question: `${request.salt}__${decision.question ?? ""}`,
+      })));
+      if (this.shopping) {
+        const byKind = new Map(outcomes.map(({ request, cardPlan }) => [
+          request.pool.kind, cardsFor(ITEMS, request.pool.kind, cardPlan.ids)[0],
+        ]));
+        this.shopStock = SHELF_KINDS.flatMap((kind) => {
+          const card = byKind.get(kind) ?? current.find((old) => old.kind === kind);
+          return card ? [card] : [];
+        });
+      } else {
+        const { request, cardPlan } = outcomes[0]!;
+        const cards = cardsFor(ITEMS, request.pool.kind, cardPlan.ids,
+          { grade: this.roomPromise.grade, style: this.intent.preset });
+        if (cards.length === 0 || !this.offer) throw new Error("reroll returned unusable cards");
+        this.offer = { ...this.offer, cards };
+        this.roomCards = cardPlan.ids;
+        this.cardPlan = cardPlan;
+        // Door badges name the cards that were originally dealt. Once paid
+        // reroll replaces them, the room readout should name the new deal.
+        this.roomPromise = { ...cardTypesOf(this.roomReward, cardPlan.ids), grade: this.roomPromise.grade };
+      }
+      this.planRecords.set(purpose, {
+        decisions,
+        offers: outcomes.map(({ request, cardPlan }) => ({
+          prefix: `${request.salt}__`, label: request.pool.kind, blended: cardPlan.blended, ids: cardPlan.ids,
+        })),
+      });
+      playtestLog.decide(index, purpose, decisions);
+      playtestLog.attach(index, (row) => {
+        row.offers = [...(row.offers ?? []), ...outcomes.map(({ request, cardPlan }) => ({
+          label: `${purpose}:${request.pool.kind}`, ids: cardPlan.ids,
+        }))];
+      });
+      this.rerollsThisRoom = roll;
+      this.showRewards();
+    } catch (error) {
+      if (this.world !== world || this.roomIndex !== index) return;
+      console.warn("[director] reroll failed:", error);
+      this.runGold += price;
+      this.runGoldSpent -= price;
+      this.hideRerollLoading();
+      this.tookLabel = t("toast.rerollFailed");
+      this.tookMs = 1800;
+      this.sfx.play("ui_deny");
+    }
   }
 
   /**
@@ -10986,6 +11129,7 @@ export class PlayScene extends Phaser.Scene {
    * the room. `answerOffer` only lifts the gate.
    */
   private chooseReward(index: number): void {
+    if (this.rerollLoading) return;
     const card = this.offerUi?.cards[index]?.card;
     if (!card) return;
     if (!this.shopping && !this.world.rewardPending) return;
@@ -11456,7 +11600,8 @@ export class PlayScene extends Phaser.Scene {
     if (npcNear && !this.offerUi && !this.staffUi) {
       this.prompt.setVisible(true);
       this.prompt.setText(npcNear.kind === "merchant"
-        ? (this.shopStock.length > 0 ? t("prompt.merchant") : t("prompt.soldOut"))
+        ? (this.shopStock.length > 0 || this.goldHeld() >= rerollPrice(this.rerollsThisRoom)
+          ? t("prompt.merchant") : t("prompt.soldOut"))
         /*
          * The fountain says which of three things it is before the player
          * presses anything: a drink to take, a bar already full, or a
@@ -11473,7 +11618,9 @@ export class PlayScene extends Phaser.Scene {
       this.promptAbove(npcNear.x, this.topOf(npcNear.badge, npcNear.y - 54));
       if (this.interactPressed) {
         this.interactPressed = false;
-        if (npcNear.kind === "merchant") { if (this.shopStock.length > 0) this.showRewards(); }
+        if (npcNear.kind === "merchant") {
+          if (this.shopStock.length > 0 || this.goldHeld() >= rerollPrice(this.rerollsThisRoom)) this.showRewards();
+        }
         else if (npcNear.kind === "fountain") this.drinkFountain(npcNear.x, npcNear.y);
         else this.showStaff("smith", null);
       }
@@ -11675,8 +11822,15 @@ export class PlayScene extends Phaser.Scene {
     const down = (key?: Phaser.Input.Keyboard.Key): boolean =>
       !!key && Phaser.Input.Keyboard.JustDown(key);
 
+    if (this.rerollLoading) {
+      for (const key of [k.A, k.D, k.LEFT, k.RIGHT, k.ENTER, k.ESC, k.R, k.E]) down(key);
+      return;
+    }
+    if (down(k.R)) { void this.rerollOffer(); return; }
+
     const count = ui.cards.length;
     if (this.shopping && down(k.ESC)) { this.hideRewards(); return; }
+    if (count === 0) return;
     /*
      * Dismantling: a spell card may be taken apart for gold instead of taken,
      * so a room whose three spells are all wrong for the build is not a room

@@ -123,6 +123,8 @@ export const EN = {
   "hint.retryBoss": "Retry the boss",
   "hint.holdE": "[Hold E]",
   "hint.gold": "Gold {gold}",
+  "hint.reroll": "Reroll · {price} gold",
+  "hint.rerolling": "Refreshing",
 
   /* -------------------------------- title ------------------------------- */
   "title.hints": "[W][S] {choose}    [A][D] {change}    [Enter] {select}",
@@ -291,6 +293,8 @@ export const EN = {
   /* -------------------------------- toasts ------------------------------ */
   "toast.jevUnavailable": "Jev Director unavailable. Playing the rule Director.",
   "toast.need": "Need {price} {coin}",
+  "toast.rerollFailed": "Could not refresh. Gold refunded.",
+  "toast.noRerolls": "No other choices are available.",
   "toast.dismantled": "{label} dismantled  +{gold} {coin}",
   "toast.gaveUpReward": "Reward given up  +{gold} {coin}",
   "toast.onKey": "{label} on {key}",
@@ -351,6 +355,7 @@ export const EN = {
   "keys.dodge": "Dash",
   "keys.use": "Use: rewards, portals, the merchant, dropped spells",
   "keys.dismantle": "Hold: dismantle a spell card for gold",
+  "keys.reroll": "Reroll reward cards or merchant stock (costs gold)",
   "keys.confirm": "Confirm · begin · take the card",
   "keys.characterScreen": "Character screen",
   "keys.pauseMenu": "Pause menu · back",

@@ -92,6 +92,8 @@ function subjectsOf(purpose: string, round: number): string {
   if (purpose === "staff") return "the starting staff";
   if (purpose === "doors") return "the next room's tension";
   if (purpose === "offer") return "the merchant's shelf";
+  if (purpose.startsWith("reroll_reward_")) return "the refreshed reward cards";
+  if (purpose.startsWith("reroll_shop_")) return "the refreshed merchant shelf";
   if (purpose === DOORS_OUT) return "the doors out, and the cards behind each kind";
   if (purpose === DOOR_IN) return "this room's cards, with the door that brought them";
   if (purpose === "portals") return "the portals out";
@@ -289,6 +291,8 @@ function titleOf(purpose: string, round: number): string {
   if (purpose === "doors") return "leaving the last room: next tension";
   if (purpose === "room") return round === 1 ? "room, round 1: space, symmetry, mood, portals, cards" : "room, round 2: zones, encounter, door promises";
   if (purpose === "offer") return "this room's offer: the merchant's shelf";
+  if (purpose.startsWith("reroll_reward_")) return "paid refresh: this room's reward cards";
+  if (purpose.startsWith("reroll_shop_")) return "paid refresh: the merchant's shelf";
   if (purpose === DOORS_OUT) return "reward taken: the doors out, and the cards behind each kind";
   if (purpose === DOOR_IN) return "the door taken in: this room's cards, asked in the room before";
   if (purpose === "portals") return "the portals out of this room";

@@ -122,6 +122,8 @@ export const ZH: Table = {
   "hint.retryBoss": "重新挑战",
   "hint.holdE": "[长按 E]",
   "hint.gold": "金币 {gold}",
+  "hint.reroll": "刷新 · {price} 金币",
+  "hint.rerolling": "正在刷新",
 
   /* -------------------------------- title ------------------------------- */
   "title.hints": "[W][S] {choose}    [A][D] {change}    [Enter] {select}",
@@ -286,6 +288,8 @@ export const ZH: Table = {
   /* -------------------------------- toasts ------------------------------ */
   "toast.jevUnavailable": "Jev 导演暂时用不了，改由规则导演安排。",
   "toast.need": "还差 {price} {coin}",
+  "toast.rerollFailed": "刷新失败，金币已退还。",
+  "toast.noRerolls": "没有其他可刷新的选项。",
   "toast.dismantled": "拆解「{label}」  +{gold} {coin}",
   "toast.gaveUpReward": "放弃了奖励  +{gold} {coin}",
   "toast.onKey": "「{label}」→ {key}",
@@ -344,6 +348,7 @@ export const ZH: Table = {
   "keys.dodge": "闪避",
   "keys.use": "互动：奖励、传送门、商人、地上的法术",
   "keys.dismantle": "长按：拆解法术卡换金币",
+  "keys.reroll": "刷新通关奖励或商人库存（消耗金币）",
   "keys.confirm": "确定 · 开始 · 拿卡",
   "keys.characterScreen": "角色界面",
   "keys.pauseMenu": "暂停菜单 · 返回",

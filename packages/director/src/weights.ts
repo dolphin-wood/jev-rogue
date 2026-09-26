@@ -324,9 +324,9 @@ export const ruleTable: WeightTable = (scopedQuestion, option, scopedState) => {
        * weak — a formed build, money in hand — and loses to a key that is
        * still empty.
        */
-      if (option === "merchant") return (gold === "rich" ? 1.1 : gold === "poor" ? 0.15 : 0.6)
+      if (option === "merchant") return (gold === "rich" ? 1.35 : gold === "poor" ? 0.15 : 0.8)
         * (shape === "formed" ? 0.5 : 1.2);
-      if (option === "smith") return gold === "rich" ? 0.9 : 0.25;
+      if (option === "smith") return gold === "rich" ? 0.5 : 0.15;
       if (option === "fountain") {
         const health = label(state, "health");
         const base = health === "critical" ? 6 : health === "low" ? 2.6 : health === "ok" ? 0.5 : 0.05;

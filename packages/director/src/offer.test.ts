@@ -190,6 +190,27 @@ describe("the Director's portals (doc 003)", () => {
     expect(plan.doors.length).toBe(3);
   });
 
+  it("prefers the merchant over the smith when Jev rates both vendors equally", async () => {
+    const even: Evaluator = async (req) => ({
+      answers: Object.fromEntries(Object.entries(req.questions).map(([name, question]) => {
+        const keys = Object.keys(question.criteria);
+        const ids = keys.filter((id) => id !== FALLBACK);
+        return [name, {
+          choice: ids[0]!, probabilities: Object.fromEntries(keys.map((id) => [id, id === FALLBACK ? 0 : 1 / ids.length])),
+          confidence: null,
+        }];
+      })),
+      usage: { input_tokens: null },
+    });
+    const choices = portalChoices(run(6), new RngSource("vendor-balance").stream("c"), 3);
+    expect(choices.npcKinds).toEqual(expect.arrayContaining(["merchant", "smith"]));
+    const plan = await createDirector("jev", { evaluate: even })
+      .planPortals(ctx(6, { seed: "vendor-balance", gold: 60 }), choices);
+    const need = plan.decisions.find((decision) => decision.question === "portal_need");
+    expect(need?.source).toBe("jev");
+    expect(need!.probabilities.merchant).toBeGreaterThan(need!.probabilities.smith!);
+  });
+
   it("hands only a declined question to the rule table; the request's other answers stand", async () => {
     const declining: Evaluator = async (req) => ({
       answers: Object.fromEntries(Object.entries(req.questions).map(([name, q]) => {
@@ -367,6 +388,29 @@ describe("the offer asked in one request (doc 002: parallel questions)", () => {
     const alone = createDirector("rule");
     for (const [i, req] of shelves.entries())
       expect(plan.cards[i]?.ids).toEqual((await alone.planCards(ctx(8), req)).ids);
+  });
+
+  it("refreshes three merchant shelves in one Jev request", async () => {
+    const seen: import("./director.ts").ObservedRequest[] = [];
+    const evaluate: Evaluator = async (req) => ({
+      answers: Object.fromEntries(Object.entries(req.questions).map(([name, question]) => {
+        const ids = Object.keys(question.criteria);
+        const choice = ids.find((id) => id !== FALLBACK)!;
+        return [name, {
+          choice, probabilities: Object.fromEntries(ids.map((id) => [id, id === choice ? 1 : 0])),
+          confidence: null,
+        }];
+      })),
+      usage: { input_tokens: null },
+    });
+    const shelves = [cardsReq(8, "reroll_shop_1_stat", "stat"),
+      cardsReq(8, "reroll_shop_1_affix", "affix"), cardsReq(8, "reroll_shop_1_spell", "spell")];
+    const plan = await createDirector("jev", { evaluate, observe: (request) => seen.push(request) })
+      .planOffer(ctx(8), { cards: shelves, purpose: "reroll_shop_1" });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.meta.purpose).toBe("reroll_shop_1");
+    expect(plan.cards).toHaveLength(3);
+    expect(plan.cards.every((card) => card.source === "jev")).toBe(true);
   });
 });
 
