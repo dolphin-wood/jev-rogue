@@ -14,6 +14,7 @@
  * keep doing the aiming, and only the last degree or two is given back.
  */
 import type { World } from "./types.ts";
+import { TILE_PX } from "../types.ts";
 
 /** Half-angle of the assist cone. Wider than this and the game aims for you. */
 export const ASSIST_CONE_DEG = 14;
@@ -58,6 +59,44 @@ export function seekTargets(
     const angle = angleBetween(dirX, dirY, dx / dist, dy / dist);
     if (angle > cone) continue;
     // Angle first, distance as the tiebreaker, at about a degree per 40 px.
+    found.push({ id: e.id, x: e.x, y: e.y, score: angle + dist / 40 / 57.3 });
+  }
+  found.sort((a, b) => a.score - b.score);
+  return found.map(({ id, x: ex, y: ey }) => ({ id, x: ex, y: ey }));
+}
+
+/**
+ * **The view, as the simulation can know it**: the 16 x 9 tiles the camera
+ * shows (the game's `VIEW_TILES_W` / `VIEW_TILES_H`, restated because the
+ * scene cannot be imported here), centred on the player and held inside the
+ * room as the camera is, then drawn in by the camera's dead zone (34 x 20 px)
+ * — the view's centre may sit that far from the player, so a body inside the
+ * narrowed box is on screen wherever inside the dead zone it sits.
+ */
+const VIEW_HALF_W = (16 * TILE_PX) / 2;
+const VIEW_HALF_H = (9 * TILE_PX) / 2;
+const VIEW_SLACK_X = 34;
+const VIEW_SLACK_Y = 20;
+
+/**
+ * **Every living body on screen**, best first: by angle from `dir`, the
+ * distance breaking ties, as `seekTargets` scores its cone — so what the
+ * player is facing still comes first — but with no cone and no range, and no
+ * wall in the way. For a spell that comes down from above anywhere the player
+ * can see (Meteor).
+ */
+export function screenTargets(
+  world: World, x: number, y: number, dirX: number, dirY: number,
+): { id: number; x: number; y: number }[] {
+  const roomW = world.room.extent.w * TILE_PX, roomH = world.room.extent.h * TILE_PX;
+  const cx = VIEW_HALF_W * 2 >= roomW ? roomW / 2 : Math.max(VIEW_HALF_W, Math.min(roomW - VIEW_HALF_W, x));
+  const cy = VIEW_HALF_H * 2 >= roomH ? roomH / 2 : Math.max(VIEW_HALF_H, Math.min(roomH - VIEW_HALF_H, y));
+  const found: { id: number; x: number; y: number; score: number }[] = [];
+  for (const e of world.enemies) {
+    if (e.hp <= 0 || e.spawnFadeMs > 0) continue;
+    if (Math.abs(e.x - cx) > VIEW_HALF_W - VIEW_SLACK_X || Math.abs(e.y - cy) > VIEW_HALF_H - VIEW_SLACK_Y) continue;
+    const dx = e.x - x, dy = e.y - y, dist = Math.hypot(dx, dy);
+    const angle = dist < 1 ? 0 : angleBetween(dirX, dirY, dx / dist, dy / dist);
     found.push({ id: e.id, x: e.x, y: e.y, score: angle + dist / 40 / 57.3 });
   }
   found.sort((a, b) => a.score - b.score);

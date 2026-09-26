@@ -13,9 +13,9 @@ import type { Bullet, Landing, World } from "./types.ts";
 import { DASH_SPEED, PLAYER_RADIUS } from "./types.ts";
 import { ORB_OFFSET_PX } from "./shapes.ts";
 import { acquire } from "./bullets.ts";
-import { hasLineOfSight, normalise } from "./collide.ts";
+import { hasLineOfSight, normalise, tileAt } from "./collide.ts";
 import { GRID_H, GRID_W, TILE_PX, Tile } from "../types.ts";
-import { assistAim, seekTargets } from "./aim.ts";
+import { assistAim, screenTargets, seekTargets } from "./aim.ts";
 import { arcJumps } from "./affix-hooks.ts";
 import { lightFire } from "./fire.ts";
 import { addPower, addPowers, copyPowers, dominantElement, noPowers } from "../content/tags.ts";
@@ -709,10 +709,25 @@ export function fireUnit(
       shots.push({ x: centre.x, y: centre.y, family: base.id });
       return;
     }
-    const mark = placed;
+    const scatter = pattern === "scatter";
+    /*
+     * **A landing from above seeks the whole screen** (Meteor). A scatter with
+     * a telegraph is a rock coming down out of the sky onto a marked spot, so
+     * neither the seek cone nor a wall between has anything to say about
+     * where it can land: it takes the best body the player can see anywhere
+     * on screen, by angle from the aim as the cone scores, so the one faced
+     * still comes first (`screenTargets`).
+     *
+     * Reported as "no rock came down at all": the cone chose bodies behind
+     * pillars and, with nothing in it, aimed `reach` tiles ahead through a
+     * near wall; the line of sight below then refused the only cell, and the
+     * cast spent its mana on nothing. With no body on screen it still lands
+     * on the ground ahead, short of the first wall.
+     */
+    const sky = scatter && telegraph > 0;
+    const mark = sky && !free ? screenTargets(world, from.x, from.y, aim.x, aim.y)[0] ?? null : placed;
     const dir = mark ? normalise(mark.x - from.x, mark.y - from.y) : aim;
     const angle0 = Math.atan2(dir.y, dir.x);
-    const scatter = pattern === "scatter";
     /*
      * A free line starts no further out than the body it was cast at: a
      * `slipstream` fires while the caster is inside the body, and a line
@@ -722,7 +737,14 @@ export function fireUnit(
     const cells: { x: number; y: number; delayMs: number }[] = [];
     // A scatter bursts round the body it seeks — or `reach` tiles ahead — the
     // first cell on the spot and the rest thrown about it, each on its own beat.
-    const reach = num(base.params, "reach", 4) * TILE_PX;
+    let reach = num(base.params, "reach", 4) * TILE_PX;
+    if (scatter && !mark) {
+      const full = reach;
+      while (reach > 0 && !hasLineOfSight(world.room.grid, from.x, from.y, from.x + dir.x * reach, from.y + dir.y * reach))
+        reach -= TILE_PX / 2;
+      // The last point the sight reaches is the wall's face: half a tile back, so the rock lands on the floor.
+      if (reach < full) reach = Math.max(0, reach - TILE_PX / 2);
+    }
     const centre = mark ? { x: mark.x, y: mark.y } : { x: from.x + dir.x * reach, y: from.y + dir.y * reach };
     const area = num(base.params, "area", 1.6) * TILE_PX;
     for (let i = 0; i < count; i++) {
@@ -734,7 +756,8 @@ export function fireUnit(
         y = centre.y + Math.sin(a) * r;
         wait = i === 0 ? 0 : world.rng.next() * delay * count;
       }
-      if (!hasLineOfSight(world.room.grid, from.x, from.y, x, y)) {
+      // A rock from above needs only floor to land on; anything else needs the caster's sight.
+      if (sky ? !onFloor(world, x, y) : !hasLineOfSight(world.room.grid, from.x, from.y, x, y)) {
         if (scatter) continue;
         break;
       }
@@ -1050,6 +1073,12 @@ const RING_CELL_SPACING = 1.5;
  * never on the far side of masonry. One cast between all the rings, so a
  * body is hit once however many cells it stands in.
  */
+/** Whether a landing at this point is on floor a body could stand on, not in a wall or a pillar. */
+function onFloor(world: World, x: number, y: number): boolean {
+  const t = tileAt(world.room.grid, x, y);
+  return t === Tile.Floor || t === Tile.Door;
+}
+
 export function eruptRing(world: World, centre: { x: number; y: number }, spec: Landing, telegraphMs: number): void {
   const cells: { x: number; y: number; delayMs: number }[] = [];
   for (let i = 0; i < Math.max(1, spec.rings); i++) {

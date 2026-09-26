@@ -334,6 +334,67 @@ describe("telegraph (Meteor)", () => {
     expect(hurt(e)).toBeGreaterThan(0);
   });
 
+  /** A wall `dx` tiles east of the caster, from the top of the room to the bottom. */
+  const wallAt = (dx: number) => {
+    const walled = grid.slice();
+    const wx = Math.floor(PX / TILE_PX) + dx;
+    for (let y = 1; y < GRID_H - 1; y++) walled[y * GRID_W + wx] = Tile.Wall;
+    return walled;
+  };
+  const marked = (w: World) => w.eruptions.filter((c) => c.alive && !c.fired);
+
+  /*
+   * Reported from play: "no rock came down at all". The seek cone could
+   * choose a body behind a wall and the line of sight then refused the only
+   * cell, or with nothing in the cone the landing went `reach` tiles ahead
+   * through a near wall; either way the cast spent its mana on nothing. A rock
+   * from above seeks the whole screen and needs no line of sight.
+   */
+  const castAt = (w: World, x: number, y: number, pinned: Enemy[] = []) => {
+    step(w, at(x, y, { spell: 0 }));
+    run(w, at(x, y), Math.ceil(windup / STEP_MS) + 2, pinned);
+  };
+
+  it("comes down on a body behind a wall", () => {
+    const w = arena("meteor", "hidden", wallAt(3));
+    const hidden = body(w, 150, 0);
+    castAt(w, hidden.x, hidden.y, [hidden]);
+    expect(marked(w)).toHaveLength(1);
+    expect(marked(w)[0]!.x).toBeCloseTo(hidden.x, 0);
+    expect(marked(w)[0]!.y).toBeCloseTo(hidden.y, 0);
+  });
+
+  it("finds a body anywhere on screen, and still takes the one it is aimed at first", () => {
+    const w = arena("meteor", "behind");
+    const behind = body(w, -150, 0);
+    castAt(w, PX + 200, PY, [behind]);
+    expect(marked(w)[0]!.x).toBeCloseTo(behind.x, 0);
+
+    const w2 = arena("meteor", "faced");
+    const faced = body(w2, 120, 60);
+    const other = body(w2, -150, 0);
+    castAt(w2, PX + 200, PY, [faced, other]);
+    expect(marked(w2)[0]!.x).toBeCloseTo(faced.x, 0);
+  });
+
+  it("does not reach a body off screen", () => {
+    const w = arena("meteor", "far");
+    const far = body(w, 400, 0);
+    castAt(w, far.x, far.y, [far]);
+    expect(marked(w)).toHaveLength(1);
+    expect(marked(w)[0]!.x).toBeLessThan(far.x - 100);
+  });
+
+  it("with no body on screen, lands on the ground ahead short of the wall", () => {
+    const w = arena("meteor", "walled", wallAt(3));
+    step(w, at(PX + 200, PY, { spell: 0 }));
+    run(w, at(PX + 200, PY), Math.ceil(windup / STEP_MS) + 2);
+    expect(marked(w)).toHaveLength(1);
+    const c = marked(w)[0]!;
+    expect(c.x).toBeGreaterThan(PX);
+    expect(c.x).toBeLessThan((Math.floor(PX / TILE_PX) + 3) * TILE_PX);
+  });
+
   it("misses a body that walks out of the mark", () => {
     const w = arena("meteor");
     const e = body(w, 150, 0);
