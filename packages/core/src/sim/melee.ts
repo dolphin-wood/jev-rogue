@@ -47,34 +47,29 @@ export const SWING_TOTAL_MS = SWING_WINDUP_MS + SWING_ACTIVE_MS + SWING_RECOVER_
 export const SWING_CHAIN_MS = 350;
 
 /**
- * **Three swings — a cut, a cut back, a thrust — then the sword rests.**
+ * **Four cuts — three one way, the last back across — then the sword rests.**
  *
- * A held key used to swing forever at
- * one swing every 16 frames, faster than any windup in the roster, so a
- * player standing still and holding it killed most bodies before their first
- * turn and never had to move. Slowing the swing would cost what makes it feel
- * good, so each swing keeps its speed and the *run* is bounded instead, after
- * Hades, whose combo ends in a recovery the enemies' attacks land in.
+ * A held key used to swing forever at one swing every 16 frames, faster than
+ * any enemy windup, so a player standing still and holding it killed most
+ * bodies before their first turn and never had to move. Slowing the swing
+ * would cost what makes it feel good, so each swing keeps its speed and the
+ * *run* is bounded instead, after The Wind Waker's held sword: the same cut
+ * three times, a fourth back the other way, and a pause the enemies' attacks
+ * land in. Every cut is the one motion, so there is no sequence to learn; the
+ * cut back is what says the run is ending, and it lands a little heavier.
  *
- * The run is a shape the player can see coming, after Hades' swing, chop and
- * thrust: the second cut crosses back the way the first came, and the third
- * is a thrust straight along the facing — narrower, longer, harder and
- * heavier, the finisher the rest follows. The rest is after the third swing
- * of a chain (`SWING_CHAIN_MS`) ends; the player walks at full pace through
+ * A thrust as the finisher was tried first and did not suit: a new motion
+ * that missed whatever the four-way facing did not point at.
+ *
+ * The rest follows the run's last cut; the player walks at full pace through
  * it, and a dash clears it — so the way to keep the blade going is to move.
  */
-export const SWING_RUN = 3;
+export const SWING_RUN = 4;
 export const SWING_BREATH_MS = 400;
-/**
- * The thrust. Its steel starts short and the reach is mostly spread, so the
- * blade is seen to drive out across the active frames; it ends about a sixth
- * further than a cut. Half a cut's width, since it does not sweep.
- */
-export const THRUST_STEEL = 0.8;
-export const THRUST_SPREAD = 1.6;
-export const THRUST_HALF_DEG = 14;
-export const THRUST_DAMAGE = 1.5;
-export const THRUST_KNOCKBACK = 1.6;
+/** The run's last cut, back across: wider, a little harder and heavier than the others. */
+export const FINISH_ARC_DEG = 180;
+export const FINISH_DAMAGE = 1.3;
+export const FINISH_KNOCKBACK = 1.4;
 
 /**
  * Total coverage of one swing: the angle the blade's tip travels through.
@@ -98,7 +93,12 @@ export const THRUST_KNOCKBACK = 1.6;
  * hitbox travelling rather than a wide one appearing, and because a spin is
  * then the same primitive with more degrees.
  */
-export const ARC_DEG = 170;
+/*
+ * Narrowed from 170 to 140 when the held sword became a run of four
+ * (`SWING_RUN`): the three alike cuts are the lighter ones, and the run's
+ * last cut, back across, sweeps the full 180 (`FINISH_ARC_DEG`).
+ */
+export const ARC_DEG = 140;
 /** How wide the blade's hitbox is at any instant. */
 export const BLADE_DEG = 34;
 /** So the tip travels this far, and blade plus sweep is the total coverage. */
@@ -263,8 +263,6 @@ export interface SwingBox {
   sweep: 1 | -1;
   /** Whether this swing continues a chain (`SWING_CHAIN_MS`): the conjured blade is already out. */
   chained: boolean;
-  /** The player's third swing of a run: a straight thrust, not a sweep (`SWING_RUN`). */
-  thrust: boolean;
   hitIds: number[];
   ageMs: number;
 }
@@ -273,7 +271,7 @@ export function makeSwingBox(): SwingBox {
   return {
     active: false, x: 0, y: 0, facing: 0, halfArc: 0, sweepDeg: 0, angle: 0, lastAngle: 0,
     trackingMs: 0, bladeReach: 0, spread: 0, reach: 0,
-    damage: 0, knockback: 0, sweep: 1, chained: false, thrust: false, hitIds: [], ageMs: 0,
+    damage: 0, knockback: 0, sweep: 1, chained: false, hitIds: [], ageMs: 0,
   };
 }
 
@@ -472,18 +470,12 @@ export function beginSwing(p: Player, world: World): void {
   box.damage = SWING_DAMAGE * (p.mods?.swordDamage ?? 1);
   box.knockback = SWING_KNOCKBACK;
   box.sweep = sweepFor(p.swingFacing);
-  box.thrust = false;
-  // The run's shape: the second cut comes back, the third is the thrust.
-  if (p.swingRun === 2) box.sweep = box.sweep === 1 ? -1 : 1;
-  else if (p.swingRun >= SWING_RUN) {
-    box.thrust = true;
-    box.sweepDeg = 0;
-    box.halfArc = (THRUST_HALF_DEG * Math.PI) / 180;
-    box.bladeReach *= THRUST_STEEL;
-    box.spread = SPREAD_BASE * THRUST_SPREAD * (p.mods?.swordReach ?? 1);
-    box.reach = box.bladeReach;
-    box.damage *= THRUST_DAMAGE;
-    box.knockback *= THRUST_KNOCKBACK;
+  // The run's last cut comes back the other way, wider, and lands heavier.
+  if (p.swingRun >= SWING_RUN) {
+    box.sweep = box.sweep === 1 ? -1 : 1;
+    box.sweepDeg = FINISH_ARC_DEG - BLADE_DEG;
+    box.damage *= FINISH_DAMAGE;
+    box.knockback *= FINISH_KNOCKBACK;
   }
   p.swung = true;
   box.chained = chained;

@@ -4,7 +4,7 @@ import {
   SPREAD_BASE, SWEEP_DEG, SWING_ACTIVE_MS, SWING_TOTAL_MS, SWING_WINDUP_MS,
   beginSwing, fullReach, makeSpin, makeSwingBox, manaPerHit, sectorHits,
   snapFacing, stepSwing, sweepFor, SWING_CHAIN_MS, swingMoveScale, swingPhase, totalCoverageDeg,
-  wallSlamSquareness, SWING_RUN, SWING_BREATH_MS, THRUST_DAMAGE,
+  wallSlamSquareness, SWING_RUN, SWING_BREATH_MS, FINISH_DAMAGE, FINISH_ARC_DEG,
 } from "./melee.ts";
 import { createWorld, step } from "./world.ts";
 import { NO_INPUT, PLAYER_RADIUS, STEP_MS } from "./types.ts";
@@ -97,7 +97,7 @@ describe("the swing's geometry", () => {
     // Widened from ALttP's measured 80 because that angle at this reach is a
     // stubby lozenge rather than a crescent, and the measured cost of widening
     // is about ten percent more enemies caught per swing.
-    expect(ARC_DEG).toBe(170);
+    expect(ARC_DEG).toBe(140);
     expect(BLADE_DEG + SWEEP_DEG).toBe(ARC_DEG);
     expect(ARC_REACH).toBeCloseTo(TILE_PX * 1.8, 6);
   });
@@ -166,34 +166,29 @@ describe("the swing's commitment", () => {
   });
 });
 
-describe("a run of swings: a cut, a cut back, a thrust, then a rest", () => {
+describe("a run of swings: three cuts, one back across, then a rest", () => {
   /** Swings once and lets it play out, then a few steps more: still inside the chain window. */
   const swingThrough = (w: ReturnType<typeof world>) => {
     beginSwing(w.player, w);
-    const s = { damage: w.swing.damage, reach: fullReach(w.swing), sweep: w.swing.sweep, sweepDeg: w.swing.sweepDeg, thrust: w.swing.thrust, started: w.player.swingMs > 0 };
+    const s = { damage: w.swing.damage, reach: fullReach(w.swing), sweep: w.swing.sweep, arc: totalCoverageDeg(w.swing), started: w.player.swingMs > 0 };
     for (let i = 0; i < 20; i++) stepSwing(w, STEP_MS);
     return s;
   };
 
-  it("cuts twice alike and thrusts harder and further on the third", () => {
-    const w = world();
-    const [a, b, c] = [swingThrough(w), swingThrough(w), swingThrough(w)];
-    expect(b.damage).toBeCloseTo(a.damage, 6);
-    expect(b.reach).toBeCloseTo(a.reach, 6);
-    expect(a.thrust || b.thrust).toBe(false);
-    expect(c.thrust).toBe(true);
-    expect(c.sweepDeg).toBe(0);
-    expect(c.damage).toBeCloseTo(a.damage * THRUST_DAMAGE, 6);
-    expect(c.reach).toBeGreaterThan(a.reach);
-  });
-
-  it("brings the second cut back the way the first came", () => {
+  it("cuts the same way three times and back across on the fourth", () => {
     const w = world();
     w.player.facing = Math.PI;
-    expect([swingThrough(w).sweep, swingThrough(w).sweep]).toEqual([1, -1]);
+    const run = Array.from({ length: SWING_RUN }, () => swingThrough(w));
+    expect(run.map((s) => s.sweep)).toEqual([1, 1, 1, -1]);
+    // Every cut the same reach; the three alike, the last a little heavier.
+    for (const s of run) expect(s.reach).toBeCloseTo(run[0]!.reach, 6);
+    for (const s of run.slice(1, -1)) expect(s.damage).toBeCloseTo(run[0]!.damage, 6);
+    expect(run[SWING_RUN - 1]!.damage).toBeCloseTo(run[0]!.damage * FINISH_DAMAGE, 6);
+    // The three sweep the cut's arc; the last sweeps wider.
+    expect(run.map((s) => Math.round(s.arc))).toEqual([ARC_DEG, ARC_DEG, ARC_DEG, FINISH_ARC_DEG]);
   });
 
-  it("rests after the thrust, then starts the run afresh", () => {
+  it("rests after the run's last cut, then starts the run afresh", () => {
     const w = world();
     for (let n = 0; n < SWING_RUN; n++) swingThrough(w);
     // A press during the rest does nothing.
@@ -201,7 +196,6 @@ describe("a run of swings: a cut, a cut back, a thrust, then a rest", () => {
     for (let i = 0; i < Math.ceil(SWING_BREATH_MS / STEP_MS); i++) stepSwing(w, STEP_MS);
     const next = swingThrough(w);
     expect(next.started).toBe(true);
-    expect(next.thrust).toBe(false);
     expect(w.swing.chained).toBe(false);
   });
 
