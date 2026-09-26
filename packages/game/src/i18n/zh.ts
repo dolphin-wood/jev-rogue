@@ -64,10 +64,10 @@ export const ZH: Table = {
   "menu.damageDealt": "造成伤害",
   "menu.damageTaken": "受到伤害",
   "menu.damageNumbers": "伤害数字",
-  "menu.autoMeleeAim": "近战自动索敌",
+  "menu.autoMeleeAim": "近战自动瞄准",
   "menu.autoCast": "自动施法",
   "menu.tabGeneral": "通用",
-  "menu.assistHeading": "辅助功能",
+  "menu.assistHeading": "战斗辅助",
   "menu.roomPlan": "每层开始前显示规划",
   "menu.screenShake": "画面震动",
   "shake.off": "关",
@@ -333,6 +333,8 @@ export const ZH: Table = {
   "first.character": "角色",
   "first.menu": "菜单",
   "first.footer": "随时可以在 [Esc] → 操作 里查看",
+  "first.assistIntro": "按需调整战斗辅助，之后也可以在设置中修改。",
+  "first.assistConfirm": "确认并开始",
 
   /* ------------------------------- controls ----------------------------- */
   "keys.walk": "移动",

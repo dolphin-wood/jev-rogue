@@ -66,7 +66,7 @@ export const JA: Table = {
   "menu.autoMeleeAim": "近接攻撃の自動照準",
   "menu.autoCast": "自動詠唱",
   "menu.tabGeneral": "一般",
-  "menu.assistHeading": "アシスト",
+  "menu.assistHeading": "戦闘アシスト",
   "menu.roomPlan": "階の開始前にプランを表示",
   "menu.screenShake": "画面の揺れ",
   "shake.off": "オフ",
@@ -332,6 +332,8 @@ export const JA: Table = {
   "first.character": "キャラクター",
   "first.menu": "メニュー",
   "first.footer": "操作はいつでも [Esc] → 操作 で確認できる",
+  "first.assistIntro": "必要なアシストを選択。後から設定で変更できます。",
+  "first.assistConfirm": "決定して開始",
 
   /* ------------------------------- controls ----------------------------- */
   "keys.walk": "移動",

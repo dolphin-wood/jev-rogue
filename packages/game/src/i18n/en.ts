@@ -67,7 +67,7 @@ export const EN = {
   "menu.autoMeleeAim": "Melee auto-target",
   "menu.autoCast": "Auto-cast",
   "menu.tabGeneral": "General",
-  "menu.assistHeading": "Assists",
+  "menu.assistHeading": "Combat assists",
   "menu.roomPlan": "Plan page before each floor",
   "menu.screenShake": "Screen shake",
   "shake.off": "Off",
@@ -340,6 +340,8 @@ export const EN = {
   "first.character": "Character",
   "first.menu": "Menu",
   "first.footer": "Controls are always under [Esc] → Controls",
+  "first.assistIntro": "Choose any assists you want. You can change them later in Settings.",
+  "first.assistConfirm": "Confirm and play",
 
   /* ------------------------------- controls ----------------------------- */
   "keys.walk": "Move",

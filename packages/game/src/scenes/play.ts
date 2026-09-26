@@ -1547,9 +1547,11 @@ export class PlayScene extends Phaser.Scene {
     } catch { return "reduced"; }
   })();
   private invincible = (() => { try { return localStorage.getItem(INVINCIBLE_KEY) === "1"; } catch { return false; } })();
-  /** The pause menu (Esc): its page, the highlighted row, and what it drew. */
+  /** The pause menu (Esc), or the first-run assist confirmation. */
   /** `tab` is which of the settings page's tabs is up (`SETTINGS_TABS`). */
-  private pauseUi: { page: "main" | "settings" | "controls"; selected: number; tab: number; objects: Phaser.GameObjects.GameObject[] } | null = null;
+  private pauseUi: { page: "main" | "settings" | "controls" | "firstAssist"; selected: number; tab: number; objects: Phaser.GameObjects.GameObject[] } | null = null;
+  /** Do not let the key that dismissed the guide also activate the assist dialog. */
+  private firstAssistInputGuard = false;
   /**
    * The title screen, over a fresh first room until a key is pressed.
    *
@@ -1634,7 +1636,7 @@ export class PlayScene extends Phaser.Scene {
    * A game whose verbs are eight keys cannot leave a first-time player to
    * find them: the action bar names the keys but not what they do, and the
    * Controls page is behind a menu nobody opens before they have a reason to.
-   * Shown once, dismissed by anything, and pointed at where it lives after.
+   * Shown once, dismissed by anything, then followed by the assist settings.
    */
   private hintsUi: { objects: Phaser.GameObjects.GameObject[]; off: () => void } | null = null;
   /** Set when the guide is owed but the room plan is still up. */
@@ -4812,6 +4814,14 @@ export class PlayScene extends Phaser.Scene {
     for (const g of this.hintsUi.objects) g.destroy();
     this.hintsUi.off();
     this.hintsUi = null;
+    this.pauseUi = { page: "firstAssist", selected: 4, tab: 0, objects: [] };
+    this.firstAssistInputGuard = true;
+    this.renderPause();
+  }
+
+  private confirmFirstLaunchAssists(): void {
+    if (this.pauseUi?.page !== "firstAssist") return;
+    this.hidePause();
     try { localStorage.setItem(SEEN_CONTROLS_KEY, "1"); } catch { /* shown again next time */ }
   }
 
@@ -5489,6 +5499,16 @@ export class PlayScene extends Phaser.Scene {
       this.autoCaster.reset();
       try { localStorage.setItem(AUTO_CAST_KEY, this.autoCast ? "1" : "0"); } catch { /* still applies */ }
     };
+    const assistRows = [
+      { label: t("menu.damageDealt"), value: `x${this.dealtMult}`, act: () => setDealt(this.dealtMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setDealt },
+      { label: t("menu.damageTaken"), value: `x${this.takenMult}`, act: () => setTaken(this.takenMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setTaken },
+      { label: t("menu.autoMeleeAim"), value: t(this.autoMeleeAim ? "menu.on" : "menu.off"), act: setAutoMeleeAim, adjust: setAutoMeleeAim },
+      { label: t("menu.autoCast"), value: t(this.autoCast ? "menu.on" : "menu.off"), act: setAutoCast, adjust: setAutoCast },
+    ];
+    if (ui.page === "firstAssist") return [
+      ...assistRows,
+      { label: t("first.assistConfirm"), act: () => this.confirmFirstLaunchAssists() },
+    ];
     if (ui.page === "settings") {
       /*
        * **Three tabs, not one long page.** Everything on one page ran past
@@ -5510,12 +5530,7 @@ export class PlayScene extends Phaser.Scene {
           ...this.volumeRows(),
           this.languageRow(),
         ],
-        [
-          { label: t("menu.damageDealt"), value: `x${this.dealtMult}`, act: () => setDealt(this.dealtMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setDealt },
-          { label: t("menu.damageTaken"), value: `x${this.takenMult}`, act: () => setTaken(this.takenMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setTaken },
-          { label: t("menu.autoMeleeAim"), value: t(this.autoMeleeAim ? "menu.on" : "menu.off"), act: setAutoMeleeAim, adjust: setAutoMeleeAim },
-          { label: t("menu.autoCast"), value: t(this.autoCast ? "menu.on" : "menu.off"), act: setAutoCast, adjust: setAutoCast },
-        ],
+        assistRows,
         // The tab is its heading.
         this.jevRows().map((r) => ({ ...r, heading: undefined })),
       ];
@@ -5565,18 +5580,25 @@ export class PlayScene extends Phaser.Scene {
     const headingH = pitch;
     const headings = rows.filter((r) => r.heading).length * headingH;
     const jevTab = ui.page === "settings" && ui.tab === SETTINGS_TABS.length - 1;
+    const firstAssist = ui.page === "firstAssist";
     // The settings panel is as tall as its tallest tab, and the tab strip, so turning a tab never resizes it.
     const tabsH = ui.page === "settings" ? 22 + pitch / 2 : 0;
     const bodyH = (ui.page === "controls" ? controlRows.length * 12 * linePitch() + 16 : 0)
-      + (ui.page === "settings" ? Math.max(rows.length, SETTINGS_TAB_ROWS) : rows.length) * pitch + headings + tabsH;
-    const panelW = ui.page === "controls" ? 400 : ui.page === "settings" ? 340 : 190;
+      + (ui.page === "settings" ? Math.max(rows.length, SETTINGS_TAB_ROWS) : rows.length) * pitch + headings + tabsH
+      + (firstAssist ? 30 : 0);
+    const panelW = ui.page === "controls" ? 400 : ui.page === "settings" || firstAssist ? 340 : 190;
     const panelH = bodyH + 62;
     ui.objects.push(...this.modalPanel(panelW, panelH, { depth: 230, cy }));
     const top = cy - panelH / 2;
-    const title = t(ui.page === "settings" ? "head.settings" : ui.page === "controls" ? "head.controls" : "head.paused");
+    const title = t(firstAssist ? "menu.assistHeading" : ui.page === "settings" ? "head.settings" : ui.page === "controls" ? "head.controls" : "head.paused");
     ui.objects.push(this.menuText(cx, top + 16, `—  ${title}  —`, 13, "#ffe9a8"));
     ui.objects.push(this.add.rectangle(cx, top + 28, panelW - 28, 1, 0x2a2750, 1).setDepth(230.5));
     let y = top + 40;
+    if (firstAssist) {
+      ui.objects.push(this.uiText(cx - panelW / 2 + 28, y, t("first.assistIntro"), 7, "#c9cfe8",
+        { wordWrap: { width: (panelW - 56) * ZOOM } }).setOrigin(0, 0).setDepth(231));
+      y += 30;
+    }
     if (ui.page === "settings") {
       /*
        * The tabs, as a row of names under the title: the one up in the
@@ -5654,6 +5676,13 @@ export class PlayScene extends Phaser.Scene {
         rowY += headingH * 0.85;
       }
       this.drawMenuRow(ui.objects, r, cx, rowY, panelW, i === ui.selected);
+      if (firstAssist) ui.objects.push(this.add.zone(cx, rowY, panelW - 24, pitch).setDepth(232)
+        .setInteractive({ useHandCursor: true }).on("pointerdown", () => {
+          ui.selected = i;
+          this.sfx.play("ui_select");
+          r.act();
+          if (this.pauseUi === ui) this.renderPause();
+        }));
       rowY += pitch;
     });
     // The same line the title menu carries, for the same reason.
@@ -5661,7 +5690,9 @@ export class PlayScene extends Phaser.Scene {
       ui.objects.push(this.uiText(labelX, tabEndY - 6, t("menu.jevHint"), 6, "#5a5f7a",
         { wordWrap: { width: (panelW - 40) * ZOOM } }).setOrigin(0, 0.5).setDepth(231));
     }
-    ui.objects.push(this.fittedKeys(cx, cy + panelH / 2 - 14, ui.page === "settings"
+    ui.objects.push(this.fittedKeys(cx, cy + panelH / 2 - 14, firstAssist
+      ? `[W][S] ${t("hint.choose")}     [A][D] ${t("hint.change")}     [Enter] ${t("hint.select")}     [Esc] ${t("hint.close")}`
+      : ui.page === "settings"
       ? `[Q][E] ${t("hint.tabs")}     [W][S] ${t("hint.choose")}     [A][D] ${t("hint.change")}     [Esc] ${t("hint.back")}`
       : `[W][S] ${t("hint.choose")}     [Enter] ${t("hint.select")}     [Esc] ${t("hint.back")}`, 7, "#8792b5", panelW - 24));
   }
@@ -5702,9 +5733,15 @@ export class PlayScene extends Phaser.Scene {
     const ui = this.pauseUi;
     if (!ui) return;
     const down = (k?: Phaser.Input.Keyboard.Key) => !!k && Phaser.Input.Keyboard.JustDown(k);
+    if (ui.page === "firstAssist" && this.firstAssistInputGuard) {
+      for (const key of Object.values(this.keys)) down(key);
+      this.firstAssistInputGuard = false;
+      return;
+    }
     const rows = this.pauseRows();
     if (down(this.keys.ESC)) {
       this.sfx.play("ui_back");
+      if (ui.page === "firstAssist") { this.confirmFirstLaunchAssists(); return; }
       // Controls opened from settings go back to settings, wherever settings was opened from.
       if (ui.page === "controls" && this.controlsFromSettings) { this.controlsFromSettings = false; ui.page = "settings"; ui.selected = 0; this.renderPause(); }
       else if (this.pauseFromTitle) this.closePauseToTitle();
