@@ -75,6 +75,20 @@ export function tableSource(kind: DecisionSource, table: WeightTable): Distribut
 export const flatTable: WeightTable = () => 1;
 
 /**
+ * **Questions whose escape is a stop, not a decline.**
+ *
+ * `subspecies` ranks the variant bodies; whether the room has any is
+ * `subspecies_weight`, asked beside it in the same round. A Jev that thinks
+ * the room should be plain has no option in the ranking that says so, and
+ * put its mass on the escape: measured, over half of it in ten rooms of
+ * sixteen, which the plan page read as "declined: variant bodies" and handed
+ * to the rule table. But the ranking among the bodies it did weigh is still
+ * Jev's, and it is only used when the weight says the room has variants — so
+ * the escape leaves the distribution and the rest is kept.
+ */
+export const ESCAPE_STOPS: ReadonlySet<string> = new Set(["subspecies"]);
+
+/**
  * The Jev source. Any failure throws `EvaluatorError`, which the Director
  * catches and replaces with the rule source for that one decision, per the
  * fallback contract.
@@ -99,8 +113,9 @@ export function jevSource(evaluate: Evaluator, now: () => number = Date.now): Di
         // not a gameplay answer. Choosing it, or mass above half on it, hands
         // this one question to the rule table (doc 002).
         const escape = answer.probabilities[FALLBACK] ?? 0;
-        if (escape > 0.5 || answer.choice === FALLBACK) { declined.push(name); continue; }
         const keys = offeredKeys(q);
+        const stops = ESCAPE_STOPS.has(name) && keys.some((k) => (answer.probabilities[k] ?? 0) > 0);
+        if (!stops && (escape > 0.5 || answer.choice === FALLBACK)) { declined.push(name); continue; }
         if (keys.length === 0) throw new EvaluatorError("invalid", `question "${name}" offered nothing`);
         dists[name] = normalise(keys, (k) => answer.probabilities[k] ?? 0);
         confidence[name] = answer.confidence;

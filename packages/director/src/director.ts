@@ -208,6 +208,27 @@ const TEMPERATURE = {
  */
 export const JEV_CONFIDENT = 0.5;
 
+/**
+ * **Questions about how often, drawn from Jev's distribution as given.**
+ *
+ * `JEV_CONFIDENT` takes Jev's top option outright at confidence 0.5, which is
+ * right for a question about getting one room right — which grade, which
+ * lane. These are not that. Each asks what kind of room this one is, and what
+ * matters is how often each kind comes up over a run: a Jev that puts 0.3 on
+ * the second answer is saying it should happen about a third of the time,
+ * and the threshold made that never. Measured over four full runs on the
+ * live model, it cut `breathe` waves from 22% to 12%, `tank` anchors from 15%
+ * to 8%, ice patches from 12% to 6%, a lone elite from 37% to 29% and
+ * release rooms from 15% to 10% — every one of them the minority answer, and
+ * each the kind of rate the findings kept proposing rule floors for (finding
+ * 27). Drawn as given, the rate is still Jev's.
+ */
+const AS_GIVEN: ReadonlySet<string> = new Set([
+  "next_tension", "composition", "wave_structure", "anchor", "elite_presence", "subspecies_weight",
+  "symmetry", "mood_temperature", "mood_brightness", "mood_particles",
+]);
+const asGiven = (name: string) => AS_GIVEN.has(name) || name.startsWith("zone_");
+
 /** TypeSafe's confidence for a Choice: 1 on a single peak, 0 on a flat spread. */
 export function choiceConfidence(dist: Distribution): number {
   const values = Object.values(dist);
@@ -458,7 +479,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
        * from (after code filtered the options and any repeat penalty).
        */
       const confidence = choiceConfidence(dist);
-      const choice = confidence >= JEV_CONFIDENT ? topOf(dist) : sampleOne(dist, rng);
+      const choice = confidence >= JEV_CONFIDENT && !asGiven(name) ? topOf(dist) : sampleOne(dist, rng);
       return {
         choice, probabilities: dist, confidence, source, question: name,
         ...(path ? { fallback_path: path as Decision["fallback_path"] } : {}),
