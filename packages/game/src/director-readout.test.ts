@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { CATEGORIES, categoryOf, groupByCategory } from "./director-readout.ts";
-import type { ReadoutRequest } from "./director-readout.ts";
+import { buildReadout, CATEGORIES, categoryOf, DOORS_OUT, groupByCategory } from "./director-readout.ts";
+import type { PlanRecord, ReadoutRequest } from "./director-readout.ts";
+import type { ObservedRequest } from "@jr/director";
 
 const q = (name: string) => ({ name, choice: null, probs: [], source: "rule" });
 
@@ -30,5 +31,39 @@ describe("director questions by category", () => {
     expect(groups.map((g) => g.category)).toEqual(["pacing", "room", "mood", "layout", "enemies", "portals", "cards"]);
     expect(groups.map((g) => g.category).every((c, i, a) => i === 0 || CATEGORIES.indexOf(a[i - 1]!) < CATEGORIES.indexOf(c))).toBe(true);
     expect(groups.find((g) => g.category === "enemies")!.questions[0]).toMatchObject({ name: "density", request: "round 2" });
+  });
+});
+
+describe("the doors' request on the readout", () => {
+  const observed = (round: number, questions: string[], dists: Record<string, Record<string, number>>): ObservedRequest => ({
+    meta: { run_id: "r", room_index: 3, door_slot: null, round, purpose: DOORS_OUT },
+    state: {}, source: "jev", dists,
+    questions: Object.fromEntries(questions.map((n) => [n, { instructions: "", criteria: {} }])) as unknown as ObservedRequest["questions"],
+  });
+
+  it("joins each answer to its question and shows the cards behind each kind, once", () => {
+    const log = [
+      observed(1, ["portal_need", "door_spell__overall", "door_spell__variety"], {
+        portal_need: { spell: 0.7, stat: 0.3 },
+        door_spell__overall: { meteor: 0.8, shock_arc: 0.2 },
+        door_spell__variety: { low: 0.1, medium: 0.9 },
+      }),
+      observed(2, ["spell_school"], { spell_school: { flame: 1 } }),
+    ];
+    const plans = new Map<string, PlanRecord>([[DOORS_OUT, {
+      decisions: [
+        { choice: "spell", probabilities: { spell: 0.7, stat: 0.3 }, confidence: 0.7, source: "jev" as const, question: "portal_need" },
+        { choice: "medium", probabilities: { low: 0.1, medium: 0.9 }, confidence: 0.9, source: "jev" as const, question: "door_spell__variety" },
+        { choice: "grade_2", probabilities: { grade_2: 1 }, confidence: null, source: "rule" as const, question: "normal_grade (code)" },
+      ],
+      offers: [{ prefix: "door_spell__", label: "spell door", blended: { meteor: 0.7, shock_arc: 0.3 }, ids: ["meteor", "shock_arc"] }],
+    }]]);
+    const [one, two] = buildReadout(log, plans);
+    expect(one!.questions.find((x) => x.name === "portal_need")!.choice).toBe("spell");
+    expect(one!.questions.find((x) => x.name === "door_spell__variety")!.choice).toBe("medium");
+    expect(one!.questions.find((x) => x.name === "blended offer: spell door")).toMatchObject({ choice: "meteor, shock_arc" });
+    // What code drew goes under the last round only, not once a round.
+    expect(one!.questions.some((x) => x.name === "normal_grade (code)")).toBe(false);
+    expect(two!.questions.filter((x) => x.name === "normal_grade (code)")).toHaveLength(1);
   });
 });

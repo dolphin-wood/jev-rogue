@@ -1463,7 +1463,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
      */
     async planOffer(ctx, req) {
       const q = offerAsk(ctx, req);
-      const meta: RequestMeta = { run_id: ctx.run_id, room_index: ctx.room_index, door_slot: null, round: 1, purpose: "offer" };
+      const meta: RequestMeta = { run_id: ctx.run_id, room_index: ctx.room_index, door_slot: null, round: 1, purpose: req.purpose ?? "offer" };
       const brief: BriefFor = { ctx, ...(req.cards?.length ? { cards: cardPools(req) } : {}) };
       const stage = q.first(await ask(q.questions, flatState(ctx, q.state), meta, brief));
       if (Object.keys(stage.questions).length === 0) return stage.finish(null);
