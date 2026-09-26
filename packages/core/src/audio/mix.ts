@@ -60,7 +60,7 @@ export function sfxPriority(name: SfxName): SfxPriority {
 
 /** The moments the music makes room for, and how far it dips. */
 export const MUSIC_DUCK: Readonly<Partial<Record<SfxName, number>>> = {
-  hurt: 0.35, player_down: 0.5, boss_phase: 0.5, kill_heavy: 0.35, boss_impact: 0.25,
+  hurt: 0.35, player_down: 0.5, kill_heavy: 0.35, boss_impact: 0.25,
 };
 
 export interface MixRequest {

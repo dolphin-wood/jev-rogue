@@ -2784,6 +2784,7 @@ function aimBossHop(w: World, e: Enemy): void {
 
 /** The hop, `since` ms into it: the crouch, the arc, and down on the mark. */
 function stepBossHop(w: World, e: Enemy, since: number): void {
+  const wasUp = e.bossLift > 0;
   if (since < BOSS_HOP_GATHER_MS) {
     e.bossLift = -3 * Math.max(0, since) / BOSS_HOP_GATHER_MS;
   } else if (since < BOSS_HOP_MS) {
@@ -2792,6 +2793,8 @@ function stepBossHop(w: World, e: Enemy, since: number): void {
     e.x = e.bossFromX + (e.bossTargetX - e.bossFromX) * ease;
     e.y = e.bossFromY + (e.bossTargetY - e.bossFromY) * ease;
     e.bossLift = BOSS_HOP_HEIGHT * 4 * k * (1 - k);
+    // Off the floor: heard (`boss_hop`).
+    if (!wasUp && e.bossLift > 0) w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: "boss_hop" });
   } else if (e.bossLift !== 0) {
     e.x = e.bossTargetX;
     e.y = e.bossTargetY;
@@ -2896,6 +2899,8 @@ function bossSummonSpots(w: World, e: Enemy, n: number): { x: number; y: number 
  * tiles across. The leap's landing keeps its own radius.
  */
 function bossShock(w: World, e: Enemy, inner = 0): void {
+  // The band's own roll, under the strike that throws it (`boss_wave`).
+  w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: "boss_wave" });
   castShockwave(w, e.x, e.y, {
     chargeMs: 0,
     inner,
@@ -3321,7 +3326,12 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
   const elapsed = BOSS_LEAP_MS - e.bossCastMs;
   const upAt = BOSS_LEAP_RISE_MS, huntAt = upAt + BOSS_LEAP_UP_MS, lockAt = huntAt + BOSS_LEAP_HUNT_MS;
   const fallAt = BOSS_LEAP_MS - BOSS_LEAP_FALL_MS;
+  const wasAir = e.airborne;
   e.airborne = elapsed > upAt && e.bossCastMs > 0;
+  // Off the floor, and the mark locking: both heard (`boss_jump`, `boss_lock`), the second being the cue to go.
+  if (!wasAir && e.airborne) w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: "boss_jump" });
+  if (BOSS_LEAP_MS - before < lockAt && elapsed >= lockAt)
+    w.events.push({ kind: "telegraph", x: e.bossTargetX, y: e.bossTargetY, what: "boss_lock" });
   if (e.bossCastMs > 0) {
     if (!e.airborne) {
       // The gather: it sinks a little before it goes, which is the beat that says "now".
@@ -3479,7 +3489,9 @@ function anyFloor(w: World): { x: number; y: number } {
 function stepBossMeteor(w: World, e: Enemy, before: number): void {
   const upAt = e.bossStartAt - BOSS_METEOR_UP_MS;
   const since = e.bossFightMs - upAt;
+  const wasAir = e.airborne;
   e.airborne = since > 0 && e.bossCastMs > 0;
+  if (!wasAir && e.airborne) w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: "boss_jump" });
   if (e.bossCastMs > 0) {
     e.knockX = 0; e.knockY = 0; e.vx = 0; e.vy = 0;
     if (since <= 0) {

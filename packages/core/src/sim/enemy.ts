@@ -2253,6 +2253,7 @@ export function bossDashWake(world: World, e: Enemy): void {
   if (len < TILE_PX) return;
   const a = Math.atan2(e.lungeY, e.lungeX);
   const mx = (e.x + e.dashFromX) / 2, my = (e.y + e.dashFromY) / 2;
+  world.events.push({ kind: "telegraph", x: mx, y: my, what: "boss_wake" });
   for (const side of [-1, 1]) {
     castShockwave(world, mx, my, {
       chargeMs: 0, inner: e.radius * 0.6, thickness: BOSS_WAKE_THICK_PX,

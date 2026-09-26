@@ -7780,10 +7780,18 @@ export class PlayScene extends Phaser.Scene {
           else if (what === "lightning" || what === "peal") sfx.play("impact_storm");
           else if (what === "heavy_hit") sfx.play("hit_heavy");
           // The boss's ground strikes have their own voice: played as a low heavy hit they lost it to the player's hits.
+          /*
+           * The charged third blow of phase III's slam, and the fall's landing: the floor heaved up — the
+           * strike a fourth lower, and so longer and heavier, in place of the ordinary one.
+           */
+          else if ((what === "boss_slam" || what === "boss_land") && this.bossHeaves(what)) sfx.play("boss_impact", 0.72);
           else if (what === "boss_land") sfx.play("boss_impact", 0.9);
           // An add of his rising at the call.
           else if (what === "boss_summon") sfx.play("cast_void", 0.8);
+          // Phase III's stomps: the strike, lighter and higher than the charged blow they lead to.
+          else if (what === "boss_stomp") sfx.play("boss_impact", 1.15);
           else if (what.startsWith("boss_")) sfx.play("boss_impact");
+
           else if (what.startsWith("ram:")) sfx.play("hit_heavy", 0.78);
           // The boss's arms reaching the floor after their windup.
           else if (what === "arm") sfx.play("boss_sweep");
@@ -7914,6 +7922,11 @@ export class PlayScene extends Phaser.Scene {
       if (e.attack !== "windup") continue;
       winding.add(e.id);
       if (a.winding.has(e.id)) continue;
+      // The king's greatsword drawn back is his own sound, pitched by the blow (`boss_tele_blade`).
+      if (e.archetype === "boss") {
+        sfx.play("boss_tele_blade", ({ greatsweep: 0.9, greatslash: 1.15, dashcut: 1, maul: 0.95, greatcleave: 0.85 } as Partial<Record<string, number>>)[e.meleeKind ?? ""] ?? 1);
+        continue;
+      }
       sfx.play(e.meleeKind && SLAM_KINDS.has(e.meleeKind) ? "tele_slam" : "tele_charge",
         e.meleeKind === "slash" || e.meleeKind === "claw" ? 1.2 : 1);
     }
@@ -7934,6 +7947,8 @@ export class PlayScene extends Phaser.Scene {
       else if (k === "greatslash") sfx.play("boss_sweep", 1.25);
       else if (k === "dashcut") { sfx.play("enemy_lunge", 0.8); sfx.play("boss_sweep", 0.9); }
       else if (k === "greatcleave") sfx.play("boss_impact", 1.1);
+      // His backhand: a gauntleted arm, not a roster body's swipe.
+      else if (k === "maul" && e.archetype === "boss") sfx.play("boss_backhand");
       else if (k === "bristle") sfx.play("enemy_spikes");
       else if (k === "charge" || k === "thrust" || k === "lance" || k === "bash") sfx.play("enemy_lunge", k === "bash" ? 0.85 : 1);
       else sfx.play("enemy_swipe", SLAM_KINDS.has(k) ? 0.8 : 1.05);
@@ -8086,17 +8101,40 @@ export class PlayScene extends Phaser.Scene {
     }
   }
 
+  /** Whether a ground strike is one that heaves the floor: phase III's charged slam, or the fall's landing. */
+  private bossHeaves(what: string): boolean {
+    const king = this.world.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
+    return !!king && (what === "boss_slam" ? king.phase >= 3 : king.bossCast === "meteor");
+  }
+
   private telegraphFor(what: string): [SfxName, number] | null {
     /*
-     * A phase change is a blow of the king's, pitched down,
-     * not `boss_phase`: that is a second of low tone falling from 300 to
-     * 100 Hz, which under the boss theme read as a hum rather than an event.
+     * A phase change is a blow of the king's, pitched down, not a sound of
+     * its own: the horn it once had (a second of low tone falling from 300 to
+     * 100 Hz) read under the boss theme as a hum rather than an event, and
+     * has been taken out of the set.
      */
     if (what.startsWith("boss_phase:")) return ["boss_impact", 0.8];
     // The call: the sword going up, the storm's voice pitched down.
     if (what === "boss_summon") return ["impact_storm", 0.7];
     // The fall into phase III starts silent: the roar before it was the sound, and the music is held down under it.
     if (what === "boss_meteor") return null;
+    /*
+     * The king's moves each promise differently, so each has its own tell:
+     * the leap rises, the chain rattles, the storm hums up; the slam and the
+     * quake keep the falling gather. Then his body's own sounds: off the
+     * floor (lower for the leap and the fall, higher for the hop back), the
+     * leap's mark locking, and the band rolling out (higher and shorter for
+     * the dashcut's wake).
+     */
+    if (what === "boss_leap") return ["boss_tele_leap", 1];
+    if (what === "boss_hook") return ["boss_tele_hook", 1];
+    if (what === "boss_storm") return ["boss_tele_storm", 1];
+    if (what === "boss_jump") return ["boss_jump", 0.9];
+    if (what === "boss_hop") return ["boss_jump", 1.2];
+    if (what === "boss_lock") return ["boss_lock", 1];
+    if (what === "boss_wave") return ["boss_wave", 1];
+    if (what === "boss_wake") return ["boss_wave", 1.35];
     if (what.startsWith("boss_")) return ["tele_slam", 0.85];
     if (what.startsWith("stir:")) return ["enemy_wake", 1.15];
     // A sidestep and a blink are movement, not a promise of damage;

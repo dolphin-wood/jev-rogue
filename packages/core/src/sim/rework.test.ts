@@ -535,6 +535,36 @@ describe("the boss", () => {
     expect(Math.hypot(band!.x - b.x, band!.y - b.y)).toBeLessThan(30);
   });
 
+  it("is heard: off the floor, the leap's mark locking, and the band going out, once each", () => {
+    const w = world();
+    const b = boss(w);
+    b.hp = b.maxHp * 0.5;
+    step(w, NO_INPUT);
+    settle(w, b);
+    w.enemies = w.enemies.filter((x) => x === b);
+    w.bossHold = { moves: true, blades: true, volleys: true };
+    b.attack = "approach";
+    w.player.x = b.x + 60;
+    w.player.y = b.y + 40;
+    const heard: { what: string }[] = [];
+    const run = (n: number) => {
+      for (let i = 0; i < n; i++) {
+        w.player.hearts = 6; w.player.invulnMs = 1e9; w.events.length = 0;
+        step(w, NO_INPUT);
+        for (const ev of w.events)
+          if (ev.kind === "telegraph" && /^boss_(jump|hop|lock|wave|wake)$/.test(ev.what ?? "")) heard.push({ what: ev.what! });
+      }
+    };
+    onGrid(b, BOSS_LEAP_MS);
+    expect(queueBossMove(w, "leap")).toBe(true);
+    run(Math.ceil(BOSS_LEAP_MS / STEP_MS) + 40);
+    expect(heard.map((x) => x.what)).toEqual(["boss_jump", "boss_lock", "boss_wave"]);
+    heard.length = 0;
+    expect(queueBossMove(w, "storm")).toBe(true);
+    run(60 * 3);
+    expect(heard.map((x) => x.what)).toEqual(["boss_hop"]);
+  });
+
   it("dashcut: stops on the player it catches, throws them a step, and the cut behind it reaches them", () => {
     const w = world();
     const b = boss(w);
