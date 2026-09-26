@@ -481,7 +481,7 @@ export function createWorld(input: CreateWorldOptions): World {
       strikeMs: 0, strikeDamage: 0, strikeRadius: 0,
       strikeElement: "none" as const, strikeElementPower: 1, strikePowers: noPowers(), strikeProc: 1, strikeStatusMult: 1, strikeHits: [],
       stunMs: 0, dragMs: 0, dragX: 0, dragY: 0, slipMs: 0, slideX: 0, slideY: 0,
-      swingMs: 0, swingFacing: 0, swung: false, chainMs: 0,
+      swingMs: 0, swingFacing: 0, swung: false, chainMs: 0, swingRun: 0, swingBreathMs: 0,
       trail: null, enchant: null, stance: null,
     },
     enemies: [],
@@ -1069,6 +1069,10 @@ function stepPlayer(w: World, input: Input, dtMs: number): void {
      */
     if (p.stance) answerStance(w, p.stance.expireShare);
     p.dashMs = DASH_MS;
+    // And the sword's rest: a dash starts a fresh run of swings, so moving is
+    // how the player keeps up the pressure (see `SWING_BREATH_MS`).
+    p.swingRun = 0;
+    p.swingBreathMs = 0;
     p.slipFired = 0;
     p.dashIframeMs = DASH_IFRAME_MS;
     p.dashCooldownMs = DASH_MS + DASH_COOLDOWN_MS * p.mods.dashCooldown;
