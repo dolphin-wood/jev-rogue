@@ -1445,6 +1445,8 @@ export class PlayScene extends Phaser.Scene {
   private pops: KillPop[] = [];
   /** The colours each death frame bursts into (`popColours`). */
   private popPalette = new Map<string, number[]>();
+  /** How far down each bolt frame is drawn (`boltReach`), read once per frame. */
+  private boltReaches = new Map<string, number>();
   /**
    * Standing features with a light in them, so the flame or the glow has two
    * frames rather than one. Rebuilt per room with the tile layer.
@@ -11461,6 +11463,30 @@ export class PlayScene extends Phaser.Scene {
     return kept;
   }
 
+  /**
+   * How far down its frame a bolt is drawn, 0..1: the lowest row with any ink,
+   * read off the sheet once and kept. The first bolt frame is the leader still
+   * coming down and stops about two thirds of the way; anchored by the frame's
+   * bottom it hung above the ground it was striking, a gap the stretch to the
+   * top of the view made a third of the column. Anchored here, every frame
+   * touches down on its mark.
+   */
+  private boltReach(frame: string): number {
+    const known = this.boltReaches.get(frame);
+    if (known !== undefined) return known;
+    let reach = 1;
+    const f = this.textures.getFrame(this.textureKey, frame);
+    if (f) {
+      scan: for (let y = f.cutHeight - 1; y >= 0; y--)
+        for (let x = 0; x < f.cutWidth; x++) {
+          const c = this.textures.getPixel(x, y, this.textureKey, frame);
+          if (c && c.alpha > 20) { reach = (y + 1) / f.cutHeight; break scan; }
+        }
+    }
+    this.boltReaches.set(frame, reach);
+    return reach;
+  }
+
   /** A few of the colours a frame is drawn in, read off the sheet and kept, so a body bursts into itself. */
   private popColours(frame: string): number[] {
     const known = this.popPalette.get(frame);
@@ -13228,8 +13254,10 @@ export class PlayScene extends Phaser.Scene {
           const boltFrame = `vfx_bolt_${Math.min(2, Math.floor(t * 3))}`;
           // From the top of the view: a bolt out of the sky, not a spark off his sword.
           if (this.atlas.has(boltFrame)) {
-            const img = this.add.image(r.x, r.y, this.textureKey, boltFrame).setOrigin(0.5, 1).setDepth(10);
-            img.setScale(1.4 / ART_SCALE, Math.max(1.4 / ART_SCALE, (r.y - this.cameras.main.worldView.y) / Math.max(1, img.height)));
+            // Its lowest ink on the mark (`boltReach`), and stretched so that point is at the top of the view's reach.
+            const reach = this.boltReach(boltFrame);
+            const img = this.add.image(r.x, r.y, this.textureKey, boltFrame).setOrigin(0.5, reach).setDepth(10);
+            img.setScale(1.4 / ART_SCALE, Math.max(1.4 / ART_SCALE, (r.y - this.cameras.main.worldView.y) / Math.max(1, img.height * reach)));
             this.hazardMarks.push(img);
             /*
              * The call's bolts are his storm's, turned violet (`Rift.summon`).
@@ -13239,7 +13267,7 @@ export class PlayScene extends Phaser.Scene {
              */
             if (r.summon) {
               img.setTintFill(BOSS_CALL_BOLT);
-              const core = this.add.image(r.x, r.y, this.textureKey, boltFrame).setOrigin(0.5, 1).setDepth(10.01)
+              const core = this.add.image(r.x, r.y, this.textureKey, boltFrame).setOrigin(0.5, reach).setDepth(10.01)
                 .setScale(img.scaleX * 0.5, img.scaleY).setTint(0xf4e8ff).setBlendMode(Phaser.BlendModes.ADD);
               this.hazardMarks.push(core);
             }
@@ -13602,7 +13630,7 @@ export class PlayScene extends Phaser.Scene {
         const boltFrame = `vfx_bolt_${Math.min(2, Math.floor(progress * 3))}`;
         if (this.atlas.has(boltFrame)) {
           const bolt = this.add.image(s.x, s.y, this.textureKey, boltFrame)
-            .setOrigin(0.5, 1)
+            .setOrigin(0.5, this.boltReach(boltFrame))
             .setScale(1 / ART_SCALE)
             .setDepth(10);
           this.hazardMarks.push(bolt);
