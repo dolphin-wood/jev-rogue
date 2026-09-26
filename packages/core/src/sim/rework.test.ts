@@ -1,11 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { rampFor } from "../encounters/ramp.ts";
 import { addPower, clearPowers } from "../content/tags.ts";
-import { createWorld, step, queueBossMove, forceBossBlade, hurtEnemy, BOSS_SLAM_MS, BOSS_LEAP_MS, BOSS_LEAP_RISE_MS, BOSS_QUAKE_MS } from "./world.ts";
+import {
+  createWorld, step, queueBossMove, forceBossBlade, hurtEnemy, BOSS_SLAM_MS, BOSS_LEAP_MS, BOSS_LEAP_RISE_MS, BOSS_QUAKE_MS,
+  BOSS_LEAP_UP_MS, BOSS_LEAP_HUNT_MS, BOSS_LEAP_LOCK_MS, BOSS_LEAP_FALL_MS, BOSS_LEAP_SKY_PX, BOSS_HOP_PX,
+} from "./world.ts";
 import { BAR_MS, BEAT_MS } from "./beat.ts";
 import { NO_INPUT, noMods } from "./types.ts";
 import type { World } from "./types.ts";
-import { makeEnemy, BOSS_ROAR_MS } from "./enemy.ts";
+import { makeEnemy, BOSS_ROAR_MS, BOSS_DASH_PAST_PX } from "./enemy.ts";
 import { armHits } from "./attacks.ts";
 import { PLAYER_RADIUS, STEP_MS } from "./types.ts";
 import { acquire } from "./bullets.ts";
@@ -18,7 +21,7 @@ import { applyStat, statById, statLine } from "../run/stats.ts";
 import { offerCards, ruleOffer } from "../run/offer.ts";
 import { ruleDoors, RUN_BOSS_ROOM } from "../run/doors.ts";
 import { RngSource } from "../rng.ts";
-import { GRID_W, Tile } from "../types.ts";
+import { GRID_W, TILE_PX, Tile } from "../types.ts";
 import type { Element } from "../types.ts";
 
 const src = new RngSource("rework");
@@ -376,42 +379,146 @@ describe("the boss", () => {
     expect(w.enemyBullets.filter((x) => x.alive).length).toBe(0);
   });
 
-  it("leaps in phase two: it travels, is untouchable in the air, and the landing throws the band", () => {
+  it("leaps out of the hall: it hunts the player from above, locks, and the landing throws the band", () => {
     const w = world();
     const b = boss(w);
     b.hp = b.maxHp * 0.5;
     step(w, NO_INPUT);
     expect(b.phase).toBe(2);
     settle(w, b);
-    // Phase two opens with adds.
-    expect(w.enemies.filter((x) => x !== b && x.hp > 0).length).toBe(4);
+    // Phase two opens with adds; they are not what is being tested.
+    w.enemies = w.enemies.filter((x) => x === b);
     b.attack = "approach";
     b.bossCast = "none";
-    w.player.x = b.x + 200;
-    w.player.y = b.y;
+    // At his feet: the leap is not a question about range any more.
+    w.player.x = b.x + 40;
+    w.player.y = b.y + 30;
+    const hold = () => { w.player.hearts = 6; w.player.invulnMs = 1e9; };
     onGrid(b, BOSS_LEAP_MS);
     expect(queueBossMove(w, "leap")).toBe(true);
     step(w, NO_INPUT);
     expect(b.bossCast).toBe("leap");
     const fromX = b.x;
+    const run = (ms: number, at?: () => void) => {
+      for (let i = 0; i < Math.round(ms / STEP_MS); i++) { at?.(); hold(); step(w, NO_INPUT); }
+    };
     // It gathers on the floor first: still down, still hittable.
-    for (let i = 0; i < Math.floor(BOSS_LEAP_RISE_MS / 16) - 2; i++) step(w, NO_INPUT);
+    run(BOSS_LEAP_RISE_MS - 3 * STEP_MS);
     expect(b.airborne).toBe(false);
     expect(Math.abs(b.x - fromX)).toBeLessThan(2);
-    // Then it is in the air, lifted, and **travelling** rather than waiting.
-    for (let i = 0; i < 20; i++) step(w, NO_INPUT);
+    // Then straight up and out of the view.
+    run(BOSS_LEAP_UP_MS + 3 * STEP_MS);
     expect(b.airborne).toBe(true);
-    expect(b.bossLift).toBeGreaterThan(10);
-    expect(Math.abs(b.x - fromX)).toBeGreaterThan(10);
-    const tx = b.bossTargetX;
-    for (let i = 0; i < Math.ceil(BOSS_LEAP_MS / 16); i++) step(w, NO_INPUT);
+    expect(b.bossLift).toBeGreaterThan(BOSS_LEAP_SKY_PX * 0.9);
+    // Up there, the mark follows the player at about their own pace, and he is under it.
+    w.player.x += 80;
+    const before = Math.hypot(b.bossTargetX - w.player.x, b.bossTargetY - w.player.y);
+    run(BOSS_LEAP_HUNT_MS - 6 * STEP_MS);
+    expect(Math.hypot(b.bossTargetX - w.player.x, b.bossTargetY - w.player.y)).toBeLessThan(before - 50);
+    expect(Math.hypot(b.x - b.bossTargetX, b.y - b.bossTargetY)).toBeLessThan(1);
+    run(8 * STEP_MS);
+    // Locked: the player walks off and the mark stays where it stopped.
+    const tx = b.bossTargetX, ty = b.bossTargetY;
+    run(BOSS_LEAP_LOCK_MS - BOSS_LEAP_FALL_MS - 4 * STEP_MS, () => { w.player.x -= 1; });
+    expect(Math.hypot(b.bossTargetX - tx, b.bossTargetY - ty)).toBe(0);
+    // Still out of sight until the fall, then down onto the mark.
+    expect(b.bossLift).toBe(BOSS_LEAP_SKY_PX);
+    run(BOSS_LEAP_FALL_MS + 6 * STEP_MS);
     expect(b.airborne).toBe(false);
     expect(b.bossLift).toBe(0);
-    expect(Math.abs(b.x - tx)).toBeLessThan(40);
+    expect(Math.hypot(b.x - tx, b.y - ty)).toBeLessThan(24);
     // The landing throws the shockwave, from the place it landed.
     const band = w.shockwaves.find((x) => x.alive);
     expect(band).toBeDefined();
     expect(Math.hypot(band!.x - b.x, band!.y - b.y)).toBeLessThan(30);
+  });
+
+  it("dashcut: stops on the player it catches, throws them a step, and the cut behind it reaches them", () => {
+    const w = world();
+    const b = boss(w);
+    b.hp = b.maxHp * 0.5;
+    b.hasAttacked = true;
+    step(w, NO_INPUT);
+    settle(w, b);
+    w.enemies = w.enemies.filter((x) => x === b);
+    w.bossHold = { moves: true, blades: true, volleys: true };
+    // Level with him, four tiles off, with a long run of floor behind them.
+    w.player.x = b.x + 130;
+    w.player.y = b.y;
+    w.player.hearts = 6;
+    expect(forceBossBlade(w, "dashcut")).toBe(true);
+    let stoppedAt = -1, hitAt = -1, secondAt = -1;
+    const px0 = w.player.x;
+    for (let i = 0; i < 60 * 3 && secondAt < 0; i++) {
+      const hearts = w.player.hearts;
+      step(w, NO_INPUT);
+      if (w.player.hearts < hearts) {
+        if (hitAt < 0) hitAt = i;
+        else secondAt = i;
+        // Mercy frames would cover the second blow; it is its reach being tested.
+        w.player.invulnMs = 0;
+      }
+      if (hitAt >= 0 && stoppedAt < 0 && b.attack !== "lunge") stoppedAt = i;
+    }
+    expect(hitAt).toBeGreaterThanOrEqual(0);
+    // He planted on them instead of running on through.
+    expect(b.x).toBeLessThan(w.player.x);
+    // Thrown a step down the line, not across the hall.
+    expect(w.player.x - px0).toBeGreaterThan(8);
+    expect(w.player.x - px0).toBeLessThan(48);
+    // And the string's next blow found them there.
+    expect(secondAt).toBeGreaterThan(hitAt);
+  });
+
+  it("dashcut in phase III: the run leaves a wake either side, rolling a short way off its line", () => {
+    const w = world();
+    const b = boss(w);
+    b.hp = b.maxHp * 0.2;
+    b.hasAttacked = true;
+    step(w, NO_INPUT);
+    settle(w, b);
+    expect(b.phase).toBe(3);
+    w.enemies = w.enemies.filter((x) => x === b);
+    w.bossHold = { moves: true, blades: true, volleys: true };
+    w.shockwaves.length = 0;
+    w.player.x = b.x + 120;
+    w.player.y = b.y;
+    expect(forceBossBlade(w, "dashcut")).toBe(true);
+    while (b.attack === "windup") step(w, NO_INPUT);
+    // Stepped off its line, so the run goes by.
+    w.player.y = b.y + 70;
+    for (let i = 0; i < 60 && b.attack === "lunge"; i++) { w.player.invulnMs = 1e9; step(w, NO_INPUT); }
+    const wake = w.shockwaves.filter((x) => x.alive && x.width !== undefined);
+    expect(wake.length).toBe(2);
+    // One each side of the run, along it, and as long as it.
+    const sides = wake.map((x) => Math.round(Math.sin(x.facing!)));
+    expect(sides.sort()).toEqual([-1, 1]);
+    expect(wake[0]!.width).toBeGreaterThan(80);
+    // A short roll, not a blast across the hall.
+    for (const x of wake) expect(x.maxRadius).toBeLessThanOrEqual(TILE_PX * 3.5);
+  });
+
+  it("dashcut: a run that misses ends a body past where the player stood, not in the wall", () => {
+    const w = world();
+    const b = boss(w);
+    b.hp = b.maxHp * 0.5;
+    b.hasAttacked = true;
+    step(w, NO_INPUT);
+    settle(w, b);
+    w.enemies = w.enemies.filter((x) => x === b);
+    w.bossHold = { moves: true, blades: true, volleys: true };
+    w.player.x = b.x + 120;
+    w.player.y = b.y;
+    expect(forceBossBlade(w, "dashcut")).toBe(true);
+    const x0 = b.x;
+    const standX = w.player.x;
+    // Off its line as it goes: well below him, out of the blade's way.
+    while (b.attack === "windup") step(w, NO_INPUT);
+    w.player.y = b.y + 90;
+    for (let i = 0; i < 60 && b.attack !== "approach"; i++) { w.player.invulnMs = 1e9; step(w, NO_INPUT); }
+    expect(b.staggerMs).toBeLessThanOrEqual(0);
+    expect(b.x - x0).toBeGreaterThan(standX - x0 - 10);
+    expect(b.x - x0).toBeLessThan(standX - x0 + BOSS_DASH_PAST_PX + 40);
   });
 
   it("strings climb in cost, and a hit's mercy frames still cover what falls inside them", () => {
@@ -519,6 +626,73 @@ describe("the boss", () => {
     for (const r of w.rifts.filter((x) => x.bolt)) expect(r.teleMaxMs).toBeGreaterThanOrEqual(260);
   });
 
+  it("hops back out of reach before the storm, on the leap's frames, and lands before the first mark", () => {
+    const w = world();
+    const b = boss(w);
+    b.hp = b.maxHp * 0.5;
+    step(w, NO_INPUT);
+    settle(w, b);
+    w.enemies = w.enemies.filter((x) => x === b);
+    b.attack = "approach";
+    w.bossHold = { moves: true, blades: true, volleys: true };
+    // At his feet, in front of him.
+    w.player.x = b.x;
+    w.player.y = b.y + 50;
+    expect(queueBossMove(w, "storm")).toBe(true);
+    for (let i = 0; i < 60 * 3 && b.bossCast !== "storm"; i++) step(w, NO_INPUT);
+    expect(b.bossCast).toBe("storm");
+    const y0 = b.y;
+    let gathered = false, flew = false, markedAt = -1;
+    for (let i = 0; i < 60 * 2 && markedAt < 0; i++) {
+      w.player.hearts = 6;
+      w.player.invulnMs = 1e9;
+      w.events.length = 0;
+      step(w, NO_INPUT);
+      if (b.bossLift < 0) gathered = true;
+      if (b.bossLift > 10) flew = true;
+      if (w.events.some((ev) => ev.kind === "telegraph" && ev.what === "bolt")) markedAt = i;
+    }
+    expect(gathered).toBe(true);
+    expect(flew).toBe(true);
+    // Away from the player, up the hall, by up to three tiles; and down before the first bolt is marked.
+    expect(y0 - b.y).toBeGreaterThan(60);
+    expect(y0 - b.y).toBeLessThanOrEqual(97);
+    expect(markedAt).toBeGreaterThan(0);
+    expect(b.bossLift).toBe(0);
+  });
+
+  it("dashcut at his feet: hops back, winds up with the line drawn, then runs at the player", () => {
+    const w = world();
+    const b = boss(w);
+    b.hp = b.maxHp * 0.5;
+    b.hasAttacked = true;
+    step(w, NO_INPUT);
+    settle(w, b);
+    w.enemies = w.enemies.filter((x) => x === b);
+    // Level with him and close: only the dashcut is left to choose (the moves and the volleys held).
+    w.bossHold = { moves: true, blades: false, volleys: true };
+    b.bossLastAct = "maul";
+    const place = () => { w.player.x = b.bossHopMs > 0 || b.attack !== "approach" ? w.player.x : b.x + 50; w.player.y = b.y; };
+    let hopped = false, windupFrom = -1;
+    for (let i = 0; i < 60 * 12 && windupFrom < 0; i++) {
+      place();
+      w.player.hearts = 6;
+      w.player.invulnMs = 1e9;
+      step(w, NO_INPUT);
+      if (b.bossHopMs > 0 && b.bossLift > 10) hopped = true;
+      if (b.attack === "windup" && b.meleeKind === "dashcut") windupFrom = Math.abs(w.player.x - b.x);
+      // Anything else he chose is not this test's: put him back in his rest.
+      if (windupFrom < 0 && b.bossHopMs <= 0 && b.attack !== "approach" && b.meleeKind !== "dashcut") { b.attack = "approach"; b.bossLastAct = "maul"; }
+    }
+    expect(hopped).toBe(true);
+    // The hop made the room: the windup starts three tiles or so off, not at their side.
+    expect(windupFrom).toBeGreaterThan(50 + 60);
+    // The tell is the windup's own: the blade armed inert along the line.
+    expect(b.swing.active).toBe(false);
+    for (let i = 0; i < 120 && b.attack === "windup"; i++) step(w, NO_INPUT);
+    expect(b.attack).not.toBe("windup");
+  });
+
   it("hooks: the chain follows the player while it lies there, catches for nothing, and the slash comes as they land", () => {
     const w = world();
     const b = boss(w);
@@ -572,9 +746,9 @@ describe("the boss", () => {
     return "none";
   };
 
-  it("chooses his turn by where the player stands: the leap and the long cuts across the hall, what is at his feet up close", () => {
+  it("chooses his turn by where the player stands: the long cuts across the hall, what is at his feet up close, the leap anywhere", () => {
     const far = new Set<string>(), close = new Set<string>(), behind = new Set<string>();
-    for (let n = 0; n < 24; n++) {
+    for (let n = 0; n < 40; n++) {
       const w = world();
       const b = boss(w);
       b.hp = b.maxHp * 0.2;
@@ -584,9 +758,10 @@ describe("the boss", () => {
       behind.add(nextTurn(world(), null, 0, -60, n));
     }
     expect([...far].every((a) => ["leap", "dashcut", "hook", "storm", "volley", "quake", "greatslash"].includes(a))).toBe(true);
-    expect(far.has("leap")).toBe(true);
-    expect([...close].every((a) => ["greatsweep", "slam", "greatslash", "greatcleave", "maul"].includes(a))).toBe(true);
-    expect([...behind].every((a) => ["maul", "slam"].includes(a))).toBe(true);
+    expect([...close].every((a) => ["greatsweep", "slam", "greatslash", "maul", "leap", "storm"].includes(a))).toBe(true);
+    expect([...behind].every((a) => ["maul", "slam", "leap", "storm"].includes(a))).toBe(true);
+    // The leap goes up out of the hall and hunts them from there, so it is asked at any range.
+    expect(far.has("leap") || close.has("leap") || behind.has("leap")).toBe(true);
     // Never one answer to a range.
     for (const set of [far, close, behind]) expect(set.size).toBeGreaterThanOrEqual(2);
   });

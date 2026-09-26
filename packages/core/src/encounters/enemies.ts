@@ -891,7 +891,7 @@ export interface BossPhase {
    * apart and the cleave on the next downbeat, and a player who panics and
    * dashes the second slash has spent the dash the cleave was for. Only the
    * last blow recovers, and its recovery is the punish window. Phase I has
-   * none: one thing at a time. A cut that follows a cut comes back the other way.
+   * only the dashcut's: one thing at a time. A cut that follows a cut comes back the other way.
    */
   readonly strings: Partial<Record<MeleeKind, readonly BossBlow[]>>;
   /** How far "far" is, in px. */
@@ -933,7 +933,8 @@ export const BOSS_PHASES: readonly BossPhase[] = [
       { pattern: rest(), duration: 1.0 },
     ]),
     rate: 0.85, speed: 1.05, melee: { far: "greatslash", near: "greatsweep" }, farPx: 999,
-    strings: {},
+    // One thing at a time, and the dashcut is one thing: the run and the cut it carries him into.
+    strings: { dashcut: [{ kind: "greatslash", at: 6 }] },
   },
   {
     at: 0.6, name: "II",

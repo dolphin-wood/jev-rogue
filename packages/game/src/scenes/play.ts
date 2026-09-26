@@ -47,7 +47,7 @@ import {
 } from "@jr/core";
 import type { BaseItem, CardNeeds, DoorOffer, NpcKind, OfferPromise, RoomStage, RunShape, WorldEvent } from "@jr/core";
 import {
-  BOSS_LEAP_MS, BOSS_LEAP_RISE_MS, BOSS_SLAM_MS, BOSS_SLAM_IMPACT_PX, BOSS_LEAP_RADIUS, BOSS_QUAKE_MS, SLAM_SHOCK_RADIUS,
+  BOSS_LEAP_RISE_MS, BOSS_LEAP_LOCK_MS, BOSS_SLAM_MS, BOSS_SLAM_IMPACT_PX, BOSS_LEAP_RADIUS, BOSS_QUAKE_MS, SLAM_SHOCK_RADIUS,
   BOSS_POWER,
   withLevel, levelDamageMult, dismantleValue, spellDetail, offerStatParts, slotStatParts, statusForecast, SPELL_DAMAGE_SCALE, rarityOf, STAT_UPGRADES, statById, SPELL_LEVEL_MAX, SCHOOL_COLOUR, schoolOf, spellSound, shapeEventSound, offerCards,
   slotCooldownMs, DASH_COOLDOWN_MS, DASH_MS,
@@ -12707,8 +12707,9 @@ export class PlayScene extends Phaser.Scene {
          * at the radius the band is born on, so "get in close" is a decision
          * that can be made before the boss is down rather than after.
          */
-        const t = 1 - e.bossCastMs / BOSS_LEAP_MS;
-        drawLeapMark(this.threatGfx, e.bossTargetX, e.bossTargetY, BOSS_LEAP_RADIUS, 0, t, tick, view);
+        // While he hunts the mark follows the player, empty; once it stops, its clock fills to the landing.
+        const t = Math.max(0, 1 - e.bossCastMs / BOSS_LEAP_LOCK_MS);
+        drawLeapMark(this.threatGfx, e.bossTargetX, e.bossTargetY, BOSS_LEAP_RADIUS, 0, t, tick, view, { clock: t > 0 });
         // The landing's band is born at the mark's own edge, so the mark is all there is to read.
       }
       /*
@@ -15525,7 +15526,10 @@ function specialPose(w: World, e: Enemy): string | null {
       if (e.bossCast === "slam" || e.bossCast === "quake")
         return e.bossCastMs > 0 ? "slam_lift" : -e.bossCastMs < BOSS_DRIVE_MS ? "slam_drive" : "slam";
       // The storm: the greatsword held straight up over his head for all of it (art order B8, `storm`).
-      if (e.bossCast === "storm") return "storm";
+      // The hop back before it (`bossLift`): the leap's gather and flight.
+      if (e.bossCast === "storm") return e.bossLift < 0 ? "leap_gather" : e.bossLift > 0 ? "leap_air" : "storm";
+      // The dashcut's hop back, the same frames; its windup after is the blade's own.
+      if (e.bossHopMs > 0) return e.bossLift > 0 ? "leap_air" : "leap_gather";
       // The leap: low for the gather, the sword over his head in the air, low again on the landing.
       if (e.bossCast === "leap")
         return e.airborne ? "leap_air" : e.bossCastMs > 0 ? "leap_gather" : -e.bossCastMs < BOSS_DRIVE_MS ? "slam_drive" : "slam";
@@ -15857,6 +15861,8 @@ function drawEnemy(
    */
   const lift = e.bossLift ?? 0;
   const airK = Math.min(1, Math.abs(lift) / 84);
+  // Up out of the hall the shadow goes too, and comes back as he falls: the mark is what is read up there.
+  const skyK = Math.max(0, Math.min(1, (lift - 84) / 160));
   const shadowName = `shadow_${ENEMY_FRAME[e.archetype].replace("enemy_", "")}`;
   if (atlas.has(shadowName)) {
     const shadow = group.image(
@@ -15864,13 +15870,13 @@ function drawEnemy(
     ).setOrigin(0.5)
       .setScale(shadowScale(atlas, name, shadowName) * (1 - 0.45 * airK), (1 - 0.45 * airK) / ART_SCALE)
       .setDepth(3)
-      .setAlpha((e.awake ? 0.5 : 0.34) * (1 - 0.25 * airK));
+      .setAlpha((e.awake ? 0.5 : 0.34) * (1 - 0.25 * airK) * (1 - skyK));
   } else {
     const shadow = group.ellipse(
       e.x, e.y + e.radius * 0.66,
       e.radius * 1.55 * (1 - 0.45 * airK), e.radius * 0.62 * (1 - 0.45 * airK), 0,
     );
-    shadow.setFillStyle(0x0d0b1f, (e.awake ? 0.4 : 0.28) * (1 - 0.25 * airK));
+    shadow.setFillStyle(0x0d0b1f, (e.awake ? 0.4 : 0.28) * (1 - 0.25 * airK) * (1 - skyK));
     shadow.setDepth(3);
   }
 

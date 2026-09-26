@@ -69,7 +69,7 @@ import {
   STATUS_BREADTH_MULT, statusBreadth,
   meleeSpec,
   spikeVolley, SPIKE_SIZE, release, bossPhase, BOSS_POWER,
-  beginWindup, bossBehind, bossLevel, BOSS_ROAR_MS,
+  beginWindup, bossBehind, bossLevel, BOSS_ROAR_MS, BOSS_LINK_RECOVER_MS, BOSS_DASH_SLIDE, bossDashWake,
 } from "./enemy.ts";
 import { feature } from "../rooms/features.ts";
 
@@ -2432,9 +2432,10 @@ function onEnemyKilled(w: World, e: Enemy): void {
  *   shots goes out from just beyond its body. The safe place is *in* — next
  *   to it — which is the one move in the game that asks the player to close.
  *   Phase III slams twice, the second ring offset into the first's gaps.
- * - **Leap** (phase II on): it marks the player's spot, goes up — nothing
- *   hits it in the air — and comes down there with a smaller ring. The
- *   answer is to leave the mark, and the landing is the punish window.
+ * - **Leap**: it goes up out of the hall — nothing hits it in the air — and
+ *   its mark hunts the player, stops, and it comes down there with a
+ *   smaller ring. The answer is to leave the mark once it has stopped, and
+ *   the landing is the punish window.
  * - **Quake**: it drives the greatsword into the floor and the stone splits
  *   along four lines out from it (eight at phase III, and the second four are
  *   laid a beat later into the first four's gaps). The answer is to stand
@@ -2472,7 +2473,15 @@ export type BossMove = "slam" | "leap" | "quake" | "hook" | "storm";
  * - **Close** (inside his sweep): the sweeps, the slam round his feet, the
  *   cleave at a player level with him, the backhand at one behind him.
  * - **Mid**: the cleave and the slash he steps into, the quake, the hook, the storm.
- * - **Far**: the leap onto them, the dashcut along a line, the hook, the storm, a volley.
+ * - **Far**: the hook, the storm, a volley.
+ *
+ * The dashcut is in every band for a player level with him — its line is
+ * sideways, its range is made by the hop back before it (`stepBossHop`).
+ *
+ * The leap and the storm are in every band, weighted low at his feet: the
+ * leap goes up out of the hall and hunts the player from there, and the
+ * storm hops back out of reach before the sword goes up, so where they stood
+ * is not either one's question.
  *
  * Each band holds at least two turns, drawn by weight, and never the one he
  * has just taken, so a player who learns a range learns a set, not a move.
@@ -2524,10 +2533,15 @@ function chooseBossAct(w: World, e: Enemy): BossAct | null {
     // At his feet the side matters: his sweeps go out of his front only, so beside him is the cleave's, behind him the backhand's.
     if (bossBehind(e, p)) opts.push(["maul", 4], ["slam", 1]);
     // Beside him, where the sweeps do not reach, the backhand (the greatcleave was taken out: it read strangely).
-    else if (level) opts.push(["maul", 4], ["slam", 1]);
+    else if (level) opts.push(["maul", 4], ["slam", 1], ["dashcut", 1.5]);
     else opts.push(["greatsweep", 3], ["greatslash", 3], ["maul", 2], ["slam", 1]);
+    // The leap asks about the sky, not the range (`BOSS_LEAP_MS`), and the storm steps back out of
+    // reach before it is called (`stepBossHop`): at his feet too, but seldom.
+    opts.push(["leap", 0.6], ["storm", 0.6]);
   } else if (d < BOSS_FAR_PX) {
-    opts.push(["quake", 1], ["storm", 1]);
+    opts.push(["quake", 1], ["storm", 1], ["leap", 1]);
+    // A player level with him is on the dashcut's line; it hops back for the room to run (`stepBossHop`).
+    if (level) opts.push(["dashcut", 2]);
     if (ph >= 2) opts.push(["hook", 1.5]);
     if (bossBehind(e, p)) opts.push(["maul", 2]);
     opts.push(["greatslash", 3], ["greatsweep", 2]);
@@ -2598,29 +2612,48 @@ const BOSS_SHOCK_THICK_PX = 22;
 const BOSS_QUAKE_DAMAGE = 1;
 const BOSS_LAND_DAMAGE = 1;
 /**
- * **The leap is an arc, not a teleport.**
+ * **The leap goes up out of the hall and comes down on the player.**
  *
- * It used to run its clock down where it stood and then assign the landing
- * coordinates, which is exactly what it looked like: the body vanished off one
- * tile and appeared on another, and the only thing that said a leap had
- * happened was the mark on the floor. Nothing about that is readable — a
- * player cannot judge *when* something arrives if it was never travelling.
+ * It was an arc from where he stood to where the player stood, which made it
+ * a move about distance: it was only chosen across the hall, and he walks
+ * the player down in every rest, so it was almost never seen (measured: 7
+ * turns in 892). An arc onto a player at his feet is a hop. So the move is
+ * now about the sky, and asked at any range, in five parts on the beat:
  *
- * So the move has three parts the player can see. It **crouches and rises**
- * for `BOSS_LEAP_RISE_MS`, still on the floor and still hittable, with the
- * mark already down. It is then **in the air** for the rest: the body is
- * interpolated along the line to the mark and lifted by a parabola
- * (`Enemy.bossLift`), while its shadow stays on the floor underneath it and
- * shrinks — so the shadow closing on the mark is the clock. And it **lands**:
- * hitstop, dust, the screen shakes, and the shockwave goes out from the
- * impact, which is the answer the whole move was asking for.
+ * - **Gather** (`BOSS_LEAP_RISE_MS`): he crouches on the floor, still
+ *   hittable, and the mark is already down under the player.
+ * - **Rise** (`BOSS_LEAP_UP_MS`): he goes straight up out of the view
+ *   (`BOSS_LEAP_SKY_PX`); from here nothing hits him.
+ * - **Hunt** (`BOSS_LEAP_HUNT_MS`): out of sight, the mark follows the
+ *   player at about their own pace (`BOSS_LEAP_HUNT_SPEED`), so running holds
+ *   it off and a dash leaves it behind for a moment.
+ * - **Lock** (`BOSS_LEAP_LOCK_MS`): the mark stops and its clock fills. This
+ *   is the telegraph, and it is longer than the reaction floor with the walk
+ *   out of the mark on top — nothing tracks once it is committed.
+ * - **Fall** (`BOSS_LEAP_FALL_MS`, the end of the lock): he drops into view
+ *   onto the mark, and the landing is what it was — hitstop, dust, the
+ *   shake, the band — and the opening.
+ *
+ * His body's coordinates stay under the mark while he is up, so everything
+ * that reads a position (the shadow, the flow field, the adds) reads a body
+ * somewhere sensible, and the fall comes down exactly where he is.
  */
-/** Four beats: one gathering, three in the air, landing on the downbeat (doc 020). */
-export const BOSS_LEAP_MS = beats(4);
+/** Seven beats: one gathering, one rising, two hunting, three locked; the landing on the downbeat (doc 020). */
+export const BOSS_LEAP_MS = beats(7);
 /** Of the leap, the part spent gathering on the floor before it is airborne: one beat. */
 export const BOSS_LEAP_RISE_MS = beats(1);
-/** How high the arc goes, in px, for the lift and the shadow. */
-export const BOSS_LEAP_HEIGHT = 84;
+/** The climb out of the view, after the gather. */
+export const BOSS_LEAP_UP_MS = beats(1);
+/** Out of sight, following the player. */
+export const BOSS_LEAP_HUNT_MS = beats(2);
+/** The mark held still before he lands on it: the telegraph proper. */
+export const BOSS_LEAP_LOCK_MS = BOSS_LEAP_MS - BOSS_LEAP_RISE_MS - BOSS_LEAP_UP_MS - BOSS_LEAP_HUNT_MS;
+/** The drop back into view, the last of the lock. */
+export const BOSS_LEAP_FALL_MS = beats(0.5);
+/** How high he goes, px: past the top of the view from anywhere on the hall's floor, with the sprite's height to spare. */
+export const BOSS_LEAP_SKY_PX = 640;
+/** How fast the mark follows the player while he is up, px/s: their own walk, a little over. */
+export const BOSS_LEAP_HUNT_SPEED = PLAYER_SPEED * 1.1;
 /*
  * **Where the sword strikes** (doc 020). The greatsword is driven into the
  * floor at his feet, so the ground round them is hit on the commit
@@ -2674,6 +2707,52 @@ const BOSS_KNEEL_MS = beats(2);
  * between two marks. Three bolts in phase I, four in II, five in III.
  */
 const BOSS_STORM_RAISE_MS = beats(2);
+/*
+ * **The hop back** (`aimBossHop`, `stepBossHop`). He walks the player down in
+ * every rest, so the moves that want room — the storm's sword held up, the
+ * dashcut's run — were only chosen across the hall and almost never came.
+ * They make the room themselves now: half a beat crouched, a beat in the air
+ * (the leap's own frames), back away from the player by up to three tiles
+ * (less against a wall), and then the move. The storm's sword goes up as he
+ * lands, half a beat before the first mark; the dashcut winds up from there.
+ */
+export const BOSS_HOP_GATHER_MS = beats(0.5);
+export const BOSS_HOP_AIR_MS = beats(1);
+export const BOSS_HOP_MS = BOSS_HOP_GATHER_MS + BOSS_HOP_AIR_MS;
+export const BOSS_HOP_PX = 96;
+const BOSS_HOP_HEIGHT = 30;
+
+/** Where the hop back lands: away from the player, as far as the floor allows. */
+function aimBossHop(w: World, e: Enemy): void {
+  const a = Math.atan2(e.y - w.player.y, e.x - w.player.x);
+  let len = Math.max(0, Math.min(BOSS_HOP_PX, lineToWall(w, e.x, e.y, a, BOSS_HOP_PX + e.radius) - e.radius));
+  // The line is clear; the whole body at its end has to be too.
+  while (len > 0 && circleHitsWall(w.room.grid, e.x + Math.cos(a) * len, e.y + Math.sin(a) * len, e.radius)) len = Math.max(0, len - 6);
+  e.bossFromX = e.x;
+  e.bossFromY = e.y;
+  e.bossTargetX = e.x + Math.cos(a) * len;
+  e.bossTargetY = e.y + Math.sin(a) * len;
+  e.bossLift = 0;
+}
+
+/** The hop, `since` ms into it: the crouch, the arc, and down on the mark. */
+function stepBossHop(w: World, e: Enemy, since: number): void {
+  if (since < BOSS_HOP_GATHER_MS) {
+    e.bossLift = -3 * Math.max(0, since) / BOSS_HOP_GATHER_MS;
+  } else if (since < BOSS_HOP_MS) {
+    const k = (since - BOSS_HOP_GATHER_MS) / BOSS_HOP_AIR_MS;
+    const ease = k * k * (3 - 2 * k);
+    e.x = e.bossFromX + (e.bossTargetX - e.bossFromX) * ease;
+    e.y = e.bossFromY + (e.bossTargetY - e.bossFromY) * ease;
+    e.bossLift = BOSS_HOP_HEIGHT * 4 * k * (1 - k);
+  } else if (e.bossLift !== 0) {
+    e.x = e.bossTargetX;
+    e.y = e.bossTargetY;
+    e.bossLift = 0;
+    w.flow = null;
+    w.flowTile = null;
+  }
+}
 const BOSS_STORM_BOLTS: Readonly<Record<number, number>> = { 1: 3, 2: 4, 3: 5 };
 const BOSS_STORM_MARK_MS = beats(2);
 const BOSS_STORM_RADIUS = 26;
@@ -2935,8 +3014,22 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
     // Walked after too long: the turn is given up for one that fits where they are now, at once.
     if (e.bossPlanMs > BOSS_BLADE_CHASE_MS) { e.bossBlade = null; e.bossBusy = false; e.bossMoveMs = 0; }
   }
+  /*
+   * **The dashcut's hop back** (`stepBossHop`): room made first, and the
+   * windup — the crouch with the line drawn, the tell — from where he lands.
+   */
+  if (e.bossHopMs > 0) {
+    e.bossHopMs -= dtMs;
+    stepBossHop(w, e, BOSS_HOP_MS - e.bossHopMs);
+    if (e.bossHopMs > 0) return;
+    e.bossHopMs = 0;
+    stepBossHop(w, e, BOSS_HOP_MS);
+    e.attackCooldownMs = 0;
+    beginWindup(w, e, w.player, "dashcut");
+    return;
+  }
   const busy = e.bossCast !== "none" || e.attack !== "approach" || e.bossNext !== "none"
-    || e.bossVolleyMs > 0 || e.bossBlade !== null || e.airborne;
+    || e.bossVolleyMs > 0 || e.bossBlade !== null || e.airborne || e.bossHopMs > 0;
   if (e.bossBusy && !busy) e.bossMoveMs = bossRestMs(w, e);
   e.bossBusy = busy;
 
@@ -2952,6 +3045,12 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
       if (act === "volley") {
         e.bossVolleyMs = BOSS_VOLLEY_MS;
         e.patternMs = 0;
+        return;
+      }
+      // The dashcut hops back before its windup, wherever the player stands (`stepBossHop`).
+      if (act === "dashcut") {
+        aimBossHop(w, e);
+        e.bossHopMs = BOSS_HOP_MS;
         return;
       }
       if (!(BOSS_MOVE_NAMES as readonly string[]).includes(act)) {
@@ -3002,6 +3101,7 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
     e.pending = [];
     e.telegraphMs = 0;
     dropFireToken(w, e);
+    if (move === "storm") aimBossHop(w, e);
     if (move === "leap") {
       e.bossTargetX = w.player.x;
       e.bossTargetY = w.player.y;
@@ -3030,7 +3130,7 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
       e.poseMs = BOSS_HOOK_AIM_MS - trim;
       // The pose owns the timing from here; the cast is over as far as the
       // move list is concerned once the chain is in the air.
-      e.bossCastMs = BOSS_LEAP_MS;
+      e.bossCastMs = beats(4);
       e.bossCastEndAt = e.bossFightMs + e.bossCastMs;
     }
     w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: `boss_${move}` });
@@ -3083,6 +3183,8 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
     return;
   }
   if (e.bossCast === "storm") {
+    // The hop back before the sword goes up (`stepBossHop`).
+    stepBossHop(w, e, e.bossFightMs - (e.bossCommitAt - BOSS_STORM_RAISE_MS));
     // A bolt a beat from the first, on the fight clock, so each falls on the beat two after it is marked.
     const n = BOSS_STORM_BOLTS[e.phase] ?? 3;
     while (e.bossBolts < n && e.bossFightMs >= e.bossCommitAt + e.bossBolts * BEAT_MS - 1e-6) {
@@ -3132,32 +3234,47 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
     return;
   }
   /*
-   * **The leap.** The gather on the floor, the arc through the air, and the
-   * landing — see `BOSS_LEAP_MS`. The body's own coordinates are moved along
-   * the arc, so it travels: the sim's position and the drawing agree, and
-   * everything that reads a position while it is in the air (the shadow, the
-   * flow field, the adds) reads a body that is somewhere sensible.
+   * **The leap.** The gather, the climb out of the view, the hunt, the lock
+   * and the fall — see `BOSS_LEAP_MS`. While he is up his coordinates are
+   * the mark's, so the fall comes down where he is.
    */
   const elapsed = BOSS_LEAP_MS - e.bossCastMs;
-  const flight = Math.max(1, BOSS_LEAP_MS - BOSS_LEAP_RISE_MS);
-  const k = Math.max(0, Math.min(1, (elapsed - BOSS_LEAP_RISE_MS) / flight));
-  e.airborne = elapsed > BOSS_LEAP_RISE_MS && e.bossCastMs > 0;
+  const upAt = BOSS_LEAP_RISE_MS, huntAt = upAt + BOSS_LEAP_UP_MS, lockAt = huntAt + BOSS_LEAP_HUNT_MS;
+  const fallAt = BOSS_LEAP_MS - BOSS_LEAP_FALL_MS;
+  e.airborne = elapsed > upAt && e.bossCastMs > 0;
   if (e.bossCastMs > 0) {
-    // The gather: it sinks a little before it goes, which is the beat that
-    // says "now", and then it is in the air on a parabola.
     if (!e.airborne) {
+      // The gather: it sinks a little before it goes, which is the beat that says "now".
       e.bossLift = -3 * (elapsed / Math.max(1, BOSS_LEAP_RISE_MS));
     } else {
-      // Eased along the ground line so the arc reads as a throw rather than a
-      // slide: quick off the floor, slowing into the mark.
-      const ease = k * k * (3 - 2 * k);
-      e.x = e.bossFromX + (e.bossTargetX - e.bossFromX) * ease;
-      e.y = e.bossFromY + (e.bossTargetY - e.bossFromY) * ease;
-      e.bossLift = BOSS_LEAP_HEIGHT * 4 * k * (1 - k);
       e.knockX = 0;
       e.knockY = 0;
       e.vx = 0;
       e.vy = 0;
+      if (elapsed < huntAt) {
+        // Straight up, quickening: a greatsword and a body that size leaving the floor.
+        const k = (elapsed - upAt) / BOSS_LEAP_UP_MS;
+        e.bossLift = BOSS_LEAP_SKY_PX * k * k;
+      } else {
+        if (elapsed < lockAt) {
+          // The hunt: the mark after the player, at about their own pace.
+          const p = w.player;
+          const dx = p.x - e.bossTargetX, dy = p.y - e.bossTargetY;
+          const d = Math.hypot(dx, dy);
+          const reach = BOSS_LEAP_HUNT_SPEED * (dtMs / 1000);
+          if (d > 0) {
+            const t = Math.min(1, reach / d);
+            e.bossTargetX += dx * t;
+            e.bossTargetY += dy * t;
+          }
+        }
+        // Out of sight, under the mark.
+        e.x = e.bossTargetX;
+        e.y = e.bossTargetY;
+        // The fall: in from the top of the view, quickening onto the mark.
+        const k = Math.max(0, (elapsed - fallAt) / BOSS_LEAP_FALL_MS);
+        e.bossLift = elapsed < fallAt ? BOSS_LEAP_SKY_PX : BOSS_LEAP_SKY_PX * (1 - k * k);
+      }
     }
   }
   if (before > 0 && e.bossCastMs <= 0) {
@@ -4378,8 +4495,10 @@ function resolveEnemySwings(w: World): void {
      * `Enemy.hasAttacked`) — the hit is marked as landed so the swing does not
      * keep looking for a second victim, and the player is told it grazed them.
      */
+    const dashcut = e.archetype === "boss" && e.meleeKind === "dashcut" && e.attack === "lunge";
     if (box.damage <= 0) {
       w.events.push({ kind: "player_hit", x: e.x, y: e.y, what: `graze:${e.archetype}`, amount: 0 });
+      if (dashcut) dashcutImpact(w, e);
       continue;
     }
     /*
@@ -4403,8 +4522,37 @@ function resolveEnemySwings(w: World): void {
     if (ram) hurtPlayer(w, p.x - e.lungeX, p.y - e.lungeY, `melee:${e.archetype}`, 0, box.damage);
     else hurtPlayer(w, e.x, e.y, `melee:${e.archetype}`, 0, box.damage);
 
-    if (ram && p.hearts < before) ramImpact(w, e, spec);
+    if (dashcut) { if (p.hearts < before) dashcutImpact(w, e); }
+    else if (ram && p.hearts < before) ramImpact(w, e, spec);
   }
+}
+
+/**
+ * **The king's dashcut stops on the player it catches** and puts them a
+ * step down its line (the throw decays, so 44 px of it carries about 25) — inside the reach of the blow his string lays after it
+ * (`BossPhase.strings`), which is the point of the throw being short. It ran
+ * on through them to the far wall, as the tank's ram used to, so the blow
+ * behind it cut at a player three tiles away. The run is spent, he plants
+ * with a short slide, and the next blow of the string winds up from there.
+ */
+const BOSS_DASH_THROW_PX = 44;
+const BOSS_DASH_THROW_MS = 160;
+function dashcutImpact(w: World, e: Enemy): void {
+  const p = w.player;
+  const throwSpeed = BOSS_DASH_THROW_PX / (BOSS_DASH_THROW_MS / 1000);
+  p.hurtX = e.lungeX * throwSpeed;
+  p.hurtY = e.lungeY * throwSpeed;
+  p.hurtMs = BOSS_DASH_THROW_MS;
+  e.dashLeftPx = 0;
+  e.attack = "recover";
+  // Into the string's next blow at once, or the dashcut's own recovery when it was the whole turn.
+  e.attackMs = e.bossString.length > 0 ? BOSS_LINK_RECOVER_MS : (meleeSpec(e)?.recoverMs ?? 0);
+  e.swing.active = false;
+  e.velX = e.lungeX * BOSS_DASH_SLIDE;
+  e.velY = e.lungeY * BOSS_DASH_SLIDE;
+  e.brakeMs = meleeSpec(e)?.brakeMs ?? 0;
+  w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `brake:${e.archetype}` });
+  bossDashWake(w, e);
 }
 
 /**

@@ -947,7 +947,7 @@ export function makeEnemy(
     hastedMs: 0,
     bossFightMs: 0, bossCast: "none", bossCastMs: 0, bossCastEndAt: 0, bossCommitAt: 0, bossBladeAt: 0, bossStartAt: -1, bossNext: "none", bossString: [], bossStringAt0: -1, bossStringN: 1, bossLinked: false, bossLinkedBlow: null, bossHooked: false, bossBolts: 0, bossComboFlip: false, bossMoveMs: 2600, bossMoveIndex: 0, bossBlade: null, bossPlanMs: 0, bossVolleyMs: 0, bossLastAct: "", bossBusy: false, bossAddsPhase: 1, bossRoarMs: 0, bossSummonMs: 0,
     bossTargetX: 0, bossTargetY: 0, airborne: false,
-    bossFromX: 0, bossFromY: 0, bossLift: 0,
+    bossFromX: 0, bossFromY: 0, bossLift: 0, dashLeftPx: 0, dashFromX: 0, dashFromY: 0, bossHopMs: 0,
     pending: [],
     damageMult: stats.damage_mult * (scale.power ?? 1),
     summonMs: SUMMONER_FIRST_MS,
@@ -1403,7 +1403,7 @@ function moveFor(e: Enemy, world: World, dt: number): { dx: number; dy: number }
   switch (def.behaviour) {
     case "chase":
       // A boss mid-move is planted: the move is the attack.
-      if (e.archetype === "boss" && e.bossCast !== "none") return { dx: 0, dy: 0 };
+      if (e.archetype === "boss" && (e.bossCast !== "none" || e.bossHopMs > 0)) return { dx: 0, dy: 0 };
       if (meleeSpec(e)) return meleeStep(e, world, speed, amble, toward);
       // No blade: chase and nothing else, rather than stalling in a cycle
       // whose phases nothing advances.
@@ -1712,6 +1712,21 @@ function advanceMelee(e: Enemy, world: World, dtMs: number): void {
       e.attack = "lunge";
       e.attackMs = spec.lungeMs;
       /*
+       * **The king's dashcut runs to the player, not to the wall.** It used
+       * to cross its whole six tiles whatever was in front of it, so a
+       * missed dash ended in the far stonework and the string behind it cut
+       * at nothing. It now runs to where they stood along its line and a
+       * body past it; a dash that catches them stops there (`dashcutImpact`
+       * in world.ts).
+       */
+      if (e.archetype === "boss" && e.meleeKind === "dashcut") {
+        const p = world.player;
+        const along = (p.x - e.x) * e.lungeX + (p.y - e.y) * e.lungeY;
+        e.dashLeftPx = Math.max(0, along) + BOSS_DASH_PAST_PX;
+        e.dashFromX = e.x;
+        e.dashFromY = e.y;
+      }
+      /*
        * The slam's **shockwave**: the blade lands on the body's own ground and
        * a ring opens round it, wider than the steel and weaker. It is cast at
        * the commit rather than at the windup so the telegraph the player reads
@@ -1820,6 +1835,12 @@ function advanceMelee(e: Enemy, world: World, dtMs: number): void {
        * Only for an attack that has somewhere to arrive; a jab has nothing to
        * brake from.
        */
+      // The dashcut plants at the end of its run rather than skidding on past it: a short slide, braked.
+      if (e.archetype === "boss" && e.meleeKind === "dashcut") {
+        e.velX = e.lungeX * BOSS_DASH_SLIDE;
+        e.velY = e.lungeY * BOSS_DASH_SLIDE;
+        bossDashWake(world, e);
+      }
       if (spec.brakeMs > 0) {
         e.brakeMs = spec.brakeMs;
         // No shake: the screen moves only for the player's own hurt (doc 008).
@@ -2208,7 +2229,36 @@ const BOSS_CLEAVE_STOP_MS = 50;
 /** The sweep's freeze as it lands: a little under the cleave's. */
 const BOSS_SWEEP_STOP_MS = 40;
 /** The recovery between two blows of the boss's string, ms: next to none, the sword carried into the next. */
-const BOSS_LINK_RECOVER_MS = 60;
+export const BOSS_LINK_RECOVER_MS = 60;
+/** How far past where the player stood the dashcut runs, px: a body's width, so a step off its line is still passed. */
+export const BOSS_DASH_PAST_PX = 40;
+/** The dashcut's speed as it plants, px/s: a short slide, braked (`brakeMs`). */
+export const BOSS_DASH_SLIDE = 90;
+/*
+ * **The dashcut's wake** (phase III). The run leaves the ground either side
+ * of it heaving: two straight edges as long as the run, one each side, that
+ * roll out off its line a short way and die — a bow wave, not a blast. A
+ * player who stepped off the line to let the run go by is standing where the
+ * wake comes; a second step, or the dash, answers it.
+ */
+const BOSS_WAKE_REACH_PX = TILE_PX * 2.5;
+const BOSS_WAKE_SPEED = 150;
+const BOSS_WAKE_THICK_PX = 16;
+const BOSS_WAKE_DAMAGE = 0.5;
+export function bossDashWake(world: World, e: Enemy): void {
+  if (e.phase < 3) return;
+  const len = Math.hypot(e.x - e.dashFromX, e.y - e.dashFromY);
+  if (len < TILE_PX) return;
+  const a = Math.atan2(e.lungeY, e.lungeX);
+  const mx = (e.x + e.dashFromX) / 2, my = (e.y + e.dashFromY) / 2;
+  for (const side of [-1, 1]) {
+    castShockwave(world, mx, my, {
+      chargeMs: 0, inner: e.radius * 0.6, thickness: BOSS_WAKE_THICK_PX,
+      speed: BOSS_WAKE_SPEED, maxRadius: e.radius * 0.6 + BOSS_WAKE_REACH_PX,
+      damage: BOSS_WAKE_DAMAGE * e.damageMult, facing: a + side * Math.PI / 2, width: len,
+    });
+  }
+}
 
 function stepBossPhase(world: World, e: Enemy): void {
   if (e.archetype !== "boss" || e.hp <= 0) return;
@@ -2219,6 +2269,9 @@ function stepBossPhase(world: World, e: Enemy): void {
   e.bossCast = "none";
   e.bossCastMs = 0;
   e.airborne = false;
+  // Out of a leap or a hop, down where he is (a burn can cross a threshold while he is up out of the hall).
+  e.bossLift = 0;
+  e.bossHopMs = 0;
   e.bossMoveMs = 1400;
   e.bossMoveIndex = 0;
   e.bossBlade = null;
@@ -3133,6 +3186,11 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
       e.radius,
     );
     const moved = dist2(before.x, before.y, e.x, e.y) > 0.01;
+    // The dashcut's run, spent: it ends where the player stood (`Enemy.dashLeftPx`).
+    if (e.attack === "lunge" && e.archetype === "boss" && e.meleeKind === "dashcut") {
+      e.dashLeftPx -= Math.sqrt(dist2(before.x, before.y, e.x, e.y));
+      if (e.dashLeftPx <= 0) e.attackMs = Math.min(e.attackMs, 0);
+    }
     /*
      * A charge that hits a wall knocks itself down.
      *

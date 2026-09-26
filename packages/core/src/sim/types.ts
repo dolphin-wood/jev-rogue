@@ -1030,14 +1030,24 @@ export interface Enemy {
   /** In the air during a leap: nothing hits it, and it is not drawn on the floor. */
   airborne: boolean;
   /**
-   * The leap's arc: where it left the floor, and how high it is right now in
-   * px. The renderer lifts the sprite by `bossLift` and leaves the shadow on
-   * the floor at the interpolated ground position, so the body **travels**
-   * instead of blinking from one tile to another.
+   * The leap: where it left the floor, and how high it is right now in px.
+   * The renderer lifts the sprite by `bossLift` over the ground position the
+   * sim has it at (under the mark while it is up; see `BOSS_LEAP_MS`).
    */
   bossFromX: number;
   bossFromY: number;
   bossLift: number;
+  /**
+   * How much further the king's dashcut runs, px (`MELEE_ATTACKS.dashcut`):
+   * set at the commit to just past where the player stood, so a dash that
+   * misses ends there rather than in the far wall.
+   */
+  dashLeftPx: number;
+  /** Where the dashcut's run started, for the wake it leaves in phase III (`bossDashWake`). */
+  dashFromX: number;
+  dashFromY: number;
+  /** The hop back before the dashcut's windup, ms left (`stepBossHop` in world.ts). */
+  bossHopMs: number;
   /** Distance to the player last step, for choices that depend on range. */
   gapPx: number;
   /**
