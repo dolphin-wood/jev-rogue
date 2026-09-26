@@ -29,7 +29,7 @@ import {
   circleHitsWall, circlesOverlap, entryPosition, hasLineOfSight, moveSliding, normalise,
 } from "./collide.ts";
 import {
-  beginSwing, cancelSwing, makeSwingBox, manaPerHit, sectorHits, snapFacing,
+  autoMeleeFacing, beginSwing, canSwing, cancelSwing, makeSwingBox, manaPerHit, sectorHits, snapFacing,
   stepStrike, stepSwing, strikeHits, swingMoveScale, beginSpin,
 } from "./melee.ts";
 import { CLOUD_TICK_MS, FIRE_ENEMY_DAMAGE, FIRE_TICK_MS, GROUND_STATUS_POWER, lightFire, makeFirePool, makeScorchPool, scorch, stepFires, stepScorches } from "./fire.ts";
@@ -1136,7 +1136,13 @@ function stepPlayer(w: World, input: Input, dtMs: number): void {
   if (spun) p.spinBufferMs = 0;
   else {
     p.spinBufferMs = Math.max(0, p.spinBufferMs - dtMs);
-    if (input.swing && !stunned) beginSwing(p, w);
+    if (input.swing && !stunned) {
+      if (input.autoMeleeAim && canSwing(p)) {
+        const facing = autoMeleeFacing(w);
+        if (facing !== null) p.facing = facing;
+      }
+      beginSwing(p, w);
+    }
   }
 
   const dashing = p.dashMs > 0;

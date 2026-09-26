@@ -63,6 +63,7 @@ export const JA: Table = {
   "menu.damageDealt": "与ダメージ",
   "menu.damageTaken": "被ダメージ",
   "menu.damageNumbers": "ダメージ表示",
+  "menu.autoMeleeAim": "近接攻撃の自動照準",
   "menu.roomPlan": "階の開始前にプランを表示",
   "menu.screenShake": "画面の揺れ",
   "shake.off": "オフ",

@@ -1512,6 +1512,7 @@ export class PlayScene extends Phaser.Scene {
   /** Settings: damage dealt and taken, as multiples. Remembered like the rest. */
   private dealtMult = readSetting(DEALT_KEY, 1);
   private takenMult = readSetting(TAKEN_KEY, 1);
+  private autoMeleeAim = (() => { try { return localStorage.getItem(AUTO_MELEE_AIM_KEY) === "1"; } catch { return false; } })();
   /** Settings: take no damage at all. For testing a room without dying in it. */
   /** Screen shake: on, reduced (the default) or off. See `holdCamera`. */
   private shakeSetting: ShakeSetting = (() => {
@@ -5405,10 +5406,15 @@ export class PlayScene extends Phaser.Scene {
       if (!this.damageNumbersOn) this.damageNumbers = [];
       try { localStorage.setItem(DAMAGE_NUMBERS_KEY, this.damageNumbersOn ? "1" : "0"); } catch { /* still toggles */ }
     };
+    const setAutoMeleeAim = () => {
+      this.autoMeleeAim = !this.autoMeleeAim;
+      try { localStorage.setItem(AUTO_MELEE_AIM_KEY, this.autoMeleeAim ? "1" : "0"); } catch { /* still applies */ }
+    };
     if (ui.page === "settings") return [
       { label: t("menu.damageDealt"), value: `x${this.dealtMult}`, act: () => setDealt(this.dealtMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setDealt },
       { label: t("menu.damageTaken"), value: `x${this.takenMult}`, act: () => setTaken(this.takenMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setTaken },
       { label: t("menu.damageNumbers"), value: t(this.damageNumbersOn ? "menu.on" : "menu.off"), act: setNumbers, adjust: setNumbers },
+      { label: t("menu.autoMeleeAim"), value: t(this.autoMeleeAim ? "menu.on" : "menu.off"), act: setAutoMeleeAim, adjust: setAutoMeleeAim },
       this.roomPlanRow(),
       { label: t("menu.screenShake"), value: t(`shake.${this.shakeSetting}` as "shake.off"), act: () => setShake(1), adjust: setShake },
       this.soundRow(),
@@ -14317,6 +14323,7 @@ export class PlayScene extends Phaser.Scene {
       aimX: this.world.player.x + Math.cos(f) * 64,
       aimY: this.world.player.y + Math.sin(f) * 64,
       swing: down(k.J) || p.leftButtonDown(),
+      autoMeleeAim: this.autoMeleeAim,
       // A press, never a hold: a spin is a segment of rage and must not be
       // spent by a finger resting on the key. Latched like the interact key,
       // so a frame with no step cannot lose it.
@@ -14572,8 +14579,10 @@ export class PlayScene extends Phaser.Scene {
     }
 
     const spinning = w.player.swingStretch > 1 && swingPhase(w.player) === "active";
+    const playerFacing = this.autoMeleeAim && w.player.swingMs > 0 && w.player.swingStretch === 1
+      ? w.player.swingFacing : w.player.facing;
     const spin = facingFrame(
-      "player", ((spinning ? w.swing.angle : w.player.facing) * 180) / Math.PI, this.playerPose(),
+      "player", ((spinning ? w.swing.angle : playerFacing) * 180) / Math.PI, this.playerPose(),
     );
     const flameName = `vfx_offhand_${Math.floor(w.tick / 6) % 4}`;
     // A slow bob on top of everything else, so the flame is alive even when
@@ -16779,6 +16788,7 @@ const STYLES: readonly { id: "spam" | "nuke" | "area" | "dot" | "melee"; name: s
   ARCHETYPES.map((id) => ({ id, ...STYLE_CARDS[id] }));
 
 const DAMAGE_NUMBERS_KEY = "jr-damage-numbers";
+const AUTO_MELEE_AIM_KEY = "jr-auto-melee-aim";
 const ROOM_PARAMS_KEY = "jr-room-params";
 /** Where the sound setting is remembered. Off unless it says otherwise. */
 /**

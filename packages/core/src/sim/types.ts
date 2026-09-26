@@ -1897,6 +1897,8 @@ export interface Input {
   readonly spell?: number | null;
   /** The melee swing. Free, always available, and the mana source. */
   readonly swing?: boolean;
+  /** Aim a newly started melee swing at the nearest enemy within its reach. */
+  readonly autoMeleeAim?: boolean;
   /** The spin, on its own key: a full circle for `SPIN_MANA`. */
   readonly spin?: boolean;
   /**
