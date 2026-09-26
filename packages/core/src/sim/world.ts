@@ -69,7 +69,7 @@ import {
   STATUS_BREADTH_MULT, statusBreadth,
   meleeSpec,
   spikeVolley, SPIKE_SIZE, release, bossPhase, BOSS_POWER,
-  beginWindup, bossBehind, bossLevel, BOSS_ROAR_MS, BOSS_LINK_RECOVER_MS, BOSS_DASH_SLIDE, bossDashWake,
+  beginWindup, bossBehind, bossLevel, BOSS_ROAR_MS, BOSS_LINK_RECOVER_MS, BOSS_DASH_SLIDE, bossDashWake, bossTempo,
 } from "./enemy.ts";
 import { feature } from "../rooms/features.ts";
 
@@ -687,7 +687,7 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
    * (doc 020). Advanced under the same conditions `stepBoss` runs under.
    */
   for (const e of w.enemies)
-    if (e.archetype === "boss" && e.hp > 0 && (isActive(e) || e.airborne) && e.awake) e.bossFightMs += dtMs;
+    if (e.archetype === "boss" && e.hp > 0 && (isActive(e) || e.airborne) && e.awake) e.bossFightMs += dtMs * bossTempo(e);
   if (w.hitstopMs > 0) {
     w.hitstopMs -= dtMs;
     return w;
@@ -778,8 +778,9 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
     w.attackTokens = Math.max(0, base + extra - heldMelee);
     w.fireTokens = Math.max(0, Math.min(w.fireTokenCap, rampFor(w.roomIndex).tokens) + extra - heldFire);
   }
-  for (const e of w.enemies) stepEnemy(w, e, dtMs);
-  for (const e of w.enemies) if (e.archetype === "boss" && e.hp > 0) stepBoss(w, e, dtMs);
+  // The king lives on his own clock (`bossTempo`): everything he does runs faster in phase III, with the music.
+  for (const e of w.enemies) stepEnemy(w, e, dtMs * bossTempo(e));
+  for (const e of w.enemies) if (e.archetype === "boss" && e.hp > 0) stepBoss(w, e, dtMs * bossTempo(e));
   resolveBodies(w);
   w.enemies = w.enemies.filter((e) => {
     if (e.hp > 0) return true;
@@ -2668,6 +2669,32 @@ export const BOSS_LEAP_SKY_PX = 640;
 /** How fast the mark follows the player while he is up, px/s: their own walk, a little over. */
 export const BOSS_LEAP_HUNT_SPEED = PLAYER_SPEED * 1.1;
 /*
+ * **The fall into phase III** (the meteor). No roar and no adds: he goes up
+ * out of the hall as the leap goes, and while he is up the roof comes down —
+ * stones marked on the floor a beat apart, one at the player and the rest
+ * anywhere in the hall — then he comes down in the middle of it, on the
+ * downbeat, with the biggest landing in the fight and the band. The music
+ * is held down under the fall and phase III's tempo (`BOSS_RAGE_TEMPO`) and
+ * layers come in with the landing. Every answer in it is one the player has
+ * already learned: leave the mark (the leap), keep moving (the storm), dash
+ * the band (the slam).
+ */
+/** Crouched, then up: a beat each. */
+export const BOSS_METEOR_GATHER_MS = beats(1);
+export const BOSS_METEOR_UP_MS = beats(1);
+/** The rain of stones, at least: two bars, and out to the next downbeat for the landing. */
+export const BOSS_METEOR_RAIN_MS = beats(8);
+/** The drop onto the middle, the end of the rain. */
+const BOSS_METEOR_FALL_MS = beats(0.5);
+/** A stone's mark on the floor before it falls, its size, and what it costs. */
+export const BOSS_METEOR_MARK_MS = beats(2);
+const BOSS_METEOR_ROCK_RADIUS = 22;
+const BOSS_METEOR_ROCK_DAMAGE = 0.5;
+/** Stones a beat: one at the player, and this many more anywhere on the floor. */
+const BOSS_METEOR_SCATTER = 2;
+/** The landing's struck ground, px: wider than the leap's (`BOSS_LEAP_RADIUS`). */
+export const BOSS_METEOR_LAND_PX = 64;
+/*
  * **Where the sword strikes** (doc 020). The greatsword is driven into the
  * floor at his feet, so the ground round them is hit on the commit
  * (`BOSS_SLAM_IMPACT_DAMAGE`), and the shockwave is born at its edge. It was a
@@ -2787,7 +2814,8 @@ function stormBolt(w: World, e: Enemy, i: number, late: number, summon = false):
   const ext = w.room.extent;
   const x = Math.max(TILE_PX * 1.5, Math.min((ext.w - 1.5) * TILE_PX, p.x + (p.x - e.lookX) * lead));
   const y = Math.max(TILE_PX * 1.5, Math.min((ext.h - 1.5) * TILE_PX, p.y + (p.y - e.lookY) * lead));
-  castRift(w, x, y, 0, 0, { width: BOSS_STORM_RADIUS * 2, teleMs: BOSS_STORM_MARK_MS - late, damage: BOSS_STORM_DAMAGE * e.damageMult, bolt: true, summon });
+  // The mark counts real time and his clock may run faster (`bossTempo`): given in real ms, so it falls on his beat.
+  castRift(w, x, y, 0, 0, { width: BOSS_STORM_RADIUS * 2, teleMs: (BOSS_STORM_MARK_MS - late) / bossTempo(e), damage: BOSS_STORM_DAMAGE * e.damageMult, bolt: true, summon });
 }
 
 /**
@@ -3157,6 +3185,7 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
     return;
   }
 
+  if (e.bossCast === "meteor" && e.bossCastEndAt < 0) startBossMeteor(w, e);
   const before = e.bossCastMs;
   // From the absolute end, not by subtraction: hitstop freezes this function but not the clock, so a
   // countdown would come out late by every freeze inside the telegraph, and off the beat.
@@ -3224,6 +3253,10 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
       e.bossBolts++;
     }
     if (e.bossCastMs <= 0 && e.bossBolts >= n) finishBossMove(e);
+    return;
+  }
+  if (e.bossCast === "meteor") {
+    stepBossMeteor(w, e, before);
     return;
   }
   if (e.bossCast === "hook") {
@@ -3343,6 +3376,8 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
 /** From a move's start to the moment it promises damage: the part the beat grid aligns. */
 const BOSS_COMMIT_MS: Readonly<Record<Exclude<Enemy["bossCast"], "none">, number>> = {
   slam: BOSS_SLAM_MS, quake: BOSS_QUAKE_MS, leap: BOSS_LEAP_MS, hook: BOSS_HOOK_AIM_MS, storm: BOSS_STORM_RAISE_MS,
+  // Never queued: the fall into phase III sets its own landing on the downbeat (`startBossMeteor`).
+  meteor: 0,
 };
 /**
  * The slam's next blow, for the renderer: how far it strikes, how far
@@ -3392,6 +3427,97 @@ function keepBossOnBeat(w: World, e: Enemy): void {
   const toCommit = e.bossCommitAt - e.bossFightMs;
   if (e.bossCast === "hook")
     for (const t of w.tethers) if (t.alive && t.from === e.id && t.phase === "aim") t.ms = Math.max(0, Math.min(t.ms, toCommit));
+}
+
+/** Sets the fall going (`BOSS_METEOR_GATHER_MS`): the landing on the downbeat after its shortest length, in the middle of the hall. */
+function startBossMeteor(w: World, e: Enemy): void {
+  const least = BOSS_METEOR_GATHER_MS + BOSS_METEOR_UP_MS + BOSS_METEOR_RAIN_MS;
+  const landAt = e.bossFightMs + least + untilGrid(e.bossFightMs + least, BAR_MS);
+  e.bossCastEndAt = landAt;
+  e.bossCastMs = landAt - e.bossFightMs;
+  // The landing is what it promises; the rain starts when he is up, and the stones are marked a beat apart from there
+  // (in `bossStartAt`, which only a queued move uses otherwise, and none is queued through the fall).
+  e.bossCommitAt = landAt;
+  e.bossStartAt = e.bossFightMs + BOSS_METEOR_GATHER_MS + BOSS_METEOR_UP_MS;
+  e.bossBolts = 0;
+  const ext = w.room.extent;
+  const [gx, gy] = nearestFloor(w, (ext.w / 2) * TILE_PX, (ext.h / 2) * TILE_PX);
+  e.bossTargetX = (gx + 0.5) * TILE_PX;
+  e.bossTargetY = (gy + 0.5) * TILE_PX;
+  e.bossFromX = e.x;
+  e.bossFromY = e.y;
+  e.bossLift = 0;
+}
+
+/** A floor cell anywhere in the hall, drawn from the fight's stream, for a stone. */
+function anyFloor(w: World): { x: number; y: number } {
+  const ext = w.room.extent;
+  for (let i = 0; i < 40; i++) {
+    const gx = 1 + Math.floor(w.rng.next() * Math.max(1, ext.w - 2));
+    const gy = 1 + Math.floor(w.rng.next() * Math.max(1, ext.h - 2));
+    if (w.room.grid[gy * GRID_W + gx] === Tile.Floor) return { x: (gx + 0.5) * TILE_PX, y: (gy + 0.5) * TILE_PX };
+  }
+  return { x: w.player.x, y: w.player.y };
+}
+
+/** The fall, one step: up, the rain of stones while he is up, and the landing (`BOSS_METEOR_GATHER_MS`). */
+function stepBossMeteor(w: World, e: Enemy, before: number): void {
+  const upAt = e.bossStartAt - BOSS_METEOR_UP_MS;
+  const since = e.bossFightMs - upAt;
+  e.airborne = since > 0 && e.bossCastMs > 0;
+  if (e.bossCastMs > 0) {
+    e.knockX = 0; e.knockY = 0; e.vx = 0; e.vy = 0;
+    if (since <= 0) {
+      // The gather, as the leap's.
+      e.bossLift = -3 * Math.min(1, (BOSS_METEOR_GATHER_MS + since) / BOSS_METEOR_GATHER_MS);
+    } else if (since < BOSS_METEOR_UP_MS) {
+      const k = since / BOSS_METEOR_UP_MS;
+      e.bossLift = BOSS_LEAP_SKY_PX * k * k;
+    } else {
+      // Up out of the hall, over the middle, where he comes down.
+      e.x = e.bossTargetX;
+      e.y = e.bossTargetY;
+      const k = Math.max(0, 1 - e.bossCastMs / BOSS_METEOR_FALL_MS);
+      e.bossLift = e.bossCastMs > BOSS_METEOR_FALL_MS ? BOSS_LEAP_SKY_PX : BOSS_LEAP_SKY_PX * (1 - k * k);
+    }
+    /*
+     * The stones, a beat apart from the rain's start, while there is time for
+     * each to fall a beat before he does: one where the player is, and the
+     * rest anywhere on the floor.
+     */
+    const lastMark = e.bossCastEndAt - BOSS_METEOR_MARK_MS - BEAT_MS;
+    for (;;) {
+      const markAt = e.bossStartAt + e.bossBolts * BEAT_MS;
+      if (markAt > lastMark + 1e-6 || e.bossFightMs < markAt - 1e-6) break;
+      const late = Math.max(0, e.bossFightMs - markAt);
+      const spots = [{ x: w.player.x, y: w.player.y }];
+      for (let i = 0; i < BOSS_METEOR_SCATTER; i++) spots.push(anyFloor(w));
+      for (const at of spots)
+        castRift(w, at.x, at.y, 0, 0, {
+          width: BOSS_METEOR_ROCK_RADIUS * 2, teleMs: BOSS_METEOR_MARK_MS - late,
+          damage: BOSS_METEOR_ROCK_DAMAGE * e.damageMult, rock: true,
+        });
+      e.bossBolts++;
+    }
+  }
+  if (before > 0 && e.bossCastMs <= 0) {
+    e.bossStartAt = -1;
+    e.x = e.bossTargetX;
+    e.y = e.bossTargetY;
+    e.airborne = false;
+    e.bossLift = 0;
+    impact(w, HITSTOP_CAP, 0);
+    w.trauma = 1;
+    w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "boss_land" });
+    bossStrikesProps(w, (q) => Math.hypot(q.x - e.x, q.y - e.y) <= BOSS_METEOR_LAND_PX + q.radius, []);
+    if (Math.hypot(w.player.x - e.x, w.player.y - e.y) <= BOSS_METEOR_LAND_PX + PLAYER_RADIUS)
+      hurtPlayer(w, e.x, e.y, "melee:boss", 0, BOSS_LAND_DAMAGE * e.damageMult);
+    bossShock(w, e, BOSS_METEOR_LAND_PX);
+    w.flow = null;
+    w.flowTile = null;
+  }
+  // Knelt in the crater: the opening phase III gives first.
+  if (e.bossCastMs <= -BOSS_KNEEL_MS) finishBossMove(e);
 }
 
 function finishBossMove(e: Enemy): void {

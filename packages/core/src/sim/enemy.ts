@@ -3,7 +3,7 @@
  * pathfinding; firing expands the declared pattern over the step window, so
  * the shape of a volley is data and adding an enemy is adding a pattern.
  */
-import { BEAT_MS, beats, untilGrid } from "./beat.ts";
+import { BEAT_MS, BOSS_RAGE_TEMPO, beats, untilGrid } from "./beat.ts";
 import { ENEMIES, baseArchetype, fillSubspecies, expandPattern, rampFor, resistOf } from "../encounters/index.ts";
 import type { BulletEmission } from "../encounters/patterns.ts";
 import type { BossPhase } from "../encounters/enemies.ts";
@@ -1939,7 +1939,9 @@ export function beginWindup(world: World, e: Enemy, target: { x: number; y: numb
   const t = tempoOf(e);
   // ...and longer again while the run is young: the ramp's `tell` (doc 005).
   const tell = rampFor(world.roomIndex).tell;
-  e.windupMs = Math.max(WINDUP_FLOOR_MS, jittered(world, (spec?.windupMs ?? MELEE.windupMs) * t.windup * tell));
+  // The floor is real time: the king's windups are on his clock, which runs faster in phase III (`bossTempo`).
+  const floor = WINDUP_FLOOR_MS * bossTempo(e);
+  e.windupMs = Math.max(floor, jittered(world, (spec?.windupMs ?? MELEE.windupMs) * t.windup * tell));
   /*
    * The boss's blade lands on the beat of its theme (doc 020): an opening
    * blow's windup is held on, by less than a beat, until the commit falls on
@@ -1954,8 +1956,8 @@ export function beginWindup(world: World, e: Enemy, target: { x: number; y: numb
       // Where the string lays it; and where a late opening blow (a freeze) leaves too little for the floor,
       // the next eighth past the floor, so it is still on the grid rather than between two lines.
       const due = e.bossStringAt0 + blow.at * (BEAT_MS / 2) - e.bossFightMs;
-      e.windupMs = due >= WINDUP_FLOOR_MS
-        ? due : WINDUP_FLOOR_MS + untilGrid(e.bossFightMs + WINDUP_FLOOR_MS, BEAT_MS / 2);
+      e.windupMs = due >= floor
+        ? due : floor + untilGrid(e.bossFightMs + floor, BEAT_MS / 2);
     } else e.windupMs += untilGrid(e.bossFightMs + e.windupMs, BEAT_MS);
     e.bossBladeAt = e.bossFightMs + e.windupMs;
   }
@@ -2260,6 +2262,20 @@ export function bossDashWake(world: World, e: Enemy): void {
   }
 }
 
+/**
+ * How fast the king's own clock runs against real time (`BOSS_RAGE_TEMPO`):
+ * faster from the landing that opens phase III, not before it — the fall
+ * into it (`BOSS_METEOR_MS`) is still played at the old tempo.
+ */
+export function bossTempo(e: Enemy): number {
+  return e.archetype === "boss" && e.phase >= 3 && !(e.bossCast === "meteor" && e.bossCastMs > 0) ? BOSS_RAGE_TEMPO : 1;
+}
+
+/** The phase the boss piece plays: phase III's layers come in with the landing, as its tempo does. */
+export function bossMusicPhase(e: Enemy): number {
+  return e.phase >= 3 && e.bossCast === "meteor" && e.bossCastMs > 0 ? 2 : e.phase;
+}
+
 function stepBossPhase(world: World, e: Enemy): void {
   if (e.archetype !== "boss" || e.hp <= 0) return;
   const next = bossPhaseAt(e.hp / Math.max(1, e.maxHp));
@@ -2299,9 +2315,19 @@ function stepBossPhase(world: World, e: Enemy): void {
     e.velY = 0;
     dropToken(world, e);
     for (const t of world.tethers) if (t.alive && t.from === e.id) t.alive = false;
-    e.bossRoarMs = BOSS_ROAR_MS;
     e.bossSummonMs = 0;
     e.bossBusy = true;
+    /*
+     * Into phase III he does not roar and call: he goes up out of the hall,
+     * the roof comes down, and he comes down after it in the middle — the
+     * fall (`BOSS_METEOR_MS` in world.ts, which sets it going on its first
+     * step). Into phase II, the roar and the adds.
+     */
+    if (next >= 3) {
+      e.bossRoarMs = 0;
+      e.bossCast = "meteor";
+      e.bossCastEndAt = -1;
+    } else e.bossRoarMs = BOSS_ROAR_MS;
   }
   world.trauma = Math.min(1, world.trauma + 0.5);
   world.events.push({ kind: "telegraph", x: e.x, y: e.y, what: `boss_phase:${next}` });

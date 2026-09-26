@@ -622,6 +622,8 @@ export interface Rift {
   struck: boolean;
   /** A bolt from the sky rather than a crack in the floor (the king's storm): the same circle, drawn and heard as lightning. */
   bolt?: boolean;
+  /** A stone out of the roof (the king's fall into phase III, `BOSS_METEOR_MS`): the same circle, drawn and heard as rock. */
+  rock?: boolean;
   /** A bolt of the king's call at a phase change rather than his storm: drawn violet, the same blow. */
   summon?: boolean;
 }
@@ -959,7 +961,7 @@ export interface Enemy {
    * began, which is the time the music plays in. Nothing he does climbs with it.
    */
   bossFightMs: number;
-  bossCast: "none" | "slam" | "leap" | "quake" | "hook" | "storm";
+  bossCast: "none" | "slam" | "leap" | "quake" | "hook" | "storm" | "meteor";
   /** Time left in the current move, rederived every step from `bossCastEndAt` so hitstop cannot delay it. */
   bossCastMs: number;
   /** On `bossFightMs`: when the current move ends. */

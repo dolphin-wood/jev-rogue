@@ -5,10 +5,10 @@ import {
   createWorld, step, queueBossMove, forceBossBlade, hurtEnemy, BOSS_SLAM_MS, BOSS_LEAP_MS, BOSS_LEAP_RISE_MS, BOSS_QUAKE_MS,
   BOSS_LEAP_UP_MS, BOSS_LEAP_HUNT_MS, BOSS_LEAP_LOCK_MS, BOSS_LEAP_FALL_MS, BOSS_LEAP_SKY_PX, BOSS_HOP_PX,
 } from "./world.ts";
-import { BAR_MS, BEAT_MS } from "./beat.ts";
+import { BAR_MS, BEAT_MS, BOSS_RAGE_TEMPO } from "./beat.ts";
 import { NO_INPUT, noMods } from "./types.ts";
 import type { World } from "./types.ts";
-import { makeEnemy, BOSS_ROAR_MS, BOSS_DASH_PAST_PX } from "./enemy.ts";
+import { makeEnemy, BOSS_ROAR_MS, BOSS_DASH_PAST_PX, bossTempo, bossMusicPhase } from "./enemy.ts";
 import { armHits } from "./attacks.ts";
 import { PLAYER_RADIUS, STEP_MS } from "./types.ts";
 import { acquire } from "./bullets.ts";
@@ -264,9 +264,12 @@ describe("the boss", () => {
    * that wants a move *now* puts the fight clock where the next step's move
    * lands on a line: a bar for the ground strikes, a beat for the chains.
    */
-  /** Steps through a phase change's roar and call, to where he takes his turns again. */
+  /** Steps through a phase change's roar and call (or phase III's fall), to where he takes his turns again. */
   const settle = (w: World, b: ReturnType<typeof boss>) => {
-    for (let i = 0; i < 60 * 8 && (b.bossRoarMs > 0 || b.bossSummonMs > 0); i++) { w.player.hearts = 6; step(w, NO_INPUT); }
+    for (let i = 0; i < 60 * 10 && (b.bossRoarMs > 0 || b.bossSummonMs > 0 || b.bossCast === "meteor"); i++) {
+      w.player.hearts = 6; w.player.invulnMs = 1e9; step(w, NO_INPUT);
+    }
+    w.player.invulnMs = 0;
   };
   const onGrid = (b: ReturnType<typeof boss>, commitMs: number, unit = BAR_MS) => {
     b.bossFightMs = unit * 20 - commitMs - STEP_MS;
@@ -360,6 +363,54 @@ describe("the boss", () => {
     expect(forceBossBlade(w, "cleave")).toBe(true);
     expect(b.attack).toBe("windup");
     expect(b.meleeKind).toBe("cleave");
+  });
+
+  it("falls into phase III: no adds, up out of the hall, stones a beat apart, and down in the middle on the downbeat", () => {
+    const w = world();
+    const b = boss(w);
+    b.hp = b.maxHp * 0.5;
+    step(w, NO_INPUT);
+    settle(w, b);
+    const adds = w.enemies.filter((x) => x !== b).length;
+    b.hp = b.maxHp * 0.25;
+    w.rifts.length = 0;
+    w.player.x = b.x + 90;
+    w.player.y = b.y + 40;
+    step(w, NO_INPUT);
+    expect(b.phase).toBe(3);
+    expect(b.bossCast).toBe("meteor");
+    expect(b.bossRoarMs).toBe(0);
+    expect(bossTempo(b)).toBe(1);
+    expect(bossMusicPhase(b)).toBe(2);
+    let up = false, landedAt = -1, marks = 0, atPlayer = 0;
+    for (let i = 0; i < 60 * 8 && landedAt < 0; i++) {
+      w.player.hearts = 6;
+      w.player.invulnMs = 1e9;
+      w.events.length = 0;
+      step(w, NO_INPUT);
+      if (b.airborne && b.bossLift >= BOSS_LEAP_SKY_PX) up = true;
+      for (const ev of w.events) {
+        if (ev.kind === "telegraph" && ev.what === "rock") {
+          marks++;
+          if (Math.hypot(ev.x - w.player.x, ev.y - w.player.y) < 2) atPlayer++;
+        }
+        if (ev.kind === "hazard_tick" && ev.what === "boss_land") landedAt = b.bossFightMs;
+      }
+    }
+    expect(up).toBe(true);
+    // A stone a beat at the player, and more across the hall; none of them lightning.
+    expect(atPlayer).toBeGreaterThanOrEqual(5);
+    expect(marks).toBeGreaterThanOrEqual(atPlayer * 3);
+    expect(w.rifts.some((r) => r.bolt)).toBe(false);
+    // Down in the middle of the hall, on the downbeat, and phase III's tempo and music from there.
+    expect(landedAt).toBeGreaterThan(0);
+    const off = ((landedAt % BAR_MS) + BAR_MS) % BAR_MS;
+    expect(Math.min(off, BAR_MS - off)).toBeLessThanOrEqual(STEP_MS * 1.01);
+    expect(Math.abs(b.x - w.room.extent.w * TILE_PX / 2)).toBeLessThan(TILE_PX);
+    expect(bossTempo(b)).toBe(BOSS_RAGE_TEMPO);
+    expect(bossMusicPhase(b)).toBe(3);
+    // No adds called for it.
+    expect(w.enemies.filter((x) => x !== b).length).toBeLessThanOrEqual(adds);
   });
 
   it("slams three times in phase III, o---o-----O: two stomps at his feet, then the band on the downbeat", () => {

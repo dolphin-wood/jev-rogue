@@ -93,8 +93,12 @@ const COUNTER_FADE_S = 4;
 type Variant = { harm: "harm" | "harm2"; drums: "drums" | "drums2" };
 
 interface Channel { src: AudioBufferSourceNode; lp: BiquadFilterNode; g: GainNode }
-/** One piece sounding: its layers, and when its loop's first sample was (or would have been) played. */
-interface Playing { piece: Piece; out: GainNode; ch: Partial<Record<Layer, Channel>>; t0: number; loopLen: number }
+/**
+ * One piece sounding: its layers, when its loop's first sample was (or would
+ * have been) played, and how fast it is playing — the boss piece runs faster
+ * in phase III (`BOSS_RAGE_TEMPO`), with `t0` re-anchored when it changes.
+ */
+interface Playing { piece: Piece; out: GainNode; ch: Partial<Record<Layer, Channel>>; t0: number; loopLen: number; rate: number }
 
 export class StemMusic {
   private readonly out: GainNode;
@@ -120,6 +124,8 @@ export class StemMusic {
    * at its position, and re-seated if it drifts (doc 020).
    */
   private bossClock: { sec: number; at: number } | null = null;
+  /** How fast the fight's beat clock runs against real time, as the sim reported it (`bossTempo`). */
+  private bossRate = 1;
   /** Bumped by every style change, so a slow download cannot start a style that was since switched away from. */
   private epoch = 0;
 
@@ -174,8 +180,9 @@ export class StemMusic {
   }
 
   /** What the game is doing. Free to call every frame: an unchanged state costs nothing. */
-  setState(state: MusicState, mood: Mood | null, bossPhase = 1, bossClockMs?: number): void {
+  setState(state: MusicState, mood: Mood | null, bossPhase = 1, bossClockMs?: number, bossRate = 1): void {
     if (bossClockMs !== undefined) this.bossClock = { sec: bossClockMs / 1000, at: this.ctx.currentTime };
+    if (bossRate !== this.bossRate) { this.bossRate = bossRate; this.setRate(this.playing); }
     const moodKey = (m: Mood | null): string => (m ? `${m.temperature}/${m.brightness}/${m.particle_intensity}` : "");
     if (state === this.state && moodKey(mood) === moodKey(this.mood) && bossPhase === this.bossPhase) return;
     const pieceChanged = this.pieceFor(state) !== this.pieceFor(this.state);
@@ -226,11 +233,23 @@ export class StemMusic {
     g.linearRampToValueAtTime(TRIM, now + seconds + back);
   }
 
-  /** Where the boss piece should be, at audio time `at`: the fight's beat clock, run on from its last report. */
+  /** Where the boss piece should be, at audio time `at`: the fight's beat clock, run on from its last report at its rate. */
   private bossPosition(loopLen: number, at = this.ctx.currentTime): number | null {
     const c = this.bossClock;
     if (!c || at - c.at > 0.5) return null;
-    return (((c.sec + (at - c.at)) % loopLen) + loopLen) % loopLen;
+    return (((c.sec + (at - c.at) * this.bossRate) % loopLen) + loopLen) % loopLen;
+  }
+
+  /** The piece to the rate it should play at (the boss piece's is `bossRate`), from where it is now. */
+  private setRate(p: Playing | null): void {
+    if (!p) return;
+    const rate = p.piece === "boss" ? this.bossRate : 1;
+    if (rate === p.rate) return;
+    const now = this.ctx.currentTime;
+    const at = this.position(p, now);
+    for (const c of Object.values(p.ch)) c?.src.playbackRate.setValueAtTime(rate, now);
+    p.rate = rate;
+    p.t0 = now - at / rate;
   }
 
   /**
@@ -252,7 +271,7 @@ export class StemMusic {
 
   /** Seconds into the loop a playing piece is at. */
   private position(p: Playing, at = this.ctx.currentTime): number {
-    return (((at - p.t0) % p.loopLen) + p.loopLen) % p.loopLen;
+    return ((((at - p.t0) * p.rate) % p.loopLen) + p.loopLen) % p.loopLen;
   }
 
   private pieceFor(state: MusicState): Piece {
@@ -320,6 +339,7 @@ export class StemMusic {
     if (old && offset !== "align" && offset !== "clock") return;
     const loopLen = Object.values(buffers)[0]?.duration ?? 1;
     const when = this.ctx.currentTime + 0.05;
+    const rate = piece === "boss" ? this.bossRate : 1;
     // The boss piece is always where the fight's beat clock is; the room piece resumes where it was left.
     const onClock = piece === "boss" ? this.bossPosition(loopLen, when) : null;
     const from = onClock ?? (offset === "align" ? (old && old.piece === piece ? this.position(old, when) : this.resumeAt.get(piece) ?? 0)
@@ -334,6 +354,7 @@ export class StemMusic {
       const src = this.ctx.createBufferSource();
       src.buffer = buffer;
       src.loop = true;
+      src.playbackRate.value = rate;
       const lp = this.ctx.createBiquadFilter();
       lp.type = "lowpass"; lp.frequency.value = OPEN; lp.Q.value = 0.5;
       const g = this.ctx.createGain();
@@ -342,7 +363,7 @@ export class StemMusic {
       src.start(when, from % loopLen);
       ch[layer] = { src, lp, g };
     }
-    this.playing = { piece, out, ch, t0: when - from, loopLen };
+    this.playing = { piece, out, ch, t0: when - from / rate, loopLen, rate };
     this.apply(0.05);
     // A style switch is a crossover in place, so it can be quick; a new piece fades in at its own pace.
     // A re-seat is the same music a few tens of ms apart, so it crosses fast or it would flam.

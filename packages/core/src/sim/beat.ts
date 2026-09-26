@@ -15,6 +15,15 @@ export const BEAT_MS = 60_000 / BOSS_BPM;
 /** One bar of four beats: 1428.57… ms. */
 export const BAR_MS = BEAT_MS * 4;
 
+/**
+ * **Phase III runs faster** (doc 020): from the landing that opens it, the
+ * king's own clock — the fight clock the grid is laid on, and everything he
+ * does — runs this much faster than real time, and the boss piece is played
+ * at the same rate, so it is heard faster (and a little higher) and the grid
+ * stays on the music. 168 BPM becomes about 185.
+ */
+export const BOSS_RAGE_TEMPO = 1.1;
+
 /** A length of `n` beats, in ms. */
 export const beats = (n: number): number => n * BEAT_MS;
 
