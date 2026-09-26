@@ -66,6 +66,7 @@ export const EN = {
   "menu.damageNumbers": "Damage numbers",
   "menu.autoMeleeAim": "Melee auto-target",
   "menu.autoCast": "Auto-cast",
+  "menu.tabGeneral": "General",
   "menu.assistHeading": "Assists",
   "menu.roomPlan": "Plan page before each floor",
   "menu.screenShake": "Screen shake",
@@ -93,6 +94,7 @@ export const EN = {
 
   /* -------------------------------- hints ------------------------------- */
   "hint.choose": "Choose",
+  "hint.tabs": "Tabs",
   "hint.change": "Change",
   "hint.select": "Select",
   "hint.back": "Back",

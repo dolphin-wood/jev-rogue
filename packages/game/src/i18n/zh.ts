@@ -66,6 +66,7 @@ export const ZH: Table = {
   "menu.damageNumbers": "伤害数字",
   "menu.autoMeleeAim": "近战自动索敌",
   "menu.autoCast": "自动施法",
+  "menu.tabGeneral": "通用",
   "menu.assistHeading": "辅助功能",
   "menu.roomPlan": "每层开始前显示规划",
   "menu.screenShake": "画面震动",
@@ -93,6 +94,7 @@ export const ZH: Table = {
 
   /* -------------------------------- hints ------------------------------- */
   "hint.choose": "选择",
+  "hint.tabs": "分页",
   "hint.change": "切换",
   "hint.select": "确定",
   "hint.back": "返回",

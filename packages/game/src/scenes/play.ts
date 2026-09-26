@@ -1542,7 +1542,8 @@ export class PlayScene extends Phaser.Scene {
   })();
   private invincible = (() => { try { return localStorage.getItem(INVINCIBLE_KEY) === "1"; } catch { return false; } })();
   /** The pause menu (Esc): its page, the highlighted row, and what it drew. */
-  private pauseUi: { page: "main" | "settings" | "controls"; selected: number; objects: Phaser.GameObjects.GameObject[] } | null = null;
+  /** `tab` is which of the settings page's tabs is up (`SETTINGS_TABS`). */
+  private pauseUi: { page: "main" | "settings" | "controls"; selected: number; tab: number; objects: Phaser.GameObjects.GameObject[] } | null = null;
   /**
    * The title screen, over a fresh first room until a key is pressed.
    *
@@ -1907,7 +1908,7 @@ export class PlayScene extends Phaser.Scene {
      * the arrow keys stay for menus only, unlisted, because a menu is the
      * one place a player reaches for them without being told.
      */
-    this.keys = this.input.keyboard!.addKeys("W,A,S,D,UP,LEFT,DOWN,RIGHT,E,J,K,L,U,I,O,ENTER,ESC,BACKTICK,TAB") as Record<string, Phaser.Input.Keyboard.Key>;
+    this.keys = this.input.keyboard!.addKeys("W,A,S,D,UP,LEFT,DOWN,RIGHT,Q,E,J,K,L,U,I,O,ENTER,ESC,BACKTICK,TAB") as Record<string, Phaser.Input.Keyboard.Key>;
     if (spellLabAsked()) this.spellLab = new SpellLab(this.spellLabHost());
     this.debug = new DebugPanel({
       ...(this.spellLab ? { spellLab: this.spellLab } : {}),
@@ -4405,7 +4406,7 @@ export class PlayScene extends Phaser.Scene {
   }[] {
     return [
       { label: t("menu.newGame"), act: () => { this.hideTitle(); this.showIntent(); } },
-      { label: t("menu.settings"), act: () => { this.hideTitle(); this.showPause(); this.pauseUi!.page = "settings"; this.pauseUi!.selected = 0; this.pauseFromTitle = true; this.renderPause(); } },
+      { label: t("menu.settings"), act: () => { this.hideTitle(); this.showPause(); this.pauseUi!.page = "settings"; this.pauseUi!.selected = 0; this.pauseUi!.tab = 0; this.pauseFromTitle = true; this.renderPause(); } },
       { label: t("menu.controls"), act: () => { this.hideTitle(); this.showPause(); this.pauseUi!.page = "controls"; this.pauseUi!.selected = 0; this.pauseFromTitle = true; this.controlsFromSettings = false; this.renderPause(); } },
       { label: t("menu.github"), link: true, act: () => { window.open("https://github.com/dolphin-wood/jev-rogue", "_blank", "noopener,noreferrer"); } },
       // The title menu has no headings to divide, so the Jev row loses its.
@@ -4812,7 +4813,7 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private showPause(): void {
-    this.pauseUi = { page: "main", selected: 0, objects: [] };
+    this.pauseUi = { page: "main", selected: 0, tab: 0, objects: [] };
     this.renderPause();
   }
 
@@ -5455,35 +5456,45 @@ export class PlayScene extends Phaser.Scene {
       this.autoCaster.reset();
       try { localStorage.setItem(AUTO_CAST_KEY, this.autoCast ? "1" : "0"); } catch { /* still applies */ }
     };
-    if (ui.page === "settings") return [
-      { label: t("menu.damageNumbers"), value: t(this.damageNumbersOn ? "menu.on" : "menu.off"), act: setNumbers, adjust: setNumbers },
-      this.roomPlanRow(),
-      { label: t("menu.screenShake"), value: t(`shake.${this.shakeSetting}` as "shake.off"), act: () => setShake(1), adjust: setShake },
-      this.soundRow(),
-      ...this.volumeRows(),
-      this.languageRow(),
+    if (ui.page === "settings") {
       /*
-       * **Assists** under their own heading: the switches that make the fight
-       * easier to play rather than change how it looks or sounds. Together, so
-       * a player looking for help finds all of it in one place, and apart, so
-       * nobody turns one on while looking for the volume.
+       * **Three tabs, not one long page.** Everything on one page ran past
+       * the screen in Chinese and Japanese, and a scrolled menu hides what is
+       * below it — the assists, the one group a struggling player most needs
+       * to find, sat in the middle. Each tab fits with room to grow; Q and E
+       * turn them (`readPauseKeys`), and the controls and Back rows close
+       * every tab.
        */
-      { heading: t("menu.assistHeading"), label: t("menu.damageDealt"), value: `x${this.dealtMult}`, act: () => setDealt(this.dealtMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setDealt },
-      { label: t("menu.damageTaken"), value: `x${this.takenMult}`, act: () => setTaken(this.takenMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setTaken },
-      { label: t("menu.autoMeleeAim"), value: t(this.autoMeleeAim ? "menu.on" : "menu.off"), act: setAutoMeleeAim, adjust: setAutoMeleeAim },
-      { label: t("menu.autoCast"), value: t(this.autoCast ? "menu.on" : "menu.off"), act: setAutoCast, adjust: setAutoCast },
-      /*
-       * The Jev rows under their own heading: who plans the run is one
-       * subject, and mixed in among the damage multipliers it reads as one
-       * more unrelated switch.
-       */
-      ...this.jevRows(),
-      // The controls are reachable from here too: from the title menu there is no pause menu to find them in.
-      { label: t("menu.controls"), act: () => { ui.page = "controls"; ui.selected = 0; this.controlsFromSettings = true; } },
-      // Opened from the title menu there is no pause menu behind this page,
-      // so Back goes back to the title rather than to a menu that is not there.
-      { label: t("menu.back"), act: () => { if (this.pauseFromTitle) this.closePauseToTitle(); else { ui.page = "main"; ui.selected = 2; } } },
-    ];
+      const tabRows: {
+        label: string; value?: string; act: () => void;
+        adjust?: (dir: 1 | -1) => void; disabled?: boolean; heading?: string;
+      }[][] = [
+        [
+          { label: t("menu.damageNumbers"), value: t(this.damageNumbersOn ? "menu.on" : "menu.off"), act: setNumbers, adjust: setNumbers },
+          this.roomPlanRow(),
+          { label: t("menu.screenShake"), value: t(`shake.${this.shakeSetting}` as "shake.off"), act: () => setShake(1), adjust: setShake },
+          this.soundRow(),
+          ...this.volumeRows(),
+          this.languageRow(),
+        ],
+        [
+          { label: t("menu.damageDealt"), value: `x${this.dealtMult}`, act: () => setDealt(this.dealtMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setDealt },
+          { label: t("menu.damageTaken"), value: `x${this.takenMult}`, act: () => setTaken(this.takenMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setTaken },
+          { label: t("menu.autoMeleeAim"), value: t(this.autoMeleeAim ? "menu.on" : "menu.off"), act: setAutoMeleeAim, adjust: setAutoMeleeAim },
+          { label: t("menu.autoCast"), value: t(this.autoCast ? "menu.on" : "menu.off"), act: setAutoCast, adjust: setAutoCast },
+        ],
+        // The tab is its heading.
+        this.jevRows().map((r) => ({ ...r, heading: undefined })),
+      ];
+      return [
+        ...tabRows[ui.tab % SETTINGS_TABS.length]!,
+        // The controls are reachable from here too: from the title menu there is no pause menu to find them in.
+        { label: t("menu.controls"), act: () => { ui.page = "controls"; ui.selected = 0; this.controlsFromSettings = true; } },
+        // Opened from the title menu there is no pause menu behind this page,
+        // so Back goes back to the title rather than to a menu that is not there.
+        { label: t("menu.back"), act: () => { if (this.pauseFromTitle) this.closePauseToTitle(); else { ui.page = "main"; ui.selected = 2; } } },
+      ];
+    }
     if (ui.page === "controls") return [{ label: t("menu.back"), act: () => {
       if (this.controlsFromSettings) { this.controlsFromSettings = false; ui.page = "settings"; ui.selected = 0; }
       else if (this.pauseFromTitle) this.closePauseToTitle();
@@ -5492,7 +5503,7 @@ export class PlayScene extends Phaser.Scene {
     return [
       { label: t("menu.resume"), act: () => this.hidePause() },
       { label: t("menu.character"), act: () => { this.hidePause(); this.showStaff("view", null); this.staffFromPause = true; } },
-      { label: t("menu.settings"), act: () => { ui.page = "settings"; ui.selected = 0; } },
+      { label: t("menu.settings"), act: () => { ui.page = "settings"; ui.selected = 0; ui.tab = 0; } },
       { label: t("menu.controls"), act: () => { ui.page = "controls"; ui.selected = 0; } },
       { label: t("menu.returnToTitle"), act: () => { this.hidePause(); this.pendingTitle = true; this.restartRun(); } },
     ];
@@ -5520,9 +5531,11 @@ export class PlayScene extends Phaser.Scene {
     // under it — which is what "JEV" was doing to "Jev Director".
     const headingH = pitch;
     const headings = rows.filter((r) => r.heading).length * headingH;
-    const hintH = ui.page === "settings" && !jevAvailable() ? 14 : 0;
+    const jevTab = ui.page === "settings" && ui.tab === SETTINGS_TABS.length - 1;
+    // The settings panel is as tall as its tallest tab, and the tab strip, so turning a tab never resizes it.
+    const tabsH = ui.page === "settings" ? 22 + pitch / 2 : 0;
     const bodyH = (ui.page === "controls" ? controlRows.length * 12 * linePitch() + 16 : 0)
-      + rows.length * pitch + headings + hintH;
+      + (ui.page === "settings" ? Math.max(rows.length, SETTINGS_TAB_ROWS) : rows.length) * pitch + headings + tabsH;
     const panelW = ui.page === "controls" ? 400 : ui.page === "settings" ? 340 : 190;
     const panelH = bodyH + 62;
     ui.objects.push(...this.modalPanel(panelW, panelH, { depth: 230, cy }));
@@ -5531,6 +5544,30 @@ export class PlayScene extends Phaser.Scene {
     ui.objects.push(this.menuText(cx, top + 16, `—  ${title}  —`, 13, "#ffe9a8"));
     ui.objects.push(this.add.rectangle(cx, top + 28, panelW - 28, 1, 0x2a2750, 1).setDepth(230.5));
     let y = top + 40;
+    if (ui.page === "settings") {
+      /*
+       * The tabs, as a row of names under the title: the one up in the
+       * selection's gold on a lit plate, the others dim, with the keys that
+       * turn them at either end. A name is also a click.
+       */
+      const names = SETTINGS_TABS.map((k) => t(k));
+      const gap = 18;
+      const widths = names.map((nm) => this.uiText(0, 0, nm, 8, "#000").setVisible(false)).map((tx) => { const w = tx.displayWidth; tx.destroy(); return w; });
+      const total = widths.reduce((a, b) => a + b, 0) + gap * (names.length - 1);
+      let x = cx - total / 2;
+      ui.objects.push(this.keys_(x - 12, y, "[Q]", 7, "#8792b5", 231, 1));
+      names.forEach((nm, i) => {
+        const on = i === ui.tab;
+        const w = widths[i]!;
+        if (on) ui.objects.push(this.add.rectangle(x + w / 2, y, w + 10, 14, 0x2a2750, 1).setDepth(230.5));
+        const tx = this.uiText(x, y, nm, 8, on ? "#ffe9a8" : "#6a7090").setOrigin(0, 0.5).setDepth(231);
+        tx.setInteractive({ useHandCursor: true }).on("pointerdown", () => { if (i !== ui.tab) this.setSettingsTab(i); });
+        ui.objects.push(tx);
+        x += w + gap;
+      });
+      ui.objects.push(this.keys_(x - gap + 12, y, "[E]", 7, "#8792b5", 231, 0));
+      y += 22;
+    }
     if (ui.page === "controls") {
       /*
        * A two-column table: every cap right-aligned to one edge, every
@@ -5555,7 +5592,23 @@ export class PlayScene extends Phaser.Scene {
     // A heading pushes its row and everything under it down, so the rows'
     // own y is walked rather than computed from the index.
     let rowY = y;
+    // The settings tabs' own rows end here, and the Jev hint goes under them.
+    let tabEndY = y;
     rows.forEach((r, i) => {
+      /*
+       * The last two settings rows — Controls and Back — are **pinned** to
+       * the foot of the panel under a rule, so they sit in the same place on
+       * every tab rather than jumping up a short one as the tabs are turned.
+       */
+      const pinned = ui.page === "settings" && i >= rows.length - 2;
+      if (pinned) {
+        if (i === rows.length - 2) {
+          tabEndY = rowY;
+          // Half a row of air over the rule, so it never sits on a full tab's last row.
+          rowY = y + (SETTINGS_TAB_ROWS - 1.5) * pitch;
+          ui.objects.push(this.add.rectangle(cx, rowY - pitch * 0.6, panelW - 28, 1, 0x2a2750, 1).setDepth(230.5));
+        }
+      }
       /*
        * A heading takes one row's slot, set nearer the rows it heads than the
        * rows above it. It was split half and half around its line, which put
@@ -5571,12 +5624,12 @@ export class PlayScene extends Phaser.Scene {
       rowY += pitch;
     });
     // The same line the title menu carries, for the same reason.
-    if (ui.page === "settings" && !jevAvailable()) {
-      ui.objects.push(this.uiText(labelX, rowY - 6, t("menu.jevHint"), 6, "#5a5f7a",
+    if (jevTab && !jevAvailable()) {
+      ui.objects.push(this.uiText(labelX, tabEndY - 6, t("menu.jevHint"), 6, "#5a5f7a",
         { wordWrap: { width: (panelW - 40) * ZOOM } }).setOrigin(0, 0.5).setDepth(231));
     }
     ui.objects.push(this.fittedKeys(cx, cy + panelH / 2 - 14, ui.page === "settings"
-      ? `[W][S] ${t("hint.choose")}     [A][D] ${t("hint.change")}     [Esc] ${t("hint.back")}`
+      ? `[Q][E] ${t("hint.tabs")}     [W][S] ${t("hint.choose")}     [A][D] ${t("hint.change")}     [Esc] ${t("hint.back")}`
       : `[W][S] ${t("hint.choose")}     [Enter] ${t("hint.select")}     [Esc] ${t("hint.back")}`, 7, "#8792b5", panelW - 24));
   }
 
@@ -5601,6 +5654,17 @@ export class PlayScene extends Phaser.Scene {
     ["Esc", "keys.pauseMenu"],
   ];
 
+  /** Turns the settings page to a tab, wrapping, with the cursor on its first row. */
+  private setSettingsTab(tab: number): void {
+    const ui = this.pauseUi;
+    if (!ui) return;
+    const n = SETTINGS_TABS.length;
+    ui.tab = ((tab % n) + n) % n;
+    ui.selected = 0;
+    this.sfx.play("ui_move");
+    this.renderPause();
+  }
+
   private readPauseKeys(): void {
     const ui = this.pauseUi;
     if (!ui) return;
@@ -5616,6 +5680,10 @@ export class PlayScene extends Phaser.Scene {
       return;
     }
     let changed = false;
+    if (ui.page === "settings") {
+      const turn = (down(this.keys.E) ? 1 : 0) - (down(this.keys.Q) ? 1 : 0);
+      if (turn !== 0) { this.setSettingsTab(ui.tab + turn); return; }
+    }
     if (down(this.keys.W) || down(this.keys.UP)) { ui.selected = (ui.selected + rows.length - 1) % rows.length; changed = true; this.sfx.play("ui_move"); }
     if (down(this.keys.S) || down(this.keys.DOWN)) { ui.selected = (ui.selected + 1) % rows.length; changed = true; this.sfx.play("ui_move"); }
     const row = rows[ui.selected];
@@ -8199,8 +8267,16 @@ export class PlayScene extends Phaser.Scene {
      * the portal needed several stabs at the key before one landed on a frame
      * with a step in it. The edge is now held until a step has seen it.
      */
-    if (this.keys.E && Phaser.Input.Keyboard.JustDown(this.keys.E)) this.interactPressed = true;
-    if (this.keys.L && Phaser.Input.Keyboard.JustDown(this.keys.L)) this.spinPressed = true;
+    /*
+     * Not behind a menu: the step is held while one is up, so a latched
+     * press would wait there and go off the moment it closed — and E is
+     * the settings tabs' key, so switching a tab would walk the player into
+     * a portal. The menu reads its own keys.
+     */
+    if (!this.modalOpen) {
+      if (this.keys.E && Phaser.Input.Keyboard.JustDown(this.keys.E)) this.interactPressed = true;
+      if (this.keys.L && Phaser.Input.Keyboard.JustDown(this.keys.L)) this.spinPressed = true;
+    }
     this.accumulator += Math.min(delta, 100) * this.labSpeed;
     if (this.labSteps > 0) { this.accumulator += STEP_MS * this.labSteps; this.labSteps = 0; }
     if (this.labOn) this.labTick();
@@ -16941,6 +17017,10 @@ const STYLES: readonly { id: "spam" | "nuke" | "area" | "dot" | "melee"; name: s
 const DAMAGE_NUMBERS_KEY = "jr-damage-numbers";
 const AUTO_MELEE_AIM_KEY = "jr-auto-melee-aim";
 const AUTO_CAST_KEY = "jr-auto-cast";
+/** The settings page's tabs, in order: their titles' string keys. */
+const SETTINGS_TABS = ["menu.tabGeneral", "menu.assistHeading", "menu.jevHeading"] as const;
+/** The most rows any settings tab holds, with its controls and Back: the panel is this tall on every tab. */
+const SETTINGS_TAB_ROWS = 9;
 /** How near a body has to be for auto-cast to spend a spell on it: about the seeking bolts' useful range. */
 const AUTO_CAST_REACH_PX = 7 * TILE_PX;
 const ROOM_PARAMS_KEY = "jr-room-params";

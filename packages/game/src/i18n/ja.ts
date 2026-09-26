@@ -65,6 +65,7 @@ export const JA: Table = {
   "menu.damageNumbers": "ダメージ表示",
   "menu.autoMeleeAim": "近接攻撃の自動照準",
   "menu.autoCast": "自動詠唱",
+  "menu.tabGeneral": "一般",
   "menu.assistHeading": "アシスト",
   "menu.roomPlan": "階の開始前にプランを表示",
   "menu.screenShake": "画面の揺れ",
@@ -92,6 +93,7 @@ export const JA: Table = {
 
   /* -------------------------------- hints ------------------------------- */
   "hint.choose": "選択",
+  "hint.tabs": "タブ",
   "hint.change": "変更",
   "hint.select": "決定",
   "hint.back": "戻る",
