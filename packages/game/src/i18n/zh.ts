@@ -23,6 +23,7 @@ export const ZH: Table = {
   "menu.newGame": "开始游戏",
   "menu.settings": "设置",
   "menu.controls": "操作",
+  "menu.github": "GitHub 仓库",
   "menu.character": "角色",
   "menu.resume": "继续",
   "menu.returnToTitle": "返回标题",

@@ -23,6 +23,7 @@ export const EN = {
   "menu.newGame": "New Game",
   "menu.settings": "Settings",
   "menu.controls": "Controls",
+  "menu.github": "GitHub Repository",
   "menu.character": "Character",
   "menu.resume": "Resume",
   "menu.returnToTitle": "Return to Title",

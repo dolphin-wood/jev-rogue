@@ -4354,12 +4354,13 @@ export class PlayScene extends Phaser.Scene {
   /** The title menu's rows: start a run, or change what a run will be. */
   private titleRows(): {
     label: string; value?: string; act: () => void;
-    adjust?: (dir: 1 | -1) => void; disabled?: boolean; heading?: string;
+    adjust?: (dir: 1 | -1) => void; disabled?: boolean; heading?: string; link?: boolean;
   }[] {
     return [
       { label: t("menu.newGame"), act: () => { this.hideTitle(); this.showIntent(); } },
       { label: t("menu.settings"), act: () => { this.hideTitle(); this.showPause(); this.pauseUi!.page = "settings"; this.pauseUi!.selected = 0; this.pauseFromTitle = true; this.renderPause(); } },
       { label: t("menu.controls"), act: () => { this.hideTitle(); this.showPause(); this.pauseUi!.page = "controls"; this.pauseUi!.selected = 0; this.pauseFromTitle = true; this.controlsFromSettings = false; this.renderPause(); } },
+      { label: t("menu.github"), link: true, act: () => { window.open("https://github.com/dolphin-wood/jev-rogue", "_blank", "noopener,noreferrer"); } },
       // The title menu has no headings to divide, so the Jev row loses its.
       ...this.jevRows().map((r) => ({ ...r, heading: undefined })),
       this.roomPlanRow(),
@@ -4384,7 +4385,7 @@ export class PlayScene extends Phaser.Scene {
     // left a growing band of nothing under the last one as rows came and went.
     // CJK rows are full-height squares with no space of their own, so the
     // pitch the Latin was laid out on has them touching (`linePitch`).
-    const pitch = 19 * linePitch();
+    const pitch = 17.5 * linePitch();
     const rowsH = (rows.length - 1) * pitch;
     const panelH = rowsH + 34;
     /*
@@ -4412,7 +4413,12 @@ export class PlayScene extends Phaser.Scene {
     ui.objects.push(this.add.rectangle(cx, menuY, panelW, panelH, 0x161334, 0.9)
       .setStrokeStyle(1, 0x4a5480, 0.9).setDepth(230.5));
     const top = menuY - rowsH / 2;
-    rows.forEach((r, i) => { this.drawMenuRow(ui.objects, r, cx, top + i * pitch, panelW, i === ui.selected); });
+    rows.forEach((r, i) => {
+      const y = top + i * pitch;
+      this.drawMenuRow(ui.objects, r, cx, y, panelW, i === ui.selected);
+      if (r.link) ui.objects.push(this.add.zone(cx, y, panelW, pitch).setDepth(232)
+        .setInteractive({ useHandCursor: true }).on("pointerdown", () => { this.sfx.play("ui_select"); r.act(); }));
+    });
     /*
      * Why the switch will not move, and what to do about it.
      *

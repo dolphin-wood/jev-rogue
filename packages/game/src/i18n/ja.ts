@@ -22,6 +22,7 @@ export const JA: Table = {
   "menu.newGame": "ニューゲーム",
   "menu.settings": "設定",
   "menu.controls": "操作",
+  "menu.github": "GitHub リポジトリ",
   "menu.character": "キャラクター",
   "menu.resume": "再開",
   "menu.returnToTitle": "タイトルへ戻る",
