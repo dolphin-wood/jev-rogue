@@ -689,6 +689,33 @@ describe("the boss", () => {
     expect(lost).toEqual([Math.floor(0.8 * power * 10), Math.floor(1.2 * power * 10)]);
   });
 
+  it("a string's cuts come back the other way each blow, whatever the strafe clock does meanwhile", () => {
+    const w = world();
+    const b = boss(w);
+    b.hp = b.maxHp * 0.2;
+    b.hasAttacked = true;
+    step(w, NO_INPUT);
+    settle(w, b);
+    w.enemies = w.enemies.filter((x) => x === b);
+    w.bossHold = { moves: true, blades: true, volleys: true };
+    w.player.x = b.x - 14;
+    w.player.y = b.y + 60;
+    expect(forceBossBlade(w, "greatslash")).toBe(true);
+    const sweeps: number[] = [b.swing.sweep];
+    let was = b.attack;
+    for (let i = 0; i < 60 * 4; i++) {
+      w.player.x = b.x - 14; w.player.y = b.y + 60; w.player.hearts = 6; w.player.invulnMs = 1e9;
+      // The strafe clock turning over mid-windup, as it does in a long string.
+      if (b.attack === "windup" && i % 7 === 0) b.strafe = b.strafe === 1 ? -1 : 1;
+      step(w, NO_INPUT);
+      if (b.attack === "windup" && was !== "windup") sweeps.push(b.swing.sweep);
+      was = b.attack;
+    }
+    // Phase III: x--x--x-----X, four cuts, each the other way from the last.
+    expect(sweeps.length).toBe(4);
+    for (let i = 1; i < sweeps.length; i++) expect(sweeps[i]).toBe(-sweeps[i - 1]!);
+  });
+
   it("is never moved by the player: not by the sword's knockback, and not by walking into him", () => {
     const w = world();
     const b = boss(w);

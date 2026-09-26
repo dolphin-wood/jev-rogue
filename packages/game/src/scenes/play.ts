@@ -15793,11 +15793,17 @@ const BOSS_BLADE_FRAMES: Partial<Record<MeleeKind, BladeFrames>> = {
     recovery: ["dash_skid", "recover"],
   },
 };
-// The light slash is too quick (160 ms) for the sweep's four strike keys, which flickered past unread:
-// wound back, then the end of the cut held — two keys, 大起大落.
+/*
+ * The light slash is quick (160 ms). The sweep's four strike keys evenly
+ * flickered past unread; the end of the cut alone, straight from the windup,
+ * threw the sword from one side of him to the other with nothing between.
+ * So the swing is seen going through — the sword coming down, then across,
+ * a quarter each — and the end of the cut is held for the other half (a key
+ * listed twice holds twice as long).
+ */
 BOSS_BLADE_FRAMES.greatslash = {
   windup: ["sweep_wind"],
-  strike: ["sweep_cut"],
+  strike: ["sweep_enter", "sweep_mid", "sweep_cut", "sweep_cut"],
   recovery: ["sweep_recover~", "sweep_reset~"],
 };
 /**
@@ -15825,9 +15831,10 @@ const BOSS_DRIVE_MS = 140;
 const WIDE_FRONT: BladeFrames = {
   windup: ["sweep_front_wind"], strike: ["sweep_front_enter", "sweep_front_mid", "sweep_front_cut"], recovery: ["sweep_front_cut"],
 };
-// The slash is quick (160 ms): the front cut's last two keys, so neither flickers past unread.
+// The slash is quick (160 ms): the whole front cut, the sword coming down and across a quarter each and the
+// end of it held for the other half, so it is seen swinging rather than jumping sides (`BOSS_BLADE_FRAMES.greatslash`).
 const WIDE_FRONT_SLASH: BladeFrames = {
-  windup: ["sweep_front_wind"], strike: ["sweep_front_mid", "sweep_front_cut"], recovery: ["sweep_front_cut"],
+  windup: ["sweep_front_wind"], strike: ["sweep_front_enter", "sweep_front_mid", "sweep_front_cut", "sweep_front_cut"], recovery: ["sweep_front_cut"],
 };
 const WIDE_BACK: BladeFrames = {
   windup: ["sweep_back_wind"], strike: ["sweep_back_cross", "sweep_back_cut"], recovery: ["sweep_back_cut"],

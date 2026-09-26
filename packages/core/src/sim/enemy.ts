@@ -1864,7 +1864,12 @@ function advanceMelee(e: Enemy, world: World, dtMs: number): void {
         // A sweep or a slash goes out of his front only: at a player who has gone round beside or behind him, the backhand instead.
         if ((next.kind === "greatsweep" || next.kind === "greatslash") && (bossLevel(e, world.player) || bossBehind(e, world.player))) next = { ...next, kind: "maul" };
         const cuts = (k: MeleeKind | null): boolean => k === "greatsweep" || k === "greatslash";
-        if (cuts(next.kind) && cuts(e.meleeKind)) e.strafe = e.strafe === 1 ? -1 : 1;
+        /*
+         * Back the other way from the blow just thrown — from its own sweep, not from `strafe`, which the
+         * strafe clock turns over on its own (`strafeMs`): turned once during a long windup, it made the
+         * flip a no-op, and two front cuts in a row threw the sword from one side of him to the other.
+         */
+        if (cuts(next.kind) && cuts(e.meleeKind)) e.strafe = e.swing.sweep === 1 ? -1 : 1;
         e.bossLinked = true;
         e.bossLinkedBlow = next;
         beginWindup(world, e, world.player, next.kind);
