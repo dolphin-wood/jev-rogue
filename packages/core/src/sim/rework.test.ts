@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { rampFor } from "../encounters/ramp.ts";
 import { addPower, clearPowers } from "../content/tags.ts";
-import { createWorld, step, queueBossMove, forceBossBlade, BOSS_SLAM_MS, BOSS_LEAP_MS, BOSS_LEAP_RISE_MS, BOSS_QUAKE_MS } from "./world.ts";
+import { createWorld, step, queueBossMove, forceBossBlade, hurtEnemy, BOSS_SLAM_MS, BOSS_LEAP_MS, BOSS_LEAP_RISE_MS, BOSS_QUAKE_MS } from "./world.ts";
 import { BAR_MS, BEAT_MS } from "./beat.ts";
 import { NO_INPUT, noMods } from "./types.ts";
 import type { World } from "./types.ts";
-import { makeEnemy } from "./enemy.ts";
+import { makeEnemy, BOSS_ROAR_MS } from "./enemy.ts";
 import { armHits } from "./attacks.ts";
 import { PLAYER_RADIUS, STEP_MS } from "./types.ts";
 import { acquire } from "./bullets.ts";
@@ -261,6 +261,10 @@ describe("the boss", () => {
    * that wants a move *now* puts the fight clock where the next step's move
    * lands on a line: a bar for the ground strikes, a beat for the chains.
    */
+  /** Steps through a phase change's roar and call, to where he takes his turns again. */
+  const settle = (w: World, b: ReturnType<typeof boss>) => {
+    for (let i = 0; i < 60 * 8 && (b.bossRoarMs > 0 || b.bossSummonMs > 0); i++) { w.player.hearts = 6; step(w, NO_INPUT); }
+  };
   const onGrid = (b: ReturnType<typeof boss>, commitMs: number, unit = BAR_MS) => {
     b.bossFightMs = unit * 20 - commitMs - STEP_MS;
   };
@@ -378,8 +382,9 @@ describe("the boss", () => {
     b.hp = b.maxHp * 0.5;
     step(w, NO_INPUT);
     expect(b.phase).toBe(2);
+    settle(w, b);
     // Phase two opens with adds.
-    expect(w.enemies.filter((x) => x !== b && x.hp > 0).length).toBe(2);
+    expect(w.enemies.filter((x) => x !== b && x.hp > 0).length).toBe(4);
     b.attack = "approach";
     b.bossCast = "none";
     w.player.x = b.x + 200;
@@ -416,6 +421,9 @@ describe("the boss", () => {
     b.hasAttacked = true;
     w.bossHold = { moves: true, blades: true, volleys: true };
     step(w, NO_INPUT);
+    settle(w, b);
+    // Only his blows are being counted: his adds are sent away.
+    w.enemies = w.enemies.filter((x) => x === b);
     // In front of him (below, on the screen), where the slashes cross and the cleave can still find them.
     w.player.x = b.x - 14;
     w.player.y = b.y + 60;
@@ -482,6 +490,7 @@ describe("the boss", () => {
     const b = boss(w);
     b.hp = b.maxHp * 0.5;
     step(w, NO_INPUT);
+    settle(w, b);
     b.attack = "approach";
     w.bossHold = { moves: true, blades: true, volleys: true };
     w.player.x = b.x + 140;
@@ -610,11 +619,60 @@ describe("the boss", () => {
     expect(w.enemyBullets.filter((x) => x.alive).length).toBeLessThanOrEqual(shots);
   });
 
+  it("roars at a phase change: stands, cannot be hurt, then calls his adds and violet bolts after the player", () => {
+    const w = world();
+    const b = boss(w);
+    w.player.x = b.x + 150;
+    w.player.y = b.y;
+    b.hp = b.maxHp * 0.5;
+    step(w, NO_INPUT);
+    expect(b.phase).toBe(2);
+    expect(b.bossRoarMs).toBeGreaterThan(0);
+    const at = { x: b.x, y: b.y };
+    const hp = b.hp;
+    // Nothing done to him through the roar counts, and he does not move or act.
+    for (let i = 0; i < Math.floor(BOSS_ROAR_MS / STEP_MS) - 4; i++) {
+      w.player.hearts = 6;
+      w.player.x = b.x + 30 + (i % 40);
+      hurtEnemy(w, b, 50, "", w.player);
+      step(w, NO_INPUT);
+      expect(b.attack).toBe("approach");
+      expect(b.bossCast).toBe("none");
+    }
+    expect(b.hp).toBe(hp);
+    expect(Math.hypot(b.x - at.x, b.y - at.y)).toBeLessThan(0.5);
+    expect(w.enemies.filter((x) => x !== b).length).toBe(0);
+    for (let i = 0; i < 20 && b.bossRoarMs > 0; i++) step(w, NO_INPUT);
+    // The call: his adds up about him, of more than one kind, none on the player.
+    expect(b.bossSummonMs).toBeGreaterThan(0);
+    const adds = w.enemies.filter((x) => x !== b);
+    expect(adds.length).toBe(4);
+    for (const a of adds) expect(Math.hypot(a.x - w.player.x, a.y - w.player.y)).toBeGreaterThan(40);
+    // He can be struck through the call; the bolts come for the player, and hurt.
+    hurtEnemy(w, b, 10, "", w.player);
+    expect(b.hp).toBeLessThan(hp);
+    w.player.x = b.x + 150;
+    const bolts: { x: number; y: number }[] = [];
+    for (let i = 0; i < 60 * 6 && b.bossSummonMs > 0; i++) {
+      w.player.hearts = 6;
+      w.player.invulnMs = 1e9;
+      const known = new Set(w.rifts);
+      step(w, NO_INPUT);
+      for (const r of w.rifts) if (r.summon && !known.has(r)) bolts.push({ x: r.x, y: r.y });
+    }
+    expect(b.bossSummonMs).toBe(0);
+    expect(bolts.length).toBe(4);
+    // The first is laid on the player where they stand.
+    expect(Math.hypot(bolts[0]!.x - w.player.x, bolts[0]!.y - w.player.y)).toBeLessThan(2);
+    expect(w.rifts.every((r) => !r.summon || r.damage > 0)).toBe(true);
+  });
+
   it("takes its adds with it", () => {
     const w = world();
     const b = boss(w);
     b.hp = b.maxHp * 0.5;
     step(w, NO_INPUT);
+    settle(w, b);
     b.hp = 0;
     step(w, NO_INPUT);
     step(w, NO_INPUT);

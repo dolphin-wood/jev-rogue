@@ -622,6 +622,8 @@ export interface Rift {
   struck: boolean;
   /** A bolt from the sky rather than a crack in the floor (the king's storm): the same circle, drawn and heard as lightning. */
   bolt?: boolean;
+  /** A bolt of the king's call at a phase change rather than his storm: drawn violet, the same blow. */
+  summon?: boolean;
 }
 
 /**
@@ -1010,6 +1012,18 @@ export interface Enemy {
   bossBusy: boolean;
   /** The last phase whose adds have been called. */
   bossAddsPhase: number;
+  /**
+   * **The roar** at a phase change: time left in it. He stands where he is,
+   * armour breaking off him, and roars; nothing he does and nothing done to
+   * him counts until it is over — he cannot be hurt (`hurtEnemy`). 0 otherwise.
+   */
+  bossRoarMs: number;
+  /**
+   * **The call** after the roar: time left in it. The greatsword held up, the
+   * phase's adds rising about him, and violet bolts called down after the
+   * player a beat apart. He stands through it too, but can be struck.
+   */
+  bossSummonMs: number;
   /** Where a leap comes down, fixed when it is marked. */
   bossTargetX: number;
   bossTargetY: number;

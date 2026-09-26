@@ -380,6 +380,9 @@ export const MANIFEST: FrameSpec[] = (() => {
   // same body scale as the other Boss poses.
   for (const p of [1, 2, 3]) out.push(frame(`boss_p${p}_storm`, "s256", true, false, [384, 384]));
   out.push(frame("boss_unbind_1", "s256", false), frame("boss_unbind_2", "s256", false));
+  // The same poses with the pieces coming off him cut away, held through the roar
+  // while the thrown fragments (`boss_debris_*`) fly on their own.
+  out.push(frame("boss_unbind_1_bare", "s256", false), frame("boss_unbind_2_bare", "s256", false));
   for (const piece of ["pauldron_l", "pauldron_r", "helm", "breastplate_l", "breastplate_r", "cape"])
     out.push(frame(`boss_debris_${piece}`, "s64", false));
   for (const piece of ["link_face", "link_edge", "hook_head"])

@@ -110,7 +110,7 @@ function sourceFor(name: string): Recipe {
     source: { file: `melee/boss-king/p${approvedBoss[1]}/${approvedBoss[2]}.png`, crop: [0, 0, 1, 1], fractional: true },
     motion: "none",
   };
-  const kingPart = /^(boss_(?:unbind_[12]|debris_(?:pauldron_[lr]|helm|breastplate_[lr]|cape)|chain_(?:link_face|link_edge|hook_head)))$/.exec(name);
+  const kingPart = /^(boss_(?:unbind_[12](?:_bare)?|debris_(?:pauldron_[lr]|helm|breastplate_[lr]|cape)|chain_(?:link_face|link_edge|hook_head)))$/.exec(name);
   if (kingPart) return {
     source: { file: `melee/boss-king/${name.slice(5)}.png`, crop: [0, 0, 1, 1], fractional: true },
     motion: "none",
