@@ -1028,65 +1028,6 @@ const DEFS = {
     },
   },
 
-  /*
-   * **The king's own tells** (doc 020). His moves shared the roster's slam
-   * gather, so a leap, a chain and a storm were all heard as "the ground is
-   * about to be struck". Each now has its own contour, by the rule in the
-   * header — different promises must not rhyme: the leap rises, the chain
-   * rattles, the storm hums up into a charge; the slam and the quake keep
-   * the falling gather that is theirs.
-   */
-
-  /** The leap's gather: a heavy breath in and a rush of air climbing, low to high — up, not down. */
-  boss_tele_leap: {
-    category: "combat", variants: 1, gain: 0.5, retriggerMs: 600,
-    render: (r, j) => {
-      const out = buffer(0.48);
-      mixInto(out, air(r, 0.44, 260 * j, 3200 * j, 0.9), 0);
-      mixInto(out, tone({ wave: "triangle", from: 70 * j, to: 190 * j, length: 0.42, gain: 0.42, env: { attack: 0.18, curve: 1.3 } }), 0.02);
-      mixInto(out, thump(120 * j, 60, 0.16, 0.5, 2), 0);
-      return finish(out, "combat", 1.2);
-    },
-  },
-
-  /** The chain laid on the floor: links rattling off his arm, iron on stone, and the weight of it dragging. */
-  boss_tele_hook: {
-    category: "combat", variants: 1, gain: 0.46, retriggerMs: 600,
-    render: (r, j) => {
-      const out = buffer(0.46);
-      for (let k = 0; k < 6; k++)
-        mixInto(out, bell((620 + r() * 380) * j, 0.09, 2.76, 2.2, 0.32 + r() * 0.2, 4), k * 0.05 + r() * 0.02);
-      mixInto(out, grit(r, 0.36, 520 * j, 0.45, 1.1), 0.04);
-      mixInto(out, thump(95 * j, 55, 0.2, 0.35, 2.5), 0);
-      return finish(out, "combat", 1.2);
-    },
-  },
-
-  /** The sword raised for the storm: a charge humming up under it, and the first sparks off the blade. */
-  boss_tele_storm: {
-    category: "combat", variants: 1, gain: 0.46, retriggerMs: 600,
-    render: (r, j) => {
-      const out = buffer(0.58);
-      mixInto(out, sweepLowpass(tone({ wave: "saw", from: 55 * j, to: 150 * j, length: 0.54, gain: 0.5, env: { attack: 0.3, curve: 1.2 }, vibrato: { hz: 11, cents: 40 } }), 400, 2600, 0.9), 0);
-      mixInto(out, arcBuzz(r, 0.34, 160 * j, 0.25, 1.4), 0.2);
-      mixInto(out, sparks(r, 0.3, 8, 0.35), 0.26);
-      return finish(out, "combat", 1.2);
-    },
-  },
-
-  /** His blades' windup: armour creaking as the greatsword is drawn back, heavier than any roster body's. */
-  boss_tele_blade: {
-    category: "combat", variants: 1, gain: 0.42, retriggerMs: 200,
-    render: (r, j) => {
-      const out = buffer(0.42);
-      mixInto(out, tone({ wave: "saw", from: 82 * j, to: 128 * j, length: 0.36, gain: 0.34, env: { attack: 0.14, curve: 1.6 } }), 0);
-      mixInto(out, lowpass(tone({ wave: "square", from: 41 * j, to: 64 * j, length: 0.3, gain: 0.2, env: { attack: 0.1, curve: 2 } }), 500), 0);
-      for (let k = 0; k < 3; k++) mixInto(out, bell((1500 + r() * 900) * j, 0.05, 3.1, 1.6, 0.14, 5), 0.05 + k * 0.08 + r() * 0.03);
-      mixInto(out, grit(r, 0.3, 700 * j, 0.25, 1.6), 0.03);
-      return finish(out, "combat", 1.2);
-    },
-  },
-
   /**
    * **Off the floor**: the leap, the fall into phase III and the hop back.
    * Plate and weight leaving stone — a thud with the armour's clank on it —

@@ -7770,7 +7770,9 @@ export class PlayScene extends Phaser.Scene {
           if (ev.what === "boss_meteor") {
             sfx.holdMusic(0.75, (BOSS_METEOR_GATHER_MS + BOSS_METEOR_UP_MS + BOSS_METEOR_RAIN_MS) / 1000);
           }
-          const cue = this.telegraphFor(ev.what ?? "");
+          // The king's chain shares the snarecaster's event; his is silent like his other tells (`telegraphFor`).
+          const kingsChain = ev.what === "hook" && this.world.enemies.some((e) => e.archetype === "boss" && Math.hypot(e.x - ev.x, e.y - ev.y) < 1);
+          const cue = kingsChain ? null : this.telegraphFor(ev.what ?? "");
           if (cue) sfx.play(cue[0], cue[1]);
           break;
         }
@@ -7922,11 +7924,8 @@ export class PlayScene extends Phaser.Scene {
       if (e.attack !== "windup") continue;
       winding.add(e.id);
       if (a.winding.has(e.id)) continue;
-      // The king's greatsword drawn back is his own sound, pitched by the blow (`boss_tele_blade`).
-      if (e.archetype === "boss") {
-        sfx.play("boss_tele_blade", ({ greatsweep: 0.9, greatslash: 1.15, dashcut: 1, maul: 0.95, greatcleave: 0.85 } as Partial<Record<string, number>>)[e.meleeKind ?? ""] ?? 1);
-        continue;
-      }
+      // The king's windups are seen, not heard: he is the one body the player is always watching (doc 020).
+      if (e.archetype === "boss") continue;
       sfx.play(e.meleeKind && SLAM_KINDS.has(e.meleeKind) ? "tele_slam" : "tele_charge",
         e.meleeKind === "slash" || e.meleeKind === "claw" ? 1.2 : 1);
     }
@@ -8120,22 +8119,22 @@ export class PlayScene extends Phaser.Scene {
     // The fall into phase III starts silent: the roar before it was the sound, and the music is held down under it.
     if (what === "boss_meteor") return null;
     /*
-     * The king's moves each promise differently, so each has its own tell:
-     * the leap rises, the chain rattles, the storm hums up; the slam and the
-     * quake keep the falling gather. Then his body's own sounds: off the
-     * floor (lower for the leap and the fall, higher for the hop back), the
-     * leap's mark locking, and the band rolling out (higher and shorter for
-     * the dashcut's wake).
+     * **The king's fight has no warning cues** (doc 020). His moves are on
+     * the beat of a theme that is already counting them in, his body is the
+     * one the player is always watching, and his marks — the storm's bolts,
+     * the stones, a volley's aim — came a beat apart for bars at a time, so
+     * the aim cue's two beeps ran on through the music as a chime. What he
+     * is heard doing is his body: off the floor (lower for the leap and the
+     * fall, higher for the hop back), the band rolling out (higher and
+     * shorter for the dashcut's wake) — and the leap's mark locking, the one
+     * cue kept, since he is out of sight when it is the moment to go.
      */
-    if (what === "boss_leap") return ["boss_tele_leap", 1];
-    if (what === "boss_hook") return ["boss_tele_hook", 1];
-    if (what === "boss_storm") return ["boss_tele_storm", 1];
     if (what === "boss_jump") return ["boss_jump", 0.9];
     if (what === "boss_hop") return ["boss_jump", 1.2];
     if (what === "boss_lock") return ["boss_lock", 1];
     if (what === "boss_wave") return ["boss_wave", 1];
     if (what === "boss_wake") return ["boss_wave", 1.35];
-    if (what.startsWith("boss_")) return ["tele_slam", 0.85];
+    if (what.startsWith("boss_") || what === "boss" || what === "bolt" || what === "rock") return null;
     if (what.startsWith("stir:")) return ["enemy_wake", 1.15];
     // A sidestep and a blink are movement, not a promise of damage;
     // cueing them would make the three telegraph families mean nothing.
@@ -8145,10 +8144,6 @@ export class PlayScene extends Phaser.Scene {
     // promise — something physical is about to be somewhere.
     if (what === "arm") return ["tele_slam", 1.25];
     if (what === "rift" || what === "burst") return ["tele_slam", 1.1];
-    // A storm bolt's mark: the aim cue, lower, as the turret's strike marks are.
-    if (what === "bolt") return ["tele_aim", 0.8];
-    // A stone's mark: the same cue, lower again.
-    if (what === "rock") return ["tele_aim", 0.65];
     if (what === "mine_primed" || what === "hook") return ["tele_aim", 0.9];
     return ["tele_aim", 1];
   }
