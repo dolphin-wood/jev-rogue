@@ -11651,7 +11651,8 @@ export class PlayScene extends Phaser.Scene {
     const p = w.player;
     const half = ((Math.abs(box.sweepDeg) / 2) * Math.PI) / 180;
     const phase = swingPhase(p);
-    if (phase === "windup") return { angle: box.facing - box.sweep * (half + WOUND_EXTRA), u: 0, stage: "wound", key: -1 };
+    // A thrust is drawn back along its own line, not wound to one side.
+    if (phase === "windup") return { angle: box.facing - box.sweep * (box.thrust ? 0 : half + WOUND_EXTRA), u: 0, stage: "wound", key: -1 };
     const key = phase === "active" ? Math.min(CUT_KEYS - 1, Math.floor((swingElapsed(p) - SWING_WINDUP_MS) / KEY_MS)) : CUT_KEYS - 1;
     const t = (key + 1) / CUT_KEYS;
     return { angle: box.facing - box.sweep * half + box.sweep * 2 * half * t, u: t, stage: key < CUT_KEYS - 1 ? "cut" : "held", key };
@@ -11817,6 +11818,39 @@ export class PlayScene extends Phaser.Scene {
    * tail, and breaks up from the point in the recovery.
    * Between the swings of a chain the focus stays lit.
    */
+  /**
+   * **The thrust's trail** (the third swing of a run, `SWING_RUN`): it does
+   * not sweep, so there is no swept sheet to draw. The blade drives straight
+   * out as the reach spreads, and what it leaves is a spray of speed lines
+   * streaming back from the point along its line — the centre one white and
+   * longest, the outer ones shorter and blue — and a faint wedge between the
+   * staff and the point. Eaten from the back as the trail retracts.
+   */
+  private drawThrustStreak(r: { tipX: number; tipY: number; pointX: number; pointY: number }, retract: number): void {
+    const g = this.magicGfx;
+    const len = Math.hypot(r.pointX - r.tipX, r.pointY - r.tipY);
+    if (len < 2) return;
+    const ux = (r.pointX - r.tipX) / len, uy = (r.pointY - r.tipY) / len;
+    const nx = -uy, ny = ux;
+    const fade = 1 - retract;
+    if (fade <= 0) return;
+    // The wedge: narrow at the staff, widest just behind the point.
+    const back = len * (0.2 + 0.8 * retract);
+    const bx = r.tipX + ux * back, by = r.tipY + uy * back;
+    g.fillStyle(0x6fb8ff, 0.28 * fade);
+    g.fillTriangle(bx, by, r.pointX + nx * 4, r.pointY + ny * 4, r.pointX - nx * 4, r.pointY - ny * 4);
+    g.fillStyle(0xcfeeff, 0.35 * fade);
+    g.fillTriangle(bx, by, r.pointX + nx * 1.6, r.pointY + ny * 1.6, r.pointX - nx * 1.6, r.pointY - ny * 1.6);
+    // Speed lines from the point back along the line, longest in the middle.
+    for (const k of [-5, -2.5, 0, 2.5, 5] as const) {
+      const off = Math.abs(k);
+      const l = len * (1.25 - off * 0.09) * fade;
+      const sx = r.pointX + nx * k - ux * 2, sy = r.pointY + ny * k - uy * 2;
+      g.lineStyle(off === 0 ? 1.4 : 1, off === 0 ? 0xffffff : 0xa8dcff, (off === 0 ? 0.9 : 0.55 - off * 0.05) * fade);
+      g.lineBetween(sx, sy, sx - ux * l, sy - uy * l);
+    }
+  }
+
   private drawConjuredSwing(): void {
     const w = this.world;
     const p = w.player;
@@ -11862,7 +11896,8 @@ export class PlayScene extends Phaser.Scene {
     const headT = pose.u;
     const retract = pose.stage === "held" ? Math.min(1, Math.max(0, since - (CUT_KEYS - 1) * KEY_MS) / TRAIL_RETRACT_MS) : 0;
     const tailT = headT * retract;
-    if (headT - tailT > 0.02) {
+    if (box.thrust) this.drawThrustStreak(r, retract);
+    else if (headT - tailT > 0.02) {
       /*
        * **The trail is what the blade swept, sampled from the blade.**
        *

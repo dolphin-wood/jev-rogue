@@ -1730,6 +1730,10 @@ export interface Player {
   swung: boolean;
   /** What is left of the window in which the next swing continues the chain. */
   chainMs: number;
+  /** Swings in the current chain, for the rest after `SWING_RUN` (see `SWING_BREATH_MS`). */
+  swingRun: number;
+  /** The rest the sword takes after a run of `SWING_RUN` swings; no swing while it lasts. */
+  swingBreathMs: number;
   /** A `trail` spell running on the caster (doc 006), or null; see `Trail`. */
   trail: Trail | null;
   /** An `enchant` spell running on the sword, or null; see `Enchant`. */

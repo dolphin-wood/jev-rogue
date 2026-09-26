@@ -4,7 +4,7 @@ import {
   SPREAD_BASE, SWEEP_DEG, SWING_ACTIVE_MS, SWING_TOTAL_MS, SWING_WINDUP_MS,
   beginSwing, fullReach, makeSpin, makeSwingBox, manaPerHit, sectorHits,
   snapFacing, stepSwing, sweepFor, SWING_CHAIN_MS, swingMoveScale, swingPhase, totalCoverageDeg,
-  wallSlamSquareness,
+  wallSlamSquareness, SWING_RUN, SWING_BREATH_MS, THRUST_DAMAGE,
 } from "./melee.ts";
 import { createWorld, step } from "./world.ts";
 import { NO_INPUT, PLAYER_RADIUS, STEP_MS } from "./types.ts";
@@ -166,33 +166,43 @@ describe("the swing's commitment", () => {
   });
 });
 
-describe("every swing is identical", () => {
-  it("does the same damage and reach on every swing", () => {
+describe("a run of swings: a cut, a cut back, a thrust, then a rest", () => {
+  /** Swings once and lets it play out, then a few steps more: still inside the chain window. */
+  const swingThrough = (w: ReturnType<typeof world>) => {
+    beginSwing(w.player, w);
+    const s = { damage: w.swing.damage, reach: fullReach(w.swing), sweep: w.swing.sweep, sweepDeg: w.swing.sweepDeg, thrust: w.swing.thrust, started: w.player.swingMs > 0 };
+    for (let i = 0; i < 20; i++) stepSwing(w, STEP_MS);
+    return s;
+  };
+
+  it("cuts twice alike and thrusts harder and further on the third", () => {
     const w = world();
-    const seen: { damage: number; reach: number }[] = [];
-    for (let n = 0; n < 4; n++) {
-      beginSwing(w.player, w);
-      seen.push({ damage: w.swing.damage, reach: fullReach(w.swing) });
-      for (let i = 0; i < 20; i++) stepSwing(w, STEP_MS);
-    }
-    // A three-hit chain whose third hit hit harder was dropped: it asked the
-    // player to track a sequence, and that attention belongs on the enemies.
-    for (const s of seen.slice(1)) {
-      expect(s.damage).toBeCloseTo(seen[0]!.damage, 6);
-      expect(s.reach).toBeCloseTo(seen[0]!.reach, 6);
-    }
+    const [a, b, c] = [swingThrough(w), swingThrough(w), swingThrough(w)];
+    expect(b.damage).toBeCloseTo(a.damage, 6);
+    expect(b.reach).toBeCloseTo(a.reach, 6);
+    expect(a.thrust || b.thrust).toBe(false);
+    expect(c.thrust).toBe(true);
+    expect(c.sweepDeg).toBe(0);
+    expect(c.damage).toBeCloseTo(a.damage * THRUST_DAMAGE, 6);
+    expect(c.reach).toBeGreaterThan(a.reach);
   });
 
-  it("crosses the body the same way on every swing in a facing", () => {
+  it("brings the second cut back the way the first came", () => {
     const w = world();
     w.player.facing = Math.PI;
-    const sweeps: number[] = [];
-    for (let n = 0; n < 4; n++) {
-      beginSwing(w.player, w);
-      sweeps.push(w.swing.sweep);
-      for (let i = 0; i < 20; i++) stepSwing(w, STEP_MS);
-    }
-    expect(sweeps).toEqual([1, 1, 1, 1]);
+    expect([swingThrough(w).sweep, swingThrough(w).sweep]).toEqual([1, -1]);
+  });
+
+  it("rests after the thrust, then starts the run afresh", () => {
+    const w = world();
+    for (let n = 0; n < SWING_RUN; n++) swingThrough(w);
+    // A press during the rest does nothing.
+    expect(swingThrough(w).started).toBe(false);
+    for (let i = 0; i < Math.ceil(SWING_BREATH_MS / STEP_MS); i++) stepSwing(w, STEP_MS);
+    const next = swingThrough(w);
+    expect(next.started).toBe(true);
+    expect(next.thrust).toBe(false);
+    expect(w.swing.chained).toBe(false);
   });
 
   it("marks a swing that follows closely as continuing the chain, and one after a pause as not", () => {
@@ -361,7 +371,7 @@ describe("the blade sweeps rather than appearing", () => {
     expect(BLADE_DEG + SWEEP_DEG).toBe(ARC_DEG);
   });
 
-  it("travels the same way on every swing", () => {
+  it("travels the same way on the first cut of every run", () => {
     const w = world();
     const travel = (): number => {
       beginSwing(w.player, w);
@@ -372,7 +382,10 @@ describe("the blade sweeps rather than appearing", () => {
       }
       return seen[seen.length - 1]! - seen[0]!;
     };
-    expect(Math.sign(travel())).toBe(Math.sign(travel()));
+    // The first cut of every run; the second of a run comes back the other way.
+    const first = travel();
+    for (let i = 0; i < 60; i++) stepSwing(w, STEP_MS);
+    expect(Math.sign(travel())).toBe(Math.sign(first));
   });
 
   it("keeps the locked centre while the blade moves", () => {

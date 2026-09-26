@@ -1,5 +1,7 @@
 # What we learned asking Jev
 
+**English** · [简体中文](jev-findings.zh-CN.md) · [日本語](jev-findings.ja.md)
+
 Findings from tuning the Director against live Jev (TypeSafe's `choice` model),
 recorded so the next question is written knowing them. Each entry states what
 was observed, the evidence, and what we now do about it. Numbers are from
