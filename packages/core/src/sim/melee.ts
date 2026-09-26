@@ -72,7 +72,16 @@ export const SWING_BREATH_MS = 400;
  */
 export const THRUST_STEEL = 0.8;
 export const THRUST_SPREAD = 1.6;
-export const THRUST_HALF_DEG = 14;
+export const THRUST_HALF_DEG = 18;
+/**
+ * **The thrust finds its body.** A cut covers 170 degrees and a thrust 36,
+ * and the body faces only four ways, so a body a little off the axis — any
+ * diagonal — was cut twice and then missed by the finisher. The thrust is
+ * turned onto the nearest body within this far of the facing and within its
+ * reach, the rule a single spell shot already follows; with nothing there it
+ * goes straight along the facing.
+ */
+export const THRUST_AIM_DEG = 50;
 export const THRUST_DAMAGE = 1.5;
 export const THRUST_KNOCKBACK = 1.6;
 
@@ -484,12 +493,36 @@ export function beginSwing(p: Player, world: World): void {
     box.reach = box.bladeReach;
     box.damage *= THRUST_DAMAGE;
     box.knockback *= THRUST_KNOCKBACK;
+    const aim = thrustAim(world, box, p.swingFacing);
+    if (aim !== null) box.facing = box.angle = aim;
   }
   p.swung = true;
   box.chained = chained;
   box.lastAngle = bladeAngle(box, p);
   box.hitIds.length = 0;
   box.ageMs = 0;
+}
+
+/**
+ * The angle to the nearest body a thrust from `box` would turn onto, or null
+ * (`THRUST_AIM_DEG`). The cone is about the body's own `facing`, never the
+ * thrust's turned one, so tracking cannot walk it round the player.
+ */
+export function thrustAim(world: World, box: SwingBox, facing: number): number | null {
+  const cone = (THRUST_AIM_DEG * Math.PI) / 180;
+  let best: number | null = null;
+  let bestD = Infinity;
+  for (const e of world.enemies) {
+    if (e.hp <= 0 || e.spawnFadeMs > 0 || e.airborne) continue;
+    const dx = e.x - box.x, dy = e.y - box.y;
+    const d = Math.hypot(dx, dy);
+    if (d > fullReach(box) + e.radius || d >= bestD) continue;
+    const a = Math.atan2(dy, dx);
+    if (Math.abs(angleDelta(facing, a)) > cone) continue;
+    best = a;
+    bestD = d;
+  }
+  return best;
 }
 
 /**
@@ -530,6 +563,16 @@ export function stepSwing(world: World, dtMs: number): Enemy[] {
   box.x = p.x;
   box.y = p.y - SWING_ORIGIN_LIFT;
   const phase = swingPhase(p);
+  /*
+   * A thrust **tracks its body through the windup**: a body that steps in the
+   * four frames before the strike is still where the point goes. It locks as
+   * the strike starts, so the blade never bends while it is driving; a body
+   * that leaves the cone leaves the aim where it was.
+   */
+  if (box.thrust && phase === "windup") {
+    const aim = thrustAim(world, box, p.swingFacing);
+    if (aim !== null) box.facing = aim;
+  }
   const wasActive = box.active;
   box.active = phase === "active";
   box.lastAngle = wasActive ? box.angle : bladeAngle({ ...box }, { ...p, swingMs: p.swingMs + dtMs });

@@ -4,7 +4,7 @@ import {
   SPREAD_BASE, SWEEP_DEG, SWING_ACTIVE_MS, SWING_TOTAL_MS, SWING_WINDUP_MS,
   beginSwing, fullReach, makeSpin, makeSwingBox, manaPerHit, sectorHits,
   snapFacing, stepSwing, sweepFor, SWING_CHAIN_MS, swingMoveScale, swingPhase, totalCoverageDeg,
-  wallSlamSquareness, SWING_RUN, SWING_BREATH_MS, THRUST_DAMAGE,
+  wallSlamSquareness, SWING_RUN, SWING_BREATH_MS, THRUST_DAMAGE, SWING_ORIGIN_LIFT,
 } from "./melee.ts";
 import { createWorld, step } from "./world.ts";
 import { NO_INPUT, PLAYER_RADIUS, STEP_MS } from "./types.ts";
@@ -203,6 +203,61 @@ describe("a run of swings: a cut, a cut back, a thrust, then a rest", () => {
     expect(next.started).toBe(true);
     expect(next.thrust).toBe(false);
     expect(w.swing.chained).toBe(false);
+  });
+
+  it("turns the thrust onto a body off the axis, and hits it", () => {
+    const w = world();
+    // 40 degrees off the east facing: outside a straight thrust's width.
+    const a = (40 * Math.PI) / 180;
+    // Placed about the swing's centre, which is lifted off the feet.
+    const e = put(w, 1, w.player.x + Math.cos(a) * 44, w.player.y - SWING_ORIGIN_LIFT + Math.sin(a) * 44);
+    e.speed = 0;
+    // Two cuts first, from far enough off that they miss: the thrust is the test.
+    const [x0, y0] = [e.x, e.y];
+    e.x = w.player.x - 200;
+    for (let n = 0; n < 2; n++) { beginSwing(w.player, w); for (let i = 0; i < 20; i++) stepSwing(w, STEP_MS); }
+    [e.x, e.y] = [x0, y0];
+    beginSwing(w.player, w);
+    expect(w.swing.thrust).toBe(true);
+    expect(w.swing.facing).toBeCloseTo(Math.atan2(e.y - w.swing.y, e.x - w.swing.x), 6);
+    let struck = false;
+    for (let i = 0; i < 20; i++) if (stepSwing(w, STEP_MS).includes(e)) struck = true;
+    expect(struck).toBe(true);
+  });
+
+  it("tracks a body through the thrust's windup, and locks once it strikes", () => {
+    const w = world();
+    const e = put(w, 1, w.player.x - 200, w.player.y);
+    e.speed = 0;
+    for (let n = 0; n < 2; n++) { beginSwing(w.player, w); for (let i = 0; i < 20; i++) stepSwing(w, STEP_MS); }
+    const at = (deg: number) => {
+      const a = (deg * Math.PI) / 180;
+      e.x = w.player.x + Math.cos(a) * 44;
+      e.y = w.player.y - SWING_ORIGIN_LIFT + Math.sin(a) * 44;
+    };
+    at(-10);
+    beginSwing(w.player, w);
+    // It steps during the windup: the thrust follows.
+    at(30);
+    stepSwing(w, STEP_MS);
+    expect(w.swing.facing).toBeCloseTo(Math.atan2(e.y - w.swing.y, e.x - w.swing.x), 6);
+    while (swingPhase(w.player) === "windup") stepSwing(w, STEP_MS);
+    const locked = w.swing.facing;
+    // Once the strike is driving it no longer turns.
+    at(-30);
+    stepSwing(w, STEP_MS);
+    expect(w.swing.facing).toBeCloseTo(locked, 6);
+  });
+
+  it("thrusts straight along the facing with nothing in its cone", () => {
+    const w = world();
+    const e = put(w, 1, w.player.x, w.player.y - 44); // due north: 90 degrees off
+    e.speed = 0;
+    for (let n = 0; n < 2; n++) { beginSwing(w.player, w); for (let i = 0; i < 20; i++) stepSwing(w, STEP_MS); }
+    e.x = w.player.x; e.y = w.player.y - 44;
+    beginSwing(w.player, w);
+    expect(w.swing.thrust).toBe(true);
+    expect(w.swing.facing).toBeCloseTo(0, 6);
   });
 
   it("marks a swing that follows closely as continuing the chain, and one after a pause as not", () => {
