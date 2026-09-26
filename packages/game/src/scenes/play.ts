@@ -1205,6 +1205,12 @@ export class PlayScene extends Phaser.Scene {
   private owned: string[] = [];
   private runGold = 0;
   /**
+   * Gold paid out at the smith and the merchant this run. `runGold` is the
+   * purse, so a results card built from it alone read what was left over
+   * rather than what the run earned.
+   */
+  private runGoldSpent = 0;
+  /**
    * What the run has done, for the game-over card.
    *
    * `World.stats` is per room and goes with the room, so a death screen built
@@ -3614,7 +3620,7 @@ export class PlayScene extends Phaser.Scene {
       [t("over.diedIn"), t("over.diedInValue", { room: this.roomIndex, type: roomTypeName(stageFor(this.roomIndex)) })],
       [t("over.bodiesFelled"), `${this.runKills}`],
       [t("over.time"), `${mins}:${String(secs).padStart(2, "0")}`],
-      [t("over.gold"), `${this.runGold + this.world.gold}`],
+      [t("over.gold"), `${this.goldEarned()}`],
     ];
     summary.forEach(([k, v], i) => {
       const y = top + 62 + i * 12;
@@ -3723,9 +3729,9 @@ export class PlayScene extends Phaser.Scene {
       [t("over.roomsCleared"), `${this.roomIndex}`],
       [t("over.time"), clock(runMs)],
       [t("over.bossTime"), this.bossTries > 1 ? t("over.bossTimeTries", { time: clock(this.bossMs), n: this.bossTries }) : clock(this.bossMs)],
-      [t("over.gold"), `${this.runGold + this.world.gold}`],
+      [t("over.gold"), `${this.goldEarned()}`],
       [t("over.bodiesFelled"), `${this.runKills}`],
-      [t("over.heartsLost"), `${Math.round(hurt)}`],
+      [t("over.heartsLost"), `${Math.round(hurt * HP_PER_HEART)}`],
       [t("over.director"), t(directorArm() === "jev" ? "hud.jev" : "hud.rule")],
     ];
     summary.forEach(([k, v], i) => {
@@ -6087,6 +6093,11 @@ export class PlayScene extends Phaser.Scene {
   /** Gold the player holds right now: the run's, and what this room has paid so far. */
   private goldHeld(): number {
     return this.runGold + this.world.gold;
+  }
+
+  /** Every coin the run took in, spent or not: what the end cards report. */
+  private goldEarned(): number {
+    return this.goldHeld() + this.runGoldSpent;
   }
 
   /** Lays a spell taken off a key on the floor, as it was: its level and its affixes. */
@@ -8700,7 +8711,7 @@ export class PlayScene extends Phaser.Scene {
       this.won = true;
       // What the last room cost, banked before the results card reads it back.
       this.bossMs = this.world.stats.elapsedMs;
-      this.tookLabel = t("toast.runComplete", { rooms: this.roomIndex, gold: this.runGold + this.world.gold });
+      this.tookLabel = t("toast.runComplete", { rooms: this.roomIndex, gold: this.goldEarned() });
       this.tookMs = WIN_BEAT_MS;
       this.sfx.play("clear");
       /*
@@ -8747,6 +8758,7 @@ export class PlayScene extends Phaser.Scene {
       this.statsTaken = [];
       this.pickTags = [];
       this.runGold = 0;
+      this.runGoldSpent = 0;
       this.runKills = 0;
       this.runMs = 0;
       this.mods = noMods();
@@ -10747,6 +10759,7 @@ export class PlayScene extends Phaser.Scene {
         if (!slot || level >= SPELL_LEVEL_MAX) { this.sfx.play("ui_deny"); return; }
         if (this.goldHeld() < price) { this.tookLabel = t("toast.need", { price, coin: "{coin}" }); this.tookMs = 1400; this.sfx.play("ui_deny"); return; }
         this.runGold -= price;
+        this.runGoldSpent += price;
         this.spellLevels[i] = level + 1;
         this.world.spells[i] = withLevel(slot, level + 1);
         this.tookLabel = t("toast.toLv", { spell: contentName(slot.item.base, titleOfId(slot.item.base)), level: level + 1 });
@@ -10927,7 +10940,9 @@ export class PlayScene extends Phaser.Scene {
     const bought = this.shopPending;
     this.shopPending = null;
     if (bought && this.shopping) {
-      this.runGold -= MERCHANT_PRICE[bought.kind] ?? 0;
+      const price = MERCHANT_PRICE[bought.kind] ?? 0;
+      this.runGold -= price;
+      this.runGoldSpent += price;
       this.shopStock = this.shopStock.filter((c) => c !== bought);
     }
     this.hideRewards();
