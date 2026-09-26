@@ -713,10 +713,9 @@ export function fireUnit(
     /*
      * **A landing from above seeks the whole screen** (Meteor). A scatter with
      * a telegraph is a rock coming down out of the sky onto a marked spot, so
-     * neither the seek cone nor a wall between has anything to say about
-     * where it can land: it takes the best body the player can see anywhere
-     * on screen, by angle from the aim as the cone scores, so the one faced
-     * still comes first (`screenTargets`).
+     * a wall between has nothing to say about where it can land, and the seek
+     * cone only says which bodies come first: the nearest body in the cone,
+     * and failing one, the body on screen nearest the aim (`screenTargets`).
      *
      * Reported as "no rock came down at all": the cone chose bodies behind
      * pillars and, with nothing in it, aimed `reach` tiles ahead through a

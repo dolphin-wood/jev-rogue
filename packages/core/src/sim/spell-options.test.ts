@@ -378,6 +378,14 @@ describe("telegraph (Meteor)", () => {
     expect(marked(w2)[0]!.x).toBeCloseTo(faced.x, 0);
   });
 
+  it("takes the nearest body in the aim's cone, not the far one dead on the aim", () => {
+    const w = arena("meteor", "near");
+    const far = body(w, 210, 0);
+    const near = body(w, 70, 30);
+    castAt(w, far.x, far.y, [far, near]);
+    expect(marked(w)[0]!.x).toBeCloseTo(near.x, 0);
+  });
+
   it("does not reach a body off screen", () => {
     const w = arena("meteor", "far");
     const far = body(w, 400, 0);
