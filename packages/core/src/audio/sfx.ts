@@ -916,22 +916,24 @@ const DEFS = {
   },
 
   /**
-   * A ranged body taking aim: two thin steady tones, no sweep at all. It has
-   * to be told from the two movement telegraphs while several of each are
-   * running, so it is the only one that does not move in pitch.
-   */
-  /*
-   * Quiet and spaced: with a few shooters aiming at once its two square
-   * beeps ran together into a constant beeping, the loudest thing in a
-   * fight that was not the player's. It is still a tell, so it is kept.
+   * A ranged body taking aim: steady, with no sweep at all, since it has to
+   * be told from the two movement telegraphs while several of each are
+   * running — so it is the only one that does not move in pitch.
+   *
+   * It was two square beeps at 1180 Hz, and in a room of shooters it was
+   * the most-heard sound in the game: a chime over everything. Now it has no
+   * tone to ring: a soft mechanical tick, as of something being drawn or
+   * cocked, then a short held hiss of tension over a faint low hum. Quiet
+   * and spaced, as before (`retriggerMs`), and still a tell.
    */
   tele_aim: {
-    category: "combat", variants: 2, gain: 0.2, retriggerMs: 400,
+    category: "combat", variants: 2, gain: 0.22, retriggerMs: 400,
     render: (r, j) => {
-      const out = buffer(0.4);
-      mixInto(out, tone({ wave: "square", from: 1180 * j, length: 0.1, gain: 0.2, env: { attack: 0.004, curve: 2 } }), 0);
-      mixInto(out, tone({ wave: "square", from: 1180 * j, length: 0.16, gain: 0.22, env: { attack: 0.004, curve: 2 } }), 0.16);
-      mixInto(out, highpass(noiseBurst(0.3, r, 0.07, { attack: 0.02, curve: 1.2 }), 3600), 0);
+      const out = buffer(0.34);
+      mixInto(out, click(r, 1500 * j, 0.018, 0.55), 0);
+      mixInto(out, lowpass(thump(240 * j, 200 * j, 0.05, 0.3, 4), 900), 0);
+      mixInto(out, bandpass(noiseBurst(0.26, r, 0.4, { attack: 0.04, hold: 0.12, curve: 2.4 }), 2300 * j, 3), 0.03);
+      mixInto(out, tone({ wave: "sine", from: 190 * j, length: 0.26, gain: 0.14, env: { attack: 0.04, hold: 0.1, curve: 2 } }), 0.03);
       return finish(out, "combat", 1.1);
     },
   },
