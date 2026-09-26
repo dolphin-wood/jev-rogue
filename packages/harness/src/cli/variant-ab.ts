@@ -5,8 +5,10 @@
  * Reported from play: the room readout said "declined: subspecies" on most
  * rooms, and variants were rare. This plans whole rooms — both rounds — for
  * a grid of players past room 3, where the ramp unlocks variants, and prints
- * what Jev answered to `subspecies_weight` and `subspecies` before code's
- * temperature touched it, beside what the room was then built with.
+ * what Jev answered to `subspecies_weight` and `subspecies` before code read
+ * it, beside what the room was then built with. The states have no rooms
+ * behind them, so they read gloomier than a played run's: for the rate over
+ * real runs, read a `jev-run` log with `answer-stats`.
  *
  * Two Jev requests a room.
  *
@@ -16,10 +18,10 @@ import { writeFileSync } from "node:fs";
 import {
   ITEMS, UNMEASURED, bucketClearSpeed, bucketGold, bucketHealth, bucketMovementPressure,
   bucketRecentDamage, bucketRunProgress, emptyHistory, heldDominantTags, plainInstance, runStaff,
-  withTemperature, STYLE_START,
+  STYLE_START,
 } from "@jr/core";
 import type { Archetype, RunContext, Tension } from "@jr/core";
-import { createDirector } from "@jr/director";
+import { JEV_CONFIDENT, choiceConfidence, createDirector } from "@jr/director";
 import type { Evaluator } from "@jr/director";
 import { jevEvaluator } from "../play/jev.ts";
 
@@ -85,11 +87,19 @@ const evaluate: Evaluator = async (req) => {
   return res;
 };
 
-/** What the game draws from, as `pickProfile` does: escape removed, then the encounter temperature. */
+/**
+ * What the game draws from, as `decide` reads a Jev answer: the escape
+ * removed, then Jev's top option outright when its confidence is at or above
+ * `JEV_CONFIDENT`, and the distribution as given below it. No temperature —
+ * that is the rule arm's.
+ */
 function drawn(d: Dist): Dist {
   const kept = Object.fromEntries(Object.entries(d).filter(([k]) => k !== "fallback"));
   const total = Object.values(kept).reduce((a, b) => a + b, 0) || 1;
-  return withTemperature(Object.fromEntries(Object.entries(kept).map(([k, v]) => [k, v / total])), 0.4);
+  const dist = Object.fromEntries(Object.entries(kept).map(([k, v]) => [k, v / total]));
+  if (choiceConfidence(dist) < JEV_CONFIDENT) return dist;
+  const top = Object.entries(dist).sort((a, b) => b[1] - a[1])[0]![0];
+  return Object.fromEntries(Object.keys(dist).map((k) => [k, k === top ? 1 : 0]));
 }
 
 interface Row { weight?: Dist; which?: Dist; built: string[]; builtWeight: string }
