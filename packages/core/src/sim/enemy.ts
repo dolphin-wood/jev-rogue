@@ -698,7 +698,9 @@ export const ALERT_MS = 320;
  * bar for it over his head was a second health bar that meant nothing. His
  * weight is his health and the turns he takes (`chooseBossAct`).
  */
-const ARMOUR: Partial<Record<EnemyId, number>> = { tank: 24 };
+// The breaker is the tank's subspecies, its body and its health, and says it
+// is armoured; it had been left out, so it flinched where the tank did not.
+const ARMOUR: Partial<Record<EnemyId, number>> = { tank: 24, breaker: 24 };
 
 /** Whether hit stun applies. Armour is immunity, and armour can be broken. */
 /**

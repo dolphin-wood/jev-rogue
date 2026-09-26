@@ -1,5 +1,5 @@
 import { featureCells } from "../rooms/features.ts";
-import { ENTRY_GRACE_MS } from "./enemy.ts";
+import { ENTRY_GRACE_MS, canStagger } from "./enemy.ts";
 import { describe, it, expect } from "vitest";
 import { createWorld, step, worldCleared, ELITE_HEAL_FRACTION, GRASS_CATCH_MS } from "./world.ts";
 import {
@@ -1566,6 +1566,14 @@ describe("enemy behaviour", () => {
     expect(e.staggerMs).toBe(0);
     expect(e.armour).toBeLessThan(e.maxArmour);
     expect(e.hp).toBe(e.maxHp);
+  });
+
+  it("armours the breaker as it does the tank, its base", () => {
+    for (const id of ["tank", "breaker"] as const) {
+      const e = makeEnemy(1, id, 0, 0, []);
+      expect(e.armour, id).toBe(24);
+      expect(canStagger(e), id).toBe(false);
+    }
   });
 
   it("lets the player earn the flinch by breaking the armour", () => {
