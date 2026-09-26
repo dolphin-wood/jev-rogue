@@ -4,6 +4,12 @@
 
 一款俯视角动作房间 Roguelike 游戏，由 TypeSafe AI 的选择模型 [Jev](https://docs.typesafe.ai/) 担任「导演」。Jev 从游戏预先给出的**合法选项**中判断什么适合当前战局；房间、遭遇、奖励和战斗仍由游戏代码生成与执行。
 
+## 游戏截图
+
+| 选择游玩风格 | 查看房间规划 | 查看 Jev 的决策 |
+|---|---|---|
+| <img src="assets/screenshots/style.png" alt="选择游玩风格并描述偏好的战局" width="100%"> | <img src="assets/screenshots/room-params.png" alt="生成的房间规划与布局测量结果" width="100%"> | <img src="assets/screenshots/jev-response.png" alt="Jev 对房间规划的回答与概率" width="100%"> |
+
 ## 为什么用 Jev？
 
 AI 可以代替人玩游戏，但这不是我期待的未来。如果 AI 接管了娱乐，人却继续干活，那更像反乌托邦。更有意思的方向是：**让 AI 参与创造游戏，让人继续亲自玩。**

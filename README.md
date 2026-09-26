@@ -4,6 +4,12 @@
 
 A top-down action room roguelike directed by [Jev](https://docs.typesafe.ai/), TypeSafe AI's choice model. Jev decides which of the game's *legal* design options fit the current run. The game still generates its own rooms, encounters, rewards, and combat.
 
+## Screenshots
+
+| Choose a play style | Review the room plan | Inspect Jev's decisions |
+|---|---|---|
+| <img src="assets/screenshots/style.png" alt="Choosing a play style and describing a preferred run" width="100%"> | <img src="assets/screenshots/room-params.png" alt="A generated room plan with its measured layout" width="100%"> | <img src="assets/screenshots/jev-response.png" alt="Jev's room-planning answers and probabilities" width="100%"> |
+
 ## Why Jev?
 
 AI can play games on a person's behalf. That is not the future this project is looking for. If AI takes over the leisure while people keep doing the work, it feels more like a dystopia. The more interesting direction is **AI helping make the game, with people still playing it**.
