@@ -12719,11 +12719,10 @@ export class PlayScene extends Phaser.Scene {
          * there is no safe circle any more (`BOSS_SLAM_IMPACT_PX`) — growing
          * out past where the shockwave is born.
          */
-        // Phase III's stomps first (`BOSS_SLAM_III_STOMPS`): each its own ground, filling to its fall.
+        // Only the blow that throws the band is marked: phase III's stomps before it (`BOSS_SLAM_III_STOMPS`)
+        // are told by the raise alone, and the mark fills over the gathering after the second.
         const next = bossSlamNext(e);
-        if (next) {
-          drawSlamTell(this.threatGfx, e.x, e.y, 0, next.radius + (next.last ? 60 * next.t : 0), next.t, tick, view);
-        }
+        if (next?.last) drawSlamTell(this.threatGfx, e.x, e.y, 0, next.radius + 60 * next.t, next.t, tick, view);
       }
       if (e.archetype === "boss" && e.bossCast === "leap" && e.bossCastMs > 0) {
         /*
