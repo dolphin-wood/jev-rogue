@@ -5556,10 +5556,16 @@ export class PlayScene extends Phaser.Scene {
     // own y is walked rather than computed from the index.
     let rowY = y;
     rows.forEach((r, i) => {
+      /*
+       * A heading takes one row's slot, set nearer the rows it heads than the
+       * rows above it. It was split half and half around its line, which put
+       * it half a row under its first row and a row and a half under the row
+       * before — glued to the wrong neighbour.
+       */
       if (r.heading) {
-        rowY += headingH / 2;
+        rowY += headingH * 0.15;
         ui.objects.push(this.uiText(labelX, rowY, r.heading.toUpperCase(), 6.5, "#8fdcff").setOrigin(0, 0.5).setDepth(231));
-        rowY += headingH / 2;
+        rowY += headingH * 0.85;
       }
       this.drawMenuRow(ui.objects, r, cx, rowY, panelW, i === ui.selected);
       rowY += pitch;
