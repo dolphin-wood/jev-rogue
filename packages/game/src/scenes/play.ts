@@ -15202,9 +15202,9 @@ export class PlayScene extends Phaser.Scene {
       // Remembered even when the press is refused: the bar's cost tick
       // follows the key the player is actually using.
       this.lastSpellKey = i;
-      // The player's own key: the assist's waits start over (`AutoCaster`),
+      // The player's own key: the assist's beat starts over (`AutoCaster`),
       // and whatever it was aiming at is let go.
-      this.autoCaster.noteManual(i, this.world.tick * STEP_MS);
+      this.autoCaster.noteManual(i);
       this.autoTargetId = null;
       return i;
     }
