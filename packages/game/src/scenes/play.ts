@@ -539,8 +539,8 @@ const COLUMN_STUMP_PX = 84;
 /*
  * The entrance's timings, ms, and where things happen, in cells: the player
  * is walked in from the door and stands; a moment later he notices them,
- * looks for a beat, throws, and stands; the goblet breaks on the carpet
- * before the dais; he stands up just in front of the throne.
+ * looks for a beat, throws, and stands; the goblet breaks on the floor
+ * beside the carpet; he stands up just in front of the throne.
  */
 const KING_WALK_IN_PX = TILE_PX * 3;
 /** The longest the walk-in may take, should anything be in the way. */
@@ -556,15 +556,23 @@ const KING_THRONE_FEET_ART = 210;
 const KING_LOOK_MS = 600;
 const KING_THROW_MS = 350;
 const KING_RISE_MS = 700;
-const KING_GOBLET_FLIGHT_MS = 640;
 /**
- * How far the goblet's arc bows above the straight line from his hand to the
- * carpet, world px. The carpet is some 80 px below his hand, so most of this
- * is spent on the fall: 62 puts the top of the arc about 28 px above his hand.
+ * The goblet, thrown down in anger rather than lobbed: fast, flung out past
+ * his hand to his side of the carpet, and turned a little over a quarter
+ * (not wheeled — a glass flung at the floor does not go round), so it lands
+ * on its side with the wine going out of it.
  */
-const KING_GOBLET_ARC_PX = 62;
-/** Where it breaks, left of the carpet's middle (still on it), so the arc is thrown across and not straight down. */
-const KING_GOBLET_ACROSS_PX = 28;
+const KING_GOBLET_FLIGHT_MS = 360;
+/** Where it breaks: this far out from his hand, world px, off the carpet onto the flags. */
+const KING_GOBLET_OUT_PX = 56;
+/**
+ * How far its path bows above the straight line from his hand to the floor,
+ * world px. The floor is some 80 px below his hand, so this is nearly all
+ * spent on the fall: the goblet barely rises (about 6 px) before it drops.
+ */
+const KING_GOBLET_ARC_PX = 34;
+/** How far it turns in the air, clockwise (outward): on its side, rim a little down. */
+const KING_GOBLET_TURN = Math.PI * 0.65;
 /** The entrance: how long the HUD takes to fade out and back, and the depth his name is drawn over it at. */
 const CINE_SLIDE_MS = 380;
 const CINE_NAME_DEPTH = 255;
@@ -2899,7 +2907,7 @@ export class PlayScene extends Phaser.Scene {
   /**
    * One frame of the entrance. The player is walked in and stands; a moment
    * later he looks up, and throws the goblet — it flies out and breaks on the
-   * carpet before the dais, and the boss theme comes in as it leaves his hand,
+   * floor beside the carpet, and the boss theme comes in as it leaves his hand,
    * which is the fight clock's zero — and stands; then the boss is spawned
    * where he stood up, planted on his sword, and his name goes up.
    */
@@ -2930,7 +2938,7 @@ export class PlayScene extends Phaser.Scene {
         next("throw");
         const [tx, ty] = THRONE_CELLS[1]!;
         const hx = (tx + 0.5) * TILE_PX + 14, hy = (ty + 0.4) * TILE_PX;
-        this.kingGoblet = { x0: hx, y0: hy, x1: (tx + 0.5) * TILE_PX - KING_GOBLET_ACROSS_PX, y1: (ty + KING_GOBLET_ROW) * TILE_PX, ms: 0 };
+        this.kingGoblet = { x0: hx, y0: hy, x1: hx + KING_GOBLET_OUT_PX, y1: (ty + KING_GOBLET_ROW) * TILE_PX, ms: 0 };
         this.sfx.play("swing_light", 1.5);
       }
     } else if (intro.phase === "throw") {
@@ -3003,22 +3011,21 @@ export class PlayScene extends Phaser.Scene {
     if (!g) return;
     g.ms += delta;
     const t = Math.min(1, g.ms / KING_GOBLET_FLIGHT_MS);
-    // A thrown thing's arc: a parabola over the line from his hand to where it breaks.
-    const dx = g.x1 - g.x0, dy = g.y1 - g.y0, h = KING_GOBLET_ARC_PX;
-    const x = g.x0 + dx * t;
-    const y = g.y0 + dy * t - 4 * h * t * (1 - t);
+    // A thrown thing's path: a parabola over the line from his hand to where it breaks.
+    const x = g.x0 + (g.x1 - g.x0) * t;
+    const y = g.y0 + (g.y1 - g.y0) * t - 4 * KING_GOBLET_ARC_PX * t * (1 - t);
     if (t < 1) {
-      // Turned along the arc, its rim leading: up out of his hand, over the
-      // top, and down onto the carpet mouth first, the wine going as it turns.
-      const turn = Math.atan2(dy - 4 * h * (1 - 2 * t), dx) + Math.PI / 2;
+      // Turning at an even rate from upright in his hand to on its side.
+      const turn = KING_GOBLET_TURN * t;
       if (this.atlas.has("vfx_goblet_0"))
         this.sprites.image(x, y, this.textureKey, "vfx_goblet_0").setScale(1 / ART_SCALE).setRotation(turn).setDepth(9);
       else this.sprites.circle(x, y, 2, 0xd8b56a).setDepth(9);
       return;
     }
-    // It breaks: glass off the carpet, and the wine left on it.
+    // It breaks: glass off the floor, and the wine left on it. Hard enough to feel.
     this.kingGoblet = null;
     this.sfx.play("prop_break", 1.6);
+    this.world.trauma = Math.min(1, this.world.trauma + 0.2);
     this.burst(g.x1, g.y1, 0xd8e4ec, 10, 150, -Math.PI / 2, Math.PI, 0.6, 260);
     this.burst(g.x1, g.y1, 0x6e1022, 8, 90, undefined, Math.PI * 2, 0.9, 200);
     const stain = this.atlas.has("deco_wine_splash")
