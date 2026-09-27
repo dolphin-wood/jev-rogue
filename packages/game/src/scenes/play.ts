@@ -556,7 +556,15 @@ const KING_THRONE_FEET_ART = 210;
 const KING_LOOK_MS = 600;
 const KING_THROW_MS = 350;
 const KING_RISE_MS = 700;
-const KING_GOBLET_FLIGHT_MS = 520;
+const KING_GOBLET_FLIGHT_MS = 640;
+/**
+ * How far the goblet's arc bows above the straight line from his hand to the
+ * carpet, world px. The carpet is some 80 px below his hand, so most of this
+ * is spent on the fall: 62 puts the top of the arc about 28 px above his hand.
+ */
+const KING_GOBLET_ARC_PX = 62;
+/** Where it breaks, left of the carpet's middle (still on it), so the arc is thrown across and not straight down. */
+const KING_GOBLET_ACROSS_PX = 28;
 /** The entrance: how long the HUD takes to fade out and back, and the depth his name is drawn over it at. */
 const CINE_SLIDE_MS = 380;
 const CINE_NAME_DEPTH = 255;
@@ -2922,7 +2930,7 @@ export class PlayScene extends Phaser.Scene {
         next("throw");
         const [tx, ty] = THRONE_CELLS[1]!;
         const hx = (tx + 0.5) * TILE_PX + 14, hy = (ty + 0.4) * TILE_PX;
-        this.kingGoblet = { x0: hx, y0: hy, x1: (tx + 0.5) * TILE_PX - 10, y1: (ty + KING_GOBLET_ROW) * TILE_PX, ms: 0 };
+        this.kingGoblet = { x0: hx, y0: hy, x1: (tx + 0.5) * TILE_PX - KING_GOBLET_ACROSS_PX, y1: (ty + KING_GOBLET_ROW) * TILE_PX, ms: 0 };
         this.sfx.play("swing_light", 1.5);
       }
     } else if (intro.phase === "throw") {
@@ -2995,16 +3003,16 @@ export class PlayScene extends Phaser.Scene {
     if (!g) return;
     g.ms += delta;
     const t = Math.min(1, g.ms / KING_GOBLET_FLIGHT_MS);
-    const x = g.x0 + (g.x1 - g.x0) * t;
-    const y = g.y0 + (g.y1 - g.y0) * t - Math.sin(t * Math.PI) * 26;
+    // A thrown thing's arc: a parabola over the line from his hand to where it breaks.
+    const dx = g.x1 - g.x0, dy = g.y1 - g.y0, h = KING_GOBLET_ARC_PX;
+    const x = g.x0 + dx * t;
+    const y = g.y0 + dy * t - 4 * h * t * (1 - t);
     if (t < 1) {
-      // Tipped over once across the flight, not spun: the four drawings are
-      // upright, tilting, upended and on its side, and he lobs it, so it lands
-      // on the last with the wine already out (as Dracula's glass in the
-      // Castlevania prologues goes over, rather than wheeling like the axe).
-      const spin = Math.min(3, Math.floor(t * 4));
-      if (this.atlas.has(`vfx_goblet_${spin}`))
-        this.sprites.image(x, y, this.textureKey, `vfx_goblet_${spin}`).setScale(1 / ART_SCALE).setDepth(9);
+      // Turned along the arc, its rim leading: up out of his hand, over the
+      // top, and down onto the carpet mouth first, the wine going as it turns.
+      const turn = Math.atan2(dy - 4 * h * (1 - 2 * t), dx) + Math.PI / 2;
+      if (this.atlas.has("vfx_goblet_0"))
+        this.sprites.image(x, y, this.textureKey, "vfx_goblet_0").setScale(1 / ART_SCALE).setRotation(turn).setDepth(9);
       else this.sprites.circle(x, y, 2, 0xd8b56a).setDepth(9);
       return;
     }
