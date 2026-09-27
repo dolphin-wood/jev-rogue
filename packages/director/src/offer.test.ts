@@ -76,6 +76,37 @@ describe("the Director's portals (doc 003)", () => {
     }
   });
 
+  it("puts no vendor on a door the need ranking barely weighed, and the smith needs more than the merchant", async () => {
+    // Jev ranks spell first and spreads a small share over everything else.
+    const lean = (smith: number, merchant: number): Evaluator => async (req) => ({
+      answers: Object.fromEntries(Object.entries(req.questions).map(([name, question]) => {
+        const keys = Object.keys(question.criteria).filter((id) => id !== FALLBACK);
+        const p = (id: string) => name !== "portal_need" ? 1 / keys.length
+          : id === "smith" ? smith : id === "merchant" ? merchant : id === "spell" ? 0.8 : 0.01;
+        const total = keys.reduce((a, id) => a + p(id), 0);
+        return [name, {
+          choice: keys[0]!, confidence: null,
+          probabilities: { ...Object.fromEntries(keys.map((id) => [id, p(id) / total])), [FALLBACK]: 0 },
+        }];
+      })),
+      usage: { input_tokens: null },
+    });
+    const vendorsOver = async (evaluate: Evaluator) => {
+      const seen = new Set<string>();
+      for (let seed = 0; seed < 30; seed++) {
+        const choices = portalChoices(run(6), new RngSource(`v${seed}`).stream("c"), 3);
+        const plan = await createDirector("jev", { evaluate }).planPortals(ctx(6, { seed: `v${seed}`, gold: 60 }), choices);
+        expect(plan.decisions.find((d) => d.question === "portal_need")?.source).toBe("jev");
+        for (const door of plan.doors) if (door.npc) seen.add(door.npc);
+      }
+      return seen;
+    };
+    expect(await vendorsOver(lean(0.03, 0.03))).toEqual(new Set());
+    // The same share the merchant clears is not enough for the smith.
+    expect(await vendorsOver(lean(0.2, 0))).toEqual(new Set());
+    expect(await vendorsOver(lean(0, 0.2))).toEqual(new Set(["merchant"]));
+  });
+
   it("puts no fountain on a door the need ranking barely weighed, and one where it leads", async () => {
     const d = createDirector("rule");
     let low = 0;
@@ -224,7 +255,9 @@ describe("the Director's portals (doc 003)", () => {
       .planPortals(ctx(6, { seed: "vendor-balance", gold: 60 }), choices);
     const need = plan.decisions.find((decision) => decision.question === "portal_need");
     expect(need?.source).toBe("jev");
-    expect(need!.probabilities.merchant).toBeGreaterThan(need!.probabilities.smith!);
+    // At an even rating the smith falls under its floor (`NPC_MIN_NEED`) and
+    // leaves the ranking altogether.
+    expect(need!.probabilities.merchant).toBeGreaterThan(need!.probabilities.smith ?? 0);
   });
 
   it("hands only a declined question to the rule table; the request's other answers stand", async () => {

@@ -16,7 +16,7 @@ import {
   allowedTensions, PLAYABLE_ARCHETYPES, FEATURES,
   assemblePortals, SCHOOL_OF,
   rampDensities, rampAnchors, rampSubspecies, rampElitePresence, rampFor, rampRoster,
-  keysLean, UNMEASURED, PORTAL_NEED_TEMPERATURE, PORTAL_TAIL_TEMPERATURE, FOUNTAIN_MIN_NEED,
+  keysLean, UNMEASURED, PORTAL_NEED_TEMPERATURE, PORTAL_TAIL_TEMPERATURE, NPC_MIN_NEED,
   buildFacts, NO_BUILD, enemy,
 } from "@jr/core";
 import type {
@@ -718,18 +718,17 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
          * written on the badge.
          */
         const asked = restrictTo(dists.portal_need!, [...choices.kinds, ...choices.npcKinds]);
-        // A fountain the Director barely weighed leaves the ranking, so the
-        // spread tail cannot hand it a door (`FOUNTAIN_MIN_NEED`).
-        const legal = (asked.fountain ?? 1) < FOUNTAIN_MIN_NEED
-          ? restrictTo(asked, Object.keys(asked).filter((k) => k !== "fountain"))
-          : asked;
         // A run gets at most one optional vendor room. Jev tended to spend it
         // on the smith, while the merchant lets the player choose among three
         // kinds and refresh the shelf. Keep the model's ranking, but make the
         // more flexible vendor win close calls when both are legal.
-        const rankedNeed = source === "jev" && choices.npcKinds.includes("merchant") && choices.npcKinds.includes("smith")
-          ? reweight(legal, (id) => id === "merchant" ? 1.5 : id === "smith" ? 0.4 : 1)
-          : legal;
+        const leaned = source === "jev" && choices.npcKinds.includes("merchant") && choices.npcKinds.includes("smith")
+          ? reweight(asked, (id) => id === "merchant" ? 1.5 : id === "smith" ? 0.4 : 1)
+          : asked;
+        // A room with no fight that the Director barely weighed leaves the
+        // ranking, so the spread tail cannot hand it a door (`NPC_MIN_NEED`).
+        const rankedNeed = restrictTo(leaned, Object.keys(leaned).filter((k) =>
+          !(k in NPC_MIN_NEED) || leaned[k]! >= NPC_MIN_NEED[k as NpcKind]));
         const need = withTemperature(rankedNeed, PORTAL_NEED_TEMPERATURE);
         /*
          * **The first door sharp, the rest spread** (`PORTAL_TAIL_TEMPERATURE`).

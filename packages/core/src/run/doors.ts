@@ -441,14 +441,21 @@ export const FOUNTAIN_FIRST_ROOM = 5;
 export const FOUNTAIN_ROOMS_MAX = 1;
 export const FOUNTAIN_OFFERS_MAX = 2;
 /**
- * **The least the Director must give the fountain for it to take a door.**
- * The doors after the first come from the spread tail of the need ranking
- * (`PORTAL_TAIL_TEMPERATURE`), and with three doors from five options the
- * third is close to a coin toss among what was left — so a fountain the
- * Director gave under one percent still stood on a door, twice in one played
- * run. Below this share of the need it is left out of the ranking entirely.
+ * **The least the Director must give a room with no fight for it to take a
+ * door**, as a share of the need ranking. The doors after the first come from
+ * the spread tail of that ranking (`PORTAL_TAIL_TEMPERATURE`), and with three
+ * doors from five or more options the third is close to a coin toss among
+ * what was left — so a fountain the Director gave under one percent stood on
+ * a door twice in one played run, and a smith at three percent took one too.
+ * Below its floor the option leaves the ranking entirely.
+ *
+ * The smith's floor is higher: it spends the run's one vendor room on a
+ * single level for a single key, where the merchant lets the player choose
+ * among three kinds, so it has to be what the Director clearly wanted.
  */
-export const FOUNTAIN_MIN_NEED = 0.1;
+export const NPC_MIN_NEED: Readonly<Record<NpcKind, number>> = {
+  merchant: 0.1, fountain: 0.1, smith: 0.2,
+};
 
 export function portalChoices(run: RunShape, rng: Rng, count = drawPortalCount(rng)): PortalChoices {
   const n = Math.max(1, Math.min(count, REWARD_KINDS.length));
