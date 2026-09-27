@@ -189,6 +189,35 @@ length of 100 to 130 s and a win rate near today's 55% for the fitted `player`.
 The meteor into phase III, the rage tempo and the music's layers are
 unchanged, because they already hang on `e.phase`.
 
+## The arena
+
+**Open floor, and nothing in it that can't be broken.** Phase I is the phase
+the player learns the king in: his shapes, his reach, the band that crosses the
+whole floor. A wall the band stops at, or a pillar the player trips on
+mid-dash, teaches something other than the king. Nothing in the room may be
+solid and permanent.
+
+It also has to look like an ordinary room until the roof gives (step 2 of the
+drop-in), so it can't be the throne hall's bare stage either.
+
+| | Room 5 | Why |
+|---|---|---|
+| Archetype | a new `audience_arena`: `arena` shape, `open`, cover `none`, `boss: true` | no cover walls at all. An open arena is also a normal room's look (`open_arena`), so the room gives nothing away |
+| Outline | the arena skeletons that only move the outer wall: `arena`, `arena_octagon`, `arena_bastions` | an outline is the room's edge, not an obstacle in it. `arena_waist`, `arena_horseshoe` and `arena_notched` bite into the floor and are left out |
+| Scattered props | the ordinary room's pots, crates and urns (`PROPS_PER_ROOM`) | part of the disguise. **The landing shatters every one of them, room-wide**, along with the bodies |
+| Standing cover | two to four **braziers** (`brazier` fixture, 16 health) on the edge zones, never in the centre | cover the player can spend, and one of the king's blows breaks one (`BOSS_PROP_DAMAGE` 18). They survive the entrance, since the landing is aimed away from them, and the fight wears them away, the way the throne hall's columns go |
+| Floor features | at most one floor feature on an edge zone: `spike_strip`, `poison_pool`, `ice_patch`, `lava_channel` or `grass_patch`, hazard budget ≤ 2 | the ground can ask something, but never in the centre where his landings and slams fall. No `turret_mount`: a turret is a body, and the landing leaves none |
+
+- **Zone slots** are `edge_n` and `edge_s` only (`A_EDGE_N`, `A_EDGE_S`). The
+  centre slot is left out, and it is where the king's landing mark goes.
+- **The spare hearts never come to rest on a floor hazard.** A heart lying in a
+  poison pool is a reserve the player has to take damage to reach.
+  `nearestFloor` moves them off it.
+- **Validation.** `checkArchetypeDeclarations` and the archetype sweep cover the
+  new archetype at every room size. A test asserts that after the landing
+  every prop still standing is a brazier, and that no cell of the room is a
+  permanent solid.
+
 ## What code decides, and what Jev does
 
 All of it is code's. It is the run's shape, like the vendors' stop and the
@@ -199,9 +228,8 @@ boss, and doc 002 does not ask a question with one answer.
   has to be a fight, and a fair one. A vendor or fountain door taken there
   would move the audience into a room that has no fight. This is a
   `portalChoices` constraint, and Jev only sees the options that remain.
-- **Room 5's space** is one of the boss archetypes (`boss_open`,
-  `boss_scattered`) in the room's own depth, the ossuary, and no Jev question is
-  asked. The king needs his arena, and the fight's geometry is his.
+- **Room 5's space** is code's, and no Jev question is asked. The king needs
+  his arena, and the fight's geometry is his. See "The arena" below.
 - **Room 5's encounter questions** (round 2) are not asked. The bodies are
   fodder with a fixed job.
 - **Room 6 is the trough.** Room 5 is recorded in the run history with
@@ -221,7 +249,8 @@ boss, and doc 002 does not ask a question with one answer.
 | `sim/world.ts` | the drop-in: trigger (one kill or 5 s), mark placement, landing, the room-wide crush, `missing + CRASH_HEARTS_SPARE` hearts (the missing ones pulled to the player, the spare ones held on the floor, not expiring and not taken on a full bar), no experience, `worldCleared` waiting on the king, not the queue |
 | `run/doors.ts` | `RUN_AUDIENCE_ROOM = 5`. `stageFor` returns `"audience"`. `portalChoices` out of room 4 forbids elite, vendor and fountain |
 | `run/offer.ts` | room 5's offer at door grade + 1 |
-| `rooms/` | room 5 planned from a boss archetype in the room's biome, no round-2 questions |
+| `rooms/archetypes.ts` | `audience_arena` (open, no cover, `edge_n`/`edge_s` slots). Room 5 planned from it in the room's biome, with the three outline skeletons, braziers and at most one floor feature, and no round-2 questions |
+| `sim/world.ts` (props) | the landing shatters every scattered prop. Braziers stand until his blows break them. Spare hearts are kept off hazard cells |
 | `run/summarize.ts`, director briefing | `king_met` and the neutral sentence |
 | `game/scenes/play.ts` | the mark, the fall, the name card on the drop-in. The retreat's rise off the top of the view. The throne entrance ending on a phase II body |
 | `harness` | `boss-bench --script audience\|final`. A full-run balance pass for hearts lost at room 5, at room 6 and at the boss, and the win rate |
