@@ -15239,7 +15239,7 @@ export class PlayScene extends Phaser.Scene {
     const p = w.player;
     const free = p.castPending < 0 && p.castRecoverMs <= 0 && p.chargeKey < 0 && !p.stance && p.stunMs <= 0 && p.dashMs <= 0;
     const target = this.autoTarget();
-    // A body awake anywhere in the room: what an enchant is cast for (`autoCastAnyReach`).
+    // A body awake anywhere in the room: what an enchant or a companion is cast for (`autoCastAnyReach`).
     const fight = w.enemies.some((e) => e.hp > 0 && e.awake && e.spawnFadeMs <= 0);
     const floor = w.staff.mana_max * AUTO_CAST_RESERVE;
     const dist = target ? Math.hypot(target.x - p.x, target.y - p.y) : Infinity;
@@ -15250,7 +15250,7 @@ export class PlayScene extends Phaser.Scene {
       const held = autoCastable(params, chargeMsOf(ITEMS, slot.item.base));
       /*
        * Only a key whose own reach the body stands in: a short spell is not
-       * thrown at a far body. An enchant needs only a fight. And no spell
+       * thrown at a far body. An enchant or a companion needs only a fight. And no spell
        * that is still running (`keyRunningMs`) — an enchant on the sword,
        * the blades round the body, a trail underfoot, the companion: recast
        * early, it spends the bar to renew what is already there. It comes
@@ -15274,7 +15274,7 @@ export class PlayScene extends Phaser.Scene {
       };
     });
     const key = this.autoCaster.pick(w.tick * STEP_MS, keys, free);
-    // An enchant with no body in reach aims nowhere in particular: the facing the player has.
+    // An enchant or a companion with no body in reach aims nowhere in particular: the facing the player has.
     if (key !== null) this.autoTargetId = target?.id ?? null;
     return key;
   }

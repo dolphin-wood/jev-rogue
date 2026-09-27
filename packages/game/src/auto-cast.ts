@@ -117,14 +117,15 @@ export function autoCastable(params: Readonly<Record<string, number | string>>, 
 }
 
 /**
- * **An enchant is cast at the fight, not at a body.** It runs on the sword
- * for seconds and is spent by the swings, so it goes up whenever a body is
- * awake in the room, however far; held to a reach it waited for a body
- * inside four tiles, and a key with a long reach beside it (Meteor) took
- * every turn first.
+ * **An enchant or a companion is cast at the fight, not at a body.** An
+ * enchant runs on the sword for seconds and is spent by the swings; a
+ * companion follows the player and finds its own targets. So either goes up
+ * whenever a body is awake in the room, however far. Held to a reach, the
+ * enchant waited for a body inside four tiles, and a key with a long reach
+ * beside it (Meteor) took every turn first.
  */
 export function autoCastAnyReach(params: Readonly<Record<string, number | string>>): boolean {
-  return params["shape"] === "enchant";
+  return params["shape"] === "enchant" || params["shape"] === "summon";
 }
 
 /** The farthest any key reaches for auto-cast: about what the screen shows round the player. */

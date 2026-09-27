@@ -172,8 +172,9 @@ describe("auto-cast", () => {
 
   it("gives every spell a reach of its own, short spells short and none past the screen", () => {
     const reach = (id: string) => autoCastReach(ITEMS.get(id)!.params!);
-    // An enchant is cast at the fight, whatever its reach says.
+    // An enchant and a companion are cast at the fight, whatever their reach says.
     expect(autoCastAnyReach(ITEMS.get("crescent_edge")!.params!)).toBe(true);
+    expect(autoCastAnyReach(ITEMS.get("spirit_ally")!.params!)).toBe(true);
     expect(autoCastAnyReach(ITEMS.get("meteor")!.params!)).toBe(false);
     for (const [id, item] of ITEMS) {
       if (!item.params) continue;
