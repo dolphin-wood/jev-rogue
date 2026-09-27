@@ -2998,7 +2998,11 @@ export class PlayScene extends Phaser.Scene {
     const x = g.x0 + (g.x1 - g.x0) * t;
     const y = g.y0 + (g.y1 - g.y0) * t - Math.sin(t * Math.PI) * 26;
     if (t < 1) {
-      const spin = Math.floor(g.ms / 60) % 4;
+      // Tipped over once across the flight, not spun: the four drawings are
+      // upright, tilting, upended and on its side, and he lobs it, so it lands
+      // on the last with the wine already out (as Dracula's glass in the
+      // Castlevania prologues goes over, rather than wheeling like the axe).
+      const spin = Math.min(3, Math.floor(t * 4));
       if (this.atlas.has(`vfx_goblet_${spin}`))
         this.sprites.image(x, y, this.textureKey, `vfx_goblet_${spin}`).setScale(1 / ART_SCALE).setDepth(9);
       else this.sprites.circle(x, y, 2, 0xd8b56a).setDepth(9);
