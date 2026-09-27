@@ -1056,6 +1056,24 @@ export function kingHp(script?: BossScript): number {
 }
 
 /**
+ * The marks on his health bar: where each change in the fight falls. The
+ * final's phase III at the half; the first audience's one mark, where he
+ * leaves; the whole fight's two.
+ */
+export function kingMarks(script?: BossScript): readonly number[] {
+  if (script === "final") return [KING_FINAL_III_AT];
+  if (script === "audience") return [KING_RETREAT_AT];
+  return BOSS_PHASES.slice(1).map((p) => p.at);
+}
+
+/** The health fraction a phase begins at under a script (the lab's phase buttons). */
+export function kingPhaseStart(script: BossScript | undefined, phase: number): number {
+  if (script === "final") return phase >= 3 ? KING_FINAL_III_AT : 1;
+  if (script === "audience") return phase >= 2 ? KING_RETREAT_AT : 1;
+  return BOSS_PHASES[Math.min(BOSS_PHASES.length, Math.max(1, phase)) - 1]!.at;
+}
+
+/**
  * The phase a boss at this health fraction is in, 1-based.
  *
  * Under `"audience"` the phase II threshold is the retreat's: the change into

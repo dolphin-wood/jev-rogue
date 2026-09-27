@@ -9,7 +9,7 @@ import {
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
   moodTransform, tintRGBA, dashInvulnerable, MELEE, ARMOUR_BREAK_MS, brakeFraction, ENEMIES,
-  BOSS_ARCHETYPES, makeEnemy, makeKing, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
+  BOSS_ARCHETYPES, makeEnemy, makeKing, kingHp, kingMarks, kingPhaseStart, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, audienceGrade, RUN_AUDIENCE_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTierKey, affixFitsSpell, itemShape,
@@ -1970,12 +1970,23 @@ export class PlayScene extends Phaser.Scene {
         try { localStorage.removeItem(SEEN_CONTROLS_KEY); } catch { /* nothing to forget */ }
       },
       skipRoom: () => { if (!this.entering) void this.enterRoom(this.roomIndex + 1); },
+      // The king's two meetings (doc 022), on the build held now; the title is put away if it is up.
+      toAudience: () => { if (!this.entering) { this.hideTitle(); void this.enterRoom(RUN_AUDIENCE_ROOM); } },
+      toFinal: () => { if (!this.entering) { this.hideTitle(); void this.enterRoom(RUN_BOSS_ROOM); } },
       bossLab: {
         enter: () => this.enterBossLab(),
         setPhase: (phase) => {
           const boss = this.world.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
-          // Just inside the phase; the change itself is the sim's, as in a fight.
-          if (boss) boss.hp = Math.max(1, Math.round(boss.maxHp * (BOSS_PHASES[phase - 1]!.at - 0.005)));
+          /*
+           * Just inside the phase; the change itself is the sim's, as in a fight. The final
+           * has no phase I (doc 022), so asking for it gives him back the unscripted fight,
+           * whose first phase is the one room 5 plays.
+           */
+          if (boss && phase === 1 && boss.bossScript) {
+            boss.bossScript = undefined;
+            boss.hp = boss.maxHp = kingHp();
+          }
+          if (boss) boss.hp = Math.max(1, Math.round(boss.maxHp * (kingPhaseStart(boss.bossScript, phase) - 0.005)));
           // And the fight clock back to its start when he is between moves, so a
           // long session in the lab does not drift into the enrage (125 s) unseen.
           if (boss && boss.bossCast === "none" && boss.attack === "approach" && boss.bossNext === "none") boss.bossFightMs = 0;
@@ -2902,8 +2913,9 @@ export class PlayScene extends Phaser.Scene {
     const y = hall ? (THRONE_CELLS[1]![1] + KING_STAND_ROW) * TILE_PX : (ext.h / 2) * TILE_PX;
     // From the world's own counter: a fixed id 1 was also the first add's, and the renderer's per-body
     // state (the phase-change burst among it) drew the add as the king.
-    // The final (doc 022): he stands in phase II, without the armour broken in room 5. The lab keeps the whole fight.
-    const boss = makeKing(w.nextEnemyId++, x, y, this.labOn ? undefined : "final");
+    // The final (doc 022): he stands in phase II, without the armour broken in room 5 — in the lab too, which is
+    // where the final is tuned. The lab's phase I button puts back the fight's first phase (`bossLab.setPhase`).
+    const boss = makeKing(w.nextEnemyId++, x, y, "final");
     boss.spawnFadeMs = 0;
     boss.awake = true;
     // The fight's clock, and the music's, from the goblet (`kingIntro.clock`).
@@ -15985,7 +15997,8 @@ export class PlayScene extends Phaser.Scene {
         this.sprites.rectangle(BX, BY - 7, BW * Math.max(0, boss.armour / boss.maxArmour), 3, SHIELD_BLUE, boss.armour > 0 ? 1 : 0.15).setOrigin(0, 0.5).setDepth(101);
         this.sprites.add(shieldMark(this, this.atlas, this.uiTextureKey, BX - 7, BY - 7, 8).setDepth(102));
       }
-      for (const mark of [0.6, 0.3])
+      // The marks are the script's (doc 022): the final's phase III at the half, the first audience's retreat.
+      for (const mark of kingMarks(boss.bossScript))
         this.sprites.rectangle(BX + BW * mark, BY, 1, 9, 0xffe9a8, 0.8).setOrigin(0.5).setDepth(102);
       this.ftext("boss:title", BX, BY - 11, t("hud.bossTitle"), {
         fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(7, ZOOM) * ZOOM)}px`, color: "#ffe9a8",

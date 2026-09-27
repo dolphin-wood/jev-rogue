@@ -13,7 +13,7 @@ import { plainInstance } from "../spells/index.ts";
 import { RngSource } from "../rng.ts";
 import { KING_AUDIENCE_XP } from "../run/levels.ts";
 import {
-  bossPhaseAt, ENEMIES, KING_AUDIENCE_HP, KING_FINAL_HP, KING_FINAL_III_AT, KING_RETREAT_AT,
+  bossPhaseAt, kingMarks, kingPhaseStart, ENEMIES, KING_AUDIENCE_HP, KING_FINAL_HP, KING_FINAL_III_AT, KING_RETREAT_AT,
 } from "../encounters/enemies.ts";
 
 function hall(seed: string): World {
@@ -61,6 +61,15 @@ describe("the king's scripts: phases", () => {
     expect(bossPhaseAt(1, "final")).toBe(2);
     expect(bossPhaseAt(KING_FINAL_III_AT + 0.01, "final")).toBe(2);
     expect(bossPhaseAt(KING_FINAL_III_AT, "final")).toBe(3);
+  });
+
+  it("marks each script's own changes on the bar", () => {
+    expect(kingMarks("final")).toEqual([KING_FINAL_III_AT]);
+    expect(kingMarks("audience")).toEqual([KING_RETREAT_AT]);
+    expect(kingMarks()).toEqual([0.6, 0.3]);
+    expect(kingPhaseStart("final", 2)).toBe(1);
+    expect(kingPhaseStart("final", 3)).toBe(KING_FINAL_III_AT);
+    expect(kingPhaseStart(undefined, 2)).toBe(0.6);
   });
 
   it("opens the final with no roar and no call", () => {
