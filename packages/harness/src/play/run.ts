@@ -6,7 +6,7 @@ import { liveCount } from "@jr/core";
  * claim (design docs 008, 011).
  */
 import {
-  MAX_HEARTS, RngSource, bucketClearSpeed, bucketGold, bucketHealth, SMITH_PRICE, MERCHANT_PRICE, fountainDrink, fountainWouldHeal,
+  MAX_HEARTS, RngSource, bucketClearSpeed, bucketGold, bucketHealth, SMITH_PRICE, MERCHANT_PRICE, fountainDrink, fountainWouldHeal, fountainWanted,
   bucketMovementPressure, bucketRecentDamage, bucketRunProgress, createWorld,
   plainInstance, heldDominantTags, STYLE_START, step, worldCleared, ITEMS, STEP_MS,
   RUN_BOSS_ROOM, stageFor, applyStat, cardPool, cardsFor, cardNeedsFor, portalChoices, heldSpell, CARDS_PER_OFFER, equipItem, attachAffix, withLevel,
@@ -434,7 +434,7 @@ export async function playRun(
         // The same hard rules the scene applies: no second room without a
         // fight straight after one, and one fountain a run.
         npcRooms, fountains, lastWasNpc, npcOffers, fountainOffers,
-        hurt: hearts < MAX_HEARTS + liveMods().maxHearts,
+        hurt: fountainWanted(hearts, MAX_HEARTS + liveMods().maxHearts),
       },
       src.stream("portal-count", index),
     );
