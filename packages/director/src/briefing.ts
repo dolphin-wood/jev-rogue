@@ -20,7 +20,7 @@
 import {
   AFFIX_SLOTS, ARCHETYPES, COIN_VALUE, FOUNTAIN_HEAL_FRACTION, GOLD_ROOM_COINS, HP_PER_HEART, ITEMS,
   MANA_PER_HIT_FRACTION, MANA_REGEN_FRACTION_PER_S, MERCHANT_PRICE, RUN_BOSS_ROOM,
-  RUN_AUDIENCE_ROOM, RUN_COMBAT_ROOMS, RUN_SHOP_ROOM, SMITH_PRICE, SPELL_LEVEL_MAX, SPELL_SCHOOLS, STAT_FAMILIES,
+  RUN_AUDIENCE_ROOM, RUN_GUARDIAN_ROOM, RUN_COMBAT_ROOMS, RUN_SHOP_ROOM, SMITH_PRICE, SPELL_LEVEL_MAX, SPELL_SCHOOLS, STAT_FAMILIES,
   MAX_HEARTS, STYLE_CARDS, TYPICAL_RUN_HEALTH_LOST, UNMEASURED, archetype, buildFacts, cardStyleTags, enemy,
   keyCost, keysLean, levelDamageMult, schoolOf, spellAffixById, statById, typicalHealthLostBy,
   baseXp, LEVEL_HP, LEVEL_SWORD_DAMAGE, LEVEL_MANA, swordAt,
@@ -1033,6 +1033,12 @@ function aheadLines(n: BriefingNow): string[] {
         + "until his armour breaks, then leaves. It pays its door's reward one grade higher, and about a room's "
         + "experience as he leaves; the crushed bodies pay none."
       : `- The boss was met in room ${RUN_AUDIENCE_ROOM} and driven off; he waits in room ${RUN_BOSS_ROOM}.`,
+    // Room 10's guardian (doc 024), stated as the run's shape.
+    ...(n.roomIndex <= RUN_GUARDIAN_ROOM ? [
+      `- ${n.roomIndex === RUN_GUARDIAN_ROOM ? "This room" : `Room ${RUN_GUARDIAN_ROOM}`} is a guardian fight: one large `
+        + "armoured body that rams and fires a spray, with a squad of ordinary bodies; a ram into a wall knocks it "
+        + "out and breaks its armour. It pays its door's reward one grade higher, and a room's experience on the kill.",
+    ] : []),
     `- ${n.roomIndex === RUN_BOSS_ROOM ? "This room" : `Room ${RUN_BOSS_ROOM}`} is the boss: one long fight `
       + "in an open hall against a single body with far more health than anything else in the run. It is "
       + "one body rather than a crowd, the fight is long, and the health bar the player arrives on is the "

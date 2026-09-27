@@ -52,6 +52,7 @@ import {
 } from "./props.ts";
 import { COIN_VALUE, MANA_ORB, drop, makePickupPool, stepPickups } from "./pickups.ts";
 import { audienceKill, makeAudience, stepAudience } from "./audience.ts";
+import { GUARDIAN_XP, makeGuardian, stepGuardian } from "./guardian.ts";
 import {
   enteredPortal, makePortal, placeRewardNear, portalsBefore, raisePortals, stepPortals, stepReward,
 } from "./exits.ts";
@@ -327,6 +328,8 @@ export interface CreateWorldOptions {
    * until he has come and gone.
    */
   readonly audience?: boolean;
+  /** Room 10's guardian fight (doc 024): the Drowned Warden stands in the room with its squad. */
+  readonly guardian?: boolean;
 }
 
 /**
@@ -419,6 +422,39 @@ export function equipItem(
 }
 
 export function createWorld(input: CreateWorldOptions): World {
+  const w = buildWorld(input);
+  if (input.guardian) placeGuardian(w);
+  return w;
+}
+
+/**
+ * **The Drowned Warden takes its ground** (doc 024): across the room from the
+ * door, awake, with the room's own squad already arriving. The farthest floor
+ * cell from the entry with floor round it for its body.
+ */
+function placeGuardian(w: World): void {
+  const ext = w.room.extent, grid = w.room.grid, p = w.player;
+  let best: { x: number; y: number; d: number } | null = null;
+  for (let gy = 3; gy < ext.h - 3; gy++)
+    for (let gx = 3; gx < ext.w - 3; gx++) {
+      let open = true;
+      for (let dy = -1; dy <= 1 && open; dy++) for (let dx = -1; dx <= 1 && open; dx++)
+        open = grid[(gy + dy) * GRID_W + gx + dx] === Tile.Floor;
+      if (!open) continue;
+      const x = (gx + 0.5) * TILE_PX, y = (gy + 0.5) * TILE_PX;
+      if (w.props.some((q) => q.hp > 0 && Math.hypot(q.x - x, q.y - y) < TILE_PX * 2)) continue;
+      const d = Math.hypot(x - p.x, y - p.y) - Math.abs(x - (ext.w / 2) * TILE_PX) * 0.5;
+      if (!best || d > best.d) best = { x, y, d };
+    }
+  const at = best ?? { x: (ext.w / 2) * TILE_PX, y: (ext.h / 2) * TILE_PX };
+  const g = makeGuardian(w.nextEnemyId++, at.x, at.y, w.roomIndex);
+  g.spawnFadeMs = 0;
+  w.enemies.push(g);
+  w.cleared = false;
+  w.events.push({ kind: "telegraph", x: at.x, y: at.y, what: "guardian_arrives" });
+}
+
+function buildWorld(input: CreateWorldOptions): World {
   /*
    * **The level is folded in here, once, for every caller.**
    *
@@ -579,6 +615,7 @@ export function createWorld(input: CreateWorldOptions): World {
      */
     roomIndex: o.roomIndex ?? 99,
     ...(o.audience ? { audience: makeAudience(), awaitingBoss: true } : {}),
+    ...(o.guardian ? { guardianRoom: true } : {}),
     coinBoost: Math.max(1, Math.min(COIN_BOOST_MAX, o.coinBoost ?? 1)),
     attackTokens: ATTACK_TOKENS,
     fireTokens: o.fireTokens ?? FIRE_TOKENS,
@@ -795,6 +832,7 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   // The king lives on his own clock (`bossTempo`): everything he does runs faster in phase III, with the music.
   for (const e of w.enemies) stepEnemy(w, e, dtMs * bossTempo(e));
   for (const e of w.enemies) if (e.archetype === "boss" && e.hp > 0) stepBoss(w, e, dtMs * bossTempo(e));
+  for (const e of w.enemies) if (e.guardian) stepGuardian(w, e);
   resolveBodies(w);
   w.enemies = w.enemies.filter((e) => {
     // Gone up out of the room (doc 022): off the floor, and nothing a death pays.
@@ -2449,9 +2487,11 @@ function onEnemyKilled(w: World, e: Enemy): void {
   if (e.archetype === "lancer" && e.affixes.length > 0) deathBurst(w, e, "lance");
   else if (e.affixes.includes("volatile")) deathBurst(w, e, "volatile");
   // The boss's adds go with it: the fight is the boss, and a run that ended
-  // on a rusher still standing would not have ended.
-  if (e.archetype === "boss")
-    for (const other of w.enemies) if (other !== e && other.hp > 0) other.hp = 0;
+  // on a rusher still standing would not have ended. The Drowned Warden's
+  // squad goes with it the same way, and its death pays a room (doc 024).
+  if (e.archetype === "boss" || e.guardian)
+    for (const other of w.enemies) if (other !== e && other.hp > 0) { other.summoned = true; other.hp = 0; }
+  if (e.guardian) payXp(w, GUARDIAN_XP, e.x, e.y);
 }
 
 /*
@@ -2903,7 +2943,7 @@ function bossAddsFor(w: World, phase: number): EnemyId[] {
 }
 
 /** Where the call's adds rise: a ring about him, each on its own floor cell, none on the player. */
-function bossSummonSpots(w: World, e: Enemy, n: number): { x: number; y: number }[] {
+export function bossSummonSpots(w: World, e: Enemy, n: number): { x: number; y: number }[] {
   const spots: { x: number; y: number }[] = [];
   const turn = w.rng.next() * Math.PI * 2;
   for (let i = 0; i < n; i++) {
@@ -4654,7 +4694,7 @@ function smashProps(w: World, dtMs: number): void {
   }
   for (const e of w.enemies) {
     if (e.hp <= 0 || !isActive(e)) continue;
-    const charging = e.attack === "lunge" && ENEMIES[e.archetype].melee === "charge";
+    const charging = e.attack === "lunge" && (e.meleeKind ?? ENEMIES[e.archetype].melee) === "charge";
 
     for (const p of w.props) {
       if (p.hp <= 0 || hallProp(p)) continue;
@@ -4820,7 +4860,7 @@ function turnBackFromBump(w: World, e: Enemy, nx: number, ny: number): void {
 
 /** A committed charge is immovable: it does not stop for anything. */
 function plowing(e: Enemy): boolean {
-  return e.attack === "lunge" && ENEMIES[e.archetype].melee === "charge";
+  return e.attack === "lunge" && (e.meleeKind ?? ENEMIES[e.archetype].melee) === "charge";
 }
 
 /**

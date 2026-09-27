@@ -12,6 +12,7 @@ import type { Rng } from "../rng.ts";
 import type { AffixContext } from "../encounters/affixes.ts";
 import type { BossScript } from "../encounters/enemies.ts";
 import type { AudienceState } from "./audience.ts";
+import type { GuardianState } from "./guardian.ts";
 import type { FlowField } from "./flow.ts";
 import type { SwingBox } from "./melee.ts";
 import type { SpellSlot } from "./spells.ts";
@@ -1040,6 +1041,8 @@ export interface Enemy {
    * struck ground, no hurt (`stepBossMeteor`).
    */
   bossEntrance?: boolean;
+  /** Room 10's guardian (doc 024): a warden that is the Drowned Warden (`sim/guardian.ts`). */
+  guardian?: GuardianState;
   /** Going back up out of the room at the end of the first audience (`stepBossMeteor`). */
   bossLeaving?: boolean;
   /**
@@ -2185,6 +2188,8 @@ export interface World {
   awaitingBoss?: boolean;
   /** The king's first audience, in room 5 (doc 022): the drop-in's state (`sim/audience.ts`). */
   audience?: AudienceState;
+  /** Room 10's guardian fight (doc 024): seen whole from the first frame. */
+  guardianRoom?: boolean;
   /**
    * Half the camera's view, px: what the player can see. A body fires only
    * from wholly inside it, and closes slower further off (`firePresence`).

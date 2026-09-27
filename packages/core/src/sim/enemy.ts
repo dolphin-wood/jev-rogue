@@ -15,6 +15,7 @@ import type { Enemy, World } from "./types.ts";
 import {
   ENEMY_BULLET_CAP, SUMMONER_INTERVAL_S, SUMMONER_MINION_CAP, MAX_CONCURRENT_ENEMIES, BOSS_PHASES, bossPhaseAt, kingHp, KING_RETREAT_AT } from "../encounters/enemies.ts";
 import type { BossScript } from "../encounters/enemies.ts";
+import { GUARDIAN_SHOT_EVERY } from "./guardian.ts";
 
 const SUMMONER_INTERVAL_MS = SUMMONER_INTERVAL_S * 1000;
 /**
@@ -2047,6 +2048,8 @@ function chooseMelee(e: Enemy): MeleeKind | null {
    * the way in for a slam, and the walk is the tell.
    */
   if (baseArchetype(e.archetype) === "tank") return e.closeIn ? "cleave" : e.casts % 3 === 0 ? "charge" : "slam";
+  // The Drowned Warden (doc 024): the tank's ram from range, its own shield shove on top of it.
+  if (e.guardian) return e.closeIn ? "bash" : "charge";
   // The boss: by phase, and by distance within the phase.
   if (e.archetype === "boss") {
     // Inside a string: the next blow is already decided (`BossPhase.strings`).
@@ -3284,6 +3287,19 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
         // second half of a combination: the slam is the player's window.
         e.comboLeft = 0;
         impactShake(world, e);
+        /*
+         * **The Drowned Warden's plate breaks on the wall** (doc 024): a head-on
+         * slam is the fight's opening, and from phase II it throws a ring of
+         * broken floor as it lands.
+         */
+        if (e.guardian) {
+          if (e.armour > 0) {
+            e.armour = 0;
+            e.armourBreakMs = ARMOUR_BREAK_MS;
+            world.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `armour_break:${e.archetype}` });
+          }
+          if (e.phase >= 2) shockRing(world, e);
+        }
       }
     }
     // Still a last resort, for the case the field cannot help with: two
@@ -3631,7 +3647,8 @@ function fire(world: World, e: Enemy, dtMs: number): void {
    * affixes that speed up a volley speed these up identically.
    */
   if (def.ranged) {
-    const period = def.ranged.interval_s * 1000;
+    // The Drowned Warden fires less often than a warden: its ram is the other half of its turns (doc 024).
+    const period = def.ranged.interval_s * 1000 * (e.guardian ? GUARDIAN_SHOT_EVERY : 1);
     const before = e.patternMs;
     e.patternMs += scaled;
     if (Math.floor(before / period) === Math.floor(e.patternMs / period)) return;

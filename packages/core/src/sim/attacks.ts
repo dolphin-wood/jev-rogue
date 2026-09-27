@@ -29,6 +29,7 @@
  * the same test the lancer's swap uses.
  */
 import { TILE_PX, GRID_W, GRID_H } from "../types.ts";
+import { GUARDIAN_FLAME } from "./guardian.ts";
 import type { EnemyId } from "../types.ts";
 import { baseArchetype } from "../encounters/enemies.ts";
 import { PLAYER_RADIUS } from "./types.ts";
@@ -567,7 +568,9 @@ function stepFlame(w: World, f: Flame, dtMs: number, hooks: AttackHooks): void {
     // wall between is a wall between), allowing for the body's own size.
     if (Math.abs(da) <= half + PLAYER_RADIUS / Math.max(8, d) && d - PLAYER_RADIUS <= Math.min(front, flameReach(f, Math.max(-half, Math.min(half, da))))) {
       f.hit = true;
-      hooks.hurtPlayer(f.x, f.y, "flame:warden", 0, 1);
+      // The Drowned Warden's spray costs what its ram does, as a share (`GUARDIAN_POWER`, doc 024).
+      const owner = w.enemies.find((o) => o.id === f.owner);
+      hooks.hurtPlayer(f.x, f.y, "flame:warden", 0, owner?.guardian ? GUARDIAN_FLAME : 1);
       hooks.burnPlayer(FLAME_BURN);
     }
   }
@@ -721,7 +724,8 @@ function finishPose(w: World, e: Enemy, seen: { x: number; y: number }): void {
     case "musket_windup":
       fireMusket(w, e);
       // The elite's second barrel: a beat later, from where it stands.
-      pose(e, e.archetype === "fusilier" && e.casts % 2 === 1 ? "musket_second" : "musket_fire", MUSKET_FIRE_MS);
+      // And the Drowned Warden's in its last phase (doc 024).
+      pose(e, (e.archetype === "fusilier" || (e.guardian && e.phase >= 3)) && e.casts % 2 === 1 ? "musket_second" : "musket_fire", MUSKET_FIRE_MS);
       break;
     case "musket_second":
       pose(e, "musket_windup", MUSKET_SECOND_MS);

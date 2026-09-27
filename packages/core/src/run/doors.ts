@@ -171,7 +171,29 @@ export function leadsToAudience(roomIndex: number): boolean {
 }
 
 /**
- * What the first audience pays: its door's own reward **one grade higher**,
+ * **Room 10's guardian** (doc 024): the last fight of the flooded depth is the
+ * Drowned Warden's. Like the first audience it is one of the fourteen fights,
+ * entered through an ordinary door, and the doors before it are narrowed the
+ * same way (`leadsToFixedFight`).
+ */
+export const RUN_GUARDIAN_ROOM = 10;
+
+export function isGuardianRoom(roomIndex: number): boolean {
+  return roomIndex === RUN_GUARDIAN_ROOM;
+}
+
+/** A fight the run's shape fixes rather than the Director: the first audience or the guardian. */
+export function isFixedFightRoom(roomIndex: number): boolean {
+  return isAudienceRoom(roomIndex) || isGuardianRoom(roomIndex);
+}
+
+/** Whether the doors out of this room open onto a fixed fight: never elite, a vendor or the fountain. */
+export function leadsToFixedFight(roomIndex: number): boolean {
+  return isFixedFightRoom(roomIndex + 1);
+}
+
+/**
+ * What a fixed fight pays — the first audience and the guardian: its door's own reward **one grade higher**,
  * capped at 3 (doc 022, "What it pays"). The reward for driving him off rides
  * on the reward the player chose at the door, so the choice still counts.
  */
@@ -281,7 +303,7 @@ export const ELITE_GAP_FIGHTS = 2;
 export const ELITE_ROOMS_MAX = 4;
 
 export function legalDifficulties(run: RunShape): readonly Difficulty[] {
-  if (run.lastWasElite || run.critical || leadsToAudience(run.roomIndex)) return ["normal"];
+  if (run.lastWasElite || run.critical || leadsToFixedFight(run.roomIndex)) return ["normal"];
   if ((run.elitesSoFar ?? 0) >= ELITE_ROOMS_MAX) return ["normal"];
   // Absent before the first elite, which is when there is nothing to be near.
   if (run.fightsSinceElite !== undefined && run.fightsSinceElite < ELITE_GAP_FIGHTS) return ["normal"];
@@ -493,7 +515,7 @@ export function portalChoices(run: RunShape, rng: Rng, count = drawPortalCount(r
   const n = Math.max(1, Math.min(count, REWARD_KINDS.length));
   // Neither may be the only way on, and neither may follow another room with
   // no fight in it: two in a row is a hole in the run.
-  const roomToSpare = n >= 2 && !run.lastWasNpc && !leadsToAudience(run.roomIndex);
+  const roomToSpare = n >= 2 && !run.lastWasNpc && !leadsToFixedFight(run.roomIndex);
   const npc = roomToSpare && run.roomIndex >= NPC_FIRST_ROOM && run.roomIndex <= NPC_LAST_ROOM
     && (run.npcRooms ?? 0) < NPC_ROOMS_MAX && (run.npcOffers ?? 0) < NPC_OFFERS_MAX;
   /*

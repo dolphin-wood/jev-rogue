@@ -11,7 +11,7 @@ import {
   moodTransform, tintRGBA, dashInvulnerable, MELEE, ARMOUR_BREAK_MS, brakeFraction, ENEMIES,
   BOSS_ARCHETYPES, makeEnemy, makeKing, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
-  BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, audienceGrade, RUN_AUDIENCE_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
+  BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, RUN_AUDIENCE_ROOM, RUN_GUARDIAN_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTierKey, affixFitsSpell, itemShape,
   spikesOut, featureCells, fillSubspecies,
   heldDominantTags, STYLE_START, bucketClearSpeed, bucketGold, bucketMovementPressure, bucketRunProgress,
@@ -2255,7 +2255,7 @@ export class PlayScene extends Phaser.Scene {
       ...(through?.schools ? { schools: through.schools } : {}),
       ...(through?.families ? { families: through.families } : {}),
       // The first audience pays its door a grade higher (doc 022).
-      grade: isAudienceRoom(index) ? audienceGrade(through?.grade ?? 1) : through?.grade ?? 1,
+      grade: isFixedFightRoom(index) ? audienceGrade(through?.grade ?? 1) : through?.grade ?? 1,
     };
     const roomCards = through?.cards ?? null;
     this.roomCards = roomCards;
@@ -2378,7 +2378,7 @@ export class PlayScene extends Phaser.Scene {
       : null;
     this.planned = planned;
     // The first audience is a peak whatever the doors said, so the room after it is the trough (doc 022).
-    if (planned && isAudienceRoom(index)) this.tension = planned.tension;
+    if (planned && isFixedFightRoom(index)) this.tension = planned.tension;
     if (planned) {
       this.planRecords.set("room", { decisions: planned.decisions });
       playtestLog.decide(index, "room", planned.decisions);
@@ -2421,6 +2421,8 @@ export class PlayScene extends Phaser.Scene {
       offer: worldOffer,
       // The king's first audience: the roof gives on this fight (doc 022).
       audience: fight && isAudienceRoom(index),
+      // Room 10's guardian stands in its room from the first frame (doc 024).
+      guardian: fight && isGuardianRoom(index),
       dealtMult: this.dealtMult,
       takenMult: this.takenMult,
       invincible: this.invincible,
