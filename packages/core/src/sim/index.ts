@@ -16,3 +16,4 @@ export * from "./exits.ts";
 export * from "./affix-hooks.ts";
 export * from "./beat.ts";
 export * from "./shapes.ts";
+export * from "./audience.ts";

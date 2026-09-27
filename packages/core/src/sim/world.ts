@@ -51,6 +51,7 @@ import {
   PROP_MANA_FRACTION,
 } from "./props.ts";
 import { COIN_VALUE, MANA_ORB, drop, makePickupPool, stepPickups } from "./pickups.ts";
+import { audienceKill, makeAudience, stepAudience } from "./audience.ts";
 import {
   enteredPortal, makePortal, placeRewardNear, portalsBefore, raisePortals, stepPortals, stepReward,
 } from "./exits.ts";
@@ -320,6 +321,12 @@ export interface CreateWorldOptions {
    * the right shape for a measurement that ends when the last enemy dies.
    */
   readonly offer?: RoomOffer;
+  /**
+   * **The king's first audience** (doc 022): the room opens as an ordinary
+   * fight, the roof gives, and he comes down into it. The room is not clear
+   * until he has come and gone.
+   */
+  readonly audience?: boolean;
 }
 
 /**
@@ -571,6 +578,7 @@ export function createWorld(input: CreateWorldOptions): World {
      * plays the full-size game.
      */
     roomIndex: o.roomIndex ?? 99,
+    ...(o.audience ? { audience: makeAudience(), awaitingBoss: true } : {}),
     coinBoost: Math.max(1, Math.min(COIN_BOOST_MAX, o.coinBoost ?? 1)),
     attackTokens: ATTACK_TOKENS,
     fireTokens: o.fireTokens ?? FIRE_TOKENS,
@@ -655,7 +663,7 @@ export function normalEliteCount(roomIndex: number, presence: ElitePresence | un
   return Math.min(NORMAL_ELITE_CAP, ELITE_COUNT[presence ?? "none"]);
 }
 
-function hazardCells(w: World): Set<number> {
+export function hazardCells(w: World): Set<number> {
   const out = new Set<number>();
   for (const z of w.room.zones)
     if (z.feature !== "none") for (const c of z.cells) out.add(c[1] * GRID_W + c[0]);
@@ -780,6 +788,8 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
     w.attackTokens = Math.max(0, base + extra - heldMelee);
     w.fireTokens = Math.max(0, Math.min(w.fireTokenCap, rampFor(w.roomIndex).tokens) + extra - heldFire);
   }
+  // The roof giving on room 5 (doc 022): held bodies first, so none of them takes a turn this step.
+  stepAudience(w, dtMs);
   // The king lives on his own clock (`bossTempo`): everything he does runs faster in phase III, with the music.
   for (const e of w.enemies) stepEnemy(w, e, dtMs * bossTempo(e));
   for (const e of w.enemies) if (e.archetype === "boss" && e.hp > 0) stepBoss(w, e, dtMs * bossTempo(e));
@@ -2375,6 +2385,7 @@ function turretMounts(w: World): [number, number][] {
 }
 
 function onEnemyKilled(w: World, e: Enemy): void {
+  audienceKill(w);
   /*
    * A `doom` mark outlives its body (doc 006): it still bursts, on its own
    * clock, where the body fell — which is what makes marking a pack and
@@ -4339,6 +4350,8 @@ function collectPickups(w: World, dtMs: number): void {
     w.pickups, dtMs, w.player,
     (x, y, r) => circleHitsWall(w.room.grid, x, y, r),
     w.cleared,
+    // A reserve waits while the hearts that fill the bar are still on their way (doc 022).
+    w.player.hearts >= MAX_HEARTS + w.player.mods.maxHearts || w.pickups.some((q) => q.alive && q.homing),
   );
   for (const p of taken) {
     if (p.kind === "heart") {

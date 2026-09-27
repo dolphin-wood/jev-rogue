@@ -11,6 +11,7 @@ import type {
 import type { Rng } from "../rng.ts";
 import type { AffixContext } from "../encounters/affixes.ts";
 import type { BossScript } from "../encounters/enemies.ts";
+import type { AudienceState } from "./audience.ts";
 import type { FlowField } from "./flow.ts";
 import type { SwingBox } from "./melee.ts";
 import type { SpellSlot } from "./spells.ts";
@@ -2182,6 +2183,8 @@ export interface World {
    * the throne's drawing (doc 020): the room is empty of bodies but not clear.
    */
   awaitingBoss?: boolean;
+  /** The king's first audience, in room 5 (doc 022): the drop-in's state (`sim/audience.ts`). */
+  audience?: AudienceState;
   /**
    * Half the camera's view, px: what the player can see. A body fires only
    * from wholly inside it, and closes slower further off (`firePresence`).
