@@ -1030,11 +1030,15 @@ export type BossScript = "audience" | "final";
 
 /**
  * The first audience's bar. Phase I is spent down to `KING_RETREAT_AT` of it,
- * so the fight is 40% of this: sized for a room-5 build, one or two spells and
- * a level or two, to last 40 to 50 s (doc 022, "Measured before it ships").
- * A third of the full fight's 3750 until `boss-bench` sets it.
+ * so the fight is 40% of this, sized for a room-5 build — one or two spells, a
+ * level or two. Measured (`boss-bench 8 typical all audience`): at 1250 the
+ * fight was 17 to 22 s for the `player` and `average` profiles; at 2000 it is
+ * 26 and 33 s, and a `novice` survives it a quarter of the time on the bar
+ * alone, before the three spare hearts (doc 022, "Measured before it ships").
+ * 2500 reached 32 and 41 s and no novice lived: the length doc 022 asks for
+ * and the survival room 5 was moved for pull against each other here.
  */
-export const KING_AUDIENCE_HP = 1250;
+export const KING_AUDIENCE_HP = 2000;
 /** Where the first audience ends: phase II's threshold, where the armour breaks. */
 export const KING_RETREAT_AT = 0.6;
 /**

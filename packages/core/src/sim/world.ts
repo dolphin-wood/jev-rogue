@@ -673,7 +673,9 @@ export function hazardCells(w: World): Set<number> {
 /** No enemies, no pending waves and no summoner alive (doc 003). */
 export function worldCleared(w: World): boolean {
   // A burst still hanging is part of the fight: the room clears once it has flown.
-  return w.enemies.length === 0 && w.pendingWaves.length === 0 && livingSummoners(w) === 0
+  // And a room whose king is still to come — the throne before he stands, room 5
+  // before the roof gives (doc 022) — is empty, not clear.
+  return !w.awaitingBoss && w.enemies.length === 0 && w.pendingWaves.length === 0 && livingSummoners(w) === 0
     && w.deathBursts.length === 0;
 }
 

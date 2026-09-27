@@ -13,11 +13,17 @@
  * build beats is a boss the run was not building toward; a boss the formed
  * build loses is a reaction test wearing a build gate.
  *
- * `pnpm boss-bench [seeds] [tier|all] [profile|all]`
+ * `pnpm boss-bench [seeds] [tier|all] [profile|all] [final|audience|whole]`
+ *
+ * The last argument is which meeting (doc 022): `final` (the default) is the
+ * throne hall as the run plays it now, phase II from full on the larger bar;
+ * `audience` is room 5's first audience, phase I until he leaves, against the
+ * builds a run brings to room 5; `whole` is the single three-phase fight the
+ * king was before the document, for comparison.
  */
 import {
   ITEMS, RngSource, TILE_PX, THRONE_CELLS, attachAffix, createWorld, throneHall,
-  makeEnemy, noMods, plainInstance, runStaff, withLevel, applyStat,
+  makeKing, noMods, plainInstance, runStaff, withLevel, applyStat, RUN_AUDIENCE_ROOM,
   LEVEL_HEARTS, XP_TO_NEXT, withLevels,
 } from "@jr/core";
 import type { ItemInstance, PlayerMods } from "@jr/core";
@@ -62,6 +68,28 @@ const LEVEL_AT_BOSS = 7;
 /** The experience that level takes, so the world builds the body from a total as the run does. */
 const XP_AT_BOSS = XP_TO_NEXT.slice(0, LEVEL_AT_BOSS - 1).reduce((a, b) => a + b, 0);
 
+/**
+ * **What a run brings to room 5** (doc 022): four fights in, one or two spells,
+ * a level or two. `blank` never took a spell; `typical` took a second one and
+ * an affix; `strong` levelled both. The first audience is sized against the
+ * middle one: 40 to 50 s from the drop to his leaving.
+ */
+const AUDIENCE_LEVEL = 3;
+const AUDIENCE_XP = XP_TO_NEXT.slice(0, AUDIENCE_LEVEL - 1).reduce((a, b) => a + b, 0);
+const AUDIENCE_TIERS: readonly Tier[] = [
+  { name: "blank", spells: [{ id: "magic_bolt", level: 1, affixes: [] }], stats: [], hearts: 6 },
+  {
+    name: "typical",
+    spells: [{ id: "magic_bolt", level: 1, affixes: [["scatter", 1]] }, { id: "frost_needle", level: 1, affixes: [] }],
+    stats: [], hearts: 6,
+  },
+  {
+    name: "strong",
+    spells: [{ id: "magic_bolt", level: 2, affixes: [["scatter", 1]] }, { id: "frost_needle", level: 2, affixes: [["seek", 1]] }],
+    stats: ["vigour"], hearts: 6,
+  },
+];
+
 const TIERS: readonly Tier[] = [
   {
     name: "blank",
@@ -96,7 +124,9 @@ const TIERS: readonly Tier[] = [
 ];
 
 /** One boss fight, with the build forced rather than earned. */
-function bossFight(tier: Tier, profileName: string, seed: string): { won: boolean; hearts: number; ms: number; timedOut: boolean; bySource: Record<string, number> } {
+type Meeting = "final" | "audience" | "whole";
+
+function bossFight(tier: Tier, profileName: string, seed: string, meeting: Meeting = "final"): { won: boolean; hearts: number; ms: number; timedOut: boolean; bySource: Record<string, number> } {
   const src = new RngSource(seed);
   const staff = runStaff();
   const slots: (ItemInstance | null)[] = Array.from({ length: staff.slots }, (_, i) => {
@@ -111,15 +141,17 @@ function bossFight(tier: Tier, profileName: string, seed: string): { won: boolea
   }
   // And the bar the levels grew, filled: the fountain at the fixed stop is the
   // room before this one, so a run walks in on very nearly its whole bar.
-  hearts += LEVEL_HEARTS * (LEVEL_AT_BOSS - 1);
+  const level = meeting === "audience" ? AUDIENCE_LEVEL : LEVEL_AT_BOSS;
+  hearts += LEVEL_HEARTS * (level - 1);
 
   // The throne hall the game fights in (`rooms/fixed.ts`): the bench and the run meet the same room.
   const plan = throneHall();
 
   const world = createWorld({
     room: plan, encounter: null, staff, slots,
-    hearts, rng: src.stream("gameplay", 1), mods, xp: XP_AT_BOSS, rage: 0,
-    coinBoost: 1, roomIndex: 16, placement: "waves",
+    hearts, rng: src.stream("gameplay", 1), mods, xp: meeting === "audience" ? AUDIENCE_XP : XP_AT_BOSS, rage: 0,
+    // The room's own ramp band: room 5's for the first audience, the boss band's for the hall.
+    coinBoost: 1, roomIndex: meeting === "audience" ? RUN_AUDIENCE_ROOM : 16, placement: "waves",
   });
   // The staff the fixture asked for, levelled and affixed, as the run's own
   // room loop does it: `createWorld` builds plain slots and the run layers
@@ -134,7 +166,7 @@ function bossFight(tier: Tier, profileName: string, seed: string): { won: boolea
 
   // Where the game's king stands up from his throne (`spawnBoss` in play.ts): two rows out in front of it.
   const [tx, ty] = THRONE_CELLS[1]!;
-  const boss = makeEnemy(world.nextEnemyId++, "boss", (tx + 0.5) * TILE_PX, (ty + 2.1) * TILE_PX, []);
+  const boss = makeKing(world.nextEnemyId++, (tx + 0.5) * TILE_PX, (ty + 2.1) * TILE_PX, meeting === "whole" ? undefined : meeting);
   boss.spawnFadeMs = 0;
   boss.awake = true;
   world.enemies.push(boss);
@@ -154,20 +186,22 @@ function bossFight(tier: Tier, profileName: string, seed: string): { won: boolea
 const seeds = Number(process.argv[2] ?? 8);
 const tierArg = process.argv[3] ?? "all";
 const profileArg = process.argv[4] ?? "all";
-const tiers = tierArg === "all" ? TIERS : TIERS.filter((t) => t.name === tierArg);
+const meeting = (process.argv[5] ?? "final") as Meeting;
+const ladder = meeting === "audience" ? AUDIENCE_TIERS : TIERS;
+const tiers = tierArg === "all" ? ladder : ladder.filter((t) => t.name === tierArg);
 const profiles = profileArg === "all" ? ["novice", "average", "player", "expert"] : [profileArg];
 
-console.log(`boss bench: ${tiers.length} build tiers x ${profiles.length} profiles x ${seeds} seeds`);
+console.log(`boss bench (${meeting}): ${tiers.length} build tiers x ${profiles.length} profiles x ${seeds} seeds`);
 for (const t of tiers) {
   const desc = t.spells.map((s) => `${s.id}@${s.level}${s.affixes.length ? `[${s.affixes.map(([a, n]) => `${a}${n}`).join(",")}]` : ""}`).join(" ");
-  console.log(`\n${t.name}: ${desc}  stats ${t.stats.length}  level ${LEVEL_AT_BOSS}  hearts ${t.hearts + LEVEL_HEARTS * (LEVEL_AT_BOSS - 1) + t.stats.filter((x) => x === "vigour").length}`);
+  console.log(`\n${t.name}: ${desc}  stats ${t.stats.length}  level ${meeting === "audience" ? AUDIENCE_LEVEL : LEVEL_AT_BOSS}  hearts ${t.hearts + LEVEL_HEARTS * ((meeting === "audience" ? AUDIENCE_LEVEL : LEVEL_AT_BOSS) - 1) + t.stats.filter((x) => x === "vigour").length}`);
   console.log(`  ${"profile".padEnd(9)} ${"win".padStart(6)}  ${"rate".padStart(5)}  ${"hearts".padStart(6)}  ${"secs".padStart(5)}  deaths  timeouts`);
   for (const p of profiles) {
     let won = 0; let heartsSum = 0; let msSum = 0; let timedOut = 0;
     // What the hearts went to, summed over the seeds: which move is doing the damage.
     const sources: Record<string, number> = {};
     for (let i = 0; i < seeds; i++) {
-      const r = bossFight(t, p, `boss-${i}`);
+      const r = bossFight(t, p, `boss-${i}`, meeting);
       if (r.won) won++;
       if (r.timedOut) timedOut++;
       heartsSum += r.hearts;

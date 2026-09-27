@@ -349,10 +349,51 @@ boss, and doc 002 does not ask a question with one answer.
 | Figure | Target |
 |---|---|
 | audience length (drop to retreat) | 40 to 50 s |
-| audience bar (`KING_AUDIENCE_HP`) | set so the drop to the retreat takes 40 to 50 s at room-5 damage; a guess of a third of today's 3750 until `boss-bench` sets it |
+| audience bar (`KING_AUDIENCE_HP`) | set so the drop to the retreat takes 40 to 50 s at room-5 damage. 2000 for now, see "Measured" below |
 | hearts lost at room 5 | at most room 6's today (1.19) |
 | hearts lost at room 6 | falls, now that it is a trough |
 | runs reaching room 8 | rises. This is measured on playtest logs, not the fitted profile, which already reaches it |
 | final fight length | 100 to 130 s |
 | run win rate, fitted `player` | about 55%, today's |
 | deaths at the boss that are the player's first sight of a move | fall. That is the point of the document |
+
+## Measured (2026-09-27)
+
+`pnpm play rule 30 <profile>`, before this document (62b3333) and with it at
+`KING_AUDIENCE_HP = 2000`:
+
+| | player, before | player, after | average, before | average, after |
+|---|---|---|---|---|
+| room 5: hearts lost, seconds | 0.09, 7 s | 1.41, 27 s | 0.35, 9 s | 2.12, 32 s |
+| room 6: hearts lost | 1.63 | 1.71 | 2.44 | 1.84 |
+| runs reaching the boss, of 30 | 29 | 28 | 12 | 17 |
+| median depth | 16 | 16 | 13 | 16 |
+| boss beaten | 0 of 29 | 0 of 28 | 0 of 12 | 0 of 17 |
+
+`boss-bench 8 typical all audience`, time from the drop to his leaving:
+
+| bar | novice | average | player | expert |
+|---|---|---|---|---|
+| 1250 | 40 s, all live | 22 s | 18 s | 12 s |
+| 2000 | 64 s, 2 of 8 live | 33 s | 26 s | 19 s |
+| 2500 | 69 s, none live | 41 s | 32 s | 23 s |
+
+What that says:
+
+- **More runs reach the king.** The `average` profile went from 12 of 30 to
+  17. With room 6 now a trough, it went from the heaviest room of its stretch
+  to an ordinary one.
+- **The audience is short of 40 to 50 s at 2000**, and a larger bar is where
+  novices start dying in it. The bench counts neither the spare hearts nor
+  the bar the drop fills, so a real novice does better than 2 of 8. This is
+  the one number left to set from playtests.
+- **Room 5 costs more than room 6 did** (1.41 and 2.12 against a 1.19 target),
+  but the drop fills the bar first and leaves three hearts in reserve. What it
+  costs a run is what the bar holds when the player walks out, and the room-6
+  and depth figures above say that went up, not down.
+- **Nobody beats the king, before or after.** The harness profiles lost every
+  final fight at 62b3333 too, so the 55% `ramp.ts` quotes is stale, and this
+  document neither caused that nor fixes it. The final dies faster now (35 s
+  against 41 s for `player`), because phase II is where it starts. Whether the
+  4500 bar is right can't be read off a fight no profile wins. It needs the
+  king's own balance pass first.

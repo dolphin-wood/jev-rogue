@@ -153,6 +153,15 @@ describe("the drop-in: the room", () => {
     expect(w.props.filter((q) => q.hp > 0 && (q.kind === "pot" || q.kind === "crate" || q.kind === "urn"))).toHaveLength(0);
   });
 
+  it("is empty, not clear, while he is still to come: bodies all gone before he lands", () => {
+    const w = audienceWorld("empty");
+    w.enemies.length = 0;
+    w.pendingWaves.length = 0;
+    expect(worldCleared(w)).toBe(false);
+    step(w, NO_INPUT);
+    expect(w.cleared).toBe(false);
+  });
+
   it("clears once he has gone", () => {
     const w = audienceWorld("clear");
     runDrop(w);
