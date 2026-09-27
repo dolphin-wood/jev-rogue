@@ -539,8 +539,8 @@ const COLUMN_STUMP_PX = 84;
 /*
  * The entrance's timings, ms, and where things happen, in cells: the player
  * is walked in from the door and stands; a moment later he notices them,
- * looks for a beat, throws, and stands; the goblet breaks on the floor
- * to his side; he stands up just in front of the throne.
+ * looks for a beat, throws, and stands; the goblet flies over the
+ * candelabrum and breaks on the floor past it; he stands up just in front of the throne.
  */
 const KING_WALK_IN_PX = TILE_PX * 3;
 /** The longest the walk-in may take, should anything be in the way. */
@@ -562,7 +562,7 @@ const KING_RISE_MS = 700;
  * (not wheeled — a glass flung at the floor does not go round), so it lands
  * on its side with the wine going out of it.
  */
-const KING_GOBLET_FLIGHT_MS = 400;
+const KING_GOBLET_FLIGHT_MS = 440;
 /** Where it leaves him: the open hand in `boss_throne_throw`, art px from the frame's top left. */
 const KING_THROW_HAND_ART: readonly [number, number] = [214, 114];
 /**
@@ -571,16 +571,18 @@ const KING_THROW_HAND_ART: readonly [number, number] = [214, 114];
  */
 const KING_GOBLET_SCALE = 0.62;
 /**
- * Where it breaks: this far out to his side from his hand, world px — across
- * the floor beside the dais, past the candelabrum — not out in front of him.
+ * Where it breaks: this far out to his side from his hand, world px, and at
+ * `KING_GOBLET_ROW` — the way his arm is flung, over the candelabrum by the
+ * dais and down on the far side of it, short of the column past it.
  */
-const KING_GOBLET_OUT_PX = 120;
+const KING_GOBLET_OUT_PX = 130;
 /**
  * How far its path bows above the straight line from his hand to the floor,
- * world px. The floor is some 45 px below his hand, so the goblet rises only
- * about 8 px before it drops: flung, not lobbed.
+ * world px. The floor is some 107 px below his hand, so the goblet rises only
+ * about 4 px before it drops, flung rather than lobbed — but it still passes
+ * some 30 px above the candelabrum's flames (`CANDELABRUM_FLAMES_PX`).
  */
-const KING_GOBLET_ARC_PX = 26;
+const KING_GOBLET_ARC_PX = 40;
 /** How far it turns in the air, clockwise (outward): on its side, rim a little down. */
 const KING_GOBLET_TURN = Math.PI * 0.65;
 /** The entrance: how long the HUD takes to fade out and back, and the depth his name is drawn over it at. */
@@ -589,7 +591,7 @@ const CINE_NAME_DEPTH = 255;
 /** From his standing up to his first turn: his name, the bars away, and a moment with the controls. */
 const BOSS_FIRST_TURN_MS = 3400 + KING_DESCEND_MS;
 /** Where the goblet breaks and where he stands up, in rows below the throne's (`THRONE_CELLS`). */
-const KING_GOBLET_ROW = 0.75;
+const KING_GOBLET_ROW = 2.7;
 // At the foot of the dais: his body clear of the throne's cells, his radius off their edge.
 const KING_STAND_ROW = 1.75;
 /** The king's thrown chain: its link sheet's scale (a link about nine world px) and the spacing it is laid at. */
@@ -2917,7 +2919,7 @@ export class PlayScene extends Phaser.Scene {
   /**
    * One frame of the entrance. The player is walked in and stands; a moment
    * later he looks up, and throws the goblet — it flies out and breaks on the
-   * floor to his side, and the boss theme comes in as it leaves his hand,
+   * floor past the candelabrum, and the boss theme comes in as it leaves his hand,
    * which is the fight clock's zero — and stands; then the boss is spawned
    * where he stood up, planted on his sword, and his name goes up.
    */
