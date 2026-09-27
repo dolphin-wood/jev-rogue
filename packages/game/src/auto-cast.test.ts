@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   AUTO_CAST_DELAY_MS, AUTO_CAST_FORGET_MS, AUTO_CAST_MIN_WEIGHT, AUTO_CAST_SPREAD_MS, AUTO_CAST_YIELD_MS,
-  AutoCaster, recencyWeight,
+  AUTO_CAST_MAX_REACH_PX, AutoCaster, autoCastReach, recencyWeight,
 } from "./auto-cast.ts";
+import { ITEMS, TILE_PX } from "@jr/core";
 
 const on = { eligible: true, coming: true };
 const soon = { eligible: false, coming: true };
@@ -107,5 +108,21 @@ describe("auto-cast", () => {
     }
     expect(casts[2]).toBeGreaterThan(30);
     expect(casts[0]! / casts[2]!).toBeLessThan(4);
+  });
+
+  it("gives every spell a reach of its own, short spells short and none past the screen", () => {
+    const reach = (id: string) => autoCastReach(ITEMS.get(id)!.params!);
+    for (const [id, item] of ITEMS) {
+      if (!item.params) continue;
+      const r = autoCastReach(item.params);
+      expect(r, id).toBeGreaterThan(0);
+      expect(r, id).toBeLessThanOrEqual(AUTO_CAST_MAX_REACH_PX);
+    }
+    // A ring round the caster and a nova are close-in; a bolt flies far.
+    expect(reach("quake_ring")).toBeLessThan(4 * TILE_PX);
+    expect(reach("frost_nova")).toBeLessThan(6 * TILE_PX);
+    expect(reach("magic_bolt")).toBeGreaterThan(8 * TILE_PX);
+    // A line of spikes reaches its last cell and no further.
+    expect(reach("earth_spikes")).toBeLessThan(reach("magic_bolt"));
   });
 });

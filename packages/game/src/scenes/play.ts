@@ -106,7 +106,7 @@ import { layoutDecisionTable, maxScrollFor } from "../ui/plan-table.ts";
 import { questionAsked, questionBase, questionName } from "../ui/question-names.ts";
 import type { TableRow } from "../ui/plan-table.ts";
 import type { AtlasJson } from "../assets/atlas.ts";
-import { AUTO_CAST_RESERVE, AUTO_CAST_SOON_MS, AutoCaster } from "../auto-cast.ts";
+import { AUTO_CAST_MAX_REACH_PX, AUTO_CAST_RESERVE, AUTO_CAST_SOON_MS, AutoCaster, autoCastReach } from "../auto-cast.ts";
 import { freshRerollPool, rerollPrice } from "../offer-reroll.ts";
 
 /**
@@ -14965,9 +14965,10 @@ export class PlayScene extends Phaser.Scene {
    * Only a key that casts on a tap — a `charge` spell is a hold and a
    * `stance` a guard, both the player's call — and never a `dash`, which
    * moves the body: the game throwing the player across the room is the
-   * one thing an assist must not do. Only with a body awake within reach,
-   * so the assist never throws a spell at an empty room, and only while the
-   * bar stays above `AUTO_CAST_RESERVE` after paying.
+   * one thing an assist must not do. Only with a body awake within that
+   * key's own reach (`autoCastReach`), so the assist never throws a spell at
+   * an empty room or at a body it cannot get to, and only while the bar
+   * stays above `AUTO_CAST_RESERVE` after paying.
    *
    * Its cast does not slow the player (`Input.spellAuto`), so it may go
    * mid-stride.
@@ -14987,9 +14988,12 @@ export class PlayScene extends Phaser.Scene {
     const free = p.castPending < 0 && p.castRecoverMs <= 0 && p.chargeKey < 0 && !p.stance && p.stunMs <= 0 && p.dashMs <= 0;
     const target = this.autoTarget();
     const floor = w.staff.mana_max * AUTO_CAST_RESERVE;
+    const dist = target ? Math.hypot(target.x - p.x, target.y - p.y) : Infinity;
     const keys = w.spells.map((slot) => {
-      if (!slot || !target) return { eligible: false, coming: false };
-      const shape = ITEMS.get(slot.item.base)?.params?.["shape"];
+      const params = ITEMS.get(slot?.item.base ?? "")?.params;
+      // Only a key whose own reach the body stands in: a short spell is not thrown at a far body.
+      if (!slot || !target || !params || dist > autoCastReach(params)) return { eligible: false, coming: false };
+      const shape = params["shape"];
       const tap = chargeMsOf(ITEMS, slot.item.base) === 0 && shape !== "stance" && shape !== "dash";
       const cost = slotCost(slot, ITEMS, w.staff);
       // How long until the key is back: its cooldown, or its bank's next charge.
@@ -15023,7 +15027,7 @@ export class PlayScene extends Phaser.Scene {
     const w = this.world;
     const p = w.player;
     let best: Enemy | null = null;
-    let bestD = AUTO_CAST_REACH_PX;
+    let bestD = AUTO_CAST_MAX_REACH_PX;
     for (const e of w.enemies) {
       if (e.hp <= 0 || !e.awake || e.spawnFadeMs > 0) continue;
       const d = Math.hypot(e.x - p.x, e.y - p.y);
@@ -17652,8 +17656,6 @@ function panelWFor(page: "main" | "settings" | "controls" | "firstAssist"): numb
 const SETTINGS_TABS = ["menu.tabGeneral", "menu.assistHeading", "menu.jevHeading"] as const;
 /** The most rows any settings tab holds, with its controls and Back: the panel is this tall on every tab. */
 const SETTINGS_TAB_ROWS = 9;
-/** How near a body has to be for auto-cast to spend a spell on it: about the seeking bolts' useful range. */
-const AUTO_CAST_REACH_PX = 7 * TILE_PX;
 const ROOM_PARAMS_KEY = "jr-room-params";
 /** Where the sound setting is remembered. Off unless it says otherwise. */
 /**

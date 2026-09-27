@@ -46,6 +46,55 @@
  * the simulation sees a press, exactly as if the player had made it.
  */
 
+import { TILE_PX } from "@jr/core";
+
+
+/**
+ * **How far a spell reaches, for auto-cast**, in px: the farthest a body can
+ * stand and still be hit by a press aimed at it. A key casts itself only at
+ * a body inside its own reach, so a short spell is not thrown into the air
+ * at a body five tiles off, and a long one is not held back while one is.
+ *
+ * Read off the spell's shape and figures, not measured: a shot flies
+ * `speed × lifetime`; a line or ring of eruptions reaches its last cell; a
+ * thing put on the floor stands at `reach`; a ring round the caster reaches
+ * its radius. Capped at `AUTO_CAST_MAX_REACH_PX`, so nothing is cast at a
+ * body the player cannot see. Affixes that stretch a shot are not counted:
+ * the reach is a spell's base, which errs short.
+ */
+export function autoCastReach(params: Readonly<Record<string, number | string>>): number {
+  const n = (k: string, d = 0): number => (typeof params[k] === "number" ? params[k] as number : d);
+  const shape = typeof params["shape"] === "string" ? params["shape"] : "bolt";
+  const radius = n("radius");
+  let reach: number;
+  switch (shape) {
+    case "eruption": {
+      const pattern = params["pattern"] ?? "line";
+      const first = n("first", 1.2) * TILE_PX, step = n("step", 1) * TILE_PX;
+      // A rock out of the sky (Meteor) seeks the whole screen; one out of the floor, `reach` tiles.
+      if (pattern === "scatter") reach = n("telegraph_ms") > 0 ? AUTO_CAST_MAX_REACH_PX : n("reach", 4) * TILE_PX + n("area") * TILE_PX;
+      else reach = first + (Math.max(1, n("count", 1)) - 1) * step + radius;
+      break;
+    }
+    case "field": case "vortex": case "pillar": case "boomerang": reach = n("reach", 64) + radius; break;
+    // The ring lasts seconds: put it up as a body closes, not once it is inside.
+    case "orbit": reach = n("orbit_radius", 48) + radius + 2 * TILE_PX; break;
+    // A slow orb drifts out and strikes what comes within its reach.
+    case "orb": reach = n("speed") * n("lifetime") + n("zap_reach"); break;
+    // The sword's swing, and the wave it throws.
+    case "enchant": reach = n("wave_reach", 80) + 40; break;
+    // A companion shoots what is in its own reach.
+    case "summon": reach = n("reach", 200); break;
+    // Fire left under the feet: worth laying only with a body close.
+    case "trail": reach = 3 * TILE_PX; break;
+    default: reach = n("speed") * n("lifetime", 1.2) + radius;
+  }
+  return Math.min(AUTO_CAST_MAX_REACH_PX, reach);
+}
+
+/** The farthest any key reaches for auto-cast: about what the screen shows round the player. */
+export const AUTO_CAST_MAX_REACH_PX = 10 * TILE_PX;
+
 /** The least a ready key waits before it presses itself, in ms of fight time. */
 export const AUTO_CAST_DELAY_MS = 700;
 /** The most on top of that, drawn afresh for each wait. */
