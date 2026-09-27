@@ -32,7 +32,7 @@ import { TILE_PX, GRID_W, GRID_H } from "../types.ts";
 import type { EnemyId } from "../types.ts";
 import { baseArchetype } from "../encounters/enemies.ts";
 import { PLAYER_RADIUS } from "./types.ts";
-import type { Arm, Enemy, Flame, Lob, Mine, Rift, Shockwave, Tether, World } from "./types.ts";
+import type { Arm, Enemy, Flame, Lob, Mine, PlayerWakeCut, Rift, Shockwave, Tether, WakeTrail, World } from "./types.ts";
 import { circleHitsWall, dist2, hasLineOfSight, moveSliding, normalise } from "./collide.ts";
 import { lightFire } from "./fire.ts";
 
@@ -184,6 +184,66 @@ export function shockwaveHits(s: Shockwave, x: number, y: number, radius: number
   while (off > Math.PI) off -= Math.PI * 2;
   while (off < -Math.PI) off += Math.PI * 2;
   return Math.abs(off) <= s.half + Math.asin(Math.min(1, radius / Math.max(d, 1)));
+}
+
+/* ================================== wake ================================== */
+
+/**
+ * **A run's wake**, after Minish Cap's dash attack: the blade held out ahead,
+ * and either side of the line the cut's edge rolls off it. It is laid **as
+ * the runner goes**, in short stretches — one pair for every `stepPx` of
+ * ground, set off at the moment the runner passes that ground — so it
+ * unfolds behind the runner as a widening V, the nearest stretch just
+ * leaving the line while the first is already out at its reach. Each
+ * stretch is a short straight edge (`Shockwave.width`) travelling out
+ * square to the run.
+ *
+ * It replaced two long edges born along the whole run at once when it
+ * ended, which pushed out as two parallel slabs: correct, and read as a
+ * wall being shoved rather than as something the run left behind it.
+ */
+export function startWake(
+  x: number, y: number, dirX: number, dirY: number,
+  spec: { stepPx: number; reachPx: number; inner: number; thick: number; speed: number; damage: number },
+  byPlayer?: PlayerWakeCut,
+): WakeTrail {
+  return {
+    fromX: x, fromY: y, dirX, dirY, ...spec, laid: 0, group: { struck: false },
+    ...(byPlayer ? { byPlayer } : {}),
+  };
+}
+
+/**
+ * Lays the stretches of `t` the runner has passed on its way to (x, y).
+ * `final` is the run ending there: what is left short of a whole stretch is
+ * laid as a shorter one, if it is worth one. Returns how many were laid.
+ */
+export function layWake(w: World, t: WakeTrail, x: number, y: number, final = false): number {
+  // Only the ground along the run counts: a shove sideways lays nothing.
+  let along = (x - t.fromX) * t.dirX + (y - t.fromY) * t.dirY;
+  let n = 0;
+  const facing = Math.atan2(t.dirY, t.dirX);
+  const lay = (len: number): void => {
+    const cx = t.fromX + t.dirX * len / 2, cy = t.fromY + t.dirY * len / 2;
+    for (const side of [-1, 1]) {
+      const s = castShockwave(w, cx, cy, {
+        chargeMs: 0, inner: t.inner, thickness: t.thick, speed: t.speed,
+        maxRadius: t.inner + t.reachPx, damage: t.damage, facing: facing + side * Math.PI / 2, width: len,
+      });
+      s.wake = t.group;
+      if (t.byPlayer) s.byPlayer = t.byPlayer;
+    }
+    t.fromX += t.dirX * len;
+    t.fromY += t.dirY * len;
+    t.laid++;
+    n++;
+  };
+  while (along >= t.stepPx) {
+    lay(t.stepPx);
+    along -= t.stepPx;
+  }
+  if (final && along >= t.stepPx / 3) lay(along);
+  return n;
 }
 
 /* ================================== arm =================================== */
@@ -1106,9 +1166,12 @@ export function stepAttacks(w: World, dtMs: number, hooks: AttackHooks): void {
      * through a pillar and hits the player standing behind it is a hit with
      * no answer, and the pillars are the arena's own answer to the move.
      */
-    if (!s.struck && !hooks.playerInvulnerable() && shockwaveHits(s, p.x, p.y, PLAYER_RADIUS)
+    // A wake the player laid cuts bodies, not them (`stepPlayerWakes` in world.ts).
+    if (s.byPlayer) continue;
+    if (!s.struck && !s.wake?.struck && !hooks.playerInvulnerable() && shockwaveHits(s, p.x, p.y, PLAYER_RADIUS)
       && hasLineOfSight(w.room.grid, s.x, s.y, p.x, p.y)) {
       s.struck = true;
+      if (s.wake) s.wake.struck = true;
       hooks.hurtPlayer(p.x, p.y, "shockwave", 0, s.damage);
     }
   }

@@ -68,7 +68,8 @@ import { bodyFeel, weightOf } from "./body-feel.ts";
 import { heldStaff, staffSpriteCentre, swingStaff, type HeldStaff } from "./blade.ts";
 import type { BodyFeel } from "./body-feel.ts";
 import { BOSS_CRESCENT, drawCrescent, ENEMY_CRESCENT, PLAYER_CRESCENT } from "./crescent.ts";
-import { drawCrescentWave, drawEdgeWave, impactFrame, mix, wavePalette, waveTrailPoints } from "./wave-art.ts";
+import { drawCrescentWave, drawEdgeWave, drawWakeRibbon, impactFrame, mix, wavePalette, waveTrailPoints } from "./wave-art.ts";
+import type { WakeStretch } from "./wave-art.ts";
 import { drawCrackle, drawProjectile } from "./projectiles.ts";
 import { equipKeepingOthers } from "./equip-keys.ts";
 import { SHADOW_INK, drawLeapShadow, drawMeteorShadow } from "./spell-marks.ts";
@@ -106,7 +107,7 @@ import { layoutDecisionTable, maxScrollFor } from "../ui/plan-table.ts";
 import { questionAsked, questionBase, questionName } from "../ui/question-names.ts";
 import type { TableRow } from "../ui/plan-table.ts";
 import type { AtlasJson } from "../assets/atlas.ts";
-import { AUTO_CAST_MAX_REACH_PX, AUTO_CAST_RESERVE, AUTO_CAST_SOON_MS, AutoCaster, autoCastReach } from "../auto-cast.ts";
+import { AUTO_CAST_MAX_REACH_PX, AUTO_CAST_RESERVE, AUTO_CAST_SOON_MS, AutoCaster, autoCastable, autoCastReach } from "../auto-cast.ts";
 import { freshRerollPool, rerollPrice } from "../offer-reroll.ts";
 
 /**
@@ -7859,6 +7860,33 @@ export class PlayScene extends Phaser.Scene {
     // A leap cuts nothing on the way (doc 006), so it draws no cut along the floor.
     if (p.strikeMs <= 0 || p.landing) return;
     const g = this.fxTopGfx;
+    if (p.strikeWake) {
+      /*
+       * **A Dash Slash**: the sword held out ahead through the run, a blade of
+       * the spell's light pointing the way the player goes — tapered to the
+       * point, white along its spine — with the streak behind it. Its wake is
+       * the ground's (`drawShockwaves`).
+       */
+      const slot = p.strikeWake.byPlayer ? w.spells[p.strikeWake.byPlayer.spellIndex] : null;
+      const look = spellLookOf(slot?.item.base ?? "dash_slash", "none");
+      const ux = p.dashX, uy = p.dashY, nx = -uy, ny = ux;
+      const bx = p.x + ux * 4, by = p.y - BODY_LIFT + uy * 4;
+      const reach = 30;
+      for (const [half, colour, alpha] of [[5, look.glow, 0.35], [3, look.glow, 0.85], [1.2, look.core, 1]] as const) {
+        g.fillStyle(colour, alpha);
+        g.beginPath();
+        g.moveTo(bx + nx * half, by + ny * half);
+        g.lineTo(bx + ux * reach, by + uy * reach);
+        g.lineTo(bx - nx * half, by - ny * half);
+        g.closePath();
+        g.fillPath();
+      }
+      g.lineStyle(5, look.glow, 0.3);
+      g.lineBetween(p.x - ux * 34, p.y - uy * 34 - BODY_LIFT, p.x, p.y - BODY_LIFT);
+      g.lineStyle(2, look.core, 0.8);
+      g.lineBetween(p.x - ux * 34, p.y - uy * 34 - BODY_LIFT, p.x, p.y - BODY_LIFT);
+      return;
+    }
     const len = 34;
     g.lineStyle(6, 0xffe9a8, 0.35);
     g.lineBetween(p.x - p.dashX * len, p.y - p.dashY * len - BODY_LIFT, p.x, p.y - BODY_LIFT);
@@ -14077,6 +14105,8 @@ export class PlayScene extends Phaser.Scene {
      */
     for (const s of w.shockwaves) {
       if (s.alive && s.facing !== undefined && s.width !== undefined) {
+        // A wake's stretches are drawn together, as one edge per side, below.
+        if (s.wake) continue;
         // The greatcleave's edge: a blade standing on the floor, running along the cut (`drawEdgeWave`).
         drawEdgeWave(this.soilGfx, {
           x: s.x, y: s.y, facing: s.facing, back: s.inner, front: s.inner + s.thickness, width: s.width,
@@ -14096,6 +14126,35 @@ export class PlayScene extends Phaser.Scene {
       const back = { x: -Math.cos(s.facing), y: -Math.sin(s.facing) };
       for (const q of waveTrailPoints(wave, Math.random() < 0.7 ? 2 : 1))
         this.shed({ x: q.x, y: q.y, vx: back.x * (20 + Math.random() * 30) + (Math.random() - 0.5) * 24, vy: back.y * (20 + Math.random() * 30) + (Math.random() - 0.5) * 24 - 8, ms: 0, life: 200 + Math.random() * 160, size: 1, colour: Math.random() < 0.5 ? KING_WAVE.mid : KING_WAVE.aura, gravity: -10 });
+    }
+    /*
+     * **A run's wake** (`layWake`): its stretches are one attack laid a piece
+     * at a time, and are drawn as what they are — one edge each side, opening
+     * out behind the run (`drawWakeRibbon`), never a row of separate blades.
+     * The player's is in the light of the spell that laid it; the king's in
+     * the danger palette. Each stretch fades over its last tile of roll.
+     */
+    // One ribbon per wake and side: the two sides of a run roll out on opposite facings.
+    const wakes = new Map<string, { facing: number; player: number; stretches: WakeStretch[] }>();
+    const wakeIds = new Map<object, number>();
+    for (const s of w.shockwaves) {
+      if (!s.alive || !s.wake || s.facing === undefined || s.width === undefined) continue;
+      if (!wakeIds.has(s.wake)) wakeIds.set(s.wake, wakeIds.size);
+      const key = `${wakeIds.get(s.wake)}:${Math.round(s.facing * 100)}`;
+      let entry = wakes.get(key);
+      if (!entry) wakes.set(key, entry = { facing: s.facing, player: s.byPlayer ? s.byPlayer.spellIndex : -2, stretches: [] });
+      entry.stretches.push({
+        x: s.x, y: s.y, inner: s.inner, thick: s.thickness, width: s.width,
+        life: Math.max(0, Math.min(1, (s.maxRadius - s.inner) / TILE_PX)),
+      });
+    }
+    for (const v of wakes.values()) {
+      const look = v.player > -2 ? spellLookOf(w.spells[v.player]?.item.base ?? "dash_slash", "none") : null;
+      drawWakeRibbon(this.soilGfx, {
+        stretches: v.stretches, facing: v.facing, rise: look ? 12 : 18, trail: look ? 26 : 34, tick: w.tick,
+        seed: Math.round(v.stretches[0]!.x + v.stretches[0]!.y) % 97,
+        palette: look ? wavePalette(look.glow, look.core) : KING_WAVE,
+      });
     }
     /*
      * The king's chain (doc 020). While it lies on the floor, the ground its
@@ -15186,8 +15245,8 @@ export class PlayScene extends Phaser.Scene {
       const params = ITEMS.get(slot?.item.base ?? "")?.params;
       // Only a key whose own reach the body stands in: a short spell is not thrown at a far body.
       if (!slot || !target || !params || dist > autoCastReach(params)) return { eligible: false, coming: false };
-      const shape = params["shape"];
-      const tap = chargeMsOf(ITEMS, slot.item.base) === 0 && shape !== "stance" && shape !== "dash";
+      // A tap, never a guard or a move of the body (`autoCastable`).
+      const tap = autoCastable(params, chargeMsOf(ITEMS, slot.item.base));
       const cost = slotCost(slot, ITEMS, w.staff);
       // How long until the key is back: its cooldown, or its bank's next charge.
       const back = chargesOf(ITEMS, slot.item.base) > 0 && bankOf(slot, ITEMS) < 1

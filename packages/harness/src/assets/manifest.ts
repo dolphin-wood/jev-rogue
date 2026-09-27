@@ -429,7 +429,7 @@ export const MANIFEST: FrameSpec[] = (() => {
   for (const id of ["mana_darts", "arcane_cannon", "doom_sigil", "frozen_orb", "contagion", "meteor", "quake_ring", "leap_slam"])
     out.push(frame(`icon_${id}`, "s32", true, false, [16, 16]));
   // And the spells on doc 006's newer shapes: the orb, the boomerang, the enchant, the stance, the trail, the cloud.
-  for (const id of ["ball_lightning", "returning_edge", "crescent_edge", "counter_stance", "cinder_stride", "toxic_cloud"])
+  for (const id of ["ball_lightning", "returning_edge", "crescent_edge", "counter_stance", "cinder_stride", "toxic_cloud", "dash_slash"])
     out.push(frame(`icon_${id}`, "s32", true, false, [16, 16]));
   for (const id of [
     "fork", "chain", "brand", "harvest", "echo", "bloom", "shatter",

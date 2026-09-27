@@ -84,6 +84,8 @@ export const SPELL_LOOK: Readonly<Record<string, SpellLook>> = {
    */
   counter_stance: { core: 0xf0fffb, glow: 0x9ff0e0, shape: "blade" },
   blink_strike: { core: 0xf0fffb, glow: 0x8fe8d8, shape: "dart" },
+  // The run's wake is drawn as standing edges in this light (`drawShockwaves`).
+  dash_slash: { core: 0xf4fbff, glow: 0x9fd8f0, shape: "blade" },
 };
 
 /** A shot with no spell of its own takes its element's shape. */

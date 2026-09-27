@@ -144,6 +144,8 @@ export const SPELL_SFX: Readonly<Record<string, SpellSound>> = {
   crescent_edge: { cast: "cast_spirit", castPitch: 0.95, impact: null },
   // A guard going up: the spirit's breath, higher and shorter than the enchant's.
   counter_stance: { cast: "cast_spirit", castPitch: 1.25, impact: null },
+  // A run with the blade out: the blink's rush, a little lower, since it carries the sword.
+  dash_slash: { cast: "cast_blink", castPitch: 0.9, impact: null },
   // The ground behind the caster catching: an ignition, and then burning.
   cinder_stride: { cast: "cast_field", castPitch: 1.1, impact: "impact_flame", impactPitch: 1.2 },
   // A cloud of poison: the venom's wet bubble, lowered, rather than a fire's ignition.

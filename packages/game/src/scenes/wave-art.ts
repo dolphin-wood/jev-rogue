@@ -277,3 +277,127 @@ export function drawEdgeWave(pen: Pen, o: EdgeWave, alpha = 1): void {
     }
   }
 }
+
+/**
+ * **A run's wake as one edge** (`layWake`). The simulation lays it in short
+ * stretches, each set off as the runner passes, and each rolling out on its
+ * own — but drawn one by one they read as a row of separate blades. So one
+ * side of a wake is drawn as a single standing sheet along a line through
+ * all its stretches: at every step along the run, how far out the edge is
+ * and how bright is interpolated between the two stretches either side, so
+ * the edge is one continuous slant from the runner out to the oldest
+ * stretch, and it fades where the stretches do.
+ */
+export interface WakeStretch {
+  /** Centre of the stretch on the run's line, and how far out its band is. */
+  readonly x: number;
+  readonly y: number;
+  readonly inner: number;
+  readonly thick: number;
+  readonly width: number;
+  readonly life: number;
+}
+
+export interface WakeRibbon {
+  /** One side's stretches, in any order. */
+  readonly stretches: readonly WakeStretch[];
+  /** Which way this side rolls out, radians. */
+  readonly facing: number;
+  readonly rise: number;
+  /** How far behind the edge its trail runs, px, fading back toward the run. */
+  readonly trail: number;
+  readonly tick: number;
+  readonly seed: number;
+  readonly palette: WavePalette;
+}
+
+/** The trail's steps of light, from faintest to the edge's own. */
+const WAKE_TRAIL_LEVELS = 4;
+
+export function drawWakeRibbon(pen: Pen, o: WakeRibbon, alpha = 1): void {
+  if (o.stretches.length === 0 || alpha <= 0) return;
+  const P = TELE_PIX;
+  const ox = Math.cos(o.facing), oy = Math.sin(o.facing);
+  // Along the run: square to the outward direction.
+  const ax = -oy, ay = ox;
+  const x0 = o.stretches[0]!.x, y0 = o.stretches[0]!.y;
+  const along = (s: WakeStretch): number => (s.x - x0) * ax + (s.y - y0) * ay;
+  const pts = [...o.stretches].map((s) => ({ s, t: along(s) })).sort((a, b) => a.t - b.t);
+  const first = pts[0]!, last = pts[pts.length - 1]!;
+  const start = first.t - first.s.width / 2, end = last.t + last.s.width / 2;
+  const cells = new Map<number, number>();
+  const put = (x: number, y: number, band: number): void => {
+    const i = Math.floor(x / P), j = Math.floor(y / P);
+    const k = j * 100000 + i;
+    if ((cells.get(k) ?? 0) < band) cells.set(k, band);
+  };
+  const flick = (o.tick >> 1) + o.seed * 31;
+  // The trail each stretch leaves behind its edge as it rolls: its own cells, in steps of light.
+  const trail = new Map<number, number>();
+  const trailPut = (x: number, y: number, level: number): void => {
+    const i = Math.floor(x / P), j = Math.floor(y / P);
+    const key = j * 100000 + i;
+    if ((trail.get(key) ?? 0) < level) trail.set(key, level);
+  };
+  let k = 0;
+  for (let t = start; t <= end; t += P / 2) {
+    // The two stretches either side of this step, and how far between them.
+    while (k < pts.length - 2 && pts[k + 1]!.t < t) k++;
+    const a = pts[k]!, b = pts[Math.min(pts.length - 1, k + 1)]!;
+    const u = b.t > a.t ? Math.max(0, Math.min(1, (t - a.t) / (b.t - a.t))) : 0;
+    const inner = a.s.inner + (b.s.inner - a.s.inner) * u;
+    const thick = a.s.thick + (b.s.thick - a.s.thick) * u;
+    const life = Math.max(0, Math.min(1, a.s.life + (b.s.life - a.s.life) * u));
+    if (life <= 0) continue;
+    // The line of the run at this step, and the band out from it.
+    const lx = x0 + ax * t, ly = y0 + ay * t;
+    const depth = thick * (0.6 + 0.4 * life);
+    /*
+     * **The trail**: the ground the edge has just crossed, lit behind it and
+     * fading back toward the run — brightest against the edge, gone a trail's
+     * length back — and fainter as the stretch itself dies.
+     */
+    const from = Math.max(2, inner - o.trail);
+    for (let d = from; d < inner; d += P / 2) {
+      const u = (d - from) / Math.max(1, inner - from);
+      const level = Math.round(u * life * WAKE_TRAIL_LEVELS);
+      if (level > 0) trailPut(lx + ox * d, ly + oy * d, level);
+    }
+    // As a stretch dies its edge loses its hot core first, then its light.
+    const cap = life > 0.5 ? 5 : life > 0.25 ? 3 : 2;
+    for (let d = 0; d <= depth; d += P / 2) {
+      const gx = lx + ox * (inner + d), gy = ly + oy * (inner + d);
+      put(gx, gy, Math.min(cap, d > depth - P ? 4 : d < P ? 1 : 2));
+    }
+    // The standing sheet on the band's leading edge: one continuous wall, lower as it fades.
+    const fx = lx + ox * (inner + depth), fy = ly + oy * (inner + depth);
+    const h = o.rise * (0.35 + 0.65 * life);
+    const top = h - (hash(Math.floor(t / P), flick, 7) < 0.25 ? P : 0);
+    for (let z = 0; z <= top; z += P / 2) {
+      const v = z / Math.max(P, top);
+      put(fx, fy - z, Math.min(cap, top - z < P ? 5 : v > 0.7 ? 4 : v > 0.35 ? 3 : 2));
+      // Thick at its foot, drawn to an edge at its top, leaning back toward the run.
+      const lean = depth * (1 - v) * 0.6;
+      for (let d = P / 2; d <= lean; d += P / 2) put(fx - ox * d, fy - oy * d - z, Math.min(cap, 3));
+    }
+  }
+  for (let level = 1; level <= WAKE_TRAIL_LEVELS; level++) {
+    pen.fillStyle(level === WAKE_TRAIL_LEVELS ? o.palette.mid : o.palette.aura, alpha * 0.4 * (level / WAKE_TRAIL_LEVELS));
+    for (const [key, v] of trail) {
+      if (v !== level || cells.has(key)) continue;
+      const j = Math.floor(key / 100000), i = key - j * 100000;
+      pen.fillRect(i * P, j * P, P, P);
+    }
+  }
+  const look: readonly (readonly [number, number])[] = [
+    [0, 0], [o.palette.lip, 0.55], [o.palette.aura, 0.3], [o.palette.aura, 0.6], [o.palette.mid, 0.9], [o.palette.core, 1],
+  ];
+  for (let band = 1; band <= 5; band++) {
+    pen.fillStyle(look[band]![0], alpha * look[band]![1]);
+    for (const [key, v] of cells) {
+      if (v !== band) continue;
+      const j = Math.floor(key / 100000), i = key - j * 100000;
+      pen.fillRect(i * P, j * P, P, P);
+    }
+  }
+}

@@ -92,6 +92,18 @@ export function autoCastReach(params: Readonly<Record<string, number | string>>)
   return Math.min(AUTO_CAST_MAX_REACH_PX, reach);
 }
 
+/**
+ * **Whether a spell may ever press itself.** Only one that casts on a tap:
+ * a `charge` spell is a hold and a `stance` a guard, both the player's call;
+ * and never a `dash` — Blink Strike, Leap Slam, Dash Slash — which moves the
+ * body: the game throwing the player across the room is the one thing an
+ * assist must not do.
+ */
+export function autoCastable(params: Readonly<Record<string, number | string>>, chargeMs: number): boolean {
+  const shape = params["shape"];
+  return chargeMs === 0 && shape !== "stance" && shape !== "dash";
+}
+
 /** The farthest any key reaches for auto-cast: about what the screen shows round the player. */
 export const AUTO_CAST_MAX_REACH_PX = 10 * TILE_PX;
 

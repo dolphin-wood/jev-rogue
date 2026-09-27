@@ -20,6 +20,7 @@ import { arcJumps } from "./affix-hooks.ts";
 import { lightFire } from "./fire.ts";
 import { addPower, addPowers, copyPowers, dominantElement, noPowers } from "../content/tags.ts";
 import { raisePillar } from "./props.ts";
+import { startWake } from "./attacks.ts";
 
 /**
  * What one cast carries onto everything it fires: the key's multipliers, the
@@ -662,6 +663,20 @@ export function fireUnit(
     p.strikeProc = proc;
     p.strikeStatusMult = statusMult;
     p.strikeHits.length = 0;
+    /*
+     * **A Dash Slash** (`wake_reach`): the sword held out ahead through the
+     * run, and either side of it the cut's edge rolls off the line, laid a
+     * stretch at a time as the player passes (`layWake`) — each body it
+     * crosses is cut once by the wake, at `wake_share` of the run's cut.
+     */
+    const wakeReach = land > 0 ? 0 : num(base.params, "wake_reach", 0);
+    p.strikeWake = wakeReach > 0 ? startWake(from.x, from.y, dir.x, dir.y, {
+      stepPx: num(base.params, "wake_step", 10), reachPx: wakeReach, inner: PLAYER_RADIUS,
+      thick: num(base.params, "wake_thick", 12), speed: num(base.params, "wake_speed", 240), damage: 0,
+    }, {
+      damage: damage * num(base.params, "wake_share", 0.5), element, powers: clonePowers(powers), proc, statusMult,
+      spellIndex: mods.spellIndex, hits: [], knock: num(base.params, "knock", 0), weight,
+    }) : null;
     p.facing = Math.atan2(dir.y, dir.x);
     shots.push({ x: from.x, y: from.y, family: base.id });
     return;
