@@ -321,6 +321,7 @@ describe("every question is grounded in the state it is asked with (doc 002)", (
     const duplicates: string[] = [];
     for (const r of await all())
       for (const [name, q] of Object.entries(r.questions)) {
+        if (q.type !== "choice") continue;
         const texts = Object.entries(q.criteria).filter(([k]) => k !== FALLBACK).map(([, t]) => optionText(t));
         for (const t of texts) expect(t.trim().length, `${name} has an empty option`).toBeGreaterThan(0);
         if (new Set(texts).size !== texts.length) duplicates.push(name);

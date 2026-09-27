@@ -25,8 +25,8 @@ import type {
   PortalChoices, RewardCardKind, NpcKind, EnemyId, SubspeciesWeight, ElitePresence,
   KeysLean,
 } from "@jr/core";
-import { EvaluatorError, FALLBACK } from "./types.ts";
-import type { ChoiceQuestion, Decision, DecisionSource, RequestMeta } from "./types.ts";
+import { EvaluatorError, FALLBACK, NOUL_YES } from "./types.ts";
+import type { ChoiceQuestion, Decision, NoulQuestion, Question, DecisionSource, RequestMeta } from "./types.ts";
 import type { DistributionSource } from "./source.ts";
 import { flatTable, jevSource, tableSource } from "./source.ts";
 import { ruleTable } from "./weights.ts";
@@ -120,7 +120,7 @@ export interface DirectorDeps {
 export interface ObservedRequest {
   readonly meta: RequestMeta;
   readonly state: Readonly<Record<string, unknown>>;
-  readonly questions: Readonly<Record<string, ChoiceQuestion>>;
+  readonly questions: Readonly<Record<string, Question>>;
   readonly dists: Readonly<Record<string, Distribution>>;
   readonly source: DecisionSource;
   /** Set when the primary source failed and the rule table answered instead. */
@@ -133,7 +133,7 @@ export interface ObservedRequest {
  * state; `finish` samples from the distributions the request came back with.
  */
 interface Asked<T> {
-  readonly questions: Record<string, ChoiceQuestion>;
+  readonly questions: Record<string, Question>;
   readonly state: Record<string, unknown>;
   finish(answer: Answered): T;
 }
@@ -176,10 +176,10 @@ interface PortalDraft {
 }
 
 interface PortalAsk {
-  readonly questions: Record<string, ChoiceQuestion>;
+  readonly questions: Record<string, Question>;
   readonly state: Record<string, unknown>;
   draft(answer: Answered): PortalDraft;
-  follow(draft: PortalDraft): { questions: Record<string, ChoiceQuestion>; state: Record<string, unknown> };
+  follow(draft: PortalDraft): { questions: Record<string, Question>; state: Record<string, unknown> };
   finish(draft: PortalDraft, answer: Answered | null): PortalPlan;
 }
 
@@ -247,6 +247,54 @@ function topOf(dist: Distribution): string {
 /** Blend weight on style rather than needs, by run progress (doc 007). */
 const STYLE_WEIGHT: Record<string, number> = { early: 0.35, mid: 0.25, late: 0.15, pre_boss: 0.15 };
 const VARIETY_TEMPERATURE = { low: 0.4, medium: 0.7, high: 1.0 } as const;
+
+/**
+ * **How sharply a per-card fit is read**, by the Director's own `variety`
+ * answer: an offer is drawn in proportion to each card's yes raised to this
+ * power.
+ *
+ * A Noul's yes is a judgement of one card, not a share of a pool, so it is
+ * far flatter than a choice distribution: drawn as given, a style's own
+ * spells took about 43% of an offer against 25% of the pool, which is barely
+ * a lean. Squared to raised to the fourth, the same answers gave 61% to 83%,
+ * with the coldest card of the style still at 0.66 to 0.24 of a uniform share
+ * (jev-findings 35). So `high` is the square and `low` the fourth power, and
+ * which one applies is still Jev's.
+ */
+const FIT_SHARPNESS = { low: 4, medium: 3, high: 2 } as const;
+
+/** The Noul that asks whether one card belongs on this screen. */
+export function fitName(id: string): string {
+  return `fit_${id}`;
+}
+
+function fitQuestion(
+  card: { readonly id: string }, text: string, what: string, extra: string,
+): NoulQuestion {
+  return {
+    type: "noul",
+    instructions:
+      `Would ${titleOfId(card.id)} be a good ${what} to show this player on this reward screen? ${text} ` +
+      "Read it against the build as held spells writes it out — every key with its level, its school, its " +
+      "element, what it costs and what is already attached to it — against the player's stated style, and " +
+      "against the player's own words in intent free text. " + INTENT_CLAUSE + extra,
+    criteria: {
+      true: "Worth a place on the screen: it fits this build and this player now.",
+      false: "Not worth a place: wrong for this build, or off where the player is going.",
+    },
+  };
+}
+
+function titleOfId(id: string): string {
+  return id.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
+/** Each card's yes, as a distribution over the pool. */
+function cardFit(ids: readonly string[], dists: Readonly<Record<string, Distribution>>): Distribution {
+  const yes = ids.map((id) => Math.max(0, dists[fitName(id)]?.[NOUL_YES] ?? 0));
+  const total = yes.reduce((a, b) => a + b, 0);
+  return Object.fromEntries(ids.map((id, i) => [id, total > 0 ? yes[i]! / total : 1 / ids.length]));
+}
 
 /**
  * The offer's temperature, asked once and shared by every offer (doc 007).
@@ -382,7 +430,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
   const unaskedIn = new WeakMap<Record<string, Distribution>, ReadonlySet<string>>();
 
   async function ask(
-    questions: Record<string, ChoiceQuestion>,
+    questions: Record<string, Question>,
     state: Record<string, unknown>,
     meta: RequestMeta,
     /**
@@ -408,7 +456,11 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
      * other than the thing under test, on the rooms where it is hardest to see.
      */
     const sent = briefed && brief && use.kind === "jev"
-      ? { briefing: briefingFrom(brief.ctx, { ...brief, deciding: decidingPhrases(Object.keys(questions)) }) }
+      ? {
+        briefing: briefingFrom(brief.ctx, { ...brief, deciding: decidingPhrases(Object.keys(questions)) }),
+        // Per-card questions carry the Director's brief once, beside the run.
+        ...(typeof state["director_brief"] === "string" ? { director_brief: state["director_brief"] } : {}),
+      }
       : state;
     const seen = (
       dists: Record<string, Distribution>, source: DecisionSource, path?: string,
@@ -590,7 +642,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
       ...choices.kinds.map((k) => ({ ...opt(k, KIND_CLAUSE[k] ?? k), ...(KIND_SPEC[k] ? { spec: KIND_SPEC[k]! } : {}) })),
       ...choices.npcKinds.map((k) => ({ ...opt(k, NPC_CLAUSE[k]!), ...(NPC_SPEC[k] ? { spec: NPC_SPEC[k]! } : {}) })),
     ];
-    const questions: Record<string, ChoiceQuestion> = {
+    const questions: Record<string, Question> = {
       portal_need: choiceQuestion({
         labels, style,
         instructions:
@@ -915,7 +967,27 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
         + "count an affix as answering that wish only when it is in that spell's list."
       : "";
     const offStyle = pool.candidates.filter((c) => !c.facts.includes("style"));
-    const named: Record<string, ChoiceQuestion> = {
+    /*
+     * **Jev judges each card on its own** (jev-findings 35). The three choice
+     * questions below ask which card is *the* answer, and a distribution over
+     * "which one is best" puts next to nothing on the second-best card of a
+     * style however well it fits — measured, a third of the spell pool drew
+     * under a quarter of a uniform offer's share, and half of each style's own
+     * spells were never on a screen in two runs of it. A Noul per card asks
+     * whether that card belongs here, and one card's yes costs no other card
+     * anything. The rule arm keeps the choice questions: it is the control.
+     */
+    const perCard = mode === "jev";
+    const fits: Record<string, NoulQuestion> = perCard
+      ? Object.fromEntries(pool.candidates.map((c) => {
+        const notFor = cardNotFor(c.id, c.facts, discriminating);
+        return [fitName(c.id), fitQuestion(c, `${described(c)}${notFor ? ` Not for: ${notFor}` : ""}`, what, namedSpellFit)];
+      }))
+      : {};
+    const named: Record<string, Question> = perCard ? {
+      ...fits,
+      variety: choiceQuestion({ ...VARIETY_QUESTION, labels, style }),
+    } : {
       /*
        * **This is the Director's main job.** Every other question shapes a
        * room; this one reads twenty-five spell descriptions, twenty-odd affix
@@ -995,6 +1067,8 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
     return {
       questions,
       state: {
+        // The brief once for every card, rather than once in each card's question.
+        ...(perCard ? { director_brief: DIRECTOR_BRIEF } : {}),
         [`${prefix}reward_kind`]: pool.kind, [`${prefix}card_facts`]: facts,
         ...(compatibility ? { [`${prefix}affixes_by_spell`]: compatibility } : {}),
       },
@@ -1010,7 +1084,9 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
         decisions.push(varietyD);
         const variety = varietyD.choice as keyof typeof VARIETY_TEMPERATURE;
         const w = STYLE_WEIGHT[ctx.labels.run_progress] ?? 0.25;
-        let blended = blend(dists.overall!, dists.for_style!, dists.for_needs!, w);
+        let blended = perCard
+          ? cardFit(pool.candidates.map((c) => c.id), dists)
+          : blend(dists.overall!, dists.for_style!, dists.for_needs!, w);
 
         /*
          * The affix intent tilts the offer the blend already produced, rather
@@ -1035,7 +1111,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
          */
         const shown = cardsShown(ctx.history.journal);
         const tuned = reweight(
-          withTemperature(blended, VARIETY_TEMPERATURE[variety]),
+          withTemperature(blended, perCard ? 1 / FIT_SHARPNESS[variety] : VARIETY_TEMPERATURE[variety]),
           (id) => Math.max(CARD_REPEAT_FLOOR, CARD_REPEAT_PENALTY ** (shown.get(id) ?? 0)),
         );
 
@@ -1133,14 +1209,14 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
    * what is still to ask.
    */
   interface OfferAsked {
-    readonly questions: Record<string, ChoiceQuestion>;
+    readonly questions: Record<string, Question>;
     readonly state: Record<string, unknown>;
     first(answer: Answered): OfferStage;
   }
   interface OfferStage {
     readonly cards: readonly CardPlan[];
     /** Empty when there is nothing left to ask; otherwise ride them in a later request. */
-    readonly questions: Record<string, ChoiceQuestion>;
+    readonly questions: Record<string, Question>;
     readonly state: Record<string, unknown>;
     finish(answer: Answered | null): OfferPlan;
   }
@@ -1343,7 +1419,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
 
       // Round 2 sees the room that exists, not the one that was asked for.
       const state2 = roomRound2State(state1, base, tension);
-      const q2: Record<string, ChoiceQuestion> = {
+      const q2: Record<string, Question> = {
         ...buildZoneQuestions({
           zones: base.zones, extent: base.extent, hazard_cap: pacing.hazard_cap,
           state: state2, labels: ctx.labels, style,
@@ -1721,8 +1797,8 @@ function restOwed(ctx: RunContext): boolean {
 }
 
 /** Several question sets as one request's; two with one name is a bug, not a merge. */
-function mergeQuestions(sets: readonly Record<string, ChoiceQuestion>[]): Record<string, ChoiceQuestion> {
-  const out: Record<string, ChoiceQuestion> = {};
+function mergeQuestions(sets: readonly Record<string, Question>[]): Record<string, Question> {
+  const out: Record<string, Question> = {};
   for (const set of sets)
     for (const [name, q] of Object.entries(set)) {
       if (name in out) throw new Error(`question "${name}" asked twice in one request`);
@@ -1818,7 +1894,7 @@ function featureResource(id: string): string | undefined {
 
 function encounterQuestions(
   ctx: RunContext, room: RoomPlan, tension: Tension, roomIndex: number, style?: QuestionStyle, capRuns = true,
-): Record<string, ChoiceQuestion> {
+): Record<string, Question> {
   if (!needsEncounter(room.room_type)) return {};
   const labels = labelSet(ctx.labels as unknown as Record<string, unknown>);
   const groups = room.spawn_groups.map((g) => g.id);
@@ -2075,7 +2151,7 @@ function encounterQuestions(
     ? [...unlocked]
     : Array.from({ length: 6 }, (_, i) => unlocked[(roomIndex * 3 + i) % unlocked.length]!);
 
-  const questions: Record<string, ChoiceQuestion> = {
+  const questions: Record<string, Question> = {
     composition: choiceQuestion({
       labels,
       instructions:

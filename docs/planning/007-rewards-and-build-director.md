@@ -3,7 +3,7 @@ id: 007
 title: Rewards and Build Director
 status: proposed
 date: 2026-09-21
-summary: Intent at run start (a build style and free text), revealed preference and the staff written out key by key feed one card request per offer. Card selection is the Director's main job and the part that is genuinely semantic, so the two questions that shape an offer carry the Director's brief — the standing rules of roguelike reward design, as words rather than as code rules. `build_shape` says how complete the build is, each reward kind owns one of its levels, and `spell_levels`, `affix_slots_open` and `casts_per_bar` say what the staff still has room for. The door has already fixed the reward kind, so Jev returns three distributions over that kind's legal cards (overall, style axis, needs axis) plus a variety level; code blends, samples two and adds one wildcard, with code-owned pity, temptation and the full-staff guarantee of an upgrade beside a replacement. An affix offer also carries the affix intent, one of six lanes over the twenty affixes. The merchant's shelf, pool exhaustion and rule precedence are defined.
+summary: Intent at run start (a build style and free text), revealed preference and the staff written out key by key feed one card request per offer. Card selection is the Director's main job and the part that is genuinely semantic, so the two questions that shape an offer carry the Director's brief — the standing rules of roguelike reward design, as words rather than as code rules. `build_shape` says how complete the build is, each reward kind owns one of its levels, and `spell_levels`, `affix_slots_open` and `casts_per_bar` say what the staff still has room for. The door has already fixed the reward kind, so Jev judges each of that kind's legal cards on its own — one Noul per card, "does this card belong on this screen" — plus a variety level; code draws in proportion to each card's yes raised to a power the variety answer picks, samples two and adds one wildcard (the rule arm keeps the three choice axes, overall, style and needs, and blends them), with code-owned pity, temptation and the full-staff guarantee of an upgrade beside a replacement. An affix offer also carries the affix intent, one of six lanes over the twenty affixes. The merchant's shelf, pool exhaustion and rule precedence are defined.
 depends_on: [002, 003, 006]
 ---
 
@@ -342,7 +342,17 @@ cards, in the room's own request.
   descriptions and the build description are both prose, and the answer is which
   of the first fits the second. It was not sent at all before; the Director was
   choosing cards for a staff it had never been shown.
-- **The questions**: `overall`, `for_style`, `for_needs`, `variety`,
+- **The questions** (Jev): one Noul per candidate, `fit_<id>` — "would this
+  card be a good one to show this player on this reward screen?", with the
+  card's own description and what it is not for — and `variety`,
+  `affix_intent` on an affix offer, and `temptation` on a temptation offer.
+  The Director's brief goes once in the state (`director_brief`) rather than
+  in every card's question. The three choice axes below asked which card is
+  *the* answer; over thirty-nine spells that left the second-best card of a
+  style near zero however well it fitted, and half of each style's own spells
+  never reached a screen in two runs of it (jev-findings 35).
+- **The questions** (the rule arm, and the table any failed Jev request falls
+  back to): `overall`, `for_style`, `for_needs`, `variety`,
   `affix_intent` on an affix offer, and `temptation` on a temptation offer. `for_style` and `for_needs` use the
   **short form** of each option description — the name plus one clause — since
   each axis is narrow enough not to need the hint sentences; `overall`
@@ -454,6 +464,14 @@ off-style candidates only, and it is asked only when there are at least two of
 them.
 
 ## Blending and sampling (code)
+
+**Jev's arm** replaces steps 2 and 3: each card's weight is its Noul yes,
+normalised over the pool, then raised to the power `variety` names
+(`FIT_SHARPNESS`: low 4, medium 3, high 2) — a yes is a judgement of one card
+rather than a share of the pool, so drawn as given it barely leans toward the
+style at all, and the power is what turns "fits" into "fits better". A Jev
+failure falls back to the rule table, which answers each Noul from the card's
+`overall` weight against a constant `no`. Every step from 4 on is shared.
 
 1. `fallback` mass is dropped from each distribution and the rest renormalised;
    more than half the mass on `fallback` is Jev declining, and the request falls

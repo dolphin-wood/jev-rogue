@@ -39,6 +39,31 @@ export interface ChoiceQuestion {
   readonly criteria: Readonly<Record<string, string | OptionSpec>>;
 }
 
+/**
+ * **A yes-or-no question, answered with one probability** (TypeSafe's Noul).
+ *
+ * Used where every option has to be judged on its own rather than against the
+ * others: a reward card's fit. A choice question over thirty-nine cards asks
+ * which one is *the* answer, and the second-best card of a style comes back
+ * near zero however well it fits (jev-findings 35). A Noul per card asks the
+ * same thing of each, and one card's yes costs no other card anything.
+ *
+ * Its answer reaches the rest of the Director as a two-option distribution,
+ * `{ yes, no }`, so the source, the rule table and the traces read it as any
+ * other question.
+ */
+export interface NoulQuestion {
+  readonly type: "noul";
+  readonly instructions: string;
+  readonly criteria: { readonly true: string; readonly false: string };
+}
+
+/** The two keys a Noul answer is carried under. */
+export const NOUL_YES = "yes";
+export const NOUL_NO = "no";
+
+export type Question = ChoiceQuestion | NoulQuestion;
+
 export interface ChoiceAnswer {
   readonly choice: string;
   readonly probabilities: Distribution;
@@ -68,7 +93,7 @@ export interface RequestMeta {
 
 export interface EvaluatorRequest {
   readonly state: Readonly<Record<string, unknown>>;
-  readonly questions: Readonly<Record<string, ChoiceQuestion>>;
+  readonly questions: Readonly<Record<string, Question>>;
   readonly signal: AbortSignal;
   readonly meta: RequestMeta;
 }

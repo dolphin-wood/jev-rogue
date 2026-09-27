@@ -40,8 +40,8 @@ const SPEC_RECORDS = {
 import { createDirector } from "./director.ts";
 import type { ObservedRequest } from "./director.ts";
 import { EvaluatorError } from "./types.ts";
-import type { ChoiceAnswer, ChoiceQuestion, Evaluator } from "./types.ts";
-import { optionText } from "./questions/common.ts";
+import type { ChoiceAnswer, Evaluator, Question } from "./types.ts";
+import { answerKeys, optionText } from "./questions/common.ts";
 import { ITEMS, RngSource, cardPool, plainInstance, portalChoices } from "@jr/core";
 
 /* --------------------------------------------------------------- fixtures */
@@ -570,13 +570,13 @@ describe("the two state formats as arms", () => {
 
   /** Everything Jev was asked, and the state it was asked with. */
   function spy(format: "labels" | "briefing") {
-    const seen: { state: Record<string, unknown>; questions: Record<string, ChoiceQuestion> }[] = [];
+    const seen: { state: Record<string, unknown>; questions: Readonly<Record<string, Question>> }[] = [];
     const observed: ObservedRequest[] = [];
     const evaluate: Evaluator = async (req) => {
       seen.push({ state: req.state as Record<string, unknown>, questions: req.questions });
       const answers: Record<string, ChoiceAnswer> = {};
       for (const [name, q] of Object.entries(req.questions)) {
-        const keys = Object.keys(q.criteria);
+        const keys = answerKeys(q);
         answers[name] = {
           choice: keys[0]!,
           probabilities: Object.fromEntries(keys.map((k, i) => [k, i === 0 ? 1 : 0])),
@@ -620,7 +620,9 @@ describe("the two state formats as arms", () => {
 
     const labels = spy("labels");
     await createDirector("jev", { evaluate: labels.evaluate }).planPortals(ctx, choices);
-    const plain = labels.seen[0]!.questions["portal_need"]!.criteria;
+    const need = labels.seen[0]!.questions["portal_need"]!;
+    if (need.type !== "choice") throw new Error("portal_need is a choice");
+    const plain = need.criteria;
     expect(typeof plain["spell"]).toBe("string");
     expect(String(plain["spell"])).toContain("Fits when");
   });
@@ -655,7 +657,7 @@ describe("every question a whole room asks", () => {
     const evaluate: Evaluator = async (req) => {
       const answers: Record<string, ChoiceAnswer> = {};
       for (const [name, q] of Object.entries(req.questions)) {
-        const keys = Object.keys(q.criteria);
+        const keys = answerKeys(q);
         answers[name] = {
           choice: keys[0]!,
           probabilities: Object.fromEntries(keys.map((k, i) => [k, i === 0 ? 1 : 0])),
@@ -692,7 +694,13 @@ describe("every question a whole room asks", () => {
     expect(requests.length).toBe(2);
     let options = 0;
     for (const r of requests)
-      for (const [name, q] of Object.entries(r.questions))
+      for (const [name, q] of Object.entries(r.questions)) {
+        // A card's own question is a sentence about that card, never a fit clause.
+        if (q.type === "noul") {
+          options++;
+          expect(q.instructions, name).not.toContain("Fits when");
+          continue;
+        }
         for (const [id, option] of Object.entries(q.criteria)) {
           options++;
           expect(typeof option, `${name}/${id}`).toBe("object");
@@ -700,6 +708,7 @@ describe("every question a whole room asks", () => {
           expect(spec.what.trim().length, `${name}/${id}`).toBeGreaterThan(0);
           expect(optionText(option), `${name}/${id}`).not.toContain("Fits when");
         }
+      }
     expect(options).toBeGreaterThan(30);
   });
 
@@ -723,7 +732,7 @@ describe("every question a whole room asks", () => {
     const evaluate: Evaluator = async (req) => {
       const answers: Record<string, ChoiceAnswer> = {};
       for (const [name, q] of Object.entries(req.questions)) {
-        const keys = Object.keys(q.criteria);
+        const keys = answerKeys(q);
         answers[name] = {
           choice: keys[0]!,
           probabilities: Object.fromEntries(keys.map((k, i) => [k, i === 0 ? 1 : 0])),
@@ -766,12 +775,19 @@ describe("every question a whole room asks", () => {
     const bare: string[] = [];
     let options = 0;
     for (const r of seen)
-      for (const [name, q] of Object.entries(r.questions))
+      for (const [name, q] of Object.entries(r.questions)) {
+        // A card's own question carries its negative in the instruction.
+        if (q.type === "noul") {
+          options++;
+          if (!q.instructions.includes("Not for:")) bare.push(name);
+          continue;
+        }
         for (const [id, option] of Object.entries(q.criteria)) {
           if (id === "fallback") continue;
           options++;
           if (!(option as { not_for?: string }).not_for) bare.push(`${name}/${id}`);
         }
+      }
     // The cards alone are more than fifty of these.
     expect(options).toBeGreaterThan(60);
     expect(bare).toEqual([]);

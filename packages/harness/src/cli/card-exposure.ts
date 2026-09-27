@@ -43,6 +43,8 @@ type Kind = "spell" | "affix";
 /** Mirrors `director.ts`: the same constants the offer is drawn with. */
 const VARIETY_TEMPERATURE: Readonly<Record<string, number>> = { low: 0.4, medium: 0.7, high: 1.0 };
 const STYLE_WEIGHT = 0.25;
+/** A per-card fit is raised to 4, 3 or 2 by the same answer (`FIT_SHARPNESS`). */
+const FIT_TEMPERATURE: Readonly<Record<string, number>> = { low: 1 / 4, medium: 1 / 3, high: 1 / 2 };
 const SAMPLED = 2;
 const TRIALS = 2000;
 
@@ -69,6 +71,8 @@ function blend(o: Distribution, s: Distribution, n: Distribution, w: number): Di
 }
 
 const mc = new RngSource("card-exposure").stream("mc", 0, null);
+/** What each run's reward screens actually showed, for the per-run readout. */
+const screens: { style: Archetype; cards: string[] }[] = [];
 
 const ledgerOf = arm === "jev" ? jevEvaluator({ budget, logFile }) : null;
 for (let i = 0; i < seeds; i++) {
@@ -77,27 +81,46 @@ for (let i = 0; i < seeds; i++) {
     ...(ledgerOf ? { evaluate: ledgerOf.evaluate } : {}),
     state_format: "briefing",
     observe: (r) => {
-      for (const [name, overall] of Object.entries(r.dists)) {
-        const m = /^(.*?)overall$/.exec(name);
+      /*
+       * One offer per prefix that carries a `variety`: either the three blended
+       * choice axes (`overall`, `for_style`, `for_needs`) or one Noul per card
+       * (`fit_<id>`), drawn as `cardAsk` draws each.
+       */
+      for (const name of Object.keys(r.dists)) {
+        const m = /^(.*?)variety$/.exec(name);
         if (!m) continue;
         const prefix = m[1]!;
-        const ids = Object.keys(overall);
+        const variety = r.dists[name] ?? { medium: 1 };
+        let fit: Distribution;
+        let temperature: Readonly<Record<string, number>>;
+        const overall = r.dists[`${prefix}overall`];
+        if (overall) {
+          fit = blend(overall, r.dists[`${prefix}for_style`] ?? {}, r.dists[`${prefix}for_needs`] ?? {}, STYLE_WEIGHT);
+          temperature = VARIETY_TEMPERATURE;
+        } else {
+          const yes = Object.entries(r.dists).flatMap(([k, d]) =>
+            k.startsWith(`${prefix}fit_`) ? [[k.slice(prefix.length + 4), d["yes"] ?? 0] as const] : []);
+          const total = yes.reduce((a, [, v]) => a + v, 0);
+          if (yes.length === 0) continue;
+          fit = Object.fromEntries(yes.map(([id, v]) => [id, total > 0 ? v / total : 1 / yes.length]));
+          temperature = FIT_TEMPERATURE;
+        }
+        const ids = Object.keys(fit);
         const kind: Kind | null = ids.every((id) => SPELL_IDS.has(id)) ? "spell"
           : ids.every((id) => AFFIX_IDS.has(id)) ? "affix" : null;
         if (!kind || ids.length <= SAMPLED) continue;
         offers[kind]++;
         poolSizes[kind].push(ids.length);
-        const blended = blend(overall, r.dists[`${prefix}for_style`] ?? {}, r.dists[`${prefix}for_needs`] ?? {}, STYLE_WEIGHT);
-        const variety = r.dists[`${prefix}variety`] ?? { medium: 1 };
-        const top = Object.entries(overall).sort((a, b) => b[1] - a[1])[0]![0];
+        const raw = overall ?? fit;
+        const top = Object.entries(raw).sort((a, b) => b[1] - a[1])[0]![0];
         for (const id of ids) {
           const t = tally(kind, id);
           t.candidate++;
-          t.overallRel += (overall[id] ?? 0) * ids.length;
+          t.overallRel += (raw[id] ?? 0) * ids.length;
           if (id === top) t.topOverall++;
         }
-        const tempered = Object.fromEntries(Object.entries(VARIETY_TEMPERATURE)
-          .map(([v, temp]) => [v, withTemperature(blended, temp)]));
+        const tempered = Object.fromEntries(Object.entries(temperature)
+          .map(([v, temp]) => [v, withTemperature(fit, temp)]));
         const hits = new Map<string, number>();
         for (let n = 0; n < TRIALS; n++) {
           const v = sampleOne(variety, mc);
@@ -106,6 +129,10 @@ for (let i = 0; i < seeds; i++) {
         for (const [id, h] of hits) tally(kind, id).exposure += h / TRIALS;
       }
     },
+  });
+  screens.push({
+    style: preset,
+    cards: out.rooms.flatMap((room) => room.route.cards.map((c) => c.replace(/@\d+$/, ""))),
   });
   for (const room of out.rooms) for (const c of room.route.cards) {
     const id = c.replace(/@\d+$/, "");
@@ -137,4 +164,37 @@ for (const kind of ["spell", "affix"] as const) {
   console.log(`top ${q} of ${exp.length} ${kind}s hold ${((exp.slice(0, q).reduce((a, b) => a + b, 0) / Math.max(1e-9, total)) * 100).toFixed(0)}% of exposure;` +
     ` ${rows.filter((r) => r.ratio < 0.25).length} below a quarter of uniform`);
 }
+/*
+ * **What a player sees**, per run: the draw above leaves out code's own spread
+ * (the repeat penalty, the wildcard, the unshown card), and a run is where the
+ * complaint "the same cards every time" is made.
+ */
+console.log("\n=== per run, on the reward screens ===");
+const mean = (xs: readonly number[]) => (xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length)).toFixed(1);
+const top5 = (xs: readonly string[]) => {
+  const m = new Map<string, number>();
+  for (const x of xs) m.set(x, (m.get(x) ?? 0) + 1);
+  return [...m.values()].sort((a, b) => b - a).slice(0, 5).reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
+};
+const jaccard = (a: readonly string[], b: readonly string[]) => {
+  const A = new Set(a); const B = new Set(b);
+  return [...A].filter((x) => B.has(x)).length / Math.max(1, new Set([...A, ...B]).size);
+};
+for (const kind of ["spell", "affix"] as const) {
+  const ids = kind === "spell" ? SPELL_IDS : AFFIX_IDS;
+  const per = screens.map((r) => ({ style: r.style, cards: r.cards.filter((c) => ids.has(c)) }));
+  const pairs = ARCHETYPES.map((st) => per.filter((r) => r.style === st)).filter((p) => p.length >= 2);
+  const overlap = pairs.map((p) => jaccard(p[0]!.cards, p[1]!.cards));
+  console.log(`${kind}: ${mean(per.map((r) => r.cards.length))} cards a run, ${mean(per.map((r) => new Set(r.cards).size))} distinct,` +
+    ` top five ${(per.reduce((a, r) => a + top5(r.cards), 0) / Math.max(1, per.length) * 100).toFixed(0)}% of them;` +
+    ` two runs of one style share ${overlap.length ? mean(overlap.map((x) => x * 100)) : "-"}% of what they saw;` +
+    ` ${new Set(per.flatMap((r) => r.cards)).size}/${ids.size} ever shown`);
+}
+for (const st of styles) {
+  const own = [...ITEMS.values()].filter((i) => i.tags.includes(st)).map((i) => i.id);
+  const seen = new Set(screens.filter((r) => r.style === st).flatMap((r) => r.cards));
+  const never = own.filter((id) => !seen.has(id));
+  console.log(`  ${st.padEnd(6)} its own spells on a screen: ${own.length - never.length}/${own.length}${never.length ? `; never ${never.join(", ")}` : ""}`);
+}
+
 if (ledgerOf) console.log(`\nJev calls ${ledgerOf.ledger.calls}, failures ${ledgerOf.ledger.failures}, refused ${ledgerOf.ledger.refused}; log ${logFile}`);

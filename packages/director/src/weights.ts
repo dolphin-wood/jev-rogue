@@ -6,6 +6,7 @@
  */
 import type { WeightTable } from "./source.ts";
 import { FREE_TEXT_WEIGHT, laneFromText } from "./questions/affixes.ts";
+import { NOUL_YES } from "./types.ts";
 
 function label(state: Readonly<Record<string, unknown>>, path: string): string {
   let cur: unknown = state;
@@ -60,8 +61,30 @@ function unscope(question: string, state: Readonly<Record<string, unknown>>): [s
   return [question.slice(at + 2), { ...state, ...scoped }];
 }
 
+/**
+ * The rule table's weight for one card on the `overall` axis, from the facts
+ * code attached to it; see the card questions below.
+ */
+function cardWeight(state: Readonly<Record<string, unknown>>, id: string): number {
+  const facts = label(state, `card_facts.${id}`);
+  if (!facts) return 1;
+  const has = (f: string) => facts.split(" ").includes(f);
+  return (has("style") ? 1.4 : 1) * (has("build") ? 1.4 : 1) * (has("need") ? 2 : 1)
+    * (has("eases") ? 1.5 : 1) * (has("synergy") ? 1.3 : 1) * (has("upgrade") ? 1.4 : 1);
+}
+
+/**
+ * What a per-card Noul's `no` weighs against the card's weight as its `yes`:
+ * a plain card reads 0.25, one carrying every fact about 0.9. It only answers
+ * when Jev failed or was not asked, and it keeps the same order the `overall`
+ * axis gives.
+ */
+const FIT_NO_WEIGHT = 3;
+
 export const ruleTable: WeightTable = (scopedQuestion, option, scopedState) => {
   const [question, state] = unscope(scopedQuestion, scopedState);
+  if (question.startsWith("fit_"))
+    return option === NOUL_YES ? cardWeight(state, question.slice("fit_".length)) : FIT_NO_WEIGHT;
   switch (question) {
     case "door_set": {
       let w = 1;
@@ -371,8 +394,7 @@ export const ruleTable: WeightTable = (scopedQuestion, option, scopedState) => {
       if (question === "for_style") return (has("style") ? 2.4 : 1) * (has("build") ? 2 : 1) * (has("synergy") ? 1.4 : 1);
       if (question === "for_needs") return (has("need") ? 3 : 1) * (has("eases") ? 2 : 1) * (has("upgrade") ? 1.3 : 1);
       if (question === "temptation") return has("need") ? 1.5 : 1;
-      return (has("style") ? 1.4 : 1) * (has("build") ? 1.4 : 1) * (has("need") ? 2 : 1)
-        * (has("eases") ? 1.5 : 1) * (has("synergy") ? 1.3 : 1) * (has("upgrade") ? 1.4 : 1);
+      return cardWeight(state, option);
     }
 
     case "reward_kind":
