@@ -79,6 +79,11 @@ const RAMP_S = 1.2;
 const PIECE_FADE_S = 1.6;
 /** How quickly the music stops for a menu and comes back after it: short, so it reads as a pause, not a transition. */
 const PAUSE_FADE_S = 0.12;
+/** The boss piece under a menu (`setPaused`): about a third as loud, and muffled as if through a wall. */
+const MENU_LEVEL = 0.35;
+const MENU_CUTOFF = 600;
+/** The crossfade back out of the muffle: long enough to cover the step back to where it was paused. */
+const MENU_RETURN_S = 0.35;
 /** How long the music takes to come back up after an effect ducked it. */
 const DUCK_RECOVER_S = 0.75;
 /** Headroom: the stems are mastered hot, and this bus sits under the effects. */
@@ -116,6 +121,8 @@ export class StemMusic {
   private reseating = false;
   /** Stopped where it stood for a menu that froze the fight; see `setPaused`. */
   private paused = false;
+  /** The piece playing on quietly under that menu, until it closes (`setPaused`). */
+  private muffled: Playing | null = null;
   private variant: Variant = { harm: "harm", drums: "drums" };
   /** The loop boundary the next variant has already been scheduled for. */
   private variantAt = 0;
@@ -174,7 +181,12 @@ export class StemMusic {
     if (style === this.style) return;
     this.style = style;
     const epoch = ++this.epoch;
-    if (this.paused) return;
+    if (this.paused) {
+      // Turned off or switched in the menu: the muffled piece goes now; the new style starts when the menu closes.
+      this.fadeOut(this.muffled, PIECE_FADE_S * 0.5);
+      this.muffled = null;
+      return;
+    }
     if (!style) {
       if (this.playing) this.resumeAt.set(this.playing.piece, this.position(this.playing));
       this.fadeOut(this.playing, PIECE_FADE_S * 0.5);
@@ -207,30 +219,45 @@ export class StemMusic {
   }
 
   /**
-   * Stops the music where it stands, and starts it again from that place.
+   * **A menu over the boss fight muffles his piece and holds its place.**
    *
-   * For a menu opened over the boss fight. The menu freezes the fight and
-   * its beat clock, and the boss piece played on without it; closed again,
-   * the music was a whole menu's length ahead of the fight and was re-seated
-   * on the clock — a jump back, heard as the music breaking. Stopped with
-   * the fight, it is still on the clock when the fight goes on.
+   * The menu freezes the fight and its beat clock. Played on at full, the
+   * piece was a menu's length ahead of the fight when the menu closed and was
+   * re-seated — a jump back, heard as the music breaking. Stopped dead, the
+   * menu was silence. So it plays on **quietly and muffled**, as if through a
+   * wall (`MENU_LEVEL`, `MENU_CUTOFF`), while the place it was paused at is
+   * kept; closed, the piece comes back in from that place, on the fight's
+   * clock, crossfading over the muffled one so the step back is never heard.
    */
   setPaused(on: boolean): void {
     if (on === this.paused) return;
     this.paused = on;
     const epoch = ++this.epoch;
+    const now = this.ctx.currentTime;
     if (on) {
-      if (this.playing) this.resumeAt.set(this.playing.piece, this.position(this.playing));
-      this.fadeOut(this.playing, PAUSE_FADE_S);
+      const p = this.playing;
       this.playing = null;
+      if (!p) return;
+      this.resumeAt.set(p.piece, this.position(p));
+      this.muffled = p;
+      p.out.gain.cancelScheduledValues(now);
+      p.out.gain.setValueAtTime(p.out.gain.value, now);
+      p.out.gain.linearRampToValueAtTime(MENU_LEVEL, now + PAUSE_FADE_S);
+      for (const c of Object.values(p.ch) as Channel[]) {
+        c.lp.frequency.cancelScheduledValues(now);
+        c.lp.frequency.setValueAtTime(c.lp.frequency.value, now);
+        c.lp.frequency.exponentialRampToValueAtTime(MENU_CUTOFF, now + PAUSE_FADE_S);
+      }
       return;
     }
     // The clock's last report is from before the menu; run on from there it
     // would put the piece a menu's length ahead. The fight reports afresh.
     this.bossClock = null;
+    this.fadeOut(this.muffled, MENU_RETURN_S);
+    this.muffled = null;
     if (!this.style) return;
     const piece = this.pieceFor(this.state);
-    void this.startPiece(piece, epoch, this.resumeAt.get(piece) ?? 0, PAUSE_FADE_S);
+    void this.startPiece(piece, epoch, this.resumeAt.get(piece) ?? 0, MENU_RETURN_S);
   }
 
   /** Steps the music aside for a moment. The recovery is slower than the dip, so it is heard as room being made, not as a pump. */
