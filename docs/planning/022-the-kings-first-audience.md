@@ -3,7 +3,7 @@ id: 022
 title: The King's First Audience
 status: proposed
 date: 2026-09-27
-summary: The Crypt King is met twice. In room 5, the last fight of the ossuary, the roof comes down on an ordinary fight, a stone on each body and none on the player, and he lands on the far side of the arena. The bodies spill enough hearts to fill the player's bar and three more that stay on the floor. That first audience is phase I alone. At 60% of its bar the armour breaks and he goes back up out of the room, and the room pays its door's reward a grade higher. The final fight in the throne hall starts where the first one stopped, with the armour already gone. Phases II and III are stretched over a full bar that is larger than the one they had before. It takes the place of the guardian that seam would have held, not a room of its own, so the run is no longer and the count of fights is unchanged. Placed at room 5 rather than 10 because real players die before room 8: the meeting comes to every run, and its peak buys room 6 as the trough at the ramp's steepest step. Code decides all of it. The one Jev question the room keeps is its door's reward.
+summary: The Crypt King is met twice. In room 5, the last fight of the ossuary, the roof comes down on an ordinary fight, a stone on each body and none on the player, and he lands on the far side of the arena. The bodies spill enough hearts to fill the player's bar and three more that stay on the floor. That first audience is phase I alone. At 60% of its bar the armour breaks and he goes back up out of the room, and the room pays its door's reward a grade higher and an ordinary room's experience. The final fight in the throne hall starts where the first one stopped, with the armour already gone. Phases II and III are stretched over a full bar that is larger than the one they had before. It takes the place of the guardian that seam would have held, not a room of its own, so the run is no longer and the count of fights is unchanged. Placed at room 5 rather than 10 because real players die before room 8: the meeting comes to every run, and its peak buys room 6 as the trough at the ramp's steepest step. Code decides all of it. The one Jev question the room keeps is its door's reward.
 depends_on: [003, 005, 014, 019, 020]
 ---
 
@@ -148,7 +148,7 @@ here and is not asked again.
 | Phase thresholds | none. At `KING_RETREAT_AT` he leaves | II from full, III at `KING_FINAL_III_AT` |
 | Power | the room-5 ramp band's (body damage ×1, hit damage ×0.8) | the boss band's (×2.05), unchanged |
 | Adds | none. The landing killed them | doc 005's phase II call, unchanged |
-| Pays | the door's reward, one grade higher | the run |
+| Pays | the door's reward, one grade higher, and `KING_AUDIENCE_XP` (110) experience as he leaves | the run |
 | Losing | the run ends, as dying anywhere does | the run ends |
 
 **Why the room's power, not the boss band's.** The ×2.05 was fitted to a
@@ -185,6 +185,14 @@ The door's own reward, **one grade higher** (grade 1 → 2, 2 → 3, capped at
 3). An offer is how this game pays for things, so the reward for driving off
 the king comes as an offer. It is not a new currency. It rides on the reward
 the player chose at the door, so the choice they made still matters.
+
+**And experience: `KING_AUDIENCE_XP` = 110, paid as he leaves.** Nothing else
+in the room pays any. The bodies are crushed by the roof, not killed by the
+player, and he is not killed at all. Without this the room the player fought
+hardest in would be the one room of the run with no level in it. 110 is an
+ordinary room's whole take at its top (`run/levels.ts`, a fight of 10 to 14
+bodies is worth 70 to 110), which at room 5 is about a level, arriving as he
+goes up.
 
 ## The final fight
 

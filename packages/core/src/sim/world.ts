@@ -6,7 +6,7 @@
 import { BAR_MS, BEAT_MS, beats, pastGrid, untilGrid } from "./beat.ts";
 import { AFFIXES, ENEMIES, affixesFor, baseArchetype, rampFor, rampMinimum, rampRoster, resistOf, threatWeight } from "../encounters/index.ts";
 import { ITEMS, plainInstance } from "../spells/index.ts";
-import { LEVEL_HEARTS, levelAt, withLevels, xpForKill } from "../run/levels.ts";
+import { KING_AUDIENCE_XP, LEVEL_HEARTS, levelAt, withLevels, xpForKill } from "../run/levels.ts";
 import type { ItemRegistry } from "../spells/items.ts";
 import { GRID_W, GRID_H, TILE_PX, Tile } from "../types.ts";
 import { STATUS_ELEMENTS, copyPowers, noPowers } from "../content/tags.ts";
@@ -3693,6 +3693,8 @@ function stepKingLeaving(w: World, e: Enemy): void {
   if (e.bossCastMs > 0) return;
   e.gone = true;
   w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: "boss_gone" });
+  // Driving him off is what the room pays in experience (`KING_AUDIENCE_XP`): paid where he stood.
+  payXp(w, KING_AUDIENCE_XP, e.bossFromX, e.bossFromY);
 }
 
 function finishBossMove(e: Enemy): void {
@@ -4517,10 +4519,14 @@ export const ELITE_HEAL_FRACTION = 0.1;
  * losing health.
  */
 function gainXp(w: World, e: Enemy): void {
-  const points = xpForKill(e.archetype, { elite: e.affixes.length > 0, summoned: e.summoned });
+  payXp(w, xpForKill(e.archetype, { elite: e.affixes.length > 0, summoned: e.summoned }), e.x, e.y);
+}
+
+/** Experience paid from a point, and the levels it reaches. */
+export function payXp(w: World, points: number, x: number, y: number): void {
   if (points <= 0) return;
   w.xp += points;
-  w.events.push({ kind: "xp", x: e.x, y: e.y, amount: points });
+  w.events.push({ kind: "xp", x, y, amount: points });
   const now = levelAt(w.xp);
   while (w.level < now.level) {
     w.level++;

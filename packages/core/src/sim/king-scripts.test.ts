@@ -11,6 +11,7 @@ import type { World } from "./types.ts";
 import { throneHall } from "../rooms/index.ts";
 import { plainInstance } from "../spells/index.ts";
 import { RngSource } from "../rng.ts";
+import { KING_AUDIENCE_XP } from "../run/levels.ts";
 import {
   bossPhaseAt, ENEMIES, KING_AUDIENCE_HP, KING_FINAL_HP, KING_FINAL_III_AT, KING_RETREAT_AT,
 } from "../encounters/enemies.ts";
@@ -100,6 +101,7 @@ describe("the king's scripts: the first audience's end", () => {
     w.enemies.push(k);
     step(w, NO_INPUT);
     k.hp = kingFloorHp(k);
+    const xp0 = w.xp;
     const saw: string[] = [];
     let killed = false;
     const gone = stepUntil(w, () => {
@@ -113,6 +115,8 @@ describe("the king's scripts: the first audience's end", () => {
     expect(saw).toEqual(["boss_retreat", "boss_gone"]);
     // Gone, not killed: nothing a death pays.
     expect(killed).toBe(false);
+    // Driven off, not killed: the room still pays, and it pays for him (doc 022).
+    expect(w.xp).toBe(xp0 + KING_AUDIENCE_XP);
     expect(worldCleared(w)).toBe(true);
     stepUntil(w, () => w.cleared, 5);
     expect(w.cleared).toBe(true);

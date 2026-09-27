@@ -1030,7 +1030,8 @@ function aheadLines(n: BriefingNow): string[] {
     n.roomIndex <= RUN_AUDIENCE_ROOM
       ? `- ${n.roomIndex === RUN_AUDIENCE_ROOM ? "This room" : `Room ${RUN_AUDIENCE_ROOM}`} is a fight the boss drops `
         + "into partway through: the room's bodies are crushed, the player's health is filled, and he fights "
-        + "until his armour breaks, then leaves. It pays its door's reward one grade higher."
+        + "until his armour breaks, then leaves. It pays its door's reward one grade higher, and about a room's "
+        + "experience as he leaves; the crushed bodies pay none."
       : `- The boss was met in room ${RUN_AUDIENCE_ROOM} and driven off; he waits in room ${RUN_BOSS_ROOM} without the armour broken there.`,
     `- ${n.roomIndex === RUN_BOSS_ROOM ? "This room" : `Room ${RUN_BOSS_ROOM}`} is the boss: one long fight `
       + "in an open hall against a single body with far more health than anything else in the run. It is "
