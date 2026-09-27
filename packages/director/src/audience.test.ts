@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   AUDIENCE_FLOOR_FEATURES, ITEMS, MAX_HEARTS, ROOM_EXTENT, bucketClearSpeed, bucketGold, bucketHealth,
   bucketMovementPressure, bucketRecentDamage, bucketRunProgress, cardPool, emptyHistory, heldDominantTags,
-  plainInstance, RUN_AUDIENCE_ROOM,
+  plainInstance, RUN_AUDIENCE_ROOM, GRID_W, Tile,
 } from "@jr/core";
 import type { RunContext } from "@jr/core";
 import { createDirector } from "./director.ts";
@@ -43,6 +43,9 @@ describe("the king's first audience: the room plan", () => {
       expect(r.plan.encounter?.waves.length).toBe(1);
       expect(r.elite_affixes).toEqual([]);
       expect(r.plan.measured.pillar_count).toBe(0);
+      // Bare floor: nothing solid and permanent inside the walls (doc 022, "The arena").
+      for (let y = 1; y < r.plan.extent.h - 1; y++)
+        for (let x = 1; x < r.plan.extent.w - 1; x++) expect(r.plan.grid[y * GRID_W + x], `${x},${y}`).toBe(Tile.Floor);
       // One edge stands braziers; the other braziers or at most one floor feature — never a turret.
       const features = r.plan.zones.map((z) => z.feature);
       expect(features).toContain("brazier");

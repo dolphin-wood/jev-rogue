@@ -407,6 +407,20 @@ function attemptLayout(
   // still met; only the band is a promise made to Jev.
   if (placedPillars < bandsFor(a, ext).pillars[0]) return null;
 
+  /*
+   * **The first audience's floor is bare** (doc 022, "The arena"): no stub and
+   * no kiting block, because a wall his band stops at, or a block the player
+   * trips on mid-dash, teaches something other than the king. What stands in
+   * that room is the braziers, and his blows break them. `open`'s band starts
+   * at none, so a bare room is inside it.
+   */
+  if (a.id === "audience_arena") {
+    const metrics = measureRoom(grid, mask, p.entryCell, ext);
+    const v = validateRoom({ grid, mask, archetype: a, entry, zones: a.zoneSlots, spawnGroups: a.spawnGroups, ext });
+    if (!v.ok || measurementProblems(metrics, a, symmetry, ext).length > 0) return null;
+    return { grid, metrics, skeleton, effective: a };
+  }
+
   // step 2b: wall stubs until the obstacle ratio reaches the openness band.
   // Stubs are tried against the cells they touch first, so blockwork grows off
   // the mask walls and off itself and the free floor stays in 3-wide lanes;

@@ -50,6 +50,9 @@ const STONE_RADIUS = 22;
 const STONE_DAMAGE = 0.5;
 /** The rumble's held tremor (trauma is squared by the camera: a steady shake, not a blow). */
 const RUMBLE_TRAUMA = 0.6;
+/** How far his mark stays off the side and bottom walls, and off the top one, where his body rises, in cells. */
+const DROP_SIDE_MARGIN = 3;
+const DROP_TOP_MARGIN = 4;
 /** A beat after the last stone before his mark goes down. */
 const DROP_AFTER_STONES_MS = BEAT_MS;
 
@@ -288,31 +291,37 @@ function beginDrop(w: World, a: AudienceState): void {
 }
 
 /**
- * **His mark: the far side of the room from the player** (doc 022, step 3). A
- * floor cell with floor round it for his body, off every floor hazard, clear
- * of every standing prop, and at least `KING_DROP_MIN_PX` from the player —
- * the farthest such cell, with a little of the room's stream in it so the
- * same room is not always the same corner. A room too small for the least
- * distance gives its farthest cell.
+ * **His mark: across the room from the player** (doc 022, step 3). The point
+ * opposite the player through the room's centre, moved to the nearest cell
+ * that is at least `KING_DROP_MIN_PX` from the player, floor with floor round
+ * it, off every floor hazard and clear of every standing prop — and held off
+ * the walls, so a body four tiles tall lands whole inside the room and clear
+ * of the HUD over its top edge rather than in a corner under the minimap. A
+ * room too small for the least distance gives its farthest such cell.
  */
 export function dropSpot(w: World): { x: number; y: number } {
   const ext = w.room.extent, grid = w.room.grid, p = w.player;
   const hazards = hazardCells(w);
   const floor = (x: number, y: number): boolean => grid[y * GRID_W + x] === Tile.Floor && !hazards.has(y * GRID_W + x);
   const propClear = TILE_PX * 2 + BOSS_METEOR_LAND_PX * 0.5;
+  const cx = (ext.w / 2) * TILE_PX, cy = (ext.h / 2) * TILE_PX;
+  const tx = 2 * cx - p.x, ty = 2 * cy - p.y;
   let best: { x: number; y: number; score: number } | null = null;
-  for (let gy = 2; gy < ext.h - 2; gy++)
-    for (let gx = 2; gx < ext.w - 2; gx++) {
+  let farthest: { x: number; y: number; d: number } | null = null;
+  for (let gy = DROP_TOP_MARGIN; gy < ext.h - DROP_SIDE_MARGIN; gy++)
+    for (let gx = DROP_SIDE_MARGIN; gx < ext.w - DROP_SIDE_MARGIN; gx++) {
       let open = true;
       for (let dy = -1; dy <= 1 && open; dy++) for (let dx = -1; dx <= 1 && open; dx++) open = floor(gx + dx, gy + dy);
       if (!open) continue;
       const x = (gx + 0.5) * TILE_PX, y = (gy + 0.5) * TILE_PX;
       if (w.props.some((q) => q.hp > 0 && Math.hypot(q.x - x, q.y - y) < propClear)) continue;
       const d = Math.hypot(x - p.x, y - p.y);
-      const score = d + w.rng.next() * TILE_PX * 1.5;
-      if (!best || score > best.score) best = { x, y, score };
+      if (!farthest || d > farthest.d) farthest = { x, y, d };
+      if (d < KING_DROP_MIN_PX) continue;
+      const score = Math.hypot(x - tx, y - ty) + w.rng.next() * TILE_PX;
+      if (!best || score < best.score) best = { x, y, score };
     }
-  return best ?? { x: (ext.w / 2) * TILE_PX, y: (ext.h / 2) * TILE_PX };
+  return best ?? farthest ?? { x: cx, y: cy };
 }
 
 /** A spare heart never lies in a floor hazard: a reserve the player has to be hurt to reach is no reserve. */

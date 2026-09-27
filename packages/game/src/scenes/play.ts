@@ -9,9 +9,9 @@ import {
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
   moodTransform, tintRGBA, dashInvulnerable, MELEE, ARMOUR_BREAK_MS, brakeFraction, ENEMIES,
-  BOSS_ARCHETYPES, makeEnemy, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
+  BOSS_ARCHETYPES, makeEnemy, makeKing, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
-  BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, audienceGrade, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
+  BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, audienceGrade, RUN_AUDIENCE_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTierKey, affixFitsSpell, itemShape,
   spikesOut, featureCells, fillSubspecies,
   heldDominantTags, STYLE_START, bucketClearSpeed, bucketGold, bucketMovementPressure, bucketRunProgress,
@@ -779,6 +779,10 @@ const CLOSE_DEAD_X = 34;
  * its one cell of wall, and the HUD lies over the room as it does everywhere.
  */
 const BOSS_VIEW_SPARE = 1;
+/** The first audience's pull out to the whole room, and back (doc 022): about the rumble's length. */
+const AUDIENCE_PULL_MS = 1500;
+/** How long the whole-room view holds after he has gone: long enough to watch him leave the top of it. */
+const AUDIENCE_HOLD_MS = 900;
 const CLOSE_DEAD_Y = 20;
 /**
  * The fastest the view moves, px/s, and how fast it may change speed, px/s²
@@ -2075,6 +2079,9 @@ export class PlayScene extends Phaser.Scene {
     // `?lab=boss`: straight into the boss lab, with no title and no invite.
     if (new URLSearchParams(location.search).get("lab") === "boss")
       void this.enterRoom(1).then(() => { this.debug.showBossLab(); this.enterBossLab(); });
+    // `?lab=audience`: straight into room 5, the king's first audience (doc 022), to watch the roof give.
+    else if (new URLSearchParams(location.search).get("lab") === "audience")
+      void this.enterRoom(1).then(() => { this.hideTitle(); void this.enterRoom(RUN_AUDIENCE_ROOM); });
     // `?lab=spells`: straight into the spell lab's arena, likewise.
     else if (this.spellLab) void this.enterRoom(1).then(() => { this.debug.showSpellLab(); this.spellLab?.start(); });
     else void this.enterRoom(1).then(() => { this.showTitle(); void this.settleInvite(); });
@@ -2423,6 +2430,8 @@ export class PlayScene extends Phaser.Scene {
 
     // A new room starts with the close camera on the player, not panning from the last one.
     this.camFocus = null;
+    this.audienceK = 0;
+    this.audienceDoneAt = -1;
 
     this.kingIntro = null;
     this.kingGoblet = null;
@@ -2891,7 +2900,8 @@ export class PlayScene extends Phaser.Scene {
     const y = hall ? (THRONE_CELLS[1]![1] + KING_STAND_ROW) * TILE_PX : (ext.h / 2) * TILE_PX;
     // From the world's own counter: a fixed id 1 was also the first add's, and the renderer's per-body
     // state (the phase-change burst among it) drew the add as the king.
-    const boss = makeEnemy(w.nextEnemyId++, "boss", x, y, []);
+    // The final (doc 022): he stands in phase II, without the armour broken in room 5. The lab keeps the whole fight.
+    const boss = makeKing(w.nextEnemyId++, x, y, this.labOn ? undefined : "final");
     boss.spawnFadeMs = 0;
     boss.awake = true;
     // The fight's clock, and the music's, from the goblet (`kingIntro.clock`).
@@ -8031,6 +8041,11 @@ export class PlayScene extends Phaser.Scene {
           if (ev.what === "boss_meteor") {
             sfx.holdMusic(0.75, (BOSS_METEOR_GATHER_MS + BOSS_METEOR_UP_MS + BOSS_METEOR_RAIN_MS) / 1000);
           }
+          // The first audience (doc 022): his name over the crater he made, as it is shown in the hall.
+          if (ev.what === "boss_arrives") {
+            this.showKingName();
+            sfx.play("boss_impact", 0.85);
+          }
           // The king's chain shares the snarecaster's event; his is silent like his other tells (`telegraphFor`).
           const kingsChain = ev.what === "hook" && this.world.enemies.some((e) => e.archetype === "boss" && Math.hypot(e.x - ev.x, e.y - ev.y) < 1);
           const cue = kingsChain ? null : this.telegraphFor(ev.what ?? "");
@@ -8379,6 +8394,9 @@ export class PlayScene extends Phaser.Scene {
     if (what === "boss_summon") return ["impact_storm", 0.7];
     // The fall into phase III starts silent: the roar before it was the sound, and the music is held down under it.
     if (what === "boss_meteor") return null;
+    // The first audience (doc 022): the roof giving is the room's rumble and his roar from above it.
+    if (what === "audience_rumble") return ["boss_roar", 0.8];
+    if (what.startsWith("audience_")) return null;
     /*
      * **The king's fight has no warning cues** (doc 020). His moves are on
      * the beat of a theme that is already counting them in, his body is the
@@ -14588,7 +14606,17 @@ export class PlayScene extends Phaser.Scene {
      */
     const hall = this.world.room.id === "fixed-boss";
     const roomW0 = this.world.room.extent.w * TILE_PX, roomH0 = this.world.room.extent.h * TILE_PX;
-    cam.setZoom(hall ? Math.min(cw / roomW0, ch / (roomH0 * BOSS_VIEW_SPARE)) : this.worldZoom());
+    const fit = Math.min(cw / roomW0, ch / (roomH0 * BOSS_VIEW_SPARE));
+    /*
+     * **The first audience pulls out to the whole room** (doc 022, "The view").
+     * It opens on the close camera, as every room does, and when the roof
+     * gives the view eases out to the throne hall's fitted zoom under the
+     * rumble's shake, holds it through the fight, and eases back once he has
+     * gone, so the portals are met the way they are everywhere else.
+     */
+    const pull = this.audiencePull(this.game.loop.delta);
+    const close = this.worldZoom();
+    cam.setZoom(hall ? fit : pull > 0 && fit < close ? close + (fit - close) * pull : close);
     const p = this.world.player;
     const halfW = cam.width / cam.zoom / 2, halfH = cam.height / cam.zoom / 2;
     // Bodies past the view hold their fire (doc 017), whatever the view is now.
@@ -14653,6 +14681,23 @@ export class PlayScene extends Phaser.Scene {
     this.uiCam.setZoom(Math.min(cw / UI_W, ch / (UI_H + HUD_H))).centerOn(UI_W / 2, (UI_H + HUD_H) / 2);
     this.drawOffscreen(this.camFocus.x, this.camFocus.y, halfW, halfH);
     this.drawMinimap(this.camFocus.x, this.camFocus.y, halfW, halfH);
+  }
+
+  /** How far the first audience's view has pulled out, 0 to 1, eased (`holdCamera`). */
+  private audienceK = 0;
+  /** When the first audience ended, on the scene's clock, so the view holds a moment past his leaving. */
+  private audienceDoneAt = -1;
+
+  private audiencePull(delta: number): number {
+    const a = this.world.audience;
+    let wide = !!a && (a.phase === "rumble" || a.phase === "stones" || a.phase === "fight");
+    if (a?.phase === "done") {
+      if (this.audienceDoneAt < 0) this.audienceDoneAt = this.time.now;
+      wide = this.time.now - this.audienceDoneAt < AUDIENCE_HOLD_MS;
+    } else this.audienceDoneAt = -1;
+    this.audienceK = Math.max(0, Math.min(1, this.audienceK + (wide ? 1 : -1) * delta / AUDIENCE_PULL_MS));
+    const k = this.audienceK;
+    return k * k * (3 - 2 * k);
   }
 
   /**
