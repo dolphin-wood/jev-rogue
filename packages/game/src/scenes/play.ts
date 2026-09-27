@@ -9,7 +9,7 @@ import {
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
   moodTransform, tintRGBA, dashInvulnerable, MELEE, ARMOUR_BREAK_MS, brakeFraction, ENEMIES,
-  BOSS_ARCHETYPES, makeEnemy, makeKing, kingHp, kingMarks, kingPhaseStart, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
+  BOSS_ARCHETYPES, makeEnemy, makeKing, kingHp, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, audienceGrade, RUN_AUDIENCE_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTierKey, affixFitsSpell, itemShape,
@@ -15977,9 +15977,11 @@ export class PlayScene extends Phaser.Scene {
      */
     /*
      * The boss's bar, across the top: the one health bar an enemy gets on the
-     * HUD, because the boss is the one fight whose length is the point. Phase
-     * marks at 60% and 30% so the change is seen coming; the phase named. No
-     * armour band: the king has none, since nothing interrupts him.
+     * HUD, because the boss is the one fight whose length is the point. The
+     * final marks where phase III begins, so the change is seen coming; the
+     * first audience's bar runs to empty at his retreat, with no mark at all
+     * (doc 022). The phase is not named outside the lab. No armour band: the
+     * king has none, since nothing interrupts him.
      */
     const bossFade = this.fadeMark();
     const boss = w.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
@@ -15990,22 +15992,30 @@ export class PlayScene extends Phaser.Scene {
       const BY = UI_H - 52;
       this.sprites.rectangle(BX - 2, BY, BW + 4, 11, 0x0d0b1f, 0.85).setOrigin(0, 0.5).setDepth(100);
       this.sprites.rectangle(BX, BY, BW, 7, 0x2a1418, 1).setOrigin(0, 0.5).setDepth(100.5);
-      const frac = Math.max(0, boss.hp / Math.max(1, boss.maxHp));
+      /*
+       * **The first audience's bar runs out when he leaves** (doc 022): drawn from full down to
+       * his retreat line, so the player sees a bar to empty, not a bar that stops at 60% for no
+       * reason they are told.
+       */
+      const floorHp = kingFloorHp(boss);
+      const frac = Math.max(0, (boss.hp - floorHp) / Math.max(1, boss.maxHp - floorHp));
       this.sprites.rectangle(BX, BY, BW * frac, 7, boss.phase >= 3 ? 0xff5a3a : 0xd83a3a, 1).setOrigin(0, 0.5).setDepth(101);
       if (boss.maxArmour > 0) {
         this.sprites.rectangle(BX, BY - 7, BW, 3, 0x0f1c3a, 0.9).setOrigin(0, 0.5).setDepth(100.8);
         this.sprites.rectangle(BX, BY - 7, BW * Math.max(0, boss.armour / boss.maxArmour), 3, SHIELD_BLUE, boss.armour > 0 ? 1 : 0.15).setOrigin(0, 0.5).setDepth(101);
         this.sprites.add(shieldMark(this, this.atlas, this.uiTextureKey, BX - 7, BY - 7, 8).setDepth(102));
       }
-      // The marks are the script's (doc 022): the final's phase III at the half, the first audience's retreat.
-      for (const mark of kingMarks(boss.bossScript))
+      // The marks are the script's (doc 022): the final's phase III at the half; none on the first audience's.
+      for (const mark of boss.bossScript === "audience" ? [] : kingMarks(boss.bossScript))
         this.sprites.rectangle(BX + BW * mark, BY, 1, 9, 0xffe9a8, 0.8).setOrigin(0.5).setDepth(102);
       this.ftext("boss:title", BX, BY - 11, t("hud.bossTitle"), {
         fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(7, ZOOM) * ZOOM)}px`, color: "#ffe9a8",
       }).setScale(1 / ZOOM).setOrigin(0, 0.5).setDepth(102);
-      this.ftext("boss:phase", BX + BW, BY - 11, t("hud.bossPhase", { n: ["I", "II", "III"][boss.phase - 1] ?? boss.phase }), {
-        fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(7, ZOOM) * ZOOM)}px`, color: boss.phase >= 3 ? "#ff9a6a" : "#c9cfe8",
-      }).setScale(1 / ZOOM).setOrigin(1, 0.5).setDepth(102);
+      // The phase is named in the lab only: in a run the fight says it — the armour, the roar, the bar's colour.
+      if (this.labOn)
+        this.ftext("boss:phase", BX + BW, BY - 11, t("hud.bossPhase", { n: ["I", "II", "III"][boss.phase - 1] ?? boss.phase }), {
+          fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(7, ZOOM) * ZOOM)}px`, color: boss.phase >= 3 ? "#ff9a6a" : "#c9cfe8",
+        }).setScale(1 / ZOOM).setOrigin(1, 0.5).setDepth(102);
       this.fadeIfCovering(bossFade, BX - 2, BY - 18, BW + 4, 26);
     }
 
