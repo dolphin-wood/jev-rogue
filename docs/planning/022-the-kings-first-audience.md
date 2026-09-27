@@ -271,19 +271,18 @@ drop-in), so it can't be the throne hall's bare stage either.
 | Size | `compact` (25 × 13), fixed | so the whole room fits the view at a zoom near the throne hall's (see "The view") |
 | Archetype | a new `audience_arena`: `arena` shape, `open`, cover `none`, `boss: true` | no cover walls at all. An open arena is also a normal room's look (`open_arena`), so the room gives nothing away |
 | Outline | the arena skeletons that only move the outer wall: `arena`, `arena_octagon`, `arena_bastions` | an outline is the room's edge, not an obstacle in it. `arena_waist`, `arena_horseshoe` and `arena_notched` bite into the floor and are left out |
-| Scattered props | the ordinary room's pots, crates and urns (`PROPS_PER_ROOM`) | part of the disguise. **The collapse shatters every one of them, room-wide**, along with the bodies |
+| Scattered props | the ordinary room's pots, crates and urns (`PROPS_PER_ROOM`) | part of the disguise. **The stones fall on bodies, not on the room**, so they stand through the collapse; each breaks to a blow of his (a pot to anything), and his landing smashes any under his mark |
 | Standing cover | two to four **braziers** (`brazier` fixture, 16 health) on the edge zones, never in the centre | cover the player can spend, and one of the king's blows breaks one (`BOSS_PROP_DAMAGE` 18). They survive the entrance, since neither the stones nor his mark are put on them, and the fight wears them away, the way the throne hall's columns go |
 | Floor features | at most one floor feature on an edge zone: `spike_strip`, `poison_pool`, `ice_patch` or `grass_patch`, hazard budget ≤ 2 (`lava_channel` once its tiles are drawn) | the ground can ask something, but never in the centre where his landings and slams fall. No `turret_mount`: a turret is a body, and the landing leaves none |
 
+- A test asserts the stones leave every pot and crate standing.
 - **Zone slots** are `edge_n` and `edge_s` only (`A_EDGE_N`, `A_EDGE_S`). The
   centre slot is left out, and it is where the king's landing mark goes.
 - **The spare hearts never come to rest on a floor hazard.** A heart lying in a
   poison pool is a reserve the player has to take damage to reach.
   `nearestFloor` moves them off it.
 - **Validation.** `checkArchetypeDeclarations` and the archetype sweep cover the
-  new archetype at every room size. A test asserts that after the landing
-  every prop still standing is a brazier, and that no cell of the room is a
-  permanent solid.
+  new archetype at every room size. A test asserts that no cell of the room is a permanent solid.
 
 ## What code decides, and what Jev does
 
@@ -317,7 +316,7 @@ boss, and doc 002 does not ask a question with one answer.
 | `run/doors.ts` | `RUN_AUDIENCE_ROOM = 5`. `stageFor` returns `"audience"`. `portalChoices` out of room 4 forbids elite, vendor and fountain |
 | `run/offer.ts` | room 5's offer at door grade + 1 |
 | `rooms/archetypes.ts` | `audience_arena` (open, no cover, `edge_n`/`edge_s` slots). Room 5 planned from it in the room's biome, with the three outline skeletons, braziers and at most one floor feature, and no round-2 questions |
-| `sim/world.ts` (props) | the collapse shatters every scattered prop. Braziers stand until his blows break them. Spare hearts are kept off hazard cells |
+| `sim/world.ts` (props) | pots, crates and braziers stand until his blows break them; his mark keeps off the braziers only. Spare hearts are kept off hazard cells |
 | `run/summarize.ts`, director briefing | `king_met` and the neutral sentence |
 | `game/scenes/play.ts` | the pull-out from the close camera to the whole-room view at the rumble, held through the fight and eased back after the retreat (`holdCamera`, `AUDIENCE_PULL_MS`). The stone marks, the mark, the fall, the name card on the drop-in. The retreat's rise off the top of the view. The throne entrance ending on a phase II body |
 | `harness` | `boss-bench --script audience\|final`. A full-run balance pass for hearts lost at room 5, at room 6 and at the boss, and the win rate |

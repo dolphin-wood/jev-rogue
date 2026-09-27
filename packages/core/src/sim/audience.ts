@@ -24,7 +24,6 @@ import { BEAT_MS } from "./beat.ts";
 import { castRift } from "./attacks.ts";
 import { makeKing } from "./enemy.ts";
 import { drop } from "./pickups.ts";
-import { clearPropCell } from "./props.ts";
 import { GRID_W, TILE_PX, Tile } from "../types.ts";
 import { MAX_HEARTS, PLAYER_RADIUS } from "./types.ts";
 import type { Enemy, World } from "./types.ts";
@@ -173,15 +172,6 @@ function holdBodies(w: World): void {
 
 function beginStones(w: World, a: AudienceState): void {
   to(a, "stones");
-  // The collapse shatters every scattered pot, crate and urn; the braziers stand until his blows break them.
-  for (const q of w.props) {
-    if (q.hp <= 0 || (q.kind !== "pot" && q.kind !== "crate" && q.kind !== "urn")) continue;
-    q.hp = 0;
-    clearPropCell(w.room.grid, q);
-    w.events.push({ kind: "enemy_killed", x: q.x, y: q.y, what: `prop:${q.kind}` });
-  }
-  w.flow = null;
-  w.flowTile = null;
   // The farthest first, so the room comes down toward the player and the ones beside them go last.
   const p = w.player;
   const bodies = w.enemies
@@ -314,7 +304,8 @@ export function dropSpot(w: World): { x: number; y: number } {
       for (let dy = -1; dy <= 1 && open; dy++) for (let dx = -1; dx <= 1 && open; dx++) open = floor(gx + dx, gy + dy);
       if (!open) continue;
       const x = (gx + 0.5) * TILE_PX, y = (gy + 0.5) * TILE_PX;
-      if (w.props.some((q) => q.hp > 0 && Math.hypot(q.x - x, q.y - y) < propClear)) continue;
+      // Clear of the braziers, which are the fight's cover; a pot under the mark is smashed by the landing.
+      if (w.props.some((q) => q.hp > 0 && q.kind === "brazier" && Math.hypot(q.x - x, q.y - y) < propClear)) continue;
       const d = Math.hypot(x - p.x, y - p.y);
       if (!farthest || d > farthest.d) farthest = { x, y, d };
       if (d < KING_DROP_MIN_PX) continue;

@@ -146,11 +146,13 @@ describe("the drop-in: the hearts", () => {
 });
 
 describe("the drop-in: the room", () => {
-  it("shatters every scattered prop in the collapse", () => {
+  it("leaves the room's pots and crates to his blows: the stones fall on bodies, not on the room", () => {
     const w = audienceWorld("props", 3, 6);
-    expect(w.props.some((q) => q.hp > 0)).toBe(true);
-    runDrop(w);
-    expect(w.props.filter((q) => q.hp > 0 && (q.kind === "pot" || q.kind === "crate" || q.kind === "urn"))).toHaveLength(0);
+    const standing = () => w.props.filter((q) => q.hp > 0 && (q.kind === "pot" || q.kind === "crate" || q.kind === "urn")).length;
+    const before = standing();
+    expect(before).toBeGreaterThan(0);
+    while (w.audience!.phase !== "fight") step(w, NO_INPUT);
+    expect(standing()).toBe(before);
   });
 
   it("is empty, not clear, while he is still to come: bodies all gone before he lands", () => {
