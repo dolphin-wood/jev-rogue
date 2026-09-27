@@ -107,9 +107,8 @@ reward badge like any other, and the room fills like any other.
 3. **The landing.** When the last stone has fallen, his mark goes down
    (`BOSS_METEOR_LAND_TELL_MS`, three beats) **on the far side of the arena
    from the player: at least `KING_DROP_MIN_PX` (eight tiles) away, and as far
-   as the floor allows**. It is in the direction the player is facing, in view
-   (the camera widens to hold both, the throne entrance's `bossCine`), and clear
-   of the braziers. He comes down on it with the meteor's landing: the hitstop,
+   as the floor allows**. The whole room is in view by now (see "The
+   view" below), and the mark is clear of the braziers. He comes down on it with the meteor's landing: the hitstop,
    the shake, the dust. **The entrance throws no band.** The landing is his
    arrival, far enough away that nothing about it could have reached the
    player. The first band in the room is the one his first slam throws in
@@ -210,6 +209,44 @@ length of 100 to 130 s and a win rate near today's 55% for the fitted `player`.
 The meteor into phase III, the rage tempo and the music's layers are
 unchanged, because they already hang on `e.phase`.
 
+## The view
+
+**He has to be seen whole, and so does his reach.** In the throne hall the
+close camera is replaced by a fixed view zoomed to fit the room (`holdCamera`,
+"the throne hall is seen whole"). The close camera cut off the king's sweep,
+his waves, his chain and his leap from across the room. An ordinary room keeps
+the close camera, a 16 × 9-tile view that follows the player. At that view his
+body fits (the 256 px frame is four tiles of the nine), but his reach does not,
+and neither does a landing eight tiles away: the close view is only eight
+tiles from its centre to its side.
+
+So room 5 **starts on the close camera and pulls out to the whole room when
+the roof gives**, and holds the fixed view for the rest of the fight.
+
+| Beat | Camera |
+|---|---|
+| The opening stretch (step 1) | the close camera, as in every room. Part of the disguise |
+| The rumble (step 2) | **eases out to fit the whole room** over `AUDIENCE_PULL_MS` (about the rumble's length, a second and a half), under the rumble's shake and falling dust |
+| The stones, the landing, phase I | the fixed whole-room view, the throne hall's rule. The minimap and the edge pointers go away, since nothing is off the view |
+| The retreat and the room's reward | holds while he rises out of the top of the view, then eases back to the close camera for the offer and the portals, so the portals are met the way they are in every room |
+
+- **The pull-out is the tell.** In every other room the view stays put, so a
+  view that starts to widen tells the player "this room is different" in the
+  same moment the roof starts shaking. It also shows the whole room before the
+  stones fall, so the player sees them land on bodies out at the edges too.
+- **The same framing as the final.** The player learns phase I at the zoom
+  they will fight phases II and III at. A fight learned on one framing and
+  tested on another is two fights.
+- **Room 5 is `compact` (25 × 13), code's choice, not a size label.** Its fit
+  zoom is about 0.64 of the close camera's, near the throne hall's 0.70 (23 ×
+  13). A `standard` room would fit at 0.55 and a `vast` one at 0.47, which
+  shrinks every body below the size the art is read at. `compact` is also an
+  ordinary room's size, so it gives nothing away.
+- **The zoom is not a whole number.** The hall already draws at a fitted zoom
+  that is not a whole number, so room 5 adds nothing new there. The ease
+  itself moves through fractional zooms, which is why it runs under the shake
+  and the dust and not on a still frame.
+
 ## The arena
 
 **Open floor, and nothing in it that can't be broken.** Phase I is the phase
@@ -223,6 +260,7 @@ drop-in), so it can't be the throne hall's bare stage either.
 
 | | Room 5 | Why |
 |---|---|---|
+| Size | `compact` (25 × 13), fixed | so the whole room fits the view at a zoom near the throne hall's (see "The view") |
 | Archetype | a new `audience_arena`: `arena` shape, `open`, cover `none`, `boss: true` | no cover walls at all. An open arena is also a normal room's look (`open_arena`), so the room gives nothing away |
 | Outline | the arena skeletons that only move the outer wall: `arena`, `arena_octagon`, `arena_bastions` | an outline is the room's edge, not an obstacle in it. `arena_waist`, `arena_horseshoe` and `arena_notched` bite into the floor and are left out |
 | Scattered props | the ordinary room's pots, crates and urns (`PROPS_PER_ROOM`) | part of the disguise. **The collapse shatters every one of them, room-wide**, along with the bodies |
@@ -273,7 +311,7 @@ boss, and doc 002 does not ask a question with one answer.
 | `rooms/archetypes.ts` | `audience_arena` (open, no cover, `edge_n`/`edge_s` slots). Room 5 planned from it in the room's biome, with the three outline skeletons, braziers and at most one floor feature, and no round-2 questions |
 | `sim/world.ts` (props) | the collapse shatters every scattered prop. Braziers stand until his blows break them. Spare hearts are kept off hazard cells |
 | `run/summarize.ts`, director briefing | `king_met` and the neutral sentence |
-| `game/scenes/play.ts` | the mark, the fall, the name card on the drop-in. The retreat's rise off the top of the view. The throne entrance ending on a phase II body |
+| `game/scenes/play.ts` | the pull-out from the close camera to the whole-room view at the rumble, held through the fight and eased back after the retreat (`holdCamera`, `AUDIENCE_PULL_MS`). The stone marks, the mark, the fall, the name card on the drop-in. The retreat's rise off the top of the view. The throne entrance ending on a phase II body |
 | `harness` | `boss-bench --script audience\|final`. A full-run balance pass for hearts lost at room 5, at room 6 and at the boss, and the win rate |
 
 ### Tests
