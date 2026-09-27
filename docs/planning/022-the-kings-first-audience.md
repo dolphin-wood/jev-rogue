@@ -3,7 +3,7 @@ id: 022
 title: The King's First Audience
 status: proposed
 date: 2026-09-27
-summary: The Crypt King is met twice. In room 5, the last fight of the ossuary, he drops out of the roof into an ordinary fight, and his landing kills every body in the room, which spill enough hearts to fill the player's bar and three more that stay on the floor. That first audience is phase I alone. At 60% of its bar the armour breaks and he goes back up out of the room, and the room pays its door's reward a grade higher. The final fight in the throne hall starts where the first one stopped, with the armour already gone. Phases II and III are stretched over a full bar that is larger than the one they had before. It takes the place of the guardian that seam would have held, not a room of its own, so the run is no longer and the count of fights is unchanged. Placed at room 5 rather than 10 because real players die before room 8: the meeting comes to every run, and its peak buys room 6 as the trough at the ramp's steepest step. Code decides all of it. The one Jev question the room keeps is its door's reward.
+summary: The Crypt King is met twice. In room 5, the last fight of the ossuary, the roof comes down on an ordinary fight, a stone on each body and none on the player, and he lands on the far side of the arena. The bodies spill enough hearts to fill the player's bar and three more that stay on the floor. That first audience is phase I alone. At 60% of its bar the armour breaks and he goes back up out of the room, and the room pays its door's reward a grade higher. The final fight in the throne hall starts where the first one stopped, with the armour already gone. Phases II and III are stretched over a full bar that is larger than the one they had before. It takes the place of the guardian that seam would have held, not a room of its own, so the run is no longer and the count of fights is unchanged. Placed at room 5 rather than 10 because real players die before room 8: the meeting comes to every run, and its peak buys room 6 as the trough at the ramp's steepest step. Code decides all of it. The one Jev question the room keeps is its door's reward.
 depends_on: [003, 005, 014, 019, 020]
 ---
 
@@ -80,28 +80,49 @@ reward badge like any other, and the room fills like any other.
    waves are never queued. These bodies are there to be crushed.
 2. **The roof gives** once the player has killed **one** body, or 5 s after the
    room opens, whichever comes first. Nothing the player does before this can
-   cost them anything, since step 3 heals it all back. So the opening stretch
+   cost them anything, since step 4 heals it all back. So the opening stretch
    is pure setup: it exists to make room 5 look like room 4, so that the roof
    giving is a surprise and not a cutscene the door announced. One kill is
-   enough to set that up. Two can take a room-5 build most of the 5 s. His mark
-   goes down the way the meteor's landing mark does (`BOSS_METEOR_LAND_TELL_MS`,
-   three beats), in view, **at least `BOSS_METEOR_LAND_PX` plus two tiles from
-   the player**.
-3. **The landing** is the meteor's landing, reused: the hitstop, the shake,
-   the dust, the band (`bossShock`). **It kills every other body in the room**,
-   in view or not. This is his entrance, and the fight after it is his alone.
-   - **The entrance band does not hurt the player.** It is a spectacle, not a
-     test. The first band that costs anything is the one his first slam
-     throws in phase I.
-   - Bodies he kills pay **no experience**, the same rule as a summoned body
-     (`xpForKill`). The player did not kill them.
+   enough to set that up. Two can take a room-5 build most of the 5 s.
+
+   **Every death has a cause the player can see, and none of them reaches the
+   player.** Picture a body two steps from the player dying while the player
+   stands untouched. Or a band that kills bodies and passes through the player
+   harmlessly. Either one asks "why not me?", and there is no answer on screen.
+   So the room is not cleared by an effect. It is cleared by stones, one on
+   each body:
+
+   - **The rumble.** The room shakes, dust falls from the roof, and every body
+     staggers where it stands and is **shoved a step away from the player**
+     (the stagger's knockback, aimed). No body is in contact with the player
+     when its stone comes down.
+   - **The stones.** Each body gets a falling stone of its own. It is the
+     meteor's rock (`BOSS_METEOR_MARK_MS`, two beats of mark, then the fall),
+     marked **on that body**, a few at a time and a beat apart, so the player
+     watches the room come down one body after another. A body stands staggered
+     under its mark until the stone lands. Each stone kills the body under it.
+     **No mark is ever drawn over the player.** A mark that would overlap them
+     is moved to the body's far side, still covering the body. Bodies out of
+     view get stones too, unseen, as the roof comes down everywhere.
+3. **The landing.** When the last stone has fallen, his mark goes down
+   (`BOSS_METEOR_LAND_TELL_MS`, three beats) **on the far side of the arena
+   from the player: at least `KING_DROP_MIN_PX` (eight tiles) away, and as far
+   as the floor allows**. It is in the direction the player is facing, in view
+   (the camera widens to hold both, the throne entrance's `bossCine`), and clear
+   of the braziers. He comes down on it with the meteor's landing: the hitstop,
+   the shake, the dust. **The entrance throws no band.** The landing is his
+   arrival, far enough away that nothing about it could have reached the
+   player. The first band in the room is the one his first slam throws in
+   phase I, and that one hurts.
+   - Bodies the stones kill pay **no experience**, the same rule as a summoned
+     body (`xpForKill`). The player did not kill them.
 4. **The hearts.** Out of the bodies comes **enough health to fill the
    player's bar, plus `CRASH_HEARTS_SPARE = 3` more**. The count is set by what
    the player is missing, not by how many bodies there were: `missing + 3`
    hearts, shared among the corpses (a room with fewer bodies than hearts
    throws several from each).
    - The ones that fill the bar **fly to the player** (the cleared room's pull,
-     `VACUUM_SPEED`) while his name is up. So the player starts phase I on a
+     `VACUUM_SPEED`) as the stones fall and while his name is up. So the player starts phase I on a
      full bar, and never has to walk round the room while the king stands.
    - **The spare three stay on the floor as the fight's reserve.** They do not
      expire while he is in the room (`PICKUP_LIFETIME_MS` is suspended for
@@ -204,8 +225,8 @@ drop-in), so it can't be the throne hall's bare stage either.
 |---|---|---|
 | Archetype | a new `audience_arena`: `arena` shape, `open`, cover `none`, `boss: true` | no cover walls at all. An open arena is also a normal room's look (`open_arena`), so the room gives nothing away |
 | Outline | the arena skeletons that only move the outer wall: `arena`, `arena_octagon`, `arena_bastions` | an outline is the room's edge, not an obstacle in it. `arena_waist`, `arena_horseshoe` and `arena_notched` bite into the floor and are left out |
-| Scattered props | the ordinary room's pots, crates and urns (`PROPS_PER_ROOM`) | part of the disguise. **The landing shatters every one of them, room-wide**, along with the bodies |
-| Standing cover | two to four **braziers** (`brazier` fixture, 16 health) on the edge zones, never in the centre | cover the player can spend, and one of the king's blows breaks one (`BOSS_PROP_DAMAGE` 18). They survive the entrance, since the landing is aimed away from them, and the fight wears them away, the way the throne hall's columns go |
+| Scattered props | the ordinary room's pots, crates and urns (`PROPS_PER_ROOM`) | part of the disguise. **The collapse shatters every one of them, room-wide**, along with the bodies |
+| Standing cover | two to four **braziers** (`brazier` fixture, 16 health) on the edge zones, never in the centre | cover the player can spend, and one of the king's blows breaks one (`BOSS_PROP_DAMAGE` 18). They survive the entrance, since neither the stones nor his mark are put on them, and the fight wears them away, the way the throne hall's columns go |
 | Floor features | at most one floor feature on an edge zone: `spike_strip`, `poison_pool`, `ice_patch`, `lava_channel` or `grass_patch`, hazard budget ≤ 2 | the ground can ask something, but never in the centre where his landings and slams fall. No `turret_mount`: a turret is a body, and the landing leaves none |
 
 - **Zone slots** are `edge_n` and `edge_s` only (`A_EDGE_N`, `A_EDGE_S`). The
@@ -246,11 +267,11 @@ boss, and doc 002 does not ask a question with one answer.
 |---|---|
 | `encounters/enemies.ts` | `KING_AUDIENCE_HP`, `KING_RETREAT_AT`, `KING_FINAL_HP`, `KING_FINAL_III_AT`. A **boss script** (`"audience" \| "final"`) the boss body carries, read by `bossPhaseAt` for its thresholds |
 | `sim/enemy.ts` | `stepBossPhase`: under `audience`, the threshold at `KING_RETREAT_AT` roars and then retreats instead of entering phase II. Under `final`, the body is made at phase 2 with no roar |
-| `sim/world.ts` | the drop-in: trigger (one kill or 5 s), mark placement, landing, the room-wide crush, `missing + CRASH_HEARTS_SPARE` hearts (the missing ones pulled to the player, the spare ones held on the floor, not expiring and not taken on a full bar), no experience, `worldCleared` waiting on the king, not the queue |
+| `sim/world.ts` | the drop-in: trigger (one kill or 5 s), the rumble (stagger, shoved away from the player), a stone per body kept off the player, the landing mark at least `KING_DROP_MIN_PX` away with no band, `missing + CRASH_HEARTS_SPARE` hearts (the missing ones pulled to the player, the spare ones held on the floor, not expiring and not taken on a full bar), no experience, `worldCleared` waiting on the king, not the queue |
 | `run/doors.ts` | `RUN_AUDIENCE_ROOM = 5`. `stageFor` returns `"audience"`. `portalChoices` out of room 4 forbids elite, vendor and fountain |
 | `run/offer.ts` | room 5's offer at door grade + 1 |
 | `rooms/archetypes.ts` | `audience_arena` (open, no cover, `edge_n`/`edge_s` slots). Room 5 planned from it in the room's biome, with the three outline skeletons, braziers and at most one floor feature, and no round-2 questions |
-| `sim/world.ts` (props) | the landing shatters every scattered prop. Braziers stand until his blows break them. Spare hearts are kept off hazard cells |
+| `sim/world.ts` (props) | the collapse shatters every scattered prop. Braziers stand until his blows break them. Spare hearts are kept off hazard cells |
 | `run/summarize.ts`, director briefing | `king_met` and the neutral sentence |
 | `game/scenes/play.ts` | the mark, the fall, the name card on the drop-in. The retreat's rise off the top of the view. The throne entrance ending on a phase II body |
 | `harness` | `boss-bench --script audience\|final`. A full-run balance pass for hearts lost at room 5, at room 6 and at the boss, and the win rate |
@@ -264,7 +285,10 @@ boss, and doc 002 does not ask a question with one answer.
 - After the landing and the pull, the player is on a full bar, and exactly
   `CRASH_HEARTS_SPARE` hearts lie on the floor. A full bar does not take them,
   and they outlive `PICKUP_LIFETIME_MS`.
-- The entrance band never hurts the player.
+- No stone mark ever overlaps the player, and no body is in contact with the
+  player when its stone falls.
+- The king's landing mark is at least `KING_DROP_MIN_PX` from the player, and
+  the entrance landing throws no band.
 - The audience can't take the king below `KING_RETREAT_AT` of its bar. Every
   hit after the roar reads `boss_immune`.
 - The room clears when he leaves.
