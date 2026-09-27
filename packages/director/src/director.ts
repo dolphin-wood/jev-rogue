@@ -17,7 +17,7 @@ import {
   assemblePortals, SCHOOL_OF,
   rampDensities, rampAnchors, rampSubspecies, rampElitePresence, rampFor, rampRoster,
   keysLean, UNMEASURED, PORTAL_NEED_TEMPERATURE, PORTAL_TAIL_TEMPERATURE, NPC_MIN_NEED,
-  buildFacts, NO_BUILD, enemy, isFixedFightRoom, isGuardianRoom, baseArchetype, audienceZones, biomeFor, BIOME_TEMPERATURE,
+  buildFacts, NO_BUILD, enemy, isFixedFightRoom, audienceRoomFor, isGuardianRoom, baseArchetype, audienceZones, biomeFor, BIOME_TEMPERATURE,
 } from "@jr/core";
 import type {
   CounterScore, Distribution, EncounterProfile, RoomPlan,
@@ -1305,7 +1305,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
     async planRoom(ctx, door, suggested, alongside) {
       // The king's first audience is the run's shape, not a question (doc 022).
       // And room 10's guardian, in the same arena (doc 024).
-      if (isFixedFightRoom(ctx.room_index) && (door.room_type === "combat" || door.room_type === "elite"))
+      if (isFixedFightRoom(ctx.room_index, audienceRoomFor(ctx.seed)) && (door.room_type === "combat" || door.room_type === "elite"))
         return planAudience(ctx, door, alongside);
       const pacing = pacingLabels({
         room_index: ctx.room_index, history: ctx.history,

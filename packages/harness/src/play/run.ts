@@ -9,7 +9,7 @@ import {
   MAX_HEARTS, RngSource, bucketClearSpeed, bucketGold, bucketHealth, SMITH_PRICE, MERCHANT_PRICE, fountainDrink, fountainWouldHeal, fountainWanted,
   bucketMovementPressure, bucketRecentDamage, bucketRunProgress, createWorld,
   plainInstance, heldDominantTags, STYLE_START, step, worldCleared, ITEMS, STEP_MS,
-  RUN_BOSS_ROOM, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, makeKing, applyStat, cardPool, cardsFor, cardNeedsFor, portalChoices, heldSpell, CARDS_PER_OFFER, equipItem, attachAffix, withLevel,
+  RUN_BOSS_ROOM, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceRoomFor, audienceGrade, makeKing, applyStat, cardPool, cardsFor, cardNeedsFor, portalChoices, heldSpell, CARDS_PER_OFFER, equipItem, attachAffix, withLevel,
   noMods, AFFIX_SLOTS, generateRoom, toRoomPlan, BOSS_ARCHETYPES,
   buildShapeFor, expectedClearMsFor, goldRoomCoins, COIN_VALUE, COIN_BOOST_MAX, affixFitsHeld, fixedExit,
   levelAt, withLevels,
@@ -414,6 +414,9 @@ export async function playRun(
    * behind it will offer. A door keeps its kind's cards and is badged with
    * every school or family among them (`cardTypesOf`); the rest are unused.
    */
+  // Which of rooms 4 to 6 the king drops into this run (doc 022), as the scene draws it.
+  const audienceRoom = audienceRoomFor(seed);
+
   async function openPortals(index: number, elite: boolean): Promise<DoorOffer[]> {
     const ctx = contextNow(index);
     const held = heldNow();
@@ -421,6 +424,7 @@ export async function playRun(
     const choices = portalChoices(
       {
         roomIndex: index,
+        audienceRoom,
         /*
          * **This room's own difficulty.** These portals decide the next
          * room, so "no elite after an elite" is about the room the player
@@ -506,7 +510,7 @@ export async function playRun(
     const held = heldNow();
     const needs = needsFor(ctx);
     // The first audience pays its door a grade higher (doc 022).
-    const promise = isFight ? { grade: isFixedFightRoom(index) ? audienceGrade(door.grade) : door.grade, style: preset } : {};
+    const promise = isFight ? { grade: isFixedFightRoom(index, audienceRoom) ? audienceGrade(door.grade) : door.grade, style: preset } : {};
     const decidedCards = isFight && door.reward !== "gold" ? door.cards : undefined;
     const cardReqs: CardRequest[] = [];
     if (isFight && door.reward !== "gold" && !decidedCards)
@@ -578,7 +582,7 @@ export async function playRun(
       // `JR_SPAWN=camps` places the encounter at the start, in camps.
       placement: process.env.JR_SPAWN === "camps" ? "camps" : "waves",
       // The king's first audience (doc 022): the roof gives on room 5's fight.
-      audience: isFight && isAudienceRoom(index),
+      audience: isFight && isAudienceRoom(index, audienceRoom),
       // Room 10's guardian (doc 024).
       guardian: isFight && isGuardianRoom(index),
     });

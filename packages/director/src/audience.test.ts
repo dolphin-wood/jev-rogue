@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   AUDIENCE_FLOOR_FEATURES, ITEMS, MAX_HEARTS, ROOM_EXTENT, bucketClearSpeed, bucketGold, bucketHealth,
   bucketMovementPressure, bucketRecentDamage, bucketRunProgress, cardPool, emptyHistory, heldDominantTags,
-  plainInstance, RUN_AUDIENCE_ROOM, GRID_W, Tile,
+  plainInstance, RUN_AUDIENCE_ROOM, GRID_W, Tile, audienceRoomFor, AUDIENCE_ROOMS,
 } from "@jr/core";
 import type { RunContext } from "@jr/core";
 import { createDirector } from "./director.ts";
@@ -17,11 +17,11 @@ function ctx(seed: string): RunContext {
   const staff = { slots: 6, mana_max: 120 };
   const slots = [plainInstance("magic_bolt"), null, null];
   return {
-    run_id: seed, seed, room_index: RUN_AUDIENCE_ROOM,
+    run_id: seed, seed, room_index: audienceRoomFor(seed),
     labels: {
       health: bucketHealth(MAX_HEARTS), recent_damage: bucketRecentDamage(0),
       clear_speed: bucketClearSpeed(30_000, 30_000), movement_pressure_recent: bucketMovementPressure(0.5),
-      run_progress: bucketRunProgress(RUN_AUDIENCE_ROOM), gold: bucketGold(0),
+      run_progress: bucketRunProgress(audienceRoomFor(seed)), gold: bucketGold(0),
       tension_cap: "peak_allowed", hazard_cap: "high", pressure_cap: 5,
       build: { range: "mid" }, preference: { dominant: heldDominantTags(slots, ITEMS), consistency: "on_plan" },
       build_shape: "forming",
@@ -34,7 +34,8 @@ describe("the king's first audience: the room plan", () => {
   it("builds the open arena at compact size in the hall's light, a peak, with one wave and no elites", async () => {
     for (let s = 0; s < 12; s++) {
       const d = createDirector("rule");
-      const r = await d.planRoom(ctx(`aud${s}`), { room_index: RUN_AUDIENCE_ROOM, door_slot: 0, room_type: "combat" }, "build");
+      const c = ctx(`aud${s}`);
+      const r = await d.planRoom(c, { room_index: c.room_index, door_slot: 0, room_type: "combat" }, "build");
       expect(r.plan.params.space).toBe("audience_arena");
       expect(r.plan.params.size).toBe("compact");
       expect(r.plan.extent).toEqual(ROOM_EXTENT.compact);
@@ -60,8 +61,8 @@ describe("the king's first audience: the room plan", () => {
     const d = createDirector("rule", { observe: (o) => seen.push(o) });
     const c = ctx("aud-ask");
     const pool = cardPool(ITEMS, [], "stat", [{ shape: "bolt", count: 1, affixes: [] }], {}, { hurt: true });
-    const r = await d.planRoom(c, { room_index: RUN_AUDIENCE_ROOM, door_slot: 0, room_type: "combat" }, "build", {
-      cards: [{ room_index: RUN_AUDIENCE_ROOM, pool, count: 3, pity: false, temptation: false }],
+    const r = await d.planRoom(c, { room_index: c.room_index, door_slot: 0, room_type: "combat" }, "build", {
+      cards: [{ room_index: c.room_index, pool, count: 3, pity: false, temptation: false }],
     });
     const asked = seen.flatMap((o) => Object.keys(o.questions));
     for (const q of ["space", "size", "symmetry", "next_tension", "composition", "density"]) expect(asked).not.toContain(q);
@@ -80,3 +81,26 @@ describe("room 10's guardian: the room plan (doc 024)", () => {
     }
   });
 });
+
+describe("the king's first audience: where it falls (doc 022)", () => {
+  it("falls in room 4, 5 or 6, fixed for a run and spread across runs", () => {
+    const seen = new Set<number>();
+    for (let s = 0; s < 60; s++) {
+      const room = audienceRoomFor(`run-${s}`);
+      expect(AUDIENCE_ROOMS).toContain(room);
+      expect(audienceRoomFor(`run-${s}`)).toBe(room);
+      seen.add(room);
+    }
+    expect([...seen].sort()).toEqual([4, 5, 6]);
+    expect(audienceRoomFor(undefined)).toBe(RUN_AUDIENCE_ROOM);
+  });
+
+  it("plans only the drawn room as the audience: the rooms either side are ordinary", async () => {
+    const c = ctx("aud-either");
+    for (const i of AUDIENCE_ROOMS) {
+      const r = await createDirector("rule").planRoom({ ...c, room_index: i }, { room_index: i, door_slot: 0, room_type: "combat" }, "build");
+      expect(r.plan.params.space === "audience_arena", `room ${i}`).toBe(i === c.room_index);
+    }
+  });
+});
+

@@ -147,27 +147,33 @@ export const RUN_COMBAT_ROOMS = 14;
 export const RUN_SHOP_ROOM = RUN_COMBAT_ROOMS + 1;
 export const RUN_BOSS_ROOM = RUN_SHOP_ROOM + 1;
 /**
- * **The king's first audience** (doc 022): the last fight of the ossuary, where
- * he drops into an ordinary fight, plays phase I and leaves. Still one of the
- * fourteen fights, entered through an ordinary door; what it asks of the doors
- * before it is `leadsToAudience`.
+ * **The king's first audience** (doc 022): the fight he drops into, plays
+ * phase I in and leaves. **Which room it is, is drawn per run** from rooms 4
+ * to 6 (`AUDIENCE_ROOMS`, `audienceRoomFor`): a drop-in the player can count
+ * the rooms to is not a drop-in. Still one of the fourteen fights, entered
+ * through an ordinary door; what it asks of the doors before it is
+ * `leadsToFixedFight`. `RUN_AUDIENCE_ROOM` is where it falls when no run is
+ * named — the bench, the lab and tests.
  */
+export const AUDIENCE_ROOMS: readonly number[] = [4, 5, 6];
 export const RUN_AUDIENCE_ROOM = 5;
 
-/** Whether this room is the first audience. */
-export function isAudienceRoom(roomIndex: number): boolean {
-  return roomIndex === RUN_AUDIENCE_ROOM;
+/** The room this run's first audience falls in: one of `AUDIENCE_ROOMS`, from the run's seed. */
+export function audienceRoomFor(seed: string | undefined): number {
+  if (seed === undefined) return RUN_AUDIENCE_ROOM;
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+  return AUDIENCE_ROOMS[(h >>> 0) % AUDIENCE_ROOMS.length]!;
 }
 
-/**
- * Whether the doors out of this room open onto the first audience. Those doors
- * are ordinary reward doors but **never elite, a vendor or the fountain**: the
- * room behind them has to be a fight, and a fair one — an elite room with the
- * king on top of it is two spikes at once, and a door into a room with no
- * fight would move him into a room he cannot drop into.
- */
-export function leadsToAudience(roomIndex: number): boolean {
-  return roomIndex + 1 === RUN_AUDIENCE_ROOM;
+/** Whether this room is the first audience, in the run whose audience falls in `audienceRoom`. */
+export function isAudienceRoom(roomIndex: number, audienceRoom = RUN_AUDIENCE_ROOM): boolean {
+  return roomIndex === audienceRoom;
+}
+
+/** Whether the doors out of this room open onto the first audience. */
+export function leadsToAudience(roomIndex: number, audienceRoom = RUN_AUDIENCE_ROOM): boolean {
+  return roomIndex + 1 === audienceRoom;
 }
 
 /**
@@ -183,13 +189,19 @@ export function isGuardianRoom(roomIndex: number): boolean {
 }
 
 /** A fight the run's shape fixes rather than the Director: the first audience or the guardian. */
-export function isFixedFightRoom(roomIndex: number): boolean {
-  return isAudienceRoom(roomIndex) || isGuardianRoom(roomIndex);
+export function isFixedFightRoom(roomIndex: number, audienceRoom = RUN_AUDIENCE_ROOM): boolean {
+  return isAudienceRoom(roomIndex, audienceRoom) || isGuardianRoom(roomIndex);
 }
 
-/** Whether the doors out of this room open onto a fixed fight: never elite, a vendor or the fountain. */
-export function leadsToFixedFight(roomIndex: number): boolean {
-  return isFixedFightRoom(roomIndex + 1);
+/**
+ * Whether the doors out of this room open onto a fixed fight: never elite, a
+ * vendor or the fountain. The room behind them has to be a fight, and a fair
+ * one — an elite room with the king on top of it is two spikes at once, and a
+ * door into a room with no fight would move the fight into a room it cannot
+ * happen in.
+ */
+export function leadsToFixedFight(roomIndex: number, audienceRoom = RUN_AUDIENCE_ROOM): boolean {
+  return isFixedFightRoom(roomIndex + 1, audienceRoom);
 }
 
 /**
@@ -267,6 +279,8 @@ export interface RunShape {
    * the bar is nearly full.
    */
   readonly hurt?: boolean;
+  /** The room this run's first audience falls in (`audienceRoomFor`); room 5 when absent. */
+  readonly audienceRoom?: number;
 }
 
 export type RoomStage = "combat" | "shop" | "boss";
@@ -303,7 +317,7 @@ export const ELITE_GAP_FIGHTS = 2;
 export const ELITE_ROOMS_MAX = 4;
 
 export function legalDifficulties(run: RunShape): readonly Difficulty[] {
-  if (run.lastWasElite || run.critical || leadsToFixedFight(run.roomIndex)) return ["normal"];
+  if (run.lastWasElite || run.critical || leadsToFixedFight(run.roomIndex, run.audienceRoom)) return ["normal"];
   if ((run.elitesSoFar ?? 0) >= ELITE_ROOMS_MAX) return ["normal"];
   // Absent before the first elite, which is when there is nothing to be near.
   if (run.fightsSinceElite !== undefined && run.fightsSinceElite < ELITE_GAP_FIGHTS) return ["normal"];
@@ -515,7 +529,7 @@ export function portalChoices(run: RunShape, rng: Rng, count = drawPortalCount(r
   const n = Math.max(1, Math.min(count, REWARD_KINDS.length));
   // Neither may be the only way on, and neither may follow another room with
   // no fight in it: two in a row is a hole in the run.
-  const roomToSpare = n >= 2 && !run.lastWasNpc && !leadsToFixedFight(run.roomIndex);
+  const roomToSpare = n >= 2 && !run.lastWasNpc && !leadsToFixedFight(run.roomIndex, run.audienceRoom);
   const npc = roomToSpare && run.roomIndex >= NPC_FIRST_ROOM && run.roomIndex <= NPC_LAST_ROOM
     && (run.npcRooms ?? 0) < NPC_ROOMS_MAX && (run.npcOffers ?? 0) < NPC_OFFERS_MAX;
   /*

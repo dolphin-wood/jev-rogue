@@ -11,7 +11,7 @@ import {
   moodTransform, tintRGBA, dashInvulnerable, MELEE, ARMOUR_BREAK_MS, brakeFraction, ENEMIES,
   BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_PHASES, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
-  BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, RUN_AUDIENCE_ROOM, RUN_GUARDIAN_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
+  BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, audienceRoomFor, RUN_GUARDIAN_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTierKey, affixFitsSpell, itemShape,
   spikesOut, featureCells, fillSubspecies,
   heldDominantTags, STYLE_START, bucketClearSpeed, bucketGold, bucketMovementPressure, bucketRunProgress,
@@ -1985,7 +1985,7 @@ export class PlayScene extends Phaser.Scene {
       },
       skipRoom: () => { if (!this.entering) void this.enterRoom(this.roomIndex + 1); },
       // The king's two meetings (doc 022), on the build held now; the title is put away if it is up.
-      toAudience: () => { if (!this.entering) { this.hideTitle(); void this.enterRoom(RUN_AUDIENCE_ROOM); } },
+      toAudience: () => { if (!this.entering) { this.hideTitle(); void this.enterRoom(this.audienceRoom); } },
       toGuardian: () => { if (!this.entering) { this.hideTitle(); void this.enterRoom(RUN_GUARDIAN_ROOM); } },
       toFinal: () => { if (!this.entering) { this.hideTitle(); void this.enterRoom(RUN_BOSS_ROOM); } },
       bossLab: {
@@ -2101,7 +2101,7 @@ export class PlayScene extends Phaser.Scene {
       void this.enterRoom(1).then(() => { this.debug.showBossLab(); this.enterBossLab(); });
     // `?lab=audience`: straight into room 5, the king's first audience (doc 022), to watch the roof give.
     else if (new URLSearchParams(location.search).get("lab") === "audience")
-      void this.enterRoom(1).then(() => { this.hideTitle(); void this.enterRoom(RUN_AUDIENCE_ROOM); });
+      void this.enterRoom(1).then(() => { this.hideTitle(); void this.enterRoom(this.audienceRoom); });
     // `?lab=spells`: straight into the spell lab's arena, likewise.
     else if (this.spellLab) void this.enterRoom(1).then(() => { this.debug.showSpellLab(); this.spellLab?.start(); });
     else void this.enterRoom(1).then(() => {
@@ -2258,7 +2258,7 @@ export class PlayScene extends Phaser.Scene {
       ...(through?.schools ? { schools: through.schools } : {}),
       ...(through?.families ? { families: through.families } : {}),
       // The first audience pays its door a grade higher (doc 022).
-      grade: isFixedFightRoom(index) ? audienceGrade(through?.grade ?? 1) : through?.grade ?? 1,
+      grade: isFixedFightRoom(index, this.audienceRoom) ? audienceGrade(through?.grade ?? 1) : through?.grade ?? 1,
     };
     const roomCards = through?.cards ?? null;
     this.roomCards = roomCards;
@@ -2345,6 +2345,7 @@ export class PlayScene extends Phaser.Scene {
     const run: RunShape = {
       style: this.intent.preset,
       roomIndex: index,
+      audienceRoom: this.audienceRoom,
       /*
        * **This room's own difficulty**, not the one before it. These portals
        * decide the *next* room, so "no elite after an elite" is a statement
@@ -2381,7 +2382,7 @@ export class PlayScene extends Phaser.Scene {
       : null;
     this.planned = planned;
     // The first audience is a peak whatever the doors said, so the room after it is the trough (doc 022).
-    if (planned && isFixedFightRoom(index)) this.tension = planned.tension;
+    if (planned && isFixedFightRoom(index, this.audienceRoom)) this.tension = planned.tension;
     if (planned) {
       this.planRecords.set("room", { decisions: planned.decisions });
       playtestLog.decide(index, "room", planned.decisions);
@@ -2423,7 +2424,7 @@ export class PlayScene extends Phaser.Scene {
       rng: src.stream("gameplay"),
       offer: worldOffer,
       // The king's first audience: the roof gives on this fight (doc 022).
-      audience: fight && isAudienceRoom(index),
+      audience: fight && isAudienceRoom(index, this.audienceRoom),
       // Room 10's guardian stands in its room from the first frame (doc 024).
       guardian: fight && isGuardianRoom(index),
       dealtMult: this.dealtMult,
@@ -14834,6 +14835,11 @@ export class PlayScene extends Phaser.Scene {
     this.uiCam.setZoom(Math.min(cw / UI_W, ch / (UI_H + HUD_H))).centerOn(UI_W / 2, (UI_H + HUD_H) / 2);
     this.drawOffscreen(this.camFocus.x, this.camFocus.y, halfW, halfH);
     this.drawMinimap(this.camFocus.x, this.camFocus.y, halfW, halfH);
+  }
+
+  /** Which of rooms 4 to 6 the king drops into this run (doc 022): a function of the run's seed. */
+  private get audienceRoom(): number {
+    return audienceRoomFor(this.runSeed);
   }
 
   /** How far the first audience's view has pulled out, 0 to 1, eased (`holdCamera`). */
