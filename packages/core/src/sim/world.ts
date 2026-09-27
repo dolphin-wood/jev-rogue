@@ -3603,8 +3603,13 @@ function stepBossMeteor(w: World, e: Enemy, before: number): void {
  * already draws the fall, with none of what makes the fall a threat.
  */
 
-/** How long he stands after coming down before his first turn: his name, and a beat past it. */
-export const KING_AUDIENCE_FIRST_TURN_MS = 3400;
+/**
+ * How long he stands after coming down before his first turn. The landing is
+ * already its own beat — the sword driven into the floor, then knelt on over
+ * it (`BOSS_KNEEL_MS`) — so he rises and comes on a beat later; standing
+ * through his whole name read as him waiting to be hit.
+ */
+export const KING_AUDIENCE_FIRST_TURN_MS = BEAT_MS;
 
 /**
  * Puts the king above his mark, falling: he lands after the landing's tell
@@ -3655,7 +3660,7 @@ function stepKingEntrance(w: World, e: Enemy, before: number): void {
     w.flow = null;
     w.flowTile = null;
   }
-  // Knelt in the crater, then up: his name is shown over it (`KING_AUDIENCE_FIRST_TURN_MS`).
+  // The sword driven in and knelt on, then up, and a beat later his first turn (`KING_AUDIENCE_FIRST_TURN_MS`).
   if (e.bossCastMs <= -BOSS_KNEEL_MS) {
     finishBossMove(e);
     e.bossEntrance = false;

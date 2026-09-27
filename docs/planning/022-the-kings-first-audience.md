@@ -136,8 +136,9 @@ reward badge like any other, and the room fills like any other.
    (`showKingName`) shows `???` here, and so does his health bar. An armoured
    figure crashing through the roof is a question, and the throne hall answers
    it: the name first appears over the throne, where a JRPG's unidentified foe
-   and a Souls boss's title card both put it. After a beat the fight is phase I
-   as doc 020 wrote it. Nothing else is in the room.
+   and a Souls boss's title card both put it. He lands driving the sword into the
+   floor and kneels on it, rises, and a beat later the fight is phase I as doc
+   020 wrote it: no standing through a name card waiting to be hit. Nothing else is in the room.
    - **His bar has no marks**, and it is drawn from full down to his retreat
      line, so it empties as he leaves. It never stops at 60% for no reason the
      player is given. The final's bar marks where phases II and III begin.

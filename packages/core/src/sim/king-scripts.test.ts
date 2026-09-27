@@ -154,9 +154,9 @@ describe("the king's scripts: the entrance", () => {
     expect(k.airborne).toBe(false);
     expect(w.shockwaves).toHaveLength(0);
     expect(w.player.hearts).toBe(hearts);
-    // He kneels, rises and stands through his name before his first turn.
+    // He drives the sword in and kneels on it, rises, and comes on a beat later: no standing about.
     stepUntil(w, () => k.bossCast === "none");
     expect(k.bossEntrance).toBe(false);
-    expect(k.bossMoveMs).toBeGreaterThan(3000);
+    expect(k.bossMoveMs).toBeLessThan(500);
   });
 });
