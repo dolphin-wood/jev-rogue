@@ -68,3 +68,15 @@ describe("the king's first audience: the room plan", () => {
     expect(r.offer?.cards[0]?.ids.length).toBe(3);
   });
 });
+
+describe("room 10's guardian: the room plan (doc 024)", () => {
+  it("is planned as room 5 is, and its squad holds no plain warden", async () => {
+    for (let s = 0; s < 12; s++) {
+      const c = { ...ctx(`guard${s}`), room_index: 10 };
+      const r = await createDirector("rule").planRoom(c, { room_index: 10, door_slot: 0, room_type: "combat" }, "build");
+      expect(r.plan.params.space).toBe("audience_arena");
+      expect(r.tension).toBe("peak");
+      for (const wave of r.plan.encounter?.waves ?? []) for (const sp of wave.spawns) expect(sp.archetype).not.toBe("warden");
+    }
+  });
+});

@@ -206,6 +206,7 @@ export const JA: Table = {
   "card.legendary": "レジェンダリー",
   "hud.bossTitle": "地下墓所の王",
   "hud.bossUnknown": "???",
+  "hud.guardianTitle": "溺れた看守長",
   "hud.bossPhase": "第 {n} 段階",
   "prompt.cutTheLink": "鎖の上に立って断ち切る",
   "card.upgradeLv": "強化 Lv {from} → {to}",

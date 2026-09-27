@@ -9,7 +9,7 @@ import {
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
   moodTransform, tintRGBA, dashInvulnerable, MELEE, ARMOUR_BREAK_MS, brakeFraction, ENEMIES,
-  BOSS_ARCHETYPES, makeEnemy, makeKing, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
+  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_PHASES, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, RUN_AUDIENCE_ROOM, RUN_GUARDIAN_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTierKey, affixFitsSpell, itemShape,
@@ -779,6 +779,8 @@ const CLOSE_DEAD_X = 34;
  * its one cell of wall, and the HUD lies over the room as it does everywhere.
  */
 const BOSS_VIEW_SPARE = 1;
+/** The Drowned Warden's cold light (doc 024): a flooded blue-green multiply over the warden's own shading. */
+const GUARDIAN_TINT = 0x9fd8d0;
 /** The level a depth's own sound sits at everywhere in it (`ambienceLevels`): under a brazier or a grate beside the player. */
 const DEPTH_AMBIENCE = 0.3;
 /**
@@ -1984,6 +1986,7 @@ export class PlayScene extends Phaser.Scene {
       skipRoom: () => { if (!this.entering) void this.enterRoom(this.roomIndex + 1); },
       // The king's two meetings (doc 022), on the build held now; the title is put away if it is up.
       toAudience: () => { if (!this.entering) { this.hideTitle(); void this.enterRoom(RUN_AUDIENCE_ROOM); } },
+      toGuardian: () => { if (!this.entering) { this.hideTitle(); void this.enterRoom(RUN_GUARDIAN_ROOM); } },
       toFinal: () => { if (!this.entering) { this.hideTitle(); void this.enterRoom(RUN_BOSS_ROOM); } },
       bossLab: {
         enter: () => this.enterBossLab(),
@@ -2455,6 +2458,11 @@ export class PlayScene extends Phaser.Scene {
     this.camFocus = null;
     this.audienceK = 0;
     this.audienceDoneAt = -1;
+    // The guardian's room opens already whole, and its name comes up over it (doc 024).
+    if (this.world.guardianRoom) {
+      this.audienceK = 1;
+      this.time.delayedCall(700, () => { if (this.world.guardianRoom && !this.world.cleared) this.showKingName(t("hud.guardianTitle")); });
+    }
 
     this.kingIntro = null;
     this.kingGoblet = null;
@@ -14835,7 +14843,9 @@ export class PlayScene extends Phaser.Scene {
 
   private audiencePull(delta: number): number {
     const a = this.world.audience;
-    let wide = !!a && (a.phase === "rumble" || a.phase === "stones" || a.phase === "fight");
+    // Room 10's guardian room is seen whole until it is cleared (doc 024).
+    let wide = (!!a && (a.phase === "rumble" || a.phase === "stones" || a.phase === "fight"))
+      || (!!this.world.guardianRoom && !this.world.cleared);
     if (a?.phase === "done") {
       if (this.audienceDoneAt < 0) this.audienceDoneAt = this.time.now;
       wide = this.time.now - this.audienceDoneAt < AUDIENCE_HOLD_MS;
@@ -16106,7 +16116,8 @@ export class PlayScene extends Phaser.Scene {
      * king has none, since nothing interrupts him.
      */
     const bossFade = this.fadeMark();
-    const boss = w.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
+    // The king's bar, or the Drowned Warden's (doc 024): the one other body that gets one.
+    const boss = w.enemies.find((e) => e.archetype === "boss" && e.hp > 0) ?? w.enemies.find((e) => e.guardian && e.hp > 0);
     if (boss) {
       const BW = 280;
       const BX = UI_W / 2 - BW / 2;
@@ -16128,9 +16139,9 @@ export class PlayScene extends Phaser.Scene {
         this.sprites.add(shieldMark(this, this.atlas, this.uiTextureKey, BX - 7, BY - 7, 8).setDepth(102));
       }
       // The marks are the script's (doc 022): the final's phase III at the half; none on the first audience's.
-      for (const mark of boss.bossScript === "audience" ? [] : kingMarks(boss.bossScript))
+      for (const mark of boss.guardian ? GUARDIAN_PHASES : boss.bossScript === "audience" ? [] : kingMarks(boss.bossScript))
         this.sprites.rectangle(BX + BW * mark, BY, 1, 9, 0xffe9a8, 0.8).setOrigin(0.5).setDepth(102);
-      this.ftext("boss:title", BX, BY - 11, t(boss.bossScript === "audience" ? "hud.bossUnknown" : "hud.bossTitle"), {
+      this.ftext("boss:title", BX, BY - 11, t(boss.guardian ? "hud.guardianTitle" : boss.bossScript === "audience" ? "hud.bossUnknown" : "hud.bossTitle"), {
         fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(7, ZOOM) * ZOOM)}px`, color: "#ffe9a8",
       }).setScale(1 / ZOOM).setOrigin(0, 0.5).setDepth(102);
       // The phase is named in the lab only: in a run the fight says it — the armour, the roar, the bar's colour.
@@ -16851,7 +16862,7 @@ function drawEnemy(
     const shadow = group.image(
       e.x, e.y + (e.archetype === "boss" ? bossShadowOffset(atlas, shadowName) + bossEntranceLift(e) : shadowOffset(atlas, name, shadowName)), textureKey, shadowName,
     ).setOrigin(0.5)
-      .setScale(shadowScale(atlas, name, shadowName) * (1 - 0.45 * airK), (1 - 0.45 * airK) / ART_SCALE)
+      .setScale(shadowScale(atlas, name, shadowName) * (1 - 0.45 * airK) * (e.guardian ? GUARDIAN_SCALE : 1), (1 - 0.45 * airK) * (e.guardian ? GUARDIAN_SCALE : 1) / ART_SCALE)
       .setDepth(3)
       .setAlpha((e.awake ? 0.5 : 0.34) * (1 - 0.25 * airK) * (1 - skyK));
   } else {
@@ -16935,6 +16946,8 @@ function drawEnemy(
    */
   if (isSubspecies(e.archetype) && e.hp > 0) subspecies?.apply(img, e.archetype);
   if (e.affixes.length > 0 && e.hp > 0) img.setTint(0xffa8b8);
+  // The Drowned Warden in its own cold light (doc 024), so it reads as more than the wardens before it.
+  else if (e.guardian && e.hp > 0) img.setTint(GUARDIAN_TINT);
 
   // Fire and poison gauges, as the player has them: filling on hits, the
   // status's clock once it runs.
@@ -16999,9 +17012,10 @@ function drawEnemy(
    * (`bossFrameScale`), from his feet: the body's middle and the foot line
    * stay where they were.
    */
-  const bossScale = e.archetype === "boss" ? bossFrameScale(atlas, name) : 1;
+  // The Drowned Warden is the warden drawn larger, from its feet (doc 024; `GUARDIAN_SCALE` need not be whole).
+  const bossScale = e.archetype === "boss" ? bossFrameScale(atlas, name) : e.guardian ? GUARDIAN_SCALE : 1;
   if (bossScale !== 1) {
-    img.x += bossBodyShift(atlas, name, flipX) * (bossScale - 1);
+    if (e.archetype === "boss") img.x += bossBodyShift(atlas, name, flipX) * (bossScale - 1);
     img.y -= (atlas.contentBottom(name) - atlas.frame(name).h / 2) * (bossScale - 1) / ART_SCALE;
   }
   const base = (1 / ART_SCALE) * (e.affixes.length > 0 ? 1.1 : 1) * bossScale;

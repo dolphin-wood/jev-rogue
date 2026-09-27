@@ -17,7 +17,7 @@ import {
   assemblePortals, SCHOOL_OF,
   rampDensities, rampAnchors, rampSubspecies, rampElitePresence, rampFor, rampRoster,
   keysLean, UNMEASURED, PORTAL_NEED_TEMPERATURE, PORTAL_TAIL_TEMPERATURE, NPC_MIN_NEED,
-  buildFacts, NO_BUILD, enemy, isFixedFightRoom, audienceZones, biomeFor, BIOME_TEMPERATURE,
+  buildFacts, NO_BUILD, enemy, isFixedFightRoom, isGuardianRoom, baseArchetype, audienceZones, biomeFor, BIOME_TEMPERATURE,
 } from "@jr/core";
 import type {
   CounterScore, Distribution, EncounterProfile, RoomPlan,
@@ -420,7 +420,15 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
       ? assembleEncounterDetailed(profile, base, band, rng, { source: "rule", room_index: ctx.room_index })
       : null;
     // The first wave only: the roof gives before a second would be called, and a second is never queued.
-    const encounter = assembled ? { ...assembled.plan, waves: assembled.plan.waves.slice(0, 1), elite_affixes: [] } : null;
+    let encounter = assembled ? { ...assembled.plan, waves: assembled.plan.waves.slice(0, 1), elite_affixes: [] } : null;
+    // Beside the Drowned Warden no plain warden: two of the same body is one to misread (doc 024).
+    if (encounter && isGuardianRoom(ctx.room_index))
+      encounter = {
+        ...encounter,
+        waves: encounter.waves.map((wave) => ({
+          ...wave, spawns: wave.spawns.map((sp) => (baseArchetype(sp.archetype) === "warden" ? { ...sp, archetype: "shooter" } : sp)),
+        })),
+      };
     let offer: OfferPlan | undefined;
     if (alongside) {
       const q = offerAsk(ctx, alongside);

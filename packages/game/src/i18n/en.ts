@@ -210,6 +210,7 @@ export const EN = {
   "card.legendary": "LEGENDARY",
   "hud.bossTitle": "THE CRYPT KING",
   "hud.bossUnknown": "???",
+  "hud.guardianTitle": "THE DROWNED WARDEN",
   "hud.bossPhase": "phase {n}",
   "prompt.cutTheLink": "Stand on the chain to break it",
   "card.upgradeLv": "upgrade Lv {from} → {to}",
