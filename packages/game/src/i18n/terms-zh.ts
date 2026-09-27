@@ -6,7 +6,7 @@
  */
 export const ZH_TERMS = {
   /* ---------------------- state: what a request carried ------------------ */
-  "term.health": "生命",
+  "term.health": "生命值",
   "term.recent_damage": "近期受伤",
   "term.clear_speed": "清场速度",
   "term.movement_pressure_recent": "走位压力",
