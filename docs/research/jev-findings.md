@@ -1052,6 +1052,18 @@ this build" — the same requests gave fire 55% and Frozen Orb top of all ten at
 36%, and the typed-nothing requests did not move (fire 12%, the style's own
 cards 78% against 76%).
 
+**How a card is judged goes once in the state.** The judging paragraph was the
+same ~500 characters in every card's instruction, seventy times a door request;
+it now rides once as `card_judging`, and each question keeps its own card text
+and the criteria. On the ten offers above, the cards' yes correlated 0.97–0.98
+with the per-card wording (a repeat of that wording: 0.99), the typed-words
+results held (fire 55%, Frozen Orb top of all ten), and the spell pool's request
+fell from 14.7k to 10.7k input tokens. Ten runs on it: 4 spells under a quarter
+of uniform, the top ten at 48%, a style's own spells on a screen in two runs
+43 of 49, 12.6 distinct spells in 18.4 spell cards a run; an offer request
+19.3k input tokens (choice 25.9k, the first Noul wording 21.8k), and a run's
+requests 16% fewer tokens than the choice arm's.
+
 **Rule:** a choice question is for picking one thing. Where code draws several
 from a list, ask each item on its own — one Noul each — and let code set how
 sharply the judgements are read; a choice distribution used as a sampling
