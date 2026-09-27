@@ -6137,7 +6137,7 @@ export class PlayScene extends Phaser.Scene {
    * and anything breakable. A merchant behind a crate is a merchant the player
    * has to smash their way to, and a pillar in front of one hid it entirely.
    * The cell it stands on and the three rows toward the entry are cleared,
-   * with a tile either side.
+   * with a tile either side — and the way out is told to keep off it.
    */
   private clearVendorGround(): void {
     const w = this.world;
@@ -6156,6 +6156,8 @@ export class PlayScene extends Phaser.Scene {
     }
     w.flow = null;
     w.flowTile = null;
+    // And the way out rises clear of them: the stop's boss door stood on the fountain.
+    w.portalKeepClear = this.vendorSpots().map(({ gx, gy }) => ({ x: (gx + 0.5) * TILE_PX, y: (gy + 0.5) * TILE_PX }));
   }
 
   private floorNear(x: number, y: number): [number, number] {

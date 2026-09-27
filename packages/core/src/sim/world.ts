@@ -352,7 +352,7 @@ export function answerOffer(w: World): void {
   w.rewardDrop = null;
   // In front of the player, where they took the reward — which is gone, so
   // the row need not keep clear of it.
-  w.portals = portalsBefore(w.room.grid, w.room.extent, w.portalSpecs, w.player, [], hazardCells(w), w.viewHalf);
+  w.portals = portalsBefore(w.room.grid, w.room.extent, w.portalSpecs, w.player, w.portalKeepClear, hazardCells(w), w.viewHalf);
   raisePortals(w.portals);
   w.events.push({ kind: "portals_open", x: w.player.x, y: w.player.y });
 }
@@ -369,7 +369,7 @@ export function resolvePortals(w: World, specs: readonly PortalSpec[]): void {
   w.portalSpecs = specs;
   if (w.portals.length === 0) return;
   if (w.portals.length !== specs.length) {
-    w.portals = portalsBefore(w.room.grid, w.room.extent, specs, w.player, [], hazardCells(w), w.viewHalf);
+    w.portals = portalsBefore(w.room.grid, w.room.extent, specs, w.player, w.portalKeepClear, hazardCells(w), w.viewHalf);
     raisePortals(w.portals);
     return;
   }
@@ -495,6 +495,7 @@ export function createWorld(input: CreateWorldOptions): World {
     // Made when the way out opens, in front of the player (`portalsBefore`).
     portals: [],
     portalSpecs: o.offer?.doors ?? [],
+    portalKeepClear: [],
     rewardPending: false,
     rewardDrop: null,
     exited: null,
@@ -867,7 +868,7 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
        */
       for (let i = 0; i < (w.offer.coins ?? GOLD_ROOM_COINS); i++)
         drop(w.pickups, "coin", w.player.x, w.player.y, w.rng);
-      w.portals = portalsBefore(w.room.grid, w.room.extent, w.portalSpecs, w.player, [], hazardCells(w), w.viewHalf);
+      w.portals = portalsBefore(w.room.grid, w.room.extent, w.portalSpecs, w.player, w.portalKeepClear, hazardCells(w), w.viewHalf);
       raisePortals(w.portals);
       w.events.push({ kind: "portals_open", x: w.player.x, y: w.player.y });
     }

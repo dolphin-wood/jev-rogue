@@ -188,3 +188,36 @@ describe("the way out, beside the player", () => {
       expect(Math.hypot(portals[i]!.x - portals[j]!.x, portals[i]!.y - portals[j]!.y)).toBeGreaterThan(PORTAL_ENTER_RADIUS * 2);
   });
 });
+
+describe("the vendors' stop's way out", () => {
+  /*
+   * Reported from play: the boss door never rose at the pre-boss stop. It had
+   * — on the fountain's cell, three tiles ahead of a player facing in from the
+   * door, under the fountain's sprite and inside its prompt, so E drank.
+   */
+  it("opens clear of the stalls whichever way the player faces", async () => {
+    const { merchantHall } = await import("../rooms/fixed.ts");
+    const { createWorld, step } = await import("./world.ts");
+    const { NO_INPUT } = await import("./types.ts");
+    const { bossExit } = await import("../run/doors.ts");
+    const room = merchantHall();
+    // Where the scene stands them (`vendorSpots`): merchant, smith, fountain.
+    const cx = Math.floor(room.extent.w / 2), cy = Math.floor(room.extent.h / 2 - 1);
+    const stalls = [[-4, 0], [4, 0], [0, 3]].map(([dx, dy]) => ({
+      x: (cx + dx! + 0.5) * TILE_PX, y: (cy + dy! + 0.5) * TILE_PX,
+    }));
+    for (const facing of [-Math.PI / 2, 0, Math.PI, Math.PI / 2]) {
+      const w = createWorld({
+        room, encounter: null, props: 0, staff: { slots: 6, mana_max: 100 },
+        slots: [null, null, null, null, null, null], hearts: 3, rng: rng(),
+        offer: { cards: [], doors: bossExit(), coins: 0 },
+      });
+      w.portalKeepClear = stalls;
+      w.player.facing = facing;
+      step(w, NO_INPUT, 16);
+      expect(w.portals).toHaveLength(1);
+      for (const s of stalls)
+        expect(Math.hypot(w.portals[0]!.x - s.x, w.portals[0]!.y - s.y)).toBeGreaterThanOrEqual(TILE_PX * 2);
+    }
+  });
+});
