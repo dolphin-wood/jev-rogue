@@ -141,7 +141,13 @@ export type AffixEffect =
     readonly element?: Element; readonly power?: number;
   }
   /** A kill with this spell takes `fraction` off its cooldown. */
-  | { readonly kind: "haste"; readonly fraction: number };
+  | { readonly kind: "haste"; readonly fraction: number }
+  /** Each body a run's cut goes through carries the run on `px` further, `times` at most. */
+  | { readonly kind: "momentum"; readonly px: number; readonly times: number }
+  /** A run's wake draws bodies in to the run's line, at `pull` of its shove, instead of throwing them off. */
+  | { readonly kind: "undertow"; readonly pull: number }
+  /** A run ends by throwing its cut on ahead: a crescent at `share` of the cut, out `reachPx`. */
+  | { readonly kind: "finale"; readonly share: number; readonly reachPx: number };
 
 export interface AffixTier {
   readonly effect: AffixEffect;
@@ -594,6 +600,66 @@ BASE_AFFIXES.push({
     + "struck.",
 });
 
+/*
+ * **The run's own affixes** (Dash Slash). A spell that runs the caster
+ * through a pack with its wake coming off either side had only the affixes
+ * every spell takes — an element, a rune, a free cast — and none that
+ * changed the run. These three do: how far it goes, where the bodies it
+ * leaves end up, and what it does when it stops. Each needs a wake
+ * (`affixFitsSpell`), so they are dealt only to a key that has one.
+ */
+BASE_AFFIXES.push(
+  {
+    id: "momentum",
+    name: "Momentum",
+    // Read once at the cast into the run's figures (`runAffixes`), not by a projectile's hook.
+    hook: "cast",
+    shapes: ["dash"],
+    element: null,
+    tiers: [
+      { effect: { kind: "momentum", px: 18, times: 3 }, text: "each body cut carries the run on" },
+      { effect: { kind: "momentum", px: 26, times: 3 }, text: "each body cut carries the run further" },
+      { effect: { kind: "momentum", px: 36, times: 3 }, text: "each body cut carries the run much further" },
+    ],
+    description:
+      "Every body the run cuts carries it on a little further, so a run into a pack goes deeper; up to three.",
+  },
+  {
+    id: "undertow",
+    name: "Undertow",
+    hook: "cast",
+    shapes: ["dash"],
+    element: null,
+    tiers: [
+      { effect: { kind: "undertow", pull: 0.6 }, text: "the wake draws bodies in" },
+      { effect: { kind: "undertow", pull: 0.8 }, text: "the wake draws bodies in hard" },
+      { effect: { kind: "undertow", pull: 1 }, text: "the wake draws bodies onto the line" },
+    ],
+    description:
+      "The wake draws the bodies it cuts in toward the run's line instead of throwing them off, and the run only "
+      + "nudges what it passes: the pack is left in a line.",
+  },
+  {
+    id: "finale",
+    name: "Finale",
+    // Read once at the cast into the run's figures (`runAffixes`), not by a projectile's hook.
+    hook: "cast",
+    shapes: ["dash"],
+    element: null,
+    tiers: [
+      { effect: { kind: "finale", share: 0.6, reachPx: 72 }, text: "the run ends in a thrown cut" },
+      { effect: { kind: "finale", share: 0.8, reachPx: 96 }, text: "the run ends in a longer thrown cut" },
+      { effect: { kind: "finale", share: 1, reachPx: 120 }, text: "the run ends in a full thrown cut" },
+    ],
+    description:
+      "Where the run stops, its cut is thrown on ahead as a crescent of sword energy that passes through each "
+      + "body in its reach.",
+  },
+);
+
+/** The affixes that change a run, and need its wake to mean anything. */
+const RUN_AFFIXES: ReadonlySet<string> = new Set(["momentum", "undertow", "finale"]);
+
 export const AFFIX_TIERS = 3;
 
 export function spellAffixById(id: string): SpellAffix | null {
@@ -659,6 +725,7 @@ export function affixFitsSpell(affix: SpellAffix, item: Pick<BaseItem, "params">
    * - `fork` on a spell that already goes out all round (Frost Nova), for
    *   the reason `scatter` is kept off it: eleven shards split three ways.
    */
+  if (RUN_AFFIXES.has(affix.id) && Number(item?.params["wake_reach"] ?? 0) <= 0) return false;
   if (affix.id === "seek" && Number(item?.params["seek"] ?? 0) >= STRONG_SEEK) return false;
   if (affix.id === "pierce" && Number(item?.params["pierce"] ?? 0) >= PIERCES_ALL) return false;
   if (affix.id === "fork" && Number(item?.params["spread"] ?? 0) >= 180) return false;
@@ -726,5 +793,8 @@ export function spellAffixMagnitude(e: AffixEffect): number {
     case "resonate": return 1 / e.every;
     case "shape": return (e.pierce ?? 0) + (e.homing ?? 0) + (e.bounce ?? 0) + (e.damage ?? 0) + (e.power ?? 0);
     case "haste": return e.fraction;
+    case "momentum": return e.px * e.times;
+    case "undertow": return e.pull;
+    case "finale": return e.share * e.reachPx;
   }
 }

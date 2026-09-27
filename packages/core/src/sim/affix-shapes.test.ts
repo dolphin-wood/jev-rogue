@@ -71,6 +71,11 @@ const REPRESENTATIVE: Readonly<Record<SpellShape, string>> = {
   stance: "counter_stance",
 };
 
+/** The run's own affixes need a wake, which the shape's representative (Blink Strike) has not. */
+const RUN_REPRESENTATIVE: Readonly<Record<string, string>> = {
+  momentum: "dash_slash", undertow: "dash_slash", finale: "dash_slash",
+};
+
 /*
  * Two of doc 006's newer shapes do nothing where the rest are measured, and
  * both by their own rule: a trail lays ground only as the caster walks, and
@@ -156,6 +161,11 @@ interface Seen {
   airborne: number;
   /** The most projectiles standing still, not orbiting, at any one frame. */
   stationary: number;
+  /** A run carried on by a body it cut (`momentum`), and a run's thrown end (`finale`). */
+  momentum: number;
+  finales: number;
+  /** Body-frames being shoved back toward the run's line (`undertow`) rather than off it. */
+  inward: number;
 }
 
 function run(spell: string, scenario: Scenario, affix?: SpellAffix): Seen {
@@ -191,7 +201,7 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix): Seen {
   const aim = scenario === "wall" ? { x: PX - 600, y: PY } : scenario === "far" ? { x: PX + 700, y: PY } : { x: PX + 150, y: PY };
   const seen: Seen = {
     damage: 0, made: 0, splits: 0, arcs: 0, brands: 0, harvests: 0, hastes: 0, fires: 0,
-    wards: 0, burn: 0, poison: 0, chill: 0, airborne: 0, stationary: 0,
+    wards: 0, burn: 0, poison: 0, chill: 0, airborne: 0, stationary: 0, momentum: 0, finales: 0, inward: 0,
   };
   /*
    * A pool slot counts as a birth when it comes alive **or is renewed** —
@@ -229,6 +239,8 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix): Seen {
       if (ev.kind === "enemy_hit" && ev.what === "brand") seen.brands++;
       if (ev.kind === "enemy_hit" && ev.what === "harvest") seen.harvests++;
       if (ev.kind === "pickup" && ev.what === "haste") seen.hastes++;
+      if (ev.kind === "spell" && ev.what === "momentum") seen.momentum++;
+      if (ev.kind === "spell" && ev.what === "finale") seen.finales++;
     }
     seen.wards = Math.max(seen.wards, w.wards.length);
     let still = 0;
@@ -241,6 +253,8 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix): Seen {
     // Summed over the run rather than the peak: a spell of the element
     // already saturates the gauge, and what the affix adds there is how soon
     // and how long it runs, not how high.
+    // The run goes along the aim, level with the caster: back toward it is toward PY.
+    for (const e of bodies) if (Math.abs(e.knockY) > 1 && (e.y - PY) * e.knockY < 0) seen.inward++;
     for (const e of bodies) {
       seen.burn += e.burnBuild + (e.burnMs > 0 ? 1 + e.burnSources : 0);
       seen.poison += e.poisonBuild + e.poisonStacks;
@@ -292,6 +306,9 @@ function observable(a: SpellAffix, bare: Seen, withIt: Seen): boolean {
     case "mark": return withIt.brands > bare.brands;
     case "burst": return withIt.harvests > bare.harvests;
     case "haste": return withIt.hastes > bare.hastes;
+    case "momentum": return withIt.momentum > bare.momentum;
+    case "undertow": return withIt.inward > bare.inward;
+    case "finale": return withIt.finales > bare.finales;
     case "field": return withIt.fires > bare.fires;
     case "ward": return withIt.wards > bare.wards;
     case "repeat": case "spread": return withIt.made > bare.made;
@@ -323,7 +340,7 @@ function bare(spell: string, scenario: Scenario): Seen {
 describe("every affix does something on every shape it lists", () => {
   for (const a of SPELL_AFFIXES) {
     for (const shape of a.shapes) {
-      const spell = REPRESENTATIVE[shape];
+      const spell = RUN_REPRESENTATIVE[a.id] ?? REPRESENTATIVE[shape];
       it(`${a.id} on ${shape} (${spell})`, () => {
         // The representative must itself be able to take the affix, or the
         // offer would never deal it there and the claim is untested.

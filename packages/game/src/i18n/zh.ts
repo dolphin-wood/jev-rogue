@@ -494,4 +494,13 @@ export const ZH: Table = {
   "affixtier.resonance.1": "每 5 次剑击自动施放",
   "affixtier.resonance.2": "每 4 次剑击自动施放",
   "affixtier.resonance.3": "每 3 次剑击自动施放",
+  "affixtier.momentum.1": "每斩过一个敌人，冲刺多冲一段",
+  "affixtier.momentum.2": "每斩过一个敌人，冲刺多冲更远",
+  "affixtier.momentum.3": "每斩过一个敌人，冲刺多冲很远",
+  "affixtier.undertow.1": "剑气把敌人吸向路线",
+  "affixtier.undertow.2": "剑气把敌人强力吸向路线",
+  "affixtier.undertow.3": "剑气把敌人吸到路线上",
+  "affixtier.finale.1": "冲刺结束时甩出剑气",
+  "affixtier.finale.2": "冲刺结束时甩出更远的剑气",
+  "affixtier.finale.3": "冲刺结束时甩出全力剑气",
 };

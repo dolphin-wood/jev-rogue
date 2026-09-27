@@ -753,7 +753,7 @@ const AFFIX_STYLE: Readonly<Record<string, readonly string[]>> = {
   nuke: ["haste", "shatter", "fork", "brand", "rime"],
   area: ["scatter", "chain", "harvest", "pierce"],
   dot: ["kindle", "blight", "bloom", "brand"],
-  melee: ["resonance", "retort", "slipstream", "ward"],
+  melee: ["resonance", "retort", "slipstream", "ward", "momentum", "undertow", "finale"],
 };
 
 /**

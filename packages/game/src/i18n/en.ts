@@ -501,4 +501,13 @@ export const EN = {
   "affixtier.resonance.1": "every fifth sword hit casts it",
   "affixtier.resonance.2": "every fourth sword hit casts it",
   "affixtier.resonance.3": "every third sword hit casts it",
+  "affixtier.momentum.1": "each body cut carries the run on",
+  "affixtier.momentum.2": "each body cut carries the run further",
+  "affixtier.momentum.3": "each body cut carries the run much further",
+  "affixtier.undertow.1": "the wake draws bodies in",
+  "affixtier.undertow.2": "the wake draws bodies in hard",
+  "affixtier.undertow.3": "the wake draws bodies onto the line",
+  "affixtier.finale.1": "the run ends in a thrown cut",
+  "affixtier.finale.2": "the run ends in a longer thrown cut",
+  "affixtier.finale.3": "the run ends in a full thrown cut",
 } as const;

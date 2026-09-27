@@ -14117,16 +14117,19 @@ export class PlayScene extends Phaser.Scene {
         continue;
       }
       if (!s.alive || s.facing === undefined || s.half === undefined) continue;
+      // A `finale`'s crescent is the player's own sword energy, in its spell's light or its element's.
+      const own = s.byPlayer ? swordEnergyLook(w.spells[s.byPlayer.spellIndex]?.item.base ?? "dash_slash", s.byPlayer.element) : null;
+      const palette = own ? wavePalette(own.glow, own.core) : KING_WAVE;
       const wave = {
         x: s.x, y: s.y, radius: s.inner + s.thickness, facing: s.facing, half: s.half,
-        thick: s.thickness, life: Math.max(0, Math.min(1, (s.maxRadius - s.inner) / (TILE_PX * 3))),
-        flash: false, tick: w.tick, seed: Math.round(s.x + s.y) % 97, palette: KING_WAVE,
+        thick: s.thickness, life: Math.max(0, Math.min(1, (s.maxRadius - s.inner) / (own ? TILE_PX : TILE_PX * 3))),
+        flash: false, tick: w.tick, seed: Math.round(s.x + s.y) % 97, palette,
       };
       // On the floor layer, which is cleared with the rings — the blade layer is cleared after this draws.
       drawCrescentWave(this.soilGfx, wave, Math.min(1, 0.25 + wave.life));
       const back = { x: -Math.cos(s.facing), y: -Math.sin(s.facing) };
       for (const q of waveTrailPoints(wave, Math.random() < 0.7 ? 2 : 1))
-        this.shed({ x: q.x, y: q.y, vx: back.x * (20 + Math.random() * 30) + (Math.random() - 0.5) * 24, vy: back.y * (20 + Math.random() * 30) + (Math.random() - 0.5) * 24 - 8, ms: 0, life: 200 + Math.random() * 160, size: 1, colour: Math.random() < 0.5 ? KING_WAVE.mid : KING_WAVE.aura, gravity: -10 });
+        this.shed({ x: q.x, y: q.y, vx: back.x * (20 + Math.random() * 30) + (Math.random() - 0.5) * 24, vy: back.y * (20 + Math.random() * 30) + (Math.random() - 0.5) * 24 - 8, ms: 0, life: 200 + Math.random() * 160, size: 1, colour: Math.random() < 0.5 ? palette.mid : palette.aura, gravity: -10 });
     }
     /*
      * **A run's wake** (`layWake`): its stretches are one attack laid a piece

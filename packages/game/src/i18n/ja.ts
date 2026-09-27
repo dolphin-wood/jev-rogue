@@ -493,4 +493,13 @@ export const JA: Table = {
   "affixtier.resonance.1": "剣の5ヒットごとに詠唱",
   "affixtier.resonance.2": "剣の4ヒットごとに詠唱",
   "affixtier.resonance.3": "剣の3ヒットごとに詠唱",
+  "affixtier.momentum.1": "斬り抜けるたびにさらに進む",
+  "affixtier.momentum.2": "斬り抜けるたびにもっと進む",
+  "affixtier.momentum.3": "斬り抜けるたびに大きく進む",
+  "affixtier.undertow.1": "剣気が敵を引き寄せる",
+  "affixtier.undertow.2": "剣気が敵を強く引き寄せる",
+  "affixtier.undertow.3": "剣気が敵を進路上へ引き寄せる",
+  "affixtier.finale.1": "終わりに剣気を放つ",
+  "affixtier.finale.2": "終わりに長い剣気を放つ",
+  "affixtier.finale.3": "終わりに全力の剣気を放つ",
 };

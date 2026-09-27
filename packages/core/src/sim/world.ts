@@ -23,7 +23,7 @@ import {
   HURT_NUDGE, HURT_NUDGE_MS, INVULN_MS, MAX_HEARTS, PLAYER_RADIUS, PLAYER_SPEED, noMods, HP_PER_HEART, NO_INPUT,
   STEP_MS, STUN_LIGHTNING_MS,
 } from "./types.ts";
-import type { Bullet, DeathBurst, Enemy, GrassCell, Input, Particle, PlayerMods, World } from "./types.ts";
+import type { Bullet, DeathBurst, Enemy, GrassCell, Input, Particle, PlayerMods, PlayerWakeCut, World } from "./types.ts";
 import { acquire, makePool, integrate, POOL_SIZES } from "./bullets.ts";
 import {
   circleHitsWall, circlesOverlap, entryPosition, hasLineOfSight, moveSliding, normalise,
@@ -5287,7 +5287,11 @@ function stepDashStrike(w: World, dtMs: number): void {
   // A Dash Slash's wake, laid where the player has got to; the rest of it as the run ends.
   if (p.strikeWake) {
     layWake(w, p.strikeWake, p.x, p.y, p.strikeMs <= 0);
-    if (p.strikeMs <= 0) p.strikeWake = null;
+    if (p.strikeMs <= 0) {
+      const cut = p.strikeWake.byPlayer;
+      if (cut && cut.finaleShare > 0) throwFinale(w, cut);
+      p.strikeWake = null;
+    }
   }
   /*
    * A `land` dash comes down (doc 006): the ring goes off where the player
@@ -5314,7 +5318,27 @@ function stepDashStrike(w: World, dtMs: number): void {
     applyElementsTo(e, p.strikePowers, p.strikeStatusMult, p.strikeProc);
     e.hitFlashMs = HIT_FLASH_MS;
     const cut = p.strikeWake?.byPlayer;
-    if (cut && cut.knock > 0) {
+    /*
+     * `momentum`: the body the cut went through carries the run on — the
+     * travel, the strike and the mercy frames all lengthened by what the
+     * extra ground takes at dash speed — a few times at most.
+     */
+    if (cut && cut.momentumLeft > 0 && cut.momentumPx > 0) {
+      const more = (cut.momentumPx / Math.max(1, DASH_SPEED * p.mods.dashRange)) * 1000;
+      p.strikeMs += more;
+      p.dashMs += more;
+      p.dashIframeMs += more;
+      cut.momentumLeft--;
+      w.events.push({ kind: "spell", x: e.x, y: e.y, what: "momentum" });
+    }
+    if (cut && cut.pull > 0) {
+      // `undertow`: the run only nudges what it passes on down the line, so the wake behind can draw it in.
+      const push = (cut.knock * 0.3) / Math.max(1, e.radius / 10);
+      e.knockX += p.dashX * push;
+      e.knockY += p.dashY * push;
+      if (cut.weight >= SPELL_STAGGER_WEIGHT) spellStagger(w, e, cut.weight);
+      impact(w, HITSTOP_HIT * 1.6, TRAUMA_HIT * 1.5);
+    } else if (cut && cut.knock > 0) {
       /*
        * **A Dash Slash throws the body off its line**, square to the run, to
        * whichever side it was on, hard: the pack parts round the player and
@@ -5339,6 +5363,31 @@ function stepDashStrike(w: World, dtMs: number): void {
 }
 
 /**
+ * How far a knock carries a body, px per px/s of it: the knock decays by
+ * 0.82 a step at 60 steps a second, so it travels v / 60 / 0.18.
+ */
+const KNOCK_TRAVEL = 1 / 60 / 0.18;
+/** A `finale`'s crescent: how wide, how deep, how fast it flies. */
+const FINALE_HALF = (50 * Math.PI) / 180;
+const FINALE_THICK = 12;
+const FINALE_SPEED = 320;
+
+/**
+ * **`finale`**: where the run stops, its cut is thrown on ahead — a crescent
+ * of the same sword energy out of the player's front, through each body in
+ * its reach once, at a share of the run's cut.
+ */
+function throwFinale(w: World, cut: PlayerWakeCut): void {
+  const p = w.player;
+  const s = castShockwave(w, p.x, p.y, {
+    chargeMs: 0, inner: PLAYER_RADIUS, thickness: FINALE_THICK, speed: FINALE_SPEED,
+    maxRadius: PLAYER_RADIUS + cut.finaleReach, damage: 0, facing: Math.atan2(p.dashY, p.dashX), half: FINALE_HALF,
+  });
+  s.byPlayer = { ...cut, damage: cut.runDamage * cut.finaleShare, hits: [], momentumLeft: 0, finaleShare: 0 };
+  w.events.push({ kind: "spell", x: p.x, y: p.y, what: "finale" });
+}
+
+/**
  * **A player's wake** (the Dash Slash, `layWake`): each stretch cuts the
  * bodies its band crosses, once each across the whole wake, and shoves them
  * on the way it is rolling. Stone stops it as it stops the king's.
@@ -5356,10 +5405,26 @@ function stepPlayerWakes(w: World): void {
       w.stats.damageDealt += cut.damage;
       applyElementsTo(e, cut.powers, cut.statusMult, cut.proc);
       e.hitFlashMs = HIT_FLASH_MS;
-      // On the way the wake rolls, off the run: as hard as the spell's shove, a little under the run's own.
-      const push = Math.max(160, cut.knock * 0.8) / Math.max(1, e.radius / 10);
-      e.knockX += Math.cos(s.facing ?? 0) * push;
-      e.knockY += Math.sin(s.facing ?? 0) * push;
+      // Out from a crescent's centre (a `finale`); square off the run for a wake's stretch.
+      const d = Math.hypot(e.x - s.x, e.y - s.y) || 1;
+      const ux = s.half !== undefined ? (e.x - s.x) / d : Math.cos(s.facing ?? 0);
+      const uy = s.half !== undefined ? (e.y - s.y) / d : Math.sin(s.facing ?? 0);
+      if (cut.pull > 0 && s.half === undefined) {
+        /*
+         * `undertow`: drawn back in toward the run's line — as far as the
+         * body stands off it and no further, since a shove decays to about a
+         * twelfth of itself in px (`KNOCK_TRAVEL`), so it lands on the line.
+         */
+        const off = Math.max(0, (e.x - s.x) * ux + (e.y - s.y) * uy);
+        const pull = Math.min(cut.knock * cut.pull, off / KNOCK_TRAVEL) / Math.max(1, e.radius / 10);
+        e.knockX -= ux * pull;
+        e.knockY -= uy * pull;
+      } else {
+        // On the way the wake rolls, off the run: as hard as the spell's shove, a little under the run's own.
+        const push = Math.max(160, cut.knock * 0.8) / Math.max(1, e.radius / 10);
+        e.knockX += ux * push;
+        e.knockY += uy * push;
+      }
       if (cut.weight >= SPELL_STAGGER_WEIGHT) spellStagger(w, e, cut.weight);
       impact(w, HITSTOP_HIT, TRAUMA_HIT);
       w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: e.archetype, amount: cut.damage });
