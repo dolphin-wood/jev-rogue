@@ -6,7 +6,7 @@
 import { BAR_MS, BEAT_MS, beats, pastGrid, untilGrid } from "./beat.ts";
 import { AFFIXES, ENEMIES, affixesFor, baseArchetype, rampFor, rampMinimum, rampRoster, resistOf, threatWeight } from "../encounters/index.ts";
 import { ITEMS, plainInstance } from "../spells/index.ts";
-import { LEVEL_HEARTS, levelAt, withLevels, xpForKill } from "../run/levels.ts";
+import { KING_AUDIENCE_XP, LEVEL_HEARTS, levelAt, withLevels, xpForKill } from "../run/levels.ts";
 import type { ItemRegistry } from "../spells/items.ts";
 import { GRID_W, GRID_H, TILE_PX, Tile } from "../types.ts";
 import { STATUS_ELEMENTS, copyPowers, noPowers } from "../content/tags.ts";
@@ -51,6 +51,7 @@ import {
   PROP_MANA_FRACTION,
 } from "./props.ts";
 import { COIN_VALUE, MANA_ORB, drop, makePickupPool, stepPickups } from "./pickups.ts";
+import { audienceKill, makeAudience, stepAudience } from "./audience.ts";
 import {
   enteredPortal, makePortal, placeRewardNear, portalsBefore, raisePortals, stepPortals, stepReward,
 } from "./exits.ts";
@@ -63,7 +64,7 @@ import { ARM_TELE_MS, castArm, castRift, castRanged, castShockwave, dragStep, in
 import type { AttackHooks } from "./attacks.ts";
 import { computeFlowField, tileOf } from "./flow.ts";
 import {
-  anchored, bossStringHearts, hatchMinion, isActive, livingSummoners, makeEnemy, stepEnemy, stagger, canStagger, midAttack, wake, dropToken,
+  anchored, bossStringHearts, hatchMinion, isActive, livingSummoners, makeEnemy, makeKing, kingFloorHp, stepEnemy, stagger, canStagger, midAttack, wake, dropToken,
   dropFireToken, ARMOUR_BREAK_MS, SPAWN_FADE_MS, SPAWN_TELEGRAPH_MS, ENEMY_FREEZE_MS, STAGGER_MS,
   ENEMY_BURN_MS, ENEMY_POISON_MS, ENEMY_BURN_SOURCES, ENEMY_POISON_STACKS, SHATTER_MULT,
   STATUS_BREADTH_MULT, statusBreadth,
@@ -320,6 +321,12 @@ export interface CreateWorldOptions {
    * the right shape for a measurement that ends when the last enemy dies.
    */
   readonly offer?: RoomOffer;
+  /**
+   * **The king's first audience** (doc 022): the room opens as an ordinary
+   * fight, the roof gives, and he comes down into it. The room is not clear
+   * until he has come and gone.
+   */
+  readonly audience?: boolean;
 }
 
 /**
@@ -571,6 +578,7 @@ export function createWorld(input: CreateWorldOptions): World {
      * plays the full-size game.
      */
     roomIndex: o.roomIndex ?? 99,
+    ...(o.audience ? { audience: makeAudience(), awaitingBoss: true } : {}),
     coinBoost: Math.max(1, Math.min(COIN_BOOST_MAX, o.coinBoost ?? 1)),
     attackTokens: ATTACK_TOKENS,
     fireTokens: o.fireTokens ?? FIRE_TOKENS,
@@ -655,7 +663,7 @@ export function normalEliteCount(roomIndex: number, presence: ElitePresence | un
   return Math.min(NORMAL_ELITE_CAP, ELITE_COUNT[presence ?? "none"]);
 }
 
-function hazardCells(w: World): Set<number> {
+export function hazardCells(w: World): Set<number> {
   const out = new Set<number>();
   for (const z of w.room.zones)
     if (z.feature !== "none") for (const c of z.cells) out.add(c[1] * GRID_W + c[0]);
@@ -665,7 +673,9 @@ function hazardCells(w: World): Set<number> {
 /** No enemies, no pending waves and no summoner alive (doc 003). */
 export function worldCleared(w: World): boolean {
   // A burst still hanging is part of the fight: the room clears once it has flown.
-  return w.enemies.length === 0 && w.pendingWaves.length === 0 && livingSummoners(w) === 0
+  // And a room whose king is still to come — the throne before he stands, room 5
+  // before the roof gives (doc 022) — is empty, not clear.
+  return !w.awaitingBoss && w.enemies.length === 0 && w.pendingWaves.length === 0 && livingSummoners(w) === 0
     && w.deathBursts.length === 0;
 }
 
@@ -780,11 +790,18 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
     w.attackTokens = Math.max(0, base + extra - heldMelee);
     w.fireTokens = Math.max(0, Math.min(w.fireTokenCap, rampFor(w.roomIndex).tokens) + extra - heldFire);
   }
+  // The roof giving on room 5 (doc 022): held bodies first, so none of them takes a turn this step.
+  stepAudience(w, dtMs);
   // The king lives on his own clock (`bossTempo`): everything he does runs faster in phase III, with the music.
   for (const e of w.enemies) stepEnemy(w, e, dtMs * bossTempo(e));
   for (const e of w.enemies) if (e.archetype === "boss" && e.hp > 0) stepBoss(w, e, dtMs * bossTempo(e));
   resolveBodies(w);
   w.enemies = w.enemies.filter((e) => {
+    // Gone up out of the room (doc 022): off the floor, and nothing a death pays.
+    if (e.gone) return false;
+    // The first audience never kills him: held on the retreat's line, he leaves from it.
+    const floor = kingFloorHp(e);
+    if (floor > 0 && e.hp < floor) e.hp = floor;
     if (e.hp > 0) return true;
     onEnemyKilled(w, e);
     return false;
@@ -2370,6 +2387,7 @@ function turretMounts(w: World): [number, number][] {
 }
 
 function onEnemyKilled(w: World, e: Enemy): void {
+  audienceKill(w);
   /*
    * A `doom` mark outlives its body (doc 006): it still bursts, on its own
    * clock, where the body fell — which is what makes marking a pack and
@@ -3039,6 +3057,14 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
     w.trauma = Math.max(w.trauma, rumble);
     if (e.bossRoarMs > 0) return;
     e.bossRoarMs = 0;
+    // The end of the first audience (doc 022): where phase II would call, he goes back up.
+    if (e.bossScript === "audience") {
+      e.bossLeaving = true;
+      e.bossCast = "meteor";
+      e.bossCastEndAt = -1;
+      w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: "boss_retreat" });
+      return;
+    }
     // Into phase III, no call: the fall (`BOSS_METEOR_GATHER_MS`), set going on the next step.
     if (e.phase >= 3) {
       e.bossAddsPhase = Math.max(e.bossAddsPhase, e.phase);
@@ -3222,7 +3248,10 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
     return;
   }
 
-  if (e.bossCast === "meteor" && e.bossCastEndAt < 0) startBossMeteor(w, e);
+  if (e.bossCast === "meteor" && e.bossCastEndAt < 0) {
+    if (e.bossLeaving) startKingLeaving(e);
+    else startBossMeteor(w, e);
+  }
   const before = e.bossCastMs;
   // From the absolute end, not by subtraction: hitstop freezes this function but not the clock, so a
   // countdown would come out late by every freeze inside the telegraph, and off the beat.
@@ -3293,7 +3322,9 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
     return;
   }
   if (e.bossCast === "meteor") {
-    stepBossMeteor(w, e, before);
+    if (e.bossEntrance) stepKingEntrance(w, e, before);
+    else if (e.bossLeaving) stepKingLeaving(w, e);
+    else stepBossMeteor(w, e, before);
     return;
   }
   if (e.bossCast === "hook") {
@@ -3562,6 +3593,115 @@ function stepBossMeteor(w: World, e: Enemy, before: number): void {
   }
   // Knelt in the crater: the opening phase III gives first.
   if (e.bossCastMs <= -BOSS_KNEEL_MS) finishBossMove(e);
+}
+
+/*
+ * **The first audience's two ends** (doc 022): the king comes down into room 5
+ * and goes back up out of it. Both are the fall into phase III's machinery —
+ * `bossCast` "meteor", the leap's frames, the landing mark while
+ * `bossCastMs <= BOSS_METEOR_LAND_TELL_MS` — so the renderer draws them as it
+ * already draws the fall, with none of what makes the fall a threat.
+ */
+
+/**
+ * How long he stands after coming down before his first turn. The landing is
+ * already its own beat — the sword driven into the floor, then knelt on over
+ * it (`BOSS_KNEEL_MS`) — so he rises and comes on a beat later; standing
+ * through his whole name read as him waiting to be hit.
+ */
+export const KING_AUDIENCE_FIRST_TURN_MS = BEAT_MS;
+
+/**
+ * Puts the king above his mark, falling: he lands after the landing's tell
+ * (`BOSS_METEOR_LAND_TELL_MS`), on the bar line after it, so the landing is on
+ * the downbeat as every landing of his is.
+ */
+export function beginKingEntrance(e: Enemy, x: number, y: number): void {
+  e.x = e.bossTargetX = e.bossFromX = x;
+  e.y = e.bossTargetY = e.bossFromY = y;
+  e.bossEntrance = true;
+  e.bossCast = "meteor";
+  e.bossBusy = true;
+  e.awake = true;
+  e.spawnFadeMs = 0;
+  e.airborne = true;
+  e.bossLift = BOSS_LEAP_SKY_PX;
+  const least = BOSS_METEOR_LAND_TELL_MS;
+  e.bossCastEndAt = e.bossFightMs + least + untilGrid(e.bossFightMs + least, BAR_MS);
+  e.bossCastMs = e.bossCastEndAt - e.bossFightMs;
+  e.bossCommitAt = e.bossCastEndAt;
+}
+
+/**
+ * The entrance, one step: up out of sight over the mark, the drop onto it,
+ * and a landing that is his arrival and nothing else — **no band, no struck
+ * ground, no hurt**. The mark is far from the player (`KING_DROP_MIN_PX`), so
+ * nothing about it could have reached them; the first band in the room is his
+ * first slam's, and that one costs.
+ */
+function stepKingEntrance(w: World, e: Enemy, before: number): void {
+  e.x = e.bossTargetX;
+  e.y = e.bossTargetY;
+  if (e.bossCastMs > 0) {
+    e.airborne = true;
+    e.knockX = 0; e.knockY = 0; e.vx = 0; e.vy = 0;
+    const k = Math.max(0, 1 - e.bossCastMs / BOSS_LEAP_FALL_MS);
+    e.bossLift = e.bossCastMs > BOSS_LEAP_FALL_MS ? BOSS_LEAP_SKY_PX : BOSS_LEAP_SKY_PX * (1 - k * k);
+    return;
+  }
+  if (before > 0) {
+    e.airborne = false;
+    e.bossLift = 0;
+    impact(w, HITSTOP_CAP, 0);
+    w.trauma = 1;
+    w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "boss_land" });
+    w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: "boss_arrives" });
+    bossStrikesProps(w, (q) => Math.hypot(q.x - e.x, q.y - e.y) <= BOSS_METEOR_LAND_PX + q.radius, []);
+    w.flow = null;
+    w.flowTile = null;
+  }
+  // The sword driven in and knelt on, then up, and a beat later his first turn (`KING_AUDIENCE_FIRST_TURN_MS`).
+  if (e.bossCastMs <= -BOSS_KNEEL_MS) {
+    finishBossMove(e);
+    e.bossEntrance = false;
+    e.bossBusy = false;
+    e.bossMoveMs = KING_AUDIENCE_FIRST_TURN_MS;
+  }
+}
+
+/** Sets his leaving going: the leap's gather, then straight up out of the view, and he does not come down. */
+function startKingLeaving(e: Enemy): void {
+  e.bossCastEndAt = e.bossFightMs + BOSS_METEOR_GATHER_MS + BOSS_METEOR_UP_MS;
+  e.bossCastMs = e.bossCastEndAt - e.bossFightMs;
+  e.bossCommitAt = e.bossCastEndAt;
+  e.bossTargetX = e.bossFromX = e.x;
+  e.bossTargetY = e.bossFromY = e.y;
+  e.bossLift = 0;
+}
+
+/**
+ * His leaving, one step. Crouched on the floor he can still be struck, and
+ * whatever lands is held on the retreat's line (`kingFloorHp`); once he is up
+ * nothing reaches him, and at the top of the climb he is gone
+ * (`Enemy.gone`) — the room clears behind him.
+ */
+function stepKingLeaving(w: World, e: Enemy): void {
+  e.knockX = 0; e.knockY = 0; e.vx = 0; e.vy = 0;
+  const since = BOSS_METEOR_UP_MS - e.bossCastMs;
+  const wasAir = e.airborne;
+  e.airborne = since > 0;
+  if (!wasAir && e.airborne) w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: "boss_jump" });
+  if (since <= 0) {
+    e.bossLift = -3 * Math.min(1, (BOSS_METEOR_GATHER_MS + since) / BOSS_METEOR_GATHER_MS);
+    return;
+  }
+  const k = Math.min(1, since / BOSS_METEOR_UP_MS);
+  e.bossLift = BOSS_LEAP_SKY_PX * k * k;
+  if (e.bossCastMs > 0) return;
+  e.gone = true;
+  w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: "boss_gone" });
+  // Driving him off is what the room pays in experience (`KING_AUDIENCE_XP`): paid where he stood.
+  payXp(w, KING_AUDIENCE_XP, e.bossFromX, e.bossFromY);
 }
 
 function finishBossMove(e: Enemy): void {
@@ -4219,6 +4359,8 @@ function collectPickups(w: World, dtMs: number): void {
     w.pickups, dtMs, w.player,
     (x, y, r) => circleHitsWall(w.room.grid, x, y, r),
     w.cleared,
+    // A reserve waits while the hearts that fill the bar are still on their way (doc 022).
+    w.player.hearts >= MAX_HEARTS + w.player.mods.maxHearts || w.pickups.some((q) => q.alive && q.homing),
   );
   for (const p of taken) {
     if (p.kind === "heart") {
@@ -4384,10 +4526,14 @@ export const ELITE_HEAL_FRACTION = 0.1;
  * losing health.
  */
 function gainXp(w: World, e: Enemy): void {
-  const points = xpForKill(e.archetype, { elite: e.affixes.length > 0, summoned: e.summoned });
+  payXp(w, xpForKill(e.archetype, { elite: e.affixes.length > 0, summoned: e.summoned }), e.x, e.y);
+}
+
+/** Experience paid from a point, and the levels it reaches. */
+export function payXp(w: World, points: number, x: number, y: number): void {
   if (points <= 0) return;
   w.xp += points;
-  w.events.push({ kind: "xp", x: e.x, y: e.y, amount: points });
+  w.events.push({ kind: "xp", x, y, amount: points });
   const now = levelAt(w.xp);
   while (w.level < now.level) {
     w.level++;

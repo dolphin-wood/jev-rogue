@@ -25,7 +25,8 @@ function ctx(over: {
   /** What the last fights measured as damage a second (`run/observed.ts`). */
   power?: "low" | "fair" | "high";
 } = {}): RunContext {
-  const index = over.index ?? 5;
+  // Room 6, not 5: room 5 is the king's first audience and asks no room questions (doc 022).
+  const index = over.index ?? 6;
   const staff = { slots: 6, mana_max: 120 };
   const slots = [plainInstance("magic_bolt"), plainInstance("spark_spray"), null];
   const seed = over.seed ?? "tension";
@@ -58,7 +59,7 @@ async function rooms(over: NonNullable<Parameters<typeof ctx>[0]>, n = 200, room
   const requests: ObservedRequest[] = [];
   const director = createDirector("rule", { observe: (r) => requests.push(r) });
   for (let i = 0; i < n; i++) {
-    const c = { ...ctx({ ...over, seed: `${over.seed ?? "t"}-${i}` }), room_index: 4 + (i % 8) };
+    const c = { ...ctx({ ...over, seed: `${over.seed ?? "t"}-${i}` }), room_index: [4, 6, 7, 8, 9, 10, 11, 12][i % 8]! };
     const plan = await director.planRoom(c, { room_index: c.room_index, door_slot: 0, room_type: roomType }, "build");
     tensions.push(plan.tension);
     sizes.push(plan.plan.params.size);
@@ -127,14 +128,14 @@ describe("the room's intensity, merged into round 1 (doc 004)", () => {
     const after = (tensions: Tension[], rooms: RoomType[]) => ({
       ...c, history: { ...c.history, tensions, rooms },
     });
-    await director.planRoom(after(["peak"], ["combat"]), { room_index: 5, door_slot: 0, room_type: "combat" }, "build");
+    await director.planRoom(after(["peak"], ["combat"]), { room_index: 6, door_slot: 0, room_type: "combat" }, "build");
     const q = seen.at(-2)?.questions["next_tension"];
     expect(q, "next_tension was not asked").toBeTruthy();
     expect(Object.keys(q!.criteria)).not.toContain("peak");
 
     // ...but a peak after a build is still on the table.
     seen.length = 0;
-    await director.planRoom(after(["build"], ["combat"]), { room_index: 5, door_slot: 0, room_type: "combat" }, "build");
+    await director.planRoom(after(["build"], ["combat"]), { room_index: 6, door_slot: 0, room_type: "combat" }, "build");
     expect(Object.keys(seen.at(-2)?.questions["next_tension"]?.criteria ?? {})).toContain("peak");
   });
 

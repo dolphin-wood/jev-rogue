@@ -414,6 +414,13 @@ export interface DebugActions {
    * the game that is not part of playing it.
    */
   readonly skipRoom: () => void;
+  /**
+   * Straight to one of the king's two meetings (doc 022), with the build the
+   * run holds now: room 5's first audience from its opening, or the throne
+   * hall's final from its entrance.
+   */
+  readonly toAudience: () => void;
+  readonly toFinal: () => void;
   /** The BOSS tab: the boss on a lead (`boss-lab.ts`). */
   readonly bossLab: BossLabActions;
   /**
@@ -610,7 +617,10 @@ export class DebugPanel {
       + `<div style="margin-top:4px"><button data-reset-hints style="${BTN};margin-left:0">reset first-launch hints</button></div>`
       + `<div style="color:#5a5f7a">the key guide shows again on the next first room</div>`
       + `<div style="margin-top:4px"><button data-skip-room style="${BTN};margin-left:0">skip to the next room</button></div>`
-      + `<div style="color:#5a5f7a">leaves this room uncleared; was the N key</div></div>`;
+      + `<div style="color:#5a5f7a">leaves this room uncleared; was the N key</div>`
+      + `<div style="margin-top:4px"><button data-to-audience style="${BTN};margin-left:0">king: first audience</button>`
+      + `<button data-to-final style="${BTN}">king: final</button></div>`
+      + `<div style="color:#5a5f7a">room 5 from its opening, or the throne hall from its entrance, with the build held now</div></div>`;
     this.toolBox.appendChild(cheats);
 
     /*
@@ -668,6 +678,10 @@ export class DebugPanel {
       ?.addEventListener("click", () => this.actions.resetFirstLaunch());
     cheats.querySelector<HTMLButtonElement>("button[data-skip-room]")
       ?.addEventListener("click", () => this.actions.skipRoom());
+    cheats.querySelector<HTMLButtonElement>("button[data-to-audience]")
+      ?.addEventListener("click", () => this.actions.toAudience());
+    cheats.querySelector<HTMLButtonElement>("button[data-to-final]")
+      ?.addEventListener("click", () => this.actions.toFinal());
   }
 
   toggle(): void {

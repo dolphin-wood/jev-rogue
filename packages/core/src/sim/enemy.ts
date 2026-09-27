@@ -13,7 +13,8 @@ import { TILE_PX, GRID_W, GRID_H } from "../types.ts";
 import { PLAYER_RADIUS, PLAYER_SPEED } from "./types.ts";
 import type { Enemy, World } from "./types.ts";
 import {
-  ENEMY_BULLET_CAP, SUMMONER_INTERVAL_S, SUMMONER_MINION_CAP, MAX_CONCURRENT_ENEMIES, BOSS_PHASES, bossPhaseAt } from "../encounters/enemies.ts";
+  ENEMY_BULLET_CAP, SUMMONER_INTERVAL_S, SUMMONER_MINION_CAP, MAX_CONCURRENT_ENEMIES, BOSS_PHASES, bossPhaseAt, kingHp, KING_RETREAT_AT } from "../encounters/enemies.ts";
+import type { BossScript } from "../encounters/enemies.ts";
 
 const SUMMONER_INTERVAL_MS = SUMMONER_INTERVAL_S * 1000;
 /**
@@ -2152,6 +2153,27 @@ const BOSS_PACE_EASE_PX = 26;
 const BOSS_PATTERN_MIN_GAP = 70;
 
 
+/**
+ * **The king for one of his two meetings** (doc 022). His bar is the script's
+ * (`kingHp`), and his phases its thresholds (`bossPhaseAt`).
+ */
+export function makeKing(id: number, x: number, y: number, script?: BossScript): Enemy {
+  const e = makeEnemy(id, "boss", x, y, []);
+  if (!script) return e;
+  e.bossScript = script;
+  e.hp = e.maxHp = kingHp(script);
+  return e;
+}
+
+/**
+ * The least health the first audience can leave him on: the retreat's line.
+ * Whatever lands past it — a big hit, a burn ticking through the roar — is
+ * held there, so he always leaves and is never killed in room 5.
+ */
+export function kingFloorHp(e: Enemy): number {
+  return e.bossScript === "audience" ? Math.ceil(e.maxHp * KING_RETREAT_AT) : 0;
+}
+
 /** The boss's current phase entry. */
 export function bossPhase(e: Enemy): BossPhase {
   return BOSS_PHASES[Math.min(BOSS_PHASES.length, Math.max(1, e.phase)) - 1]!;
@@ -2293,7 +2315,7 @@ function bossFalling(e: Enemy): boolean {
 
 function stepBossPhase(world: World, e: Enemy): void {
   if (e.archetype !== "boss" || e.hp <= 0) return;
-  const next = bossPhaseAt(e.hp / Math.max(1, e.maxHp));
+  const next = bossPhaseAt(e.hp / Math.max(1, e.maxHp), e.bossScript);
   if (next === e.phase) return;
   const prev = e.phase;
   e.phase = next;

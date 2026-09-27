@@ -9,7 +9,7 @@ import {
   MAX_HEARTS, RngSource, bucketClearSpeed, bucketGold, bucketHealth, SMITH_PRICE, MERCHANT_PRICE, fountainDrink, fountainWouldHeal, fountainWanted,
   bucketMovementPressure, bucketRecentDamage, bucketRunProgress, createWorld,
   plainInstance, heldDominantTags, STYLE_START, step, worldCleared, ITEMS, STEP_MS,
-  RUN_BOSS_ROOM, stageFor, applyStat, cardPool, cardsFor, cardNeedsFor, portalChoices, heldSpell, CARDS_PER_OFFER, equipItem, attachAffix, withLevel,
+  RUN_BOSS_ROOM, stageFor, isAudienceRoom, audienceGrade, makeKing, applyStat, cardPool, cardsFor, cardNeedsFor, portalChoices, heldSpell, CARDS_PER_OFFER, equipItem, attachAffix, withLevel,
   noMods, AFFIX_SLOTS, generateRoom, toRoomPlan, BOSS_ARCHETYPES,
   buildShapeFor, expectedClearMsFor, goldRoomCoins, COIN_VALUE, COIN_BOOST_MAX, affixFitsHeld, fixedExit,
   levelAt, withLevels,
@@ -505,7 +505,8 @@ export async function playRun(
       isFight ? door.reward : stage === "shop" ? "stat" : null;
     const held = heldNow();
     const needs = needsFor(ctx);
-    const promise = isFight ? { grade: door.grade, style: preset } : {};
+    // The first audience pays its door a grade higher (doc 022).
+    const promise = isFight ? { grade: isAudienceRoom(index) ? audienceGrade(door.grade) : door.grade, style: preset } : {};
     const decidedCards = isFight && door.reward !== "gold" ? door.cards : undefined;
     const cardReqs: CardRequest[] = [];
     if (isFight && door.reward !== "gold" && !decidedCards)
@@ -576,6 +577,8 @@ export async function playRun(
       roomIndex: index,
       // `JR_SPAWN=camps` places the encounter at the start, in camps.
       placement: process.env.JR_SPAWN === "camps" ? "camps" : "waves",
+      // The king's first audience (doc 022): the roof gives on room 5's fight.
+      audience: isFight && isAudienceRoom(index),
     });
     spellAffixes.forEach((affixes, i) => {
       const slot = world.spells[i];
@@ -589,7 +592,8 @@ export async function playRun(
       if (slot && level > 1) world.spells[i] = withLevel(slot, level);
     });
     if (stage === "boss") {
-      const boss = makeEnemy(world.nextEnemyId++, "boss", (GRID_W / 2) * TILE_PX, (GRID_H / 2) * TILE_PX, []);
+      // The final (doc 022): a short phase I, then II and III on the larger bar.
+      const boss = makeKing(world.nextEnemyId++, (GRID_W / 2) * TILE_PX, (GRID_H / 2) * TILE_PX, "final");
       boss.spawnFadeMs = 0;
       boss.awake = true;
       world.enemies.push(boss);

@@ -109,7 +109,7 @@ async function all(): Promise<ObservedRequest[]> {
       ...(await requests({ hearts: 2, damage: 3, clearMs: 75_000, gold: 5, preset: "melee", seed: "behind" })),
       // Mid-run and unhurt, which is where the pacing cap allows a peak and
       // the rooms declare the spawn groups the late fixtures do not.
-      ...(await requests({ index: 5, hearts: 5, clearMs: 20_000, gold: 40, preset: "area", seed: "mid" })),
+      ...(await requests({ index: 4, hearts: 5, clearMs: 20_000, gold: 40, preset: "area", seed: "mid" })),
       // The very first room, where the run-progress ramp is at its tightest.
       ...(await requests({ index: 1, hearts: 6, clearMs: 20_000, gold: 0, seed: "opening" })),
     ];

@@ -46,6 +46,17 @@ export interface Pickup {
   ageMs: number;
   /** What a coin is worth; `COIN_VALUE` unless it was minted for a sum. */
   value: number;
+  /**
+   * Flies to the player from wherever it lies, as a cleared room's coins do:
+   * the hearts that fill the bar at the king's first audience (doc 022).
+   */
+  homing?: boolean;
+  /**
+   * **A reserve**: never expires, and is not taken on a full bar — the spare
+   * hearts the first audience leaves on the floor for a hurt player (doc 022).
+   * A heart touched on a full bar is otherwise spent for nothing.
+   */
+  reserve?: boolean;
 }
 
 export const PICKUP_POOL = 64;
@@ -104,6 +115,8 @@ export function drop(
   slot.lifeMs = PICKUP_LIFETIME_MS;
   slot.ageMs = 0;
   slot.value = COIN_VALUE;
+  slot.homing = false;
+  slot.reserve = false;
   return slot;
 }
 
@@ -156,13 +169,15 @@ export function stepPickups(
    * pick up the pay.
    */
   vacuum = false,
+  /** The player's bar is full: a reserve heart is left lying (`Pickup.reserve`). */
+  full = false,
 ): Pickup[] {
   const taken: Pickup[] = [];
   const dt = dtMs / 1000;
   for (const p of pool) {
     if (!p.alive) continue;
     p.ageMs += dtMs;
-    p.lifeMs -= dtMs;
+    if (!p.reserve) p.lifeMs -= dtMs;
     if (p.lifeMs <= 0) {
       p.alive = false;
       continue;
@@ -186,7 +201,8 @@ export function stepPickups(
     const dx = player.x - p.x;
     const dy = player.y - p.y;
     const d = Math.hypot(dx, dy);
-    if (vacuum && p.kind === "coin" && d > PICKUP_MAGNET) {
+    if (p.reserve && full) continue;
+    if (((vacuum && p.kind === "coin") || p.homing) && d > PICKUP_MAGNET) {
       const step = Math.min(d, VACUUM_SPEED * dt);
       p.x += (dx / d) * step;
       p.y += (dy / d) * step;
