@@ -563,14 +563,21 @@ const KING_RISE_MS = 700;
  * on its side with the wine going out of it.
  */
 const KING_GOBLET_FLIGHT_MS = 360;
-/** Where it breaks: this far out from his hand, world px, off the carpet onto the flags. */
-const KING_GOBLET_OUT_PX = 56;
+/** Where it leaves him: the open hand in `boss_throne_throw`, art px from the frame's top left. */
+const KING_THROW_HAND_ART: readonly [number, number] = [214, 114];
+/**
+ * Its size in flight against `vfx_goblet_0`: the goblet in his hand
+ * (`boss_throne_goblet`) is some 31 art px tall, the flying drawing's 47.
+ */
+const KING_GOBLET_SCALE = 0.62;
+/** Where it breaks: this far out from his hand, world px, on the flags beside the carpet. */
+const KING_GOBLET_OUT_PX = 28;
 /**
  * How far its path bows above the straight line from his hand to the floor,
- * world px. The floor is some 80 px below his hand, so this is nearly all
- * spent on the fall: the goblet barely rises (about 6 px) before it drops.
+ * world px. The floor is some 115 px below his hand, so this is nearly all
+ * spent on the fall: the goblet barely rises (about 5 px) before it drops.
  */
-const KING_GOBLET_ARC_PX = 34;
+const KING_GOBLET_ARC_PX = 45;
 /** How far it turns in the air, clockwise (outward): on its side, rim a little down. */
 const KING_GOBLET_TURN = Math.PI * 0.65;
 /** The entrance: how long the HUD takes to fade out and back, and the depth his name is drawn over it at. */
@@ -2937,7 +2944,10 @@ export class PlayScene extends Phaser.Scene {
       if (intro.ms >= KING_LOOK_MS) {
         next("throw");
         const [tx, ty] = THRONE_CELLS[1]!;
-        const hx = (tx + 0.5) * TILE_PX + 14, hy = (ty + 0.4) * TILE_PX;
+        // From his open hand in the throw's drawing (placed as `throneImg` is).
+        const art = this.atlas.has("boss_throne_throw") ? this.atlas.frame("boss_throne_throw") : null;
+        const hx = (tx + 0.5) * TILE_PX + (art ? (KING_THROW_HAND_ART[0] - art.w / 2) / ART_SCALE : 14);
+        const hy = (ty + 1) * TILE_PX + (art ? (KING_THROW_HAND_ART[1] - 0.86 * art.h) / ART_SCALE : -19);
         this.kingGoblet = { x0: hx, y0: hy, x1: hx + KING_GOBLET_OUT_PX, y1: (ty + KING_GOBLET_ROW) * TILE_PX, ms: 0 };
         this.sfx.play("swing_light", 1.5);
       }
@@ -3018,7 +3028,7 @@ export class PlayScene extends Phaser.Scene {
       // Turning at an even rate from upright in his hand to on its side.
       const turn = KING_GOBLET_TURN * t;
       if (this.atlas.has("vfx_goblet_0"))
-        this.sprites.image(x, y, this.textureKey, "vfx_goblet_0").setScale(1 / ART_SCALE).setRotation(turn).setDepth(9);
+        this.sprites.image(x, y, this.textureKey, "vfx_goblet_0").setScale(KING_GOBLET_SCALE / ART_SCALE).setRotation(turn).setDepth(9);
       else this.sprites.circle(x, y, 2, 0xd8b56a).setDepth(9);
       return;
     }
