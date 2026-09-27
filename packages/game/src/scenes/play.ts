@@ -1626,6 +1626,13 @@ export class PlayScene extends Phaser.Scene {
   /** A code taken out of the URL in `create`, waiting for the title to be up. */
   private claimedInvite = "";
   /**
+   * A link's code, already on its way to the proxy while the sound choice is
+   * up, so its dialog opens on an answer rather than on "checking".
+   */
+  private invitePrecheck: { code: string; res: Promise<InviteCheck> } | null = null;
+  /** The first-launch sound choice (`showSoundChoice`): which style has the focus. */
+  private soundUi: { selected: number; objects: Phaser.GameObjects.GameObject[] } | null = null;
+  /**
    * The run's intent (doc 003's intent screen): a build style, and in Jev
    * mode the player's own words. It reaches the Director's context, the
    * starting staff, the second starting spell, and which spells the doors
@@ -1961,7 +1968,7 @@ export class PlayScene extends Phaser.Scene {
       floorGrain: () => floorGrain,
       setFloorGrain: (grain) => this.setFloorGrain(grain),
       resetFirstLaunch: () => {
-        try { localStorage.removeItem(SEEN_CONTROLS_KEY); } catch { /* nothing to forget */ }
+        try { localStorage.removeItem(SEEN_CONTROLS_KEY); localStorage.removeItem(SOUND_KEY); } catch { /* nothing to forget */ }
       },
       skipRoom: () => { if (!this.entering) void this.enterRoom(this.roomIndex + 1); },
       bossLab: {
@@ -2077,7 +2084,11 @@ export class PlayScene extends Phaser.Scene {
       void this.enterRoom(1).then(() => { this.debug.showBossLab(); this.enterBossLab(); });
     // `?lab=spells`: straight into the spell lab's arena, likewise.
     else if (this.spellLab) void this.enterRoom(1).then(() => { this.debug.showSpellLab(); this.spellLab?.start(); });
-    else void this.enterRoom(1).then(() => { this.showTitle(); void this.settleInvite(); });
+    else void this.enterRoom(1).then(() => {
+      this.showTitle();
+      if (soundUnchosen()) this.showSoundChoice();
+      void this.settleInvite();
+    });
   }
 
   /** The boss lab's start: the boss room, the boss held, the player invincible (not remembered). */
@@ -4480,6 +4491,91 @@ export class PlayScene extends Phaser.Scene {
   }
 
   /** The title card, over the first room, which stands still behind it. */
+  /**
+   * **The sound, asked once, on a first visit** — before anything else, over
+   * the title. Off, 8-bit or 16-bit, side by side: one setting has no menu
+   * to put it in. The focus starts on Off, so nothing plays until the player
+   * moves; moving to a style plays it (the move is the gesture a browser
+   * wants before it makes a sound), so the choice is heard, not imagined.
+   * Enter or a click keeps it; Escape keeps Off. Either way it is stored,
+   * and the title's Sound row changes it after.
+   */
+  private showSoundChoice(): void {
+    this.soundUi = { selected: 0, objects: [] };
+    this.renderSoundChoice();
+  }
+
+  private renderSoundChoice(): void {
+    const ui = this.soundUi;
+    if (!ui) return;
+    for (const g of ui.objects) g.destroy();
+    ui.objects = [];
+    const cx = UI_W / 2, cy = UI_H / 2;
+    const panelW = 320, panelH = 148;
+    const depth = 245;
+    ui.objects.push(...this.modalPanel(panelW, panelH, { depth, dim: 0.85 }));
+    // The dim takes the clicks, so the title under it does not answer them.
+    (ui.objects[0] as Phaser.GameObjects.Rectangle).setInteractive();
+    const top = cy - panelH / 2;
+    ui.objects.push(this.menuText(cx, top + 18, t("first.soundTitle"), 13, "#ffe9a8").setDepth(depth + 1));
+    ui.objects.push(this.uiText(cx, top + 36, t("first.soundIntro"), 7, "#c9cfe8",
+      { align: "center", wordWrap: { width: (panelW - 40) * ZOOM } }).setOrigin(0.5, 0).setDepth(depth + 1));
+    const W = 80, H = 30, gap = 12;
+    const y = top + 80;
+    SOUND_STYLES.forEach((style, i) => {
+      const x = cx + (i - (SOUND_STYLES.length - 1) / 2) * (W + gap);
+      const on = i === ui.selected;
+      const box = this.add.rectangle(x, y, W, H, on ? 0x221d46 : 0x161334, 1)
+        .setStrokeStyle(on ? 2 : 1, on ? 0xffe9a8 : 0x4a5480, 1).setDepth(depth + 1)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerover", () => { if (this.soundUi === ui && ui.selected !== i) this.focusSoundChoice(i); })
+        .on("pointerdown", () => { if (this.soundUi === ui) { this.focusSoundChoice(i); this.closeSoundChoice(); } });
+      ui.objects.push(box);
+      ui.objects.push(this.menuText(x, y, soundStyleLabel(style), 10, on ? "#ffe9a8" : "#c9cfe8").setDepth(depth + 2));
+    });
+    ui.objects.push(this.uiText(cx, y + H / 2 + 8, t("first.soundLater"), 6, "#7a8098").setOrigin(0.5, 0).setDepth(depth + 1));
+    ui.objects.push(this.fittedKeys(cx, top + panelH - 12,
+      `[A][D] ${t("hint.choose")}     [Enter] ${t("hint.select")}     [Esc] ${t("menu.off")}`, 7, "#8792b5", panelW - 24, depth + 1));
+  }
+
+  /** Moves the focus, and plays the style it lands on (or stops, on Off). */
+  private focusSoundChoice(i: number): void {
+    const ui = this.soundUi;
+    if (!ui) return;
+    ui.selected = i;
+    const style = SOUND_STYLES[i]!;
+    this.sfx.setStyle(style);
+    this.sfx.unlock();
+    this.sfx.play("ui_move");
+    this.renderSoundChoice();
+  }
+
+  /** Keeps the focused style, and lets a waiting invitation open. */
+  private closeSoundChoice(): void {
+    const ui = this.soundUi;
+    if (!ui) return;
+    const style = SOUND_STYLES[ui.selected]!;
+    setSoundStyle(style);
+    this.sfx.setStyle(style);
+    this.sfx.unlock();
+    this.sfx.play("ui_select");
+    for (const g of ui.objects) g.destroy();
+    this.soundUi = null;
+    if (this.titleUi) this.renderTitle();
+    if (this.claimedInvite) void this.settleInvite();
+  }
+
+  private readSoundKeys(): void {
+    const ui = this.soundUi;
+    if (!ui) return;
+    const down = (k?: Phaser.Input.Keyboard.Key) => !!k && Phaser.Input.Keyboard.JustDown(k);
+    const n = SOUND_STYLES.length;
+    if (down(this.keys.A) || down(this.keys.LEFT)) this.focusSoundChoice((ui.selected + n - 1) % n);
+    else if (down(this.keys.D) || down(this.keys.RIGHT)) this.focusSoundChoice((ui.selected + 1) % n);
+    else if (down(this.keys.ENTER)) this.closeSoundChoice();
+    else if (down(this.keys.ESC)) { ui.selected = 0; this.closeSoundChoice(); }
+  }
+
   private showTitle(): void {
     this.hideTitle();
     this.titleUi = { selected: 0, objects: [] };
@@ -4804,7 +4900,7 @@ export class PlayScene extends Phaser.Scene {
   private get modalOpen(): boolean {
     return !!(this.titleUi || this.intentUi || this.transitionUi || this.offerUi
       || this.pauseUi || this.staffUi || this.gameOverUi || this.victoryUi || this.hintsUi
-      || this.inviteUi);
+      || this.inviteUi || this.soundUi);
   }
 
   /**
@@ -5037,7 +5133,7 @@ export class PlayScene extends Phaser.Scene {
       this.sfx.play("ui_select");
     };
     const style = this.sfx.getStyle();
-    return { label: t("menu.sound"), value: style === "off" ? t("menu.off") : style === "8bit" ? "8-bit" : "16-bit", act: () => step(1), adjust: step };
+    return { label: t("menu.sound"), value: soundStyleLabel(style), act: () => step(1), adjust: step };
   }
 
   /**
@@ -5310,7 +5406,9 @@ export class PlayScene extends Phaser.Scene {
     const token = ++ui.checking;
     ui.status = "checking";
     this.renderInvite();
-    const res = await checkInviteCode(code);
+    const pre = this.invitePrecheck;
+    this.invitePrecheck = null;
+    const res = await (pre?.code === code ? pre.res : checkInviteCode(code));
     // Abandoned: the dialog closed, or the text changed while this was away.
     if (this.inviteUi !== ui || ui.checking !== token) return;
     if (!res.ok) ui.status = res.why === "rate" ? "tooMany" : "unreachable";
@@ -5364,6 +5462,17 @@ export class PlayScene extends Phaser.Scene {
    */
   private async settleInvite(): Promise<void> {
     const claimed = this.claimedInvite;
+    /*
+     * **The sound choice first.** Both open over the title on a first visit
+     * by a link. The code is sent now and its dialog waits for the choice to
+     * close (`closeSoundChoice`): the invitation dialog takes the keyboard
+     * for its field, so opened first it would swallow the one key the sound
+     * choice asks for.
+     */
+    if (claimed && this.soundUi) {
+      this.invitePrecheck = { code: claimed.trim(), res: checkInviteCode(claimed.trim()) };
+      return;
+    }
     this.claimedInvite = "";
     if (claimed) { this.showInvite(claimed, true); return; }
     await probeInviteGate();
@@ -8514,6 +8623,7 @@ export class PlayScene extends Phaser.Scene {
     // The invitation dialog's own `<input>` has the keyboard while it is up,
     // and the game's is switched off; nothing here may read a key behind it.
     if (this.inviteUi) { /* see `showInvite` */ }
+    else if (this.soundUi) this.readSoundKeys();
     else if (this.transitionUi?.phase === "ready") this.readTransitionKeys();
     else if (this.intentUi) { this.readIntentKeys(); this.drawIntentDemo(); }
     else if (this.titleUi) this.readTitleKeys();
@@ -17687,6 +17797,16 @@ function soundStyle(): SoundStyle {
     const v = localStorage.getItem(SOUND_KEY);
     return v === "8bit" || v === "16bit" ? v : v === "1" ? "8bit" : "off";
   } catch { return "off"; }
+}
+
+/** Whether the sound has never been chosen: a first visit, which asks (`showSoundChoice`). */
+function soundUnchosen(): boolean {
+  try { return localStorage.getItem(SOUND_KEY) === null; } catch { return false; }
+}
+
+/** A sound style as the menus name it. */
+function soundStyleLabel(style: SoundStyle): string {
+  return style === "off" ? t("menu.off") : style === "8bit" ? "8-bit" : "16-bit";
 }
 
 function setSoundStyle(style: SoundStyle): void {

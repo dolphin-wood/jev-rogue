@@ -340,6 +340,9 @@ export const ZH: Table = {
   "first.footer": "随时可以在 [Esc] → 操作 里查看",
   "first.assistIntro": "按需调整战斗辅助，之后也可以在设置中修改。",
   "first.assistConfirm": "确认并开始",
+  "first.soundTitle": "声音",
+  "first.soundIntro": "选择音乐和音效的风格。",
+  "first.soundLater": "之后可以在设置里修改。",
 
   /* ------------------------------- controls ----------------------------- */
   "keys.walk": "移动",

@@ -347,6 +347,9 @@ export const EN = {
   "first.footer": "Controls are always under [Esc] → Controls",
   "first.assistIntro": "Choose any assists you want. You can change them later in Settings.",
   "first.assistConfirm": "Confirm and play",
+  "first.soundTitle": "SOUND",
+  "first.soundIntro": "Pick the style of the music and sound effects.",
+  "first.soundLater": "You can change this later in Settings.",
 
   /* ------------------------------- controls ----------------------------- */
   "keys.walk": "Move",

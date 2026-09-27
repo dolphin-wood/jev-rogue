@@ -339,6 +339,9 @@ export const JA: Table = {
   "first.footer": "操作はいつでも [Esc] → 操作 で確認できる",
   "first.assistIntro": "必要なアシストを選択。後から設定で変更できます。",
   "first.assistConfirm": "決定して開始",
+  "first.soundTitle": "サウンド",
+  "first.soundIntro": "音楽と効果音のスタイルを選んでください。",
+  "first.soundLater": "あとで設定から変更できます。",
 
   /* ------------------------------- controls ----------------------------- */
   "keys.walk": "移動",
