@@ -13334,7 +13334,8 @@ export class PlayScene extends Phaser.Scene {
         }
       }
       // The fall's landing in the middle: only once the stones have all come down (`BOSS_METEOR_LAND_TELL_MS`).
-      if (e.archetype === "boss" && e.bossCast === "meteor" && e.bossCastMs > 0 && e.bossCastMs <= BOSS_METEOR_LAND_TELL_MS) {
+      // Not as he leaves the first audience (doc 022): that rise comes down nowhere, so it marks nothing.
+      if (e.archetype === "boss" && e.bossCast === "meteor" && !e.bossLeaving && e.bossCastMs > 0 && e.bossCastMs <= BOSS_METEOR_LAND_TELL_MS) {
         const t = 1 - e.bossCastMs / BOSS_METEOR_LAND_TELL_MS;
         drawLeapMark(this.threatGfx, e.bossTargetX, e.bossTargetY, BOSS_METEOR_LAND_PX, 0, t, tick, view);
       }
