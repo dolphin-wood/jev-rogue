@@ -10,6 +10,7 @@ import type {
   Element, ElementPowers, EliteAffix, EnemyId, ItemInstance, RoomPlan, Staff, MeleeKind } from "../types.ts";
 import type { Rng } from "../rng.ts";
 import type { AffixContext } from "../encounters/affixes.ts";
+import type { BossScript } from "../encounters/enemies.ts";
 import type { FlowField } from "./flow.ts";
 import type { SwingBox } from "./melee.ts";
 import type { SpellSlot } from "./spells.ts";
@@ -1026,6 +1027,25 @@ export interface Enemy {
    * player a beat apart. He stands through it too, but can be struck.
    */
   bossSummonMs: number;
+  /**
+   * **Which meeting this is** (doc 022): the first audience in room 5, or the
+   * final in the throne hall. Absent for the one fight he was before the
+   * document — the bench, the lab and the tests that predate it.
+   */
+  bossScript?: BossScript;
+  /**
+   * His entrance into the first audience: he is up out of the room and comes
+   * down on his mark as the meteor's landing does, but on nobody — no band, no
+   * struck ground, no hurt (`stepBossMeteor`).
+   */
+  bossEntrance?: boolean;
+  /** Going back up out of the room at the end of the first audience (`stepBossMeteor`). */
+  bossLeaving?: boolean;
+  /**
+   * Gone out of the room without dying: taken off the floor at the end of the
+   * step, with nothing a death pays (`step`, the kill filter).
+   */
+  gone?: boolean;
   /** Where a leap comes down, fixed when it is marked. */
   bossTargetX: number;
   bossTargetY: number;

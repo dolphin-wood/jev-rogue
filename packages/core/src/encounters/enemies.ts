@@ -1017,8 +1017,51 @@ export const BOSS_PHASES: readonly BossPhase[] = [
   },
 ];
 
-/** The phase a boss at this health fraction is in, 1-based. */
-export function bossPhaseAt(hpFraction: number): number {
+/*
+ * **The king is met twice** (doc 022). In room 5 he drops into an ordinary
+ * fight and plays phase I only (`"audience"`): at `KING_RETREAT_AT` of that bar
+ * the armour breaks, as it always has at 60%, and he goes back up out of the
+ * room rather than calling his adds. In the throne hall he stands already in
+ * phase II (`"final"`), without the armour the player broke, and phases II and
+ * III share a larger bar. A body with no script is the one fight he was before:
+ * the bench, the lab and every test that predates the document.
+ */
+export type BossScript = "audience" | "final";
+
+/**
+ * The first audience's bar. Phase I is spent down to `KING_RETREAT_AT` of it,
+ * so the fight is 40% of this: sized for a room-5 build, one or two spells and
+ * a level or two, to last 40 to 50 s (doc 022, "Measured before it ships").
+ * A third of the full fight's 3750 until `boss-bench` sets it.
+ */
+export const KING_AUDIENCE_HP = 1250;
+/** Where the first audience ends: phase II's threshold, where the armour breaks. */
+export const KING_RETREAT_AT = 0.6;
+/**
+ * The final fight's bar: phases II and III, which were 60% of 3750 (2250), over
+ * twice that. Phase I has moved to room 5, so the denser phases alone hold doc
+ * 020's two minutes, against a player who has seen him once already.
+ */
+export const KING_FINAL_HP = 4500;
+/** Where phase III begins in the final fight: the bar shared evenly by II and III. */
+export const KING_FINAL_III_AT = 0.5;
+
+/** The king's bar under a script. */
+export function kingHp(script?: BossScript): number {
+  return script === "audience" ? KING_AUDIENCE_HP : script === "final" ? KING_FINAL_HP : ENEMIES.boss.hp;
+}
+
+/**
+ * The phase a boss at this health fraction is in, 1-based.
+ *
+ * Under `"audience"` the phase II threshold is the retreat's: the change into
+ * phase 2 is the armour breaking, and what follows the roar is his leaving
+ * (`stepBoss`), never phase II's call. Under `"final"` he is in phase II from
+ * full and phase III from `KING_FINAL_III_AT`.
+ */
+export function bossPhaseAt(hpFraction: number, script?: BossScript): number {
+  if (script === "audience") return hpFraction <= KING_RETREAT_AT ? 2 : 1;
+  if (script === "final") return hpFraction <= KING_FINAL_III_AT ? 3 : 2;
   let phase = 1;
   BOSS_PHASES.forEach((p, i) => { if (hpFraction <= p.at) phase = i + 1; });
   return phase;

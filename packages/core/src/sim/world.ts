@@ -63,7 +63,7 @@ import { ARM_TELE_MS, castArm, castRift, castRanged, castShockwave, dragStep, in
 import type { AttackHooks } from "./attacks.ts";
 import { computeFlowField, tileOf } from "./flow.ts";
 import {
-  anchored, bossStringHearts, hatchMinion, isActive, livingSummoners, makeEnemy, stepEnemy, stagger, canStagger, midAttack, wake, dropToken,
+  anchored, bossStringHearts, hatchMinion, isActive, livingSummoners, makeEnemy, makeKing, kingFloorHp, stepEnemy, stagger, canStagger, midAttack, wake, dropToken,
   dropFireToken, ARMOUR_BREAK_MS, SPAWN_FADE_MS, SPAWN_TELEGRAPH_MS, ENEMY_FREEZE_MS, STAGGER_MS,
   ENEMY_BURN_MS, ENEMY_POISON_MS, ENEMY_BURN_SOURCES, ENEMY_POISON_STACKS, SHATTER_MULT,
   STATUS_BREADTH_MULT, statusBreadth,
@@ -785,6 +785,11 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   for (const e of w.enemies) if (e.archetype === "boss" && e.hp > 0) stepBoss(w, e, dtMs * bossTempo(e));
   resolveBodies(w);
   w.enemies = w.enemies.filter((e) => {
+    // Gone up out of the room (doc 022): off the floor, and nothing a death pays.
+    if (e.gone) return false;
+    // The first audience never kills him: held on the retreat's line, he leaves from it.
+    const floor = kingFloorHp(e);
+    if (floor > 0 && e.hp < floor) e.hp = floor;
     if (e.hp > 0) return true;
     onEnemyKilled(w, e);
     return false;
@@ -3039,6 +3044,14 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
     w.trauma = Math.max(w.trauma, rumble);
     if (e.bossRoarMs > 0) return;
     e.bossRoarMs = 0;
+    // The end of the first audience (doc 022): where phase II would call, he goes back up.
+    if (e.bossScript === "audience") {
+      e.bossLeaving = true;
+      e.bossCast = "meteor";
+      e.bossCastEndAt = -1;
+      w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: "boss_retreat" });
+      return;
+    }
     // Into phase III, no call: the fall (`BOSS_METEOR_GATHER_MS`), set going on the next step.
     if (e.phase >= 3) {
       e.bossAddsPhase = Math.max(e.bossAddsPhase, e.phase);
@@ -3222,7 +3235,10 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
     return;
   }
 
-  if (e.bossCast === "meteor" && e.bossCastEndAt < 0) startBossMeteor(w, e);
+  if (e.bossCast === "meteor" && e.bossCastEndAt < 0) {
+    if (e.bossLeaving) startKingLeaving(e);
+    else startBossMeteor(w, e);
+  }
   const before = e.bossCastMs;
   // From the absolute end, not by subtraction: hitstop freezes this function but not the clock, so a
   // countdown would come out late by every freeze inside the telegraph, and off the beat.
@@ -3293,7 +3309,9 @@ function stepBoss(w: World, e: Enemy, dtMs: number): void {
     return;
   }
   if (e.bossCast === "meteor") {
-    stepBossMeteor(w, e, before);
+    if (e.bossEntrance) stepKingEntrance(w, e, before);
+    else if (e.bossLeaving) stepKingLeaving(w, e);
+    else stepBossMeteor(w, e, before);
     return;
   }
   if (e.bossCast === "hook") {
@@ -3562,6 +3580,108 @@ function stepBossMeteor(w: World, e: Enemy, before: number): void {
   }
   // Knelt in the crater: the opening phase III gives first.
   if (e.bossCastMs <= -BOSS_KNEEL_MS) finishBossMove(e);
+}
+
+/*
+ * **The first audience's two ends** (doc 022): the king comes down into room 5
+ * and goes back up out of it. Both are the fall into phase III's machinery —
+ * `bossCast` "meteor", the leap's frames, the landing mark while
+ * `bossCastMs <= BOSS_METEOR_LAND_TELL_MS` — so the renderer draws them as it
+ * already draws the fall, with none of what makes the fall a threat.
+ */
+
+/** How long he stands after coming down before his first turn: his name, and a beat past it. */
+export const KING_AUDIENCE_FIRST_TURN_MS = 3400;
+
+/**
+ * Puts the king above his mark, falling: he lands after the landing's tell
+ * (`BOSS_METEOR_LAND_TELL_MS`), on the bar line after it, so the landing is on
+ * the downbeat as every landing of his is.
+ */
+export function beginKingEntrance(e: Enemy, x: number, y: number): void {
+  e.x = e.bossTargetX = e.bossFromX = x;
+  e.y = e.bossTargetY = e.bossFromY = y;
+  e.bossEntrance = true;
+  e.bossCast = "meteor";
+  e.bossBusy = true;
+  e.awake = true;
+  e.spawnFadeMs = 0;
+  e.airborne = true;
+  e.bossLift = BOSS_LEAP_SKY_PX;
+  const least = BOSS_METEOR_LAND_TELL_MS;
+  e.bossCastEndAt = e.bossFightMs + least + untilGrid(e.bossFightMs + least, BAR_MS);
+  e.bossCastMs = e.bossCastEndAt - e.bossFightMs;
+  e.bossCommitAt = e.bossCastEndAt;
+}
+
+/**
+ * The entrance, one step: up out of sight over the mark, the drop onto it,
+ * and a landing that is his arrival and nothing else — **no band, no struck
+ * ground, no hurt**. The mark is far from the player (`KING_DROP_MIN_PX`), so
+ * nothing about it could have reached them; the first band in the room is his
+ * first slam's, and that one costs.
+ */
+function stepKingEntrance(w: World, e: Enemy, before: number): void {
+  e.x = e.bossTargetX;
+  e.y = e.bossTargetY;
+  if (e.bossCastMs > 0) {
+    e.airborne = true;
+    e.knockX = 0; e.knockY = 0; e.vx = 0; e.vy = 0;
+    const k = Math.max(0, 1 - e.bossCastMs / BOSS_LEAP_FALL_MS);
+    e.bossLift = e.bossCastMs > BOSS_LEAP_FALL_MS ? BOSS_LEAP_SKY_PX : BOSS_LEAP_SKY_PX * (1 - k * k);
+    return;
+  }
+  if (before > 0) {
+    e.airborne = false;
+    e.bossLift = 0;
+    impact(w, HITSTOP_CAP, 0);
+    w.trauma = 1;
+    w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "boss_land" });
+    w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: "boss_arrives" });
+    bossStrikesProps(w, (q) => Math.hypot(q.x - e.x, q.y - e.y) <= BOSS_METEOR_LAND_PX + q.radius, []);
+    w.flow = null;
+    w.flowTile = null;
+  }
+  // Knelt in the crater, then up: his name is shown over it (`KING_AUDIENCE_FIRST_TURN_MS`).
+  if (e.bossCastMs <= -BOSS_KNEEL_MS) {
+    finishBossMove(e);
+    e.bossEntrance = false;
+    e.bossBusy = false;
+    e.bossMoveMs = KING_AUDIENCE_FIRST_TURN_MS;
+  }
+}
+
+/** Sets his leaving going: the leap's gather, then straight up out of the view, and he does not come down. */
+function startKingLeaving(e: Enemy): void {
+  e.bossCastEndAt = e.bossFightMs + BOSS_METEOR_GATHER_MS + BOSS_METEOR_UP_MS;
+  e.bossCastMs = e.bossCastEndAt - e.bossFightMs;
+  e.bossCommitAt = e.bossCastEndAt;
+  e.bossTargetX = e.bossFromX = e.x;
+  e.bossTargetY = e.bossFromY = e.y;
+  e.bossLift = 0;
+}
+
+/**
+ * His leaving, one step. Crouched on the floor he can still be struck, and
+ * whatever lands is held on the retreat's line (`kingFloorHp`); once he is up
+ * nothing reaches him, and at the top of the climb he is gone
+ * (`Enemy.gone`) — the room clears behind him.
+ */
+function stepKingLeaving(w: World, e: Enemy): void {
+  e.knockX = 0; e.knockY = 0; e.vx = 0; e.vy = 0;
+  const since = BOSS_METEOR_UP_MS - e.bossCastMs;
+  const wasAir = e.airborne;
+  e.airborne = since > 0;
+  if (!wasAir && e.airborne) w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: "boss_jump" });
+  if (since <= 0) {
+    e.bossLift = -3 * Math.min(1, (BOSS_METEOR_GATHER_MS + since) / BOSS_METEOR_GATHER_MS);
+    return;
+  }
+  const k = Math.min(1, since / BOSS_METEOR_UP_MS);
+  e.bossLift = BOSS_LEAP_SKY_PX * k * k;
+  if (e.bossCastMs > 0) return;
+  e.gone = true;
+  w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: "boss_gone" });
 }
 
 function finishBossMove(e: Enemy): void {
