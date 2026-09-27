@@ -98,7 +98,7 @@ export const ZH_TERMS = {
   "term.obstacle_cells": "障碍格",
 
   /* ------------------------------- buckets ------------------------------- */
-  "term.critical": "垂危",
+  "term.critical": "危急",
   "term.low": "低",
   "term.ok": "尚可",
   "term.full": "满",
@@ -160,7 +160,7 @@ export const ZH_TERMS = {
   "term.nuke": "重击",
   "term.area": "群攻",
   "term.dot": "侵蚀",
-  "term.melee": "剑斗",
+  "term.melee": "近战",
 
   /* ------------------------- roles, tags, elements ----------------------- */
   "term.attack": "攻击",
@@ -177,7 +177,7 @@ export const ZH_TERMS = {
   "term.cover": "掩体",
   "term.utility": "功能",
   "term.common": "普通",
-  "term.uncommon": "优良",
+  "term.uncommon": "优秀",
   "term.rare": "稀有",
   "term.fire": "火",
   "term.ice": "冰",
@@ -198,7 +198,7 @@ export const ZH_TERMS = {
 
   /* ---------------------------- the affix lanes -------------------------- */
   "term.homing": "追踪",
-  "term.cheaper": "省蓝",
+  "term.cheaper": "低耗",
   "term.wider": "扩散",
   "term.heavier": "重击",
   "term.elemental": "元素",
@@ -360,7 +360,7 @@ export const ZH_TERMS = {
   "term.enemy.orbiter": "环绕者",
   "term.enemy.tank": "重甲兵",
   "term.enemy.summoner": "召唤者",
-  "term.enemy.lancer": "枪骑",
+  "term.enemy.lancer": "长枪兵",
   "term.enemy.sentinel": "哨卫",
   "term.enemy.warden": "守望者",
   "term.enemy.bellringer": "鸣钟人",
@@ -504,6 +504,6 @@ export const ZH_TERMS = {
   "plan.note.blended": "参与混合，未单独抽取",
   "plan.note.notNeeded": "这次用不上",
   "plan.note.drawnByCode": "由代码抽取",
-  "plan.note.offerBlend": "综合＋风格＋短板，按本次温度混合；抽两张，留一张变数",
+  "plan.note.offerBlend": "综合＋流派＋短板，按本次温度混合；抽两张，留一张变数",
   "plan.note.declined": "拒答：{names}",
 } as const;

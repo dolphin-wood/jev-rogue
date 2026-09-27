@@ -72,7 +72,7 @@ export const PLAYER_TEXT: Readonly<Record<string, string>> = {
   scatter: "The spell also fires out to every side. Your answer to being surrounded.",
   ward: "Casting leaves a rune at your feet that blocks enemy shots.",
   retort: "When you're hit, this spell fires back at whoever hit you, for free.",
-  slipstream: "Dodge-rolling through an enemy hits it.",
+  slipstream: "Dashing through an enemy hits it.",
   pierce: "The shot keeps going through what it hits.",
   seek: "The shot curves toward the nearest enemy.",
   ricochet: "Walls bounce the shot back into the room.",
@@ -84,8 +84,8 @@ export const PLAYER_TEXT: Readonly<Record<string, string>> = {
 
   /* --------------------------------- stats ------------------------------- */
   fleet: "Move faster.",
-  second_wind: "Your dodge roll comes back sooner.",
-  long_stride: "Your dodge roll goes further.",
+  second_wind: "Your dash comes back sooner.",
+  long_stride: "Your dash goes further.",
   wrath: "One more rage segment, so you can bank another spin attack.",
   vigour: "More max health, and a full heal.",
   steady_nerve: "Longer invulnerability after you're hit.",

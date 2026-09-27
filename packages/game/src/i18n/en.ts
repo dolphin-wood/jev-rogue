@@ -293,7 +293,7 @@ export const EN = {
 
   /* -------------------------------- toasts ------------------------------ */
   "toast.jevUnavailable": "Jev Director unavailable. Playing the rule Director.",
-  "toast.need": "Need {price} {coin}",
+  "toast.need": "Need {price} more {coin}",
   "toast.rerollFailed": "Could not refresh. Gold refunded.",
   "toast.noRerolls": "No other choices are available.",
   "toast.dismantled": "{label} dismantled  +{gold} {coin}",
