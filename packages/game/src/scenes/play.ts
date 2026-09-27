@@ -107,7 +107,7 @@ import { layoutDecisionTable, maxScrollFor } from "../ui/plan-table.ts";
 import { questionAsked, questionBase, questionName } from "../ui/question-names.ts";
 import type { TableRow } from "../ui/plan-table.ts";
 import type { AtlasJson } from "../assets/atlas.ts";
-import { AUTO_CAST_MAX_REACH_PX, AUTO_CAST_RESERVE, AUTO_CAST_SOON_MS, AutoCaster, autoCastable, autoCastAnyReach, autoCastReach } from "../auto-cast.ts";
+import { AUTO_CAST_MAX_REACH_PX, AUTO_CAST_RESERVE, AutoCaster, autoCastable, autoCastAnyReach, autoCastReach } from "../auto-cast.ts";
 import { freshRerollPool, rerollPrice } from "../offer-reroll.ts";
 
 /**
@@ -15245,35 +15245,25 @@ export class PlayScene extends Phaser.Scene {
     const dist = target ? Math.hypot(target.x - p.x, target.y - p.y) : Infinity;
     const keys = w.spells.map((slot, i) => {
       const params = ITEMS.get(slot?.item.base ?? "")?.params;
-      if (!slot || !params) return { eligible: false, coming: false, held: false };
+      if (!slot || !params) return { held: false, ready: false, cost: 0 };
       // A tap, never a guard or a move of the body (`autoCastable`).
       const held = autoCastable(params, chargeMsOf(ITEMS, slot.item.base));
       /*
        * Only a key whose own reach the body stands in: a short spell is not
-       * thrown at a far body. An enchant or a companion needs only a fight. And no spell
-       * that is still running (`keyRunningMs`) — an enchant on the sword,
-       * the blades round the body, a trail underfoot, the companion: recast
-       * early, it spends the bar to renew what is already there. It comes
-       * back into the draw as its effect runs out, owed every draw it sat
-       * out (`AutoCaster`).
+       * thrown at a far body. An enchant or a companion needs only a fight.
+       * And no spell that is still running (`keyRunningMs`) — an enchant on
+       * the sword, the blades round the body, a trail underfoot, the
+       * companion: recast early, it spends the bar to renew what is already
+       * there. It sits the draws out meanwhile, and comes back owed for them.
        */
       const inReach = autoCastAnyReach(params) ? fight : !!target && dist <= autoCastReach(params);
-      const running = this.keyRunningMs(i);
-      if (!held || !inReach || running > AUTO_CAST_SOON_MS) return { eligible: false, coming: false, held };
-      const cost = slotCost(slot, ITEMS, w.staff);
-      // How long until the key is back: its cooldown, or its bank's next charge, or its enchant's end.
-      const back = Math.max(running, chargesOf(ITEMS, slot.item.base) > 0 && bankOf(slot, ITEMS) < 1
-        ? chargeIntervalMs(ITEMS, slot.item.base) - (slot.bankMs ?? 0)
-        : Math.max(0, slot.cooldownMs));
       return {
-        eligible: running <= 0 && spellReady(slot, ITEMS) && p.mana - cost >= floor,
-        // Owed its turn whatever the bar says now, so the bar is saved up for
-        // it — unless the bar could never pay for it above the floor.
-        coming: back <= AUTO_CAST_SOON_MS && cost + floor <= w.staff.mana_max,
         held,
+        ready: held && inReach && this.keyRunningMs(i) <= 0 && spellReady(slot, ITEMS),
+        cost: slotCost(slot, ITEMS, w.staff),
       };
     });
-    const key = this.autoCaster.pick(w.tick * STEP_MS, keys, free);
+    const key = this.autoCaster.pick(w.tick * STEP_MS, keys, free, { mana: p.mana, floor, max: w.staff.mana_max });
     // An enchant or a companion with no body in reach aims nowhere in particular: the facing the player has.
     if (key !== null) this.autoTargetId = target?.id ?? null;
     return key;

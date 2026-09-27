@@ -10,24 +10,23 @@
  * has to play around. The player's own press starts the wait over, so the
  * assist never casts on top of a choice just made.
  *
- * **The draw.** Among every key that is ready *or nearly back*
- * (`AUTO_CAST_SOON_MS`, whatever the bar says), each by its weight:
+ * **The draw is among the keys that can go now**: back from cooldown, with
+ * a body in reach, not still running, and paid for above the reserve. If
+ * none can, the beat waits on, frame by frame, and no weight moves. Each key
+ * in the draw counts by its weight:
  *
- * - the key drawn, once cast, goes back to `AUTO_CAST_MIN_WEIGHT`;
+ * - the key cast goes back to `AUTO_CAST_MIN_WEIGHT`;
  * - **every other key gains** `AUTO_CAST_MISS_WEIGHT`, up to
  *   `AUTO_CAST_MAX_WEIGHT` — the ones in the draw and the ones that sat it
- *   out: a key cooling down, out of reach, or with its enchant still running
- *   was skipped, not given its turn, so it comes back owed;
+ *   out cooling, out of reach or still running: they were skipped, not
+ *   given their turn, so they come back owed;
  * - a key the player casts by hand has had its turn, and goes back down too.
  *
- * **A key drawn before it is back is waited for.** The beats that follow
- * are kept for it — nothing else is cast, so the bar saves up — until it
- * can go, for up to `AUTO_CAST_WAIT_MS`, and then the draw is made again.
- * That is what stops the cheap short keys starving a dear long one: left to
- * "whichever is ready first", they come back first and hold the bar under
- * what it costs. (Skipping one beat and drawing again was tried: the cheap
- * keys spent between the beats what the dear one was saving, and a 20 s
- * key's longest gap went from 33 s to 42.)
+ * **The bar is saved for the key most owed.** When the key with the most
+ * weight is back but the bar is short of it, nothing is cast: any other key
+ * would spend what it is waiting for. Without this the cheap short keys,
+ * always affordable, held the bar under what a dear long one costs, and a
+ * 20 s key went once in ten minutes of simulated fight.
  *
  * It also keeps a floor under the bar (`AUTO_CAST_RESERVE`): it never casts
  * a key whose cost would take the bar below that share, so a spell the
@@ -40,10 +39,6 @@
  *
  * Input only. It decides which key to report as pressed and nothing else;
  * the simulation sees a press, exactly as if the player had made it.
- *
- * (It was once a wait per key, a redraw when the player spent the key
- * being waited for, and a weight that grew back on a clock; the one beat
- * and the owed weights do what those did.)
  */
 
 import { TILE_PX } from "@jr/core";
@@ -125,10 +120,6 @@ export const AUTO_CAST_DELAY_MS = 700;
 export const AUTO_CAST_SPREAD_MS = 900;
 /** The share of the bar an auto-cast never spends into. */
 export const AUTO_CAST_RESERVE = 0.3;
-/** How near its return a key has to be to be in the draw while not yet ready. */
-export const AUTO_CAST_SOON_MS = 1500;
-/** The longest the beats wait for a key drawn before it was back, before drawing again. */
-export const AUTO_CAST_WAIT_MS = 3000;
 /** A key's weight in the draw just after it casts, by the assist or by hand. */
 export const AUTO_CAST_MIN_WEIGHT = 0.1;
 /** A key's weight before it has ever cast. */
@@ -141,33 +132,33 @@ export const AUTO_CAST_MAX_WEIGHT = 4;
 /** What the scene says about one key on this step. */
 export interface AutoCastKey {
   /**
-   * Whether this key may press itself now: it holds a spell that casts on a
-   * tap (not a charge or a stance), it is ready, it is affordable above the
-   * reserve, and there is a body to cast at.
-   */
-  readonly eligible: boolean;
-  /**
-   * Whether this key is **in the draw**: a tap-cast spell with a body to
-   * cast at, back within `AUTO_CAST_SOON_MS`, and one the bar could ever pay
-   * for above the reserve — whether or not it can pay now. Eligible implies
-   * coming.
-   */
-  readonly coming: boolean;
-  /**
    * Whether this key holds a spell the assist may ever press
-   * (`autoCastable`), whatever it can do now. A held key that is not in a
-   * draw sat it out, and its weight grows as if it had lost it.
+   * (`autoCastable`), whatever it can do now. A held key that sits a draw
+   * out gains weight as if it had lost it.
    */
   readonly held: boolean;
+  /**
+   * Whether it could go now but for the bar: held, back from cooldown, with
+   * a body in its reach, and not still running (an enchant, a ring of
+   * blades, a trail, a companion).
+   */
+  readonly ready: boolean;
+  /** What a cast of it takes off the bar. */
+  readonly cost: number;
+}
+
+/** The bar on this step: what is in it, the reserve it keeps, and all it can hold. */
+export interface AutoCastBar {
+  readonly mana: number;
+  readonly floor: number;
+  readonly max: number;
 }
 
 export class AutoCaster {
-  /** When the next draw is, or null until the hands are free and some key is in the draw. */
+  /** When the next draw is, or null until the hands are free again. */
   private next: number | null = null;
   /** Each key's weight in the draw; `AUTO_CAST_START_WEIGHT` until it has one. */
   private readonly weights: number[] = [];
-  /** A key drawn before it was back, and until when the beats wait for it. */
-  private owed: { key: number; until: number } | null = null;
 
   constructor(private readonly random: () => number = Math.random) {}
 
@@ -180,15 +171,12 @@ export class AutoCaster {
   noteManual(key: number): void {
     this.weights[key] = AUTO_CAST_MIN_WEIGHT;
     this.next = null;
-    // Spent by hand: the beats kept for it are free again.
-    if (this.owed?.key === key) this.owed = null;
   }
 
   /** Forgets the beat and every weight: a new room, a paused fight, the assist switched off. */
   reset(): void {
     this.next = null;
     this.weights.length = 0;
-    this.owed = null;
   }
 
   /**
@@ -198,18 +186,19 @@ export class AutoCaster {
    * `free` is whether the caster could cast at all — no windup, recovery,
    * charge or guard running — so a key never presses into a refusal.
    */
-  pick(now: number, keys: readonly AutoCastKey[], free: boolean): number | null {
-    const pool = keys.flatMap((k, i) => (k.coming ? [i] : []));
-    // Nothing to draw: the beat waits for something to come, and then runs in full.
-    if (pool.length === 0) { this.next = null; return null; }
+  pick(now: number, keys: readonly AutoCastKey[], free: boolean, bar: AutoCastBar): number | null {
     if (!free) return null;
+    // The beat is counted from the hands coming free.
     if (this.next === null) { this.next = now + AUTO_CAST_DELAY_MS + this.random() * AUTO_CAST_SPREAD_MS; return null; }
     if (now < this.next) return null;
+    const paid = (k: AutoCastKey) => bar.mana - k.cost >= bar.floor;
+    // The bar saved for the key most owed, when it is back and the bar is short of it — and could ever pay.
+    const top = Math.max(0, ...keys.map((k, i) => (k.held ? this.weight(i) : 0)));
+    if (keys.some((k, i) => k.ready && !paid(k) && k.cost + bar.floor <= bar.max && this.weight(i) >= top)) return null;
+    const pool = keys.flatMap((k, i) => (k.ready && paid(k) ? [i] : []));
+    // Nothing can go: the beat waits on, and no weight moves.
+    if (pool.length === 0) return null;
     this.next = null;
-    // A beat kept for a key drawn before it was back: it goes if it can, and nothing else does.
-    const owed = this.owed;
-    if (owed && (!keys[owed.key]?.coming || now > owed.until)) this.owed = null;
-    else if (owed) return this.cast(owed.key, keys, now);
     const weights = pool.map((i) => this.weight(i));
     let r = this.random() * weights.reduce((a, b) => a + b, 0);
     let key = pool[pool.length - 1]!;
@@ -221,17 +210,6 @@ export class AutoCaster {
     keys.forEach((k, i) => {
       if (i !== key && k.held) this.weights[i] = Math.min(AUTO_CAST_MAX_WEIGHT, this.weight(i) + AUTO_CAST_MISS_WEIGHT);
     });
-    // Not back yet, or not yet paid for: the beat passes with nothing cast, and the key stays owed.
-    return this.cast(key, keys, now);
-  }
-
-  /** The drawn key goes if it can; if not, the beats that follow are kept for it (`owed`). */
-  private cast(key: number, keys: readonly AutoCastKey[], now: number): number | null {
-    if (!keys[key]!.eligible) {
-      this.owed ??= { key, until: now + AUTO_CAST_WAIT_MS };
-      return null;
-    }
-    this.owed = null;
     this.weights[key] = AUTO_CAST_MIN_WEIGHT;
     return key;
   }
