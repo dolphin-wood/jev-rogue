@@ -277,10 +277,23 @@ function fitQuestion(
       `Would ${titleOfId(card.id)} be a good ${what} to show this player on this reward screen? ${text} ` +
       "Read it against the build as held spells writes it out — every key with its level, its school, its " +
       "element, what it costs and what is already attached to it — against the player's stated style, and " +
-      "against the player's own words in intent free text. " + INTENT_CLAUSE + extra,
+      "against the player's own words (the line \"In their own words\"). When those words ask for a kind of " +
+      `${what} or name one, a card they ask for belongs on the screen ahead of any card they do not; when they ` +
+      "typed nothing, go by the build and the style. " + INTENT_CLAUSE + extra,
+    /*
+     * **The player's words are in the criteria, not only in the instruction.**
+     * Worded as "it fits this build and this player now", a card the player
+     * had named was judged mostly against the build: over ten logged spell
+     * offers, "I only want Frozen Orb" moved Frozen Orb from 2% to 10% of the
+     * sampled slots and to the top of one; "only fire spells" moved fire from
+     * 11% to 18%. The choice questions had done better (44% and top of all
+     * ten; 40%). Naming the words as a way to be worth a place took the same
+     * requests to 36% and top of all ten, and fire to 55%, with the typed-
+     * nothing requests unchanged (jev-findings 35).
+     */
     criteria: {
-      true: "Worth a place on the screen: it fits this build and this player now.",
-      false: "Not worth a place: wrong for this build, or off where the player is going.",
+      true: "Worth a place on the screen: what the player's own words ask for, or a fit for this build and this player now.",
+      false: "Not worth a place: not what the player asked for, and wrong for this build or off where the player is going.",
     },
   };
 }

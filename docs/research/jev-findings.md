@@ -1040,6 +1040,18 @@ were never as concentrated), and two runs of a style still share two thirds of
 the affixes they see, which is the affix door's count (21 affix cards a run in
 a pool of 19) rather than the draw.
 
+**The player's words have to be in the criteria.** Worded first as "worth a
+place: it fits this build and this player now", the Noul read the build over
+the player: on the same ten logged spell offers with only the typed words
+changed, "only fire spells" (typed in Chinese) took fire from 11% to 18% of
+the sampled slots, rising only in the dot runs, and "I only want Frozen Orb"
+put it top of one offer in ten (2% → 10%). The choice questions had done better
+(fire 17% → 40%; Frozen Orb top of all ten, 44%). With the words named in the
+instruction and in `true` — "what the player's own words ask for, or a fit for
+this build" — the same requests gave fire 55% and Frozen Orb top of all ten at
+36%, and the typed-nothing requests did not move (fire 12%, the style's own
+cards 78% against 76%).
+
 **Rule:** a choice question is for picking one thing. Where code draws several
 from a list, ask each item on its own — one Noul each — and let code set how
 sharply the judgements are read; a choice distribution used as a sampling
