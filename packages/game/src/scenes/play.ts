@@ -5292,6 +5292,14 @@ export class PlayScene extends Phaser.Scene {
   private async verifyInviteField(closeOnAccept = true): Promise<void> {
     const ui = this.inviteUi;
     if (!ui) return;
+    /*
+     * **Already accepted: Save just closes.** The code in the field was
+     * checked and stored — a link's code is, the moment the dialog opens —
+     * and any edit since would have put the status back to idle, so there is
+     * nothing to check again; asking the proxy a second time only made the
+     * player wait to leave.
+     */
+    if (ui.status === "accepted") { this.hideInvite(); return; }
     const code = ui.field.value.trim();
     if (!code) {
       ui.status = "empty";
