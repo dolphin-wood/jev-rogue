@@ -1,0 +1,67 @@
+/**
+ * Room 5, the king's first audience (doc 022): the room is the run's shape and
+ * code's, so none of the room's own questions are asked; the offer its door
+ * promised still is.
+ */
+import { describe, expect, it } from "vitest";
+import {
+  AUDIENCE_FLOOR_FEATURES, ITEMS, MAX_HEARTS, ROOM_EXTENT, bucketClearSpeed, bucketGold, bucketHealth,
+  bucketMovementPressure, bucketRecentDamage, bucketRunProgress, cardPool, emptyHistory, heldDominantTags,
+  plainInstance, RUN_AUDIENCE_ROOM,
+} from "@jr/core";
+import type { RunContext } from "@jr/core";
+import { createDirector } from "./director.ts";
+import type { ObservedRequest } from "./director.ts";
+
+function ctx(seed: string): RunContext {
+  const staff = { slots: 6, mana_max: 120 };
+  const slots = [plainInstance("magic_bolt"), null, null];
+  return {
+    run_id: seed, seed, room_index: RUN_AUDIENCE_ROOM,
+    labels: {
+      health: bucketHealth(MAX_HEARTS), recent_damage: bucketRecentDamage(0),
+      clear_speed: bucketClearSpeed(30_000, 30_000), movement_pressure_recent: bucketMovementPressure(0.5),
+      run_progress: bucketRunProgress(RUN_AUDIENCE_ROOM), gold: bucketGold(0),
+      tension_cap: "peak_allowed", hazard_cap: "high", pressure_cap: 5,
+      build: { range: "mid" }, preference: { dominant: heldDominantTags(slots, ITEMS), consistency: "on_plan" },
+      build_shape: "forming",
+    },
+    staff, slots, inventory: [], history: emptyHistory(), intent: { preset: "dot" },
+  };
+}
+
+describe("the king's first audience: the room plan", () => {
+  it("builds the open arena at compact size in the hall's light, a peak, with one wave and no elites", async () => {
+    for (let s = 0; s < 12; s++) {
+      const d = createDirector("rule");
+      const r = await d.planRoom(ctx(`aud${s}`), { room_index: RUN_AUDIENCE_ROOM, door_slot: 0, room_type: "combat" }, "build");
+      expect(r.plan.params.space).toBe("audience_arena");
+      expect(r.plan.params.size).toBe("compact");
+      expect(r.plan.extent).toEqual(ROOM_EXTENT.compact);
+      expect(r.plan.params.mood).toEqual({ temperature: "cold", brightness: "dim", particle_intensity: "calm" });
+      expect(r.tension).toBe("peak");
+      expect(r.plan.encounter?.waves.length).toBe(1);
+      expect(r.elite_affixes).toEqual([]);
+      expect(r.plan.measured.pillar_count).toBe(0);
+      // One edge stands braziers; the other braziers or at most one floor feature — never a turret.
+      const features = r.plan.zones.map((z) => z.feature);
+      expect(features).toContain("brazier");
+      expect(features).not.toContain("turret_mount");
+      for (const f of features) expect(["brazier", ...AUDIENCE_FLOOR_FEATURES]).toContain(f);
+      expect(features.filter((f) => f !== "brazier").length).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("asks nothing about the room, and still asks the offer its door promised", async () => {
+    const seen: ObservedRequest[] = [];
+    const d = createDirector("rule", { observe: (o) => seen.push(o) });
+    const c = ctx("aud-ask");
+    const pool = cardPool(ITEMS, [], "stat", [{ shape: "bolt", count: 1, affixes: [] }], {}, { hurt: true });
+    const r = await d.planRoom(c, { room_index: RUN_AUDIENCE_ROOM, door_slot: 0, room_type: "combat" }, "build", {
+      cards: [{ room_index: RUN_AUDIENCE_ROOM, pool, count: 3, pity: false, temptation: false }],
+    });
+    const asked = seen.flatMap((o) => Object.keys(o.questions));
+    for (const q of ["space", "size", "symmetry", "next_tension", "composition", "density"]) expect(asked).not.toContain(q);
+    expect(r.offer?.cards[0]?.ids.length).toBe(3);
+  });
+});

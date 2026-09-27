@@ -11,7 +11,7 @@ import {
   moodTransform, tintRGBA, dashInvulnerable, MELEE, ARMOUR_BREAK_MS, brakeFraction, ENEMIES,
   BOSS_ARCHETYPES, makeEnemy, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
-  BLADE_REACH, noMods, applyStat, stageFor, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
+  BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, audienceGrade, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTierKey, affixFitsSpell, itemShape,
   spikesOut, featureCells, fillSubspecies,
   heldDominantTags, STYLE_START, bucketClearSpeed, bucketGold, bucketMovementPressure, bucketRunProgress,
@@ -2226,7 +2226,8 @@ export class PlayScene extends Phaser.Scene {
     this.roomPromise = {
       ...(through?.schools ? { schools: through.schools } : {}),
       ...(through?.families ? { families: through.families } : {}),
-      grade: through?.grade ?? 1,
+      // The first audience pays its door a grade higher (doc 022).
+      grade: isAudienceRoom(index) ? audienceGrade(through?.grade ?? 1) : through?.grade ?? 1,
     };
     const roomCards = through?.cards ?? null;
     this.roomCards = roomCards;
@@ -2348,6 +2349,8 @@ export class PlayScene extends Phaser.Scene {
       ? await this.director.planRoom(ctx, { room_index: index, door_slot: 0, room_type: roomType }, this.tension, ask.request)
       : null;
     this.planned = planned;
+    // The first audience is a peak whatever the doors said, so the room after it is the trough (doc 022).
+    if (planned && isAudienceRoom(index)) this.tension = planned.tension;
     if (planned) {
       this.planRecords.set("room", { decisions: planned.decisions });
       playtestLog.decide(index, "room", planned.decisions);
@@ -2388,6 +2391,8 @@ export class PlayScene extends Phaser.Scene {
       hearts: startHearts,
       rng: src.stream("gameplay"),
       offer: worldOffer,
+      // The king's first audience: the roof gives on this fight (doc 022).
+      audience: fight && isAudienceRoom(index),
       dealtMult: this.dealtMult,
       takenMult: this.takenMult,
       invincible: this.invincible,

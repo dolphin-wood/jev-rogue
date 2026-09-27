@@ -232,6 +232,7 @@ export const ZH_TERMS = {
   "term.boss_open": "开阔 Boss 场",
   "term.boss_scattered": "散布 Boss 场",
   "term.boss_pillared": "列柱 Boss 场",
+  "term.audience_arena": "开阔竞技场",
 
   /* ------------------------- symmetry, size, mood ------------------------ */
   "term.mirrored": "镜像",

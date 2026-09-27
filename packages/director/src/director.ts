@@ -17,7 +17,7 @@ import {
   assemblePortals, SCHOOL_OF,
   rampDensities, rampAnchors, rampSubspecies, rampElitePresence, rampFor, rampRoster,
   keysLean, UNMEASURED, PORTAL_NEED_TEMPERATURE, PORTAL_TAIL_TEMPERATURE,
-  buildFacts, NO_BUILD, enemy,
+  buildFacts, NO_BUILD, enemy, isAudienceRoom, audienceZones,
 } from "@jr/core";
 import type {
   CounterScore, Distribution, EncounterProfile, RoomPlan,
@@ -380,6 +380,77 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
   const declinedIn = new WeakMap<Record<string, Distribution>, ReadonlySet<string>>();
   /** Questions answered by the rule table without being asked, and why (`no_history`). */
   const unaskedIn = new WeakMap<Record<string, Distribution>, ReadonlySet<string>>();
+
+  /**
+   * **Room 5: the king's first audience** (doc 022). Everything about the room
+   * is code's — its arena, its size, its look, its edges and the fight it opens
+   * as — because the room is the run's shape, like the vendors' stop and the
+   * throne hall, and doc 002 does not ask a question with one answer. What is
+   * still asked is the reward its door promised: the offer rides in a request
+   * of its own, as a vendor room's does.
+   *
+   * - **The arena** is `audience_arena`: open, no cover, `compact` so it fits
+   *   the view at a zoom near the throne hall's (doc 022, "The view"), mirrored.
+   * - **The look** is the throne hall's own light, the same framing and the
+   *   same room the player will meet him in again.
+   * - **The edges** are braziers and at most one floor feature (`audienceZones`).
+   * - **The fight** is one round of the build band, no subspecies, no elites:
+   *   these bodies are there to be crushed, and the world never calls the rest.
+   * - **The tension** is recorded as `peak`, so the beat after it is the
+   *   trough (doc 014) — at room 6, the ramp's steepest step.
+   */
+  async function planAudience(ctx: RunContext, door: DoorRef, alongside?: OfferRequest): Promise<RoomPlanResult> {
+    const rng = new RngSource(ctx.seed).stream("decision", ctx.room_index, door.door_slot, 1);
+    const mood = { temperature: "cold", brightness: "dim", particle_intensity: "calm" } as const;
+    const generated = generateRoom(
+      { space: "audience_arena", symmetry: "mirrored", size: "compact", mood }, "S", "combat", rng,
+    );
+    const base = toRoomPlan(generated, {
+      id: `${ctx.run_id}/${ctx.room_index}/${door.door_slot}`,
+      seed_key: `decision:${ctx.room_index}:${door.door_slot}`,
+      reward_kind: "item",
+      params_source: "rule",
+    });
+    const zones = audienceZones(base.zones, rng);
+    const profile: EncounterProfile = {
+      composition: "mixed", density: "sparse", wave_structure: "steady", anchor: "none", entry: "far_front", rounds: 1,
+    };
+    const band = bandForRoom({ room_type: "combat", tension: "build", pressure_cap: ctx.labels.pressure_cap });
+    const assembled = band
+      ? assembleEncounterDetailed(profile, base, band, rng, { source: "rule", room_index: ctx.room_index })
+      : null;
+    // The first wave only: the roof gives before a second would be called, and a second is never queued.
+    const encounter = assembled ? { ...assembled.plan, waves: assembled.plan.waves.slice(0, 1), elite_affixes: [] } : null;
+    let offer: OfferPlan | undefined;
+    if (alongside) {
+      const q = offerAsk(ctx, alongside);
+      const meta: RequestMeta = { run_id: ctx.run_id, room_index: ctx.room_index, door_slot: door.door_slot, round: 1, purpose: "room" };
+      const brief: BriefFor = { ctx, ...(alongside.cards?.length ? { cards: cardPools(alongside) } : {}) };
+      const stage = q.first(await ask(q.questions, flatState(ctx, q.state), meta, brief));
+      offer = Object.keys(stage.questions).length === 0
+        ? stage.finish(null)
+        : stage.finish(await ask(stage.questions, flatState(ctx, stage.state), { ...meta, round: 2 }, brief));
+    }
+    const plan: RoomPlan = {
+      ...base, zones, encounter,
+      source: { ...base.source, params: "rule", encounter: encounter ? "rule" : "none" },
+    };
+    return {
+      door, plan, tension: "peak",
+      source: {
+        params: "rule", mood: "rule", reward_kind: "rule", zones: "rule",
+        encounter: "rule", affixes: null, layout: generated.layout,
+      },
+      profile: { composition: profile.composition, density: profile.density, wave_structure: profile.wave_structure, anchor: profile.anchor, entry: profile.entry },
+      elite_affixes: [],
+      trimmed: false,
+      decisions: [{
+        choice: "audience_arena", probabilities: { audience_arena: 1 }, confidence: null, source: "rule",
+        question: "space (the king's first audience, doc 022)",
+      }],
+      ...(offer ? { offer } : {}),
+    };
+  }
 
   async function ask(
     questions: Record<string, ChoiceQuestion>,
@@ -1220,6 +1291,9 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
     },
 
     async planRoom(ctx, door, suggested, alongside) {
+      // The king's first audience is the run's shape, not a question (doc 022).
+      if (isAudienceRoom(ctx.room_index) && (door.room_type === "combat" || door.room_type === "elite"))
+        return planAudience(ctx, door, alongside);
       const pacing = pacingLabels({
         room_index: ctx.room_index, history: ctx.history,
         health: ctx.labels.health, recent_damage: ctx.labels.recent_damage,

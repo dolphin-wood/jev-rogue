@@ -197,6 +197,22 @@ const DEFS: readonly Def[] = [
     zoneSlots: [], spawnGroups: [A_SURROUND],
     description: "A boss arena ringed with pillars; the centre stays clear for the fight.",
   },
+  /*
+   * **The king's first audience** (doc 022, "The arena"). An open arena with no
+   * cover at all, because phase I is where the player learns him and a wall
+   * his band stops at teaches something else. It has to look like an ordinary
+   * room until the roof gives, so it keeps an ordinary arena's spawn groups
+   * for the fight it opens as, and its two edge slots take the braziers and at
+   * most one floor feature (`audienceZones`); the centre, where the fight with
+   * him happens, is left bare. A boss arena for the generator — the plain
+   * outline, the centre clear — so it is never on the Director's space list.
+   */
+  {
+    id: "audience_arena", shape: "arena", openness: "open", cover: "none", doors: ARENA_DOORS, boss: true,
+    zoneSlots: [A_EDGE_N, A_EDGE_S],
+    spawnGroups: [A_FAR, A_FLANK_L, A_FLANK_R, A_SURROUND],
+    description: "A wide empty arena, bare in the middle; braziers and a patch of strange ground stand at its edges.",
+  },
 ];
 
 export const SPACE_ARCHETYPES: readonly SpaceArchetype[] = DEFS.map((d) => ({

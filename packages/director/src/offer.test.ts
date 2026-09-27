@@ -361,14 +361,14 @@ describe("the offer asked in one request (doc 002: parallel questions)", () => {
   it("rides in the room's round 1 and answers as the separate requests would", async () => {
     const seen: import("./director.ts").ObservedRequest[] = [];
     const d = createDirector("rule", { observe: (r) => seen.push(r) });
-    const choices = portalChoices(run(5), new RngSource("m").stream("c"), 3);
-    const req = cardsReq(5);
-    const room = await d.planRoom(ctx(5), { room_index: 5, door_slot: 0, room_type: "combat" }, "build", { portals: choices, cards: [req] });
+    const choices = portalChoices(run(6), new RngSource("m").stream("c"), 3);
+    const req = cardsReq(6);
+    const room = await d.planRoom(ctx(6), { room_index: 6, door_slot: 0, room_type: "combat" }, "build", { portals: choices, cards: [req] });
     expect(seen.map((r) => `${r.meta.purpose}:${r.meta.round}`)).toEqual(["room:1", "room:2"]);
     expect(Object.keys(seen[0]!.questions)).toEqual(expect.arrayContaining(["space", "portal_need", "overall", "variety"]));
     const alone = createDirector("rule");
-    expect(room.offer?.portals?.doors).toEqual((await alone.planPortals(ctx(5), choices)).doors);
-    expect(room.offer?.cards[0]?.ids).toEqual((await alone.planCards(ctx(5), req)).ids);
+    expect(room.offer?.portals?.doors).toEqual((await alone.planPortals(ctx(6), choices)).doors);
+    expect(room.offer?.cards[0]?.ids).toEqual((await alone.planCards(ctx(6), req)).ids);
   });
 
   it("asks a vendor's three shelves and its portals together, each shelf scoped by its salt", async () => {
@@ -418,7 +418,7 @@ describe("elite rooms", () => {
   it("always arrive in more than one wave", async () => {
     const d = createDirector("rule");
     for (let seed = 0; seed < 20; seed++) {
-      const room = await d.planRoom(ctx(5, { seed: `el${seed}` }), { room_index: 5, door_slot: 0, room_type: "elite" }, "peak");
+      const room = await d.planRoom(ctx(6, { seed: `el${seed}` }), { room_index: 6, door_slot: 0, room_type: "elite" }, "peak");
       expect(room.plan.encounter?.waves.length ?? 0, `seed ${seed}`).toBeGreaterThanOrEqual(2);
       expect(room.profile?.wave_structure).not.toBe("single");
     }

@@ -232,6 +232,7 @@ export const JA_TERMS = {
   "term.boss_open": "開けたボス場",
   "term.boss_scattered": "散在物のあるボス場",
   "term.boss_pillared": "柱のボス場",
+  "term.audience_arena": "開けた闘技場",
 
   /* ------------------------- symmetry, size, mood ------------------------ */
   "term.mirrored": "左右対称",

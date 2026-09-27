@@ -272,3 +272,30 @@ export function assignZoneFeatures<
     return { ...z, feature: picked.id };
   });
 }
+
+/**
+ * The floor features the first audience's edge may carry (doc 022, "The
+ * arena"): ground that asks something, each within a hazard budget of 2. No
+ * `turret_mount` — a turret is a body, and the landing leaves none — and no
+ * brazier here, because the braziers are the other edge's.
+ */
+export const AUDIENCE_FLOOR_FEATURES: readonly string[] = [
+  "spike_strip", "poison_pool", "ice_patch", "lava_channel", "grass_patch",
+];
+
+/**
+ * **The first audience's edges**, chosen by code (doc 022): one edge stands
+ * braziers, cover the player can spend and one of his blows breaks; the other
+ * stands braziers too, or carries at most one floor feature. Which edge is
+ * which, and which ground, come from the room's own stream.
+ */
+export function audienceZones<Z extends { readonly id: string; readonly feature: string }>(
+  zones: readonly Z[],
+  rng: { next(): number },
+): Z[] {
+  const braziers = rng.next() < 0.5 ? 0 : 1;
+  const ground = rng.next() < 0.5
+    ? AUDIENCE_FLOOR_FEATURES[Math.floor(rng.next() * AUDIENCE_FLOOR_FEATURES.length)]!
+    : "brazier";
+  return zones.map((z, i) => ({ ...z, feature: i === braziers ? "brazier" : ground }));
+}

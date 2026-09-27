@@ -40,7 +40,7 @@ export type { GeneratedRoom, RoomZone } from "./generate.ts";
 export {
   FEATURES, HAZARD_CAP_BUDGET, feature, featureCells, featuresByResource, featuresForCap, featuresForZone,
   centralZone, assignZoneFeatures, SPIKE_PERIOD_MS, spikesOut,
-  isHazard, totalHazardBudget,
+  isHazard, totalHazardBudget, audienceZones, AUDIENCE_FLOOR_FEATURES,
 } from "./features.ts";
 export type { FeatureId } from "./features.ts";
 export * from "./melee-metrics.ts";

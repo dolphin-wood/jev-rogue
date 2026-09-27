@@ -146,6 +146,38 @@ export const RUN_COMBAT_ROOMS = 14;
 /** The merchant and blacksmith, fixed: gold needs somewhere to go. */
 export const RUN_SHOP_ROOM = RUN_COMBAT_ROOMS + 1;
 export const RUN_BOSS_ROOM = RUN_SHOP_ROOM + 1;
+/**
+ * **The king's first audience** (doc 022): the last fight of the ossuary, where
+ * he drops into an ordinary fight, plays phase I and leaves. Still one of the
+ * fourteen fights, entered through an ordinary door; what it asks of the doors
+ * before it is `leadsToAudience`.
+ */
+export const RUN_AUDIENCE_ROOM = 5;
+
+/** Whether this room is the first audience. */
+export function isAudienceRoom(roomIndex: number): boolean {
+  return roomIndex === RUN_AUDIENCE_ROOM;
+}
+
+/**
+ * Whether the doors out of this room open onto the first audience. Those doors
+ * are ordinary reward doors but **never elite, a vendor or the fountain**: the
+ * room behind them has to be a fight, and a fair one — an elite room with the
+ * king on top of it is two spikes at once, and a door into a room with no
+ * fight would move him into a room he cannot drop into.
+ */
+export function leadsToAudience(roomIndex: number): boolean {
+  return roomIndex + 1 === RUN_AUDIENCE_ROOM;
+}
+
+/**
+ * What the first audience pays: its door's own reward **one grade higher**,
+ * capped at 3 (doc 022, "What it pays"). The reward for driving him off rides
+ * on the reward the player chose at the door, so the choice still counts.
+ */
+export function audienceGrade(grade: number): number {
+  return Math.min(3, grade + 1);
+}
 
 export interface RunShape {
   readonly roomIndex: number;
@@ -247,7 +279,7 @@ export const ELITE_GAP_FIGHTS = 2;
 export const ELITE_ROOMS_MAX = 4;
 
 export function legalDifficulties(run: RunShape): readonly Difficulty[] {
-  if (run.lastWasElite || run.critical) return ["normal"];
+  if (run.lastWasElite || run.critical || leadsToAudience(run.roomIndex)) return ["normal"];
   if ((run.elitesSoFar ?? 0) >= ELITE_ROOMS_MAX) return ["normal"];
   // Absent before the first elite, which is when there is nothing to be near.
   if (run.fightsSinceElite !== undefined && run.fightsSinceElite < ELITE_GAP_FIGHTS) return ["normal"];
@@ -443,7 +475,7 @@ export function portalChoices(run: RunShape, rng: Rng, count = drawPortalCount(r
   const n = Math.max(1, Math.min(count, REWARD_KINDS.length));
   // Neither may be the only way on, and neither may follow another room with
   // no fight in it: two in a row is a hole in the run.
-  const roomToSpare = n >= 2 && !run.lastWasNpc;
+  const roomToSpare = n >= 2 && !run.lastWasNpc && !leadsToAudience(run.roomIndex);
   const npc = roomToSpare && run.roomIndex >= NPC_FIRST_ROOM && run.roomIndex <= NPC_LAST_ROOM
     && (run.npcRooms ?? 0) < NPC_ROOMS_MAX && (run.npcOffers ?? 0) < NPC_OFFERS_MAX;
   /*
