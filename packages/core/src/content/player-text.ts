@@ -66,7 +66,7 @@ export const PLAYER_TEXT: Readonly<Record<string, string>> = {
   repeat: "Shortly after you cast, the spell casts again in the direction you're aiming.",
   scatter: "The spell also fires out to every side.",
   ward: "Casting leaves a rune at your feet that blocks enemy shots.",
-  retort: "When you take damage, casts this spell at the attacker for free.",
+  retort: "When you take damage, casts this spell at the attacker at no mana cost.",
   slipstream: "Dashing through an enemy casts this spell at it.",
   pierce: "The shot passes through enemies it hits.",
   seek: "The shot curves toward the nearest enemy.",
@@ -75,7 +75,7 @@ export const PLAYER_TEXT: Readonly<Record<string, string>> = {
   rime: "This spell deals ice: its hits build toward a freeze, and a frozen enemy shatters for triple damage.",
   blight: "This spell deals poison: its hits build up poison that slows and wears enemies down.",
   haste: "Killing with this spell brings it back sooner.",
-  resonance: "Every few sword hits, casts this spell at the enemy you struck for free.",
+  resonance: "Every few sword hits, casts this spell at the enemy you struck at no mana cost.",
 
   /* --------------------------------- stats ------------------------------- */
   fleet: "Move faster.",

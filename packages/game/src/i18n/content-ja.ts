@@ -55,7 +55,7 @@ export const JA_CONTENT: ContentTable = {
 
   /* -------------------------------- affixes ------------------------------ */
   fork: { name: "フォーク", description: "当たると破片に分かれ、前へ飛び続ける。" },
-  chain: { name: "チェイン", description: "当たると近くの次の敵へ、同じ呪文の小さく弱い写しを放つ。" },
+  chain: { name: "チェイン", description: "当たると近くの次の敵へ、威力の落ちた同じ呪文を放つ。" },
   brand: { name: "ブランド", description: "1発目で印を付け、2発目で起爆する。" },
   harvest: { name: "ハーヴェスト", description: "この呪文で倒した敵がはじけ飛ぶ。" },
   bloom: { name: "ブルーム", description: "弾が飛び切った場所の床が燃え、上にいる敵を燃やす。外れても効果がある。" },
@@ -63,7 +63,7 @@ export const JA_CONTENT: ContentTable = {
   repeat: { name: "リピート", description: "押してから一拍おいて、そのとき狙っている方向へもう1回撃つ。" },
   scatter: { name: "スキャッター", description: "前だけでなく周りにも撃ち出す。" },
   ward: { name: "ワード", description: "詠唱すると、足元に敵の弾を防ぐルーンを残す。" },
-  retort: { name: "リベンジ", description: "ダメージを受けると、攻撃してきた敵へこの呪文を無料で撃ち返す。" },
+  retort: { name: "リベンジ", description: "ダメージを受けると、攻撃してきた敵へこの呪文を撃ち返す（マナ消費なし）。" },
   slipstream: { name: "スリップストリーム", description: "ダッシュで敵をすり抜けるとき、ついでに攻撃する。" },
   pierce: { name: "ピアース", description: "弾が敵を貫いて飛び続ける。" },
   seek: { name: "シーク", description: "弾が一番近い敵へ曲がる。" },
@@ -72,7 +72,7 @@ export const JA_CONTENT: ContentTable = {
   rime: { name: "ライム", description: "元の属性はそのままに、当てると凍結も溜まる。凍った敵を砕くと3倍ダメージ。異なる属性を二つ抱えた敵は、受けるダメージがすべて増える。" },
   blight: { name: "ブライト", description: "元の属性はそのままに、当てると毒も溜まる。毒は敵を鈍らせ、削っていく。異なる属性を二つ抱えた敵は、受けるダメージがすべて増える。" },
   haste: { name: "ヘイスト", description: "この呪文で倒すと、クールダウンが早く戻る。" },
-  resonance: { name: "レゾナンス", description: "剣が何回か当たるたび、斬った敵へこの呪文を無料で放つ。" },
+  resonance: { name: "レゾナンス", description: "剣が何回か当たるたびに、斬った敵へこの呪文を放つ（マナ消費なし）。" },
 
   /* --------------------------------- stats ------------------------------- */
   fleet: { name: "俊足", description: "移動が速くなる。" },
@@ -93,14 +93,14 @@ export const JA_CONTENT: ContentTable = {
   frost: { name: "氷" },
   venom: { name: "毒" },
   storm: { name: "雷" },
-  void: { name: "虚無" },
+  void: { name: "虚空" },
   spirit: { name: "霊" },
-  stone: { name: "石" },
+  stone: { name: "岩" },
 
   /* --------------------------------- styles ------------------------------ */
   "style.spam": { name: "弾幕", description: "安い呪文を途切れなく撃ち続ける。連鎖し広がる弾で、画面を埋め尽くす。" },
   "style.nuke": { name: "一撃", description: "手数は少なく、一発が重い。遅くて高い呪文を狙って当て、戦いを終わらせる。" },
-  "style.area": { name: "範囲", description: "まとめて薙ぎ払う。爆発・輪・床の効果で、敵が固まるほど気持ちいい。" },
-  "style.dot": { name: "継続", description: "燃やして、毒を盛って、あとは動き回るだけ。" },
-  "style.melee": { name: "剣戟", description: "剣の間合いで戦う。体の周りを巡る呪文を、剣そのものが放つ。" },
+  "style.area": { name: "範囲", description: "爆発・輪・床の効果で、多くの敵をまとめて攻撃する。" },
+  "style.dot": { name: "継続", description: "燃焼と毒で継続ダメージを与え、動き回りながら戦う。" },
+  "style.melee": { name: "剣戟", description: "剣の間合いで戦う。周囲を巡る呪文や、剣を振ると発動する呪文を使う。" },
 };

@@ -113,31 +113,31 @@ export const STYLE_CARDS: Readonly<Record<Archetype, {
   readonly name: string; readonly desc: string; readonly does: string;
 }>> = {
   spam: {
-    name: "Barrage", desc: "Many cheap casts, kept up. Fast spells that chain and fan out.",
+    name: "Barrage", desc: "Cast cheap, fast spells nonstop. Chain and spread your shots.",
     does: "Spells on a short cooldown, pressed often; some bank shots while the key rests and loose the "
       + "banked shots on one press. Starts with Shock Arc, a seeking spark that leaps to up to "
       + "two more nearby bodies.",
   },
   nuke: {
-    name: "Heavy", desc: "Few big hits, placed well. Slow, expensive spells that end fights.",
+    name: "Heavy", desc: "Fewer casts, bigger hits. Slow, costly spells that end fights.",
     does: "Spells that take a windup, a held charge or a marked landing before one hit that carries the "
       + "cast's damage. Starts with Earth Spikes, a line of stone spikes out of the "
       + "floor after a windup, staggering what they catch.",
   },
   area: {
-    name: "Crowd", desc: "Hit many at once. Bursts, rings and ground that rewards a bunched room.",
+    name: "Crowd", desc: "Hit many enemies at once with bursts, rings and ground effects.",
     does: "Spells that hit several bodies with one cast: cones, rings, lines through a row, and pulls that "
       + "drag bodies together. Starts with Scatter Shot, a wide cone of pellets that fly a short way.",
   },
   dot: {
-    name: "Affliction", desc: "Burn and poison. Let it tick, and keep moving while it does.",
+    name: "Affliction", desc: "Burn and poison your enemies, then keep moving while the damage ticks.",
     does: "Spells that put a burn or a poison on a body, which deals its damage over the next seconds while "
       + "the player moves; some leave burning or poisoned ground. Starts with Ember Dart, a dart that sets "
       + "its target burning.",
   },
   melee: {
     name: "Blade",
-    desc: "Live in sword range. Spells that circle and strike close, cast by the sword itself.",
+    desc: "Fight up close with the sword, using spells that orbit you or trigger on your swings.",
     does: "Spells used within sword reach: some add to the sword swing, some are set off by it, some cut "
       + "what is close. Starts with Crescent Edge, an enchant: for a while each sword swing also throws its "
       + "crescent forward as a wave.",

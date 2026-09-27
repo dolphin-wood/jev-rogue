@@ -65,7 +65,7 @@ export const ZH_CONTENT: ContentTable = {
   repeat: { name: "回响", description: "施放后片刻，朝你当时瞄准的方向自动再施放一次。" },
   scatter: { name: "散射", description: "法术会同时向四周射出。" },
   ward: { name: "守护", description: "施法时在脚下留下一道符文，抵挡敌人的子弹。" },
-  retort: { name: "还击", description: "受到伤害时，免费向攻击你的敌人施放一次此法术。" },
+  retort: { name: "还击", description: "受到伤害时，向攻击你的敌人施放一次此法术，不消耗法力。" },
   slipstream: { name: "尾流", description: "冲刺穿过敌人时，对其施放此法术。" },
   pierce: { name: "穿透", description: "弹丸可穿透命中的敌人。" },
   seek: { name: "追踪", description: "弹丸会转向最近的敌人。" },
@@ -74,7 +74,7 @@ export const ZH_CONTENT: ContentTable = {
   rime: { name: "霜冻", description: "命中时额外叠加冰冻，不影响法术原有的元素；被冻结的敌人被击碎时受到三倍伤害。同时带有两种元素状态的敌人会受到更多伤害。" },
   blight: { name: "枯萎", description: "命中时额外叠加中毒，不影响法术原有的元素；中毒会使敌人减速并持续受到伤害。同时带有两种元素状态的敌人会受到更多伤害。" },
   haste: { name: "急速", description: "用此法术击杀敌人时，冷却恢复更快。" },
-  resonance: { name: "共鸣", description: "挥剑每命中数次，就会免费对被击中的敌人施放一次此法术。" },
+  resonance: { name: "共鸣", description: "挥剑每命中数次，就会对被击中的敌人施放一次此法术，不消耗法力。" },
 
   /* --------------------------------- stats ------------------------------- */
   fleet: { name: "轻盈", description: "移动更快。" },
@@ -100,9 +100,9 @@ export const ZH_CONTENT: ContentTable = {
   stone: { name: "岩石" },
 
   /* --------------------------------- styles ------------------------------ */
-  "style.spam": { name: "弹幕", description: "法术又便宜又快，一刻不停地放。连锁、扇射，打满全屏。" },
-  "style.nuke": { name: "重击", description: "出手不多，但每一下都要命。法术慢而贵，放准了就能结束战斗。" },
-  "style.area": { name: "群攻", description: "一下打一片。爆炸、光环和地面效果，敌人越扎堆越爽。" },
-  "style.dot": { name: "侵蚀", description: "点火、下毒，让伤害慢慢跳，你只管跑位。" },
-  "style.melee": { name: "近战", description: "贴身作战。环绕和近身的法术，由剑来施放。" },
+  "style.spam": { name: "弹幕", description: "持续施放廉价、快速的法术，用连锁和扇形弹幕铺满全屏。" },
+  "style.nuke": { name: "重击", description: "出手少，伤害高。施放缓慢、消耗高的法术，一击结束战斗。" },
+  "style.area": { name: "群攻", description: "用爆炸、光环和地面效果同时攻击大量敌人。" },
+  "style.dot": { name: "侵蚀", description: "用灼烧和中毒持续造成伤害，同时保持走位。" },
+  "style.melee": { name: "近战", description: "持剑近身作战，搭配环绕自身或由挥剑触发的法术。" },
 };
