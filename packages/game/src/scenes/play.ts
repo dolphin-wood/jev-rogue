@@ -12956,7 +12956,7 @@ export class PlayScene extends Phaser.Scene {
   private drawFocus(x: number, y: number, angle: number, depth: number, charged: boolean): void {
     const g = this.focusGfx;
     g.clear().setDepth(depth);
-    const px = new Map<string, number>();
+    const px = new Map<number, number>();
     const dx = Math.cos(angle), dy = Math.sin(angle), nx = -dy, ny = dx;
     const ax = x * ART_SCALE, ay = y * ART_SCALE;
     // Lengths and widths in pixels at the tuned scale.
@@ -12966,7 +12966,7 @@ export class PlayScene extends Phaser.Scene {
         const u = (t - from) / Math.max(1, to - from);
         const wd = width(u) * TUNED;
         for (let s = -wd / 2; s <= wd / 2; s += 0.35)
-          px.set(`${Math.round(ax + dx * t + nx * s)},${Math.round(ay + dy * t + ny * s)}`, colour(s / Math.max(0.5, wd / 2), u));
+          px.set(pixKey(Math.round(ax + dx * t + nx * s), Math.round(ay + dy * t + ny * s)), colour(s / Math.max(0.5, wd / 2), u));
       }
     };
     if (FOCUS === "staff") {
@@ -12978,24 +12978,21 @@ export class PlayScene extends Phaser.Scene {
       stroke(3.5, 12, (u) => 2.6 - u * 1.6, (s, u) => (u > 0.85 || s < 0 ? 0xeef2ff : 0x7d849e));
       stroke(4.5, 5.5, () => 1, () => 0x08acd1);
     }
-    const ink = new Set<string>();
-    for (const k of px.keys()) {
-      const [kx, ky] = k.split(",").map(Number) as [number, number];
+    const ink = new Set<number>();
+    for (const k of px.keys())
       for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
-        const n = `${kx + ox},${ky + oy}`;
+        const n = k + oy * PIX_ROW + ox;
         if (!px.has(n)) ink.add(n);
       }
-    }
     const cell = 1 / ART_SCALE;
     const flash = charged && (this.world.tick >> 1) & 1;
     const p = this.world.player;
     g.setAlpha(dashInvulnerable(p) ? 0.55 : p.invulnMs > 0 && (this.world.tick >> 2) & 1 ? 0.35 : 1);
     g.fillStyle(0x040407, 1);
-    for (const k of ink) { const [kx, ky] = k.split(",").map(Number) as [number, number]; g.fillRect(kx * cell - cell / 2, ky * cell - cell / 2, cell, cell); }
+    for (const k of ink) g.fillRect(pixX(k) * cell - cell / 2, pixY(k) * cell - cell / 2, cell, cell);
     for (const [k, c] of px) {
-      const [kx, ky] = k.split(",").map(Number) as [number, number];
       g.fillStyle(flash ? 0xffffff : c, 1);
-      g.fillRect(kx * cell - cell / 2, ky * cell - cell / 2, cell, cell);
+      g.fillRect(pixX(k) * cell - cell / 2, pixY(k) * cell - cell / 2, cell, cell);
     }
   }
 
@@ -13009,7 +13006,7 @@ export class PlayScene extends Phaser.Scene {
    */
   private drawConjured(bx: number, by: number, dx: number, dy: number, len: number, alpha: number, lead: number, white: boolean): void {
     const g = this.conjureGfx;
-    const px = new Map<string, number>();
+    const px = new Map<number, number>();
     const nx = -dy * lead, ny = dx * lead;
     const L = len * ART_SCALE;
     const ax = bx * ART_SCALE, ay = by * ART_SCALE;
@@ -13028,21 +13025,21 @@ export class PlayScene extends Phaser.Scene {
       for (let sAc = -h; sAc <= h; sAc += 0.35) {
         const k = sAc / h;
         const c = t < 1.6 * TUNED ? 0xcfeeff : k > 0.45 ? 0xffffff : k < -0.6 ? 0x6fb8ff : Math.abs(k) < 0.25 ? 0xf2fdff : 0xa9e2ff;
-        px.set(`${Math.round(ax + dx * t + nx * sAc)},${Math.round(ay + dy * t + ny * sAc)}`, c);
+        px.set(pixKey(Math.round(ax + dx * t + nx * sAc), Math.round(ay + dy * t + ny * sAc)), c);
       }
     }
     const cell = 1 / ART_SCALE;
-    const rim = new Set<string>();
-    for (const key of px.keys()) {
-      const [kx, ky] = key.split(",").map(Number) as [number, number];
-      for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) if (!px.has(`${kx + ox},${ky + oy}`)) rim.add(`${kx + ox},${ky + oy}`);
-    }
+    const rim = new Set<number>();
+    for (const key of px.keys())
+      for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+        const n = key + oy * PIX_ROW + ox;
+        if (!px.has(n)) rim.add(n);
+      }
     g.fillStyle(0x16266a, alpha);
-    for (const key of rim) { const [kx, ky] = key.split(",").map(Number) as [number, number]; g.fillRect(kx * cell - cell / 2, ky * cell - cell / 2, cell, cell); }
+    for (const key of rim) g.fillRect(pixX(key) * cell - cell / 2, pixY(key) * cell - cell / 2, cell, cell);
     for (const [key, c] of px) {
-      const [kx, ky] = key.split(",").map(Number) as [number, number];
       g.fillStyle(white ? 0xffffff : c, alpha);
-      g.fillRect(kx * cell - cell / 2, ky * cell - cell / 2, cell, cell);
+      g.fillRect(pixX(key) * cell - cell / 2, pixY(key) * cell - cell / 2, cell, cell);
     }
   }
 
@@ -18687,6 +18684,25 @@ function requestTitle(purpose: string, round: number): string {
 function sentenceOf(str: string): string {
   const s = str.replace(/_/g, " ");
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/*
+ * **An art pixel as one number**, for the blades and the focus drawn a pixel
+ * at a time. They were keyed by "x,y" strings — built for every pixel set,
+ * split again for every pixel drawn and for each of its eight neighbours —
+ * which was most of what a swing's blade cost. Coordinates are art pixels
+ * (world × ART_SCALE), inside ±2^15 for any room; a neighbour is ±1 and ±ROW.
+ */
+const PIX_OFF = 1 << 15;
+const PIX_ROW = 1 << 16;
+function pixKey(x: number, y: number): number {
+  return (y + PIX_OFF) * PIX_ROW + (x + PIX_OFF);
+}
+function pixX(k: number): number {
+  return (k % PIX_ROW) - PIX_OFF;
+}
+function pixY(k: number): number {
+  return Math.floor(k / PIX_ROW) - PIX_OFF;
 }
 
 /** `?spells=a,b+affix,c`: a development loadout (`debugSpells`). Empty when not asked for. */

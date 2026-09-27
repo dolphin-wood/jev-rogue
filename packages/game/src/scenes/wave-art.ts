@@ -75,9 +75,12 @@ function hash(a: number, b: number, c: number): number {
 /** Which band a texel is in: 0 none, 1 lip, 2 aura, 3 mid, 4 core. */
 function bandAt(o: CrescentWave, px: number, py: number, half: number, thick: number, flick: number): number {
   const dx = px - o.x, dy = py - o.y;
-  const d = Math.hypot(dx, dy);
+  const d = Math.sqrt(dx * dx + dy * dy);
   let off = Math.atan2(dy, dx) - o.facing;
-  off = Math.atan2(Math.sin(off), Math.cos(off));
+  if (off > Math.PI) off -= Math.PI * 2;
+  else if (off < -Math.PI) off += Math.PI * 2;
+  if (off > Math.PI) off -= Math.PI * 2;
+  else if (off < -Math.PI) off += Math.PI * 2;
   const u = off / half;
   if (Math.abs(u) >= 1) return 0;
   // Fat in the middle, drawn to a point at each tip.
@@ -128,18 +131,43 @@ export function drawCrescentWave(pen: Pen, o: CrescentWave, alpha = 1): void {
   // Each texel's band once, then each band's runs a row at a time.
   const cols = Math.round((gx1 - gx0) / P) + 1, rows = Math.round((gy1 - gy0) / P) + 1;
   const grid = new Uint8Array(cols * rows);
-  for (let j = 0; j < rows; j++)
-    for (let i = 0; i < cols; i++) grid[j * cols + i] = bandAt(o, gx0 + i * P + P / 2, gy0 + j * P + P / 2, half, thick, flick);
-  for (let band = 1; band <= 4; band++) {
-    pen.fillStyle(colours[band]!, alpha);
-    for (let j = 0; j < rows; j++) {
-      let from = -1;
-      for (let i = 0; i <= cols; i++) {
-        const on = i < cols && grid[j * cols + i] === band;
-        if (on && from < 0) from = i;
-        else if (!on && from >= 0) { pen.fillRect(gx0 + from * P, gy0 + j * P, (i - from) * P, P); from = -1; }
-      }
+  /*
+   * **Only the ring is read.** Nothing outside radius − thick .. radius +
+   * lip can be lit, and the box round a wide crescent is mostly the inside
+   * of the curve: reading every texel in it was thousands of `bandAt`s a
+   * wave, a frame, several waves at once. Each row reads only the one or
+   * two spans of it that fall inside the ring.
+   */
+  const rIn = Math.max(0, o.radius - thick - P), rOut = o.radius + TELE_PIX * 1.5 + P;
+  for (let j = 0; j < rows; j++) {
+    const py = gy0 + j * P + P / 2;
+    const dy = py - o.y;
+    if (Math.abs(dy) > rOut) continue;
+    const outer = Math.sqrt(rOut * rOut - dy * dy);
+    const inner = Math.abs(dy) < rIn ? Math.sqrt(rIn * rIn - dy * dy) : 0;
+    for (const [lo, hi] of [[o.x - outer, o.x - inner], [o.x + inner, o.x + outer]] as const) {
+      const i0 = Math.max(0, Math.floor((lo - gx0) / P)), i1 = Math.min(cols - 1, Math.ceil((hi - gx0) / P));
+      for (let i = i0; i <= i1; i++) grid[j * cols + i] = bandAt(o, gx0 + i * P + P / 2, py, half, thick, flick);
     }
+  }
+  // One pass over the grid for every band's runs (x, y, width, flattened), then each band in one colour.
+  const runs: number[][] = [[], [], [], [], []];
+  for (let j = 0; j < rows; j++) {
+    const row = j * cols;
+    let from = 0, band = grid[row]!;
+    for (let i = 1; i <= cols; i++) {
+      const next = i < cols ? grid[row + i]! : 0;
+      if (next === band) continue;
+      if (band > 0) runs[band]!.push(gx0 + from * P, gy0 + j * P, (i - from) * P);
+      from = i;
+      band = next;
+    }
+  }
+  for (let band = 1; band <= 4; band++) {
+    const r = runs[band]!;
+    if (r.length === 0) continue;
+    pen.fillStyle(colours[band]!, alpha);
+    for (let k = 0; k < r.length; k += 3) pen.fillRect(r[k]!, r[k + 1]!, r[k + 2]!, P);
   }
 }
 
