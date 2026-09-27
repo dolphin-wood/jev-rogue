@@ -2082,6 +2082,14 @@ export interface World {
   /** The doors this room offers, made into `portals` when the way out opens. */
   portalSpecs: readonly PortalSpec[];
   /**
+   * Where something the player talks to stands — the vendors and the fountain
+   * — which the portals open clear of. Set by the scene, which places them.
+   * Without it the pre-boss stop's one door could rise on the fountain's cell,
+   * under its sprite and inside its prompt: E drank instead of leaving, and
+   * the boss door looked like it had never opened.
+   */
+  portalKeepClear: readonly { x: number; y: number }[];
+  /**
    * The portal the player walked into, or null. The scene reads it and loads
    * the next room; the simulation does not know what a next room is.
    */
