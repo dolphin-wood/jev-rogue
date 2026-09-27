@@ -989,6 +989,8 @@ export interface HeldSpell {
    * goes out all round takes no `scatter`.
    */
   readonly spread?: number;
+  /** How far its run's wake rolls, px (Dash Slash); absent reads as none. A run with a wake takes no `scatter`. */
+  readonly wake?: number;
   /** Affix ids already attached, which both exclude and upgrade. */
   readonly affixes: readonly string[];
 }
@@ -1001,7 +1003,7 @@ export function heldSpell(
   return {
     ...(item?.id ? { id: item.id } : {}),
     shape: itemShape(item), count: Number(item?.params["count"] ?? 1),
-    spread: Number(item?.params["spread"] ?? 0), affixes,
+    spread: Number(item?.params["spread"] ?? 0), wake: Number(item?.params["wake_reach"] ?? 0), affixes,
   };
 }
 
@@ -1015,7 +1017,9 @@ export function heldSpell(
 export function affixFitsHeld(affix: SpellAffix, key: HeldSpell): boolean {
   if (key.affixes.includes(affix.id)) return true;
   if (key.affixes.length >= AFFIX_SLOTS) return false;
-  return affixFitsSpell(affix, { params: { shape: key.shape, count: key.count, spread: key.spread ?? 0 } }, key.affixes);
+  return affixFitsSpell(affix, {
+    params: { shape: key.shape, count: key.count, spread: key.spread ?? 0, wake_reach: key.wake ?? 0 },
+  }, key.affixes);
 }
 
 /** The affixes at least one held key can actually take; all of them if none are known. */

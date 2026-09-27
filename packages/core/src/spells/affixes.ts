@@ -619,6 +619,14 @@ export function affixFitsSpell(affix: SpellAffix, item: Pick<BaseItem, "params">
    * card twice.
    */
   if (affix.id === "scatter" && Number(item?.params["spread"] ?? 0) >= 180) return false;
+  /*
+   * **Nor a run with a wake** (Dash Slash). A dash's side cast is its cut
+   * at a point in that direction with the caster left where they are — so
+   * "also behind you" on a Dash Slash was a cut behind with no run and no
+   * wake, the one part of the spell it is for. Its wake is already its
+   * answer to the sides.
+   */
+  if (affix.id === "scatter" && Number(item?.params["wake_reach"] ?? 0) > 0) return false;
   return true;
 }
 
