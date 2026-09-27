@@ -9,7 +9,7 @@
  */
 import { z } from "zod";
 import { validateDistribution } from "@jr/core";
-import { EvaluatorError } from "./types.ts";
+import { EvaluatorError, NOUL_NO, NOUL_YES } from "./types.ts";
 import type { ChoiceAnswer, Evaluation, Evaluator, EvaluatorRequest } from "./types.ts";
 
 /**
@@ -61,12 +61,15 @@ const responseSchema = z.object({
   model: z.string().optional(),
   answers: z.record(
     z.string(),
-    z.object({
-      type: z.literal("choice"),
-      choice: z.string(),
-      probabilities: z.record(z.string(), probability),
-      confidence: probability.nullish(),
-    }),
+    z.discriminatedUnion("type", [
+      z.object({
+        type: z.literal("choice"),
+        choice: z.string(),
+        probabilities: z.record(z.string(), probability),
+        confidence: probability.nullish(),
+      }),
+      z.object({ type: z.literal("noul"), noul: probability }),
+    ]),
   ),
   usage: z.object({ input_tokens: z.number().int().nonnegative().optional() }).partial().optional(),
 });
@@ -166,6 +169,24 @@ function validate(
   for (const [name, question] of Object.entries(req.questions)) {
     const answer = data.answers[name];
     if (!answer) throw new EvaluatorError("invalid", `no answer for question "${name}"`);
+    if (answer.type !== question.type)
+      throw new EvaluatorError("invalid", `question "${name}" answered as ${answer.type}, asked as ${question.type}`);
+
+    /*
+     * A Noul is one probability; it travels on as a two-option distribution
+     * so that everything downstream reads one shape of answer. It carries no
+     * confidence: its value already says how sure it is (0.5 is a coin).
+     */
+    if (answer.type === "noul") {
+      const yes = Math.min(1, answer.noul);
+      answers[name] = {
+        choice: yes >= 0.5 ? NOUL_YES : NOUL_NO,
+        probabilities: { [NOUL_YES]: yes, [NOUL_NO]: 1 - yes },
+        confidence: null,
+      };
+      continue;
+    }
+    if (question.type !== "choice") continue;
 
     const offered = Object.keys(question.criteria);
     if (!offered.includes(answer.choice))

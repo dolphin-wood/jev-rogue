@@ -11,9 +11,9 @@ import { validateDistribution } from "@jr/core";
 import type { Distribution } from "@jr/core";
 import { EvaluatorError, FALLBACK } from "./types.ts";
 import type {
-  ChoiceQuestion, DecisionSource, Evaluator, FallbackPath, RequestMeta,
+  DecisionSource, Evaluator, FallbackPath, Question, RequestMeta,
 } from "./types.ts";
-import { offeredKeys } from "./questions/common.ts";
+import { answerKeys, offeredKeys } from "./questions/common.ts";
 
 export interface SourceResult {
   readonly dists: Readonly<Record<string, Distribution>>;
@@ -33,7 +33,7 @@ export interface SourceResult {
 export interface DistributionSource {
   readonly kind: DecisionSource;
   distributions(
-    questions: Readonly<Record<string, ChoiceQuestion>>,
+    questions: Readonly<Record<string, Question>>,
     state: Readonly<Record<string, unknown>>,
     meta: RequestMeta,
     signal: AbortSignal,
@@ -106,7 +106,7 @@ export function jevSource(evaluate: Evaluator, now: () => number = Date.now): Di
       for (const [name, q] of Object.entries(questions)) {
         const answer = result.answers[name];
         if (!answer) throw new EvaluatorError("invalid", `no answer for "${name}"`);
-        const reason = validateDistribution(answer.probabilities, Object.keys(q.criteria));
+        const reason = validateDistribution(answer.probabilities, answerKeys(q));
         if (reason) throw new EvaluatorError("invalid", `question "${name}": ${reason}`);
 
         // The escape option is removed before sampling: it is Jev declining,
@@ -114,7 +114,8 @@ export function jevSource(evaluate: Evaluator, now: () => number = Date.now): Di
         // this one question to the rule table (doc 002).
         const escape = answer.probabilities[FALLBACK] ?? 0;
         const keys = offeredKeys(q);
-        const stops = ESCAPE_STOPS.has(name) && keys.some((k) => (answer.probabilities[k] ?? 0) > 0);
+        // A Noul has no escape: its answer is always a judgement.
+        const stops = q.type === "noul" || ESCAPE_STOPS.has(name) && keys.some((k) => (answer.probabilities[k] ?? 0) > 0);
         if (!stops && (escape > 0.5 || answer.choice === FALLBACK)) { declined.push(name); continue; }
         if (keys.length === 0) throw new EvaluatorError("invalid", `question "${name}" offered nothing`);
         dists[name] = normalise(keys, (k) => answer.probabilities[k] ?? 0);

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { createEvaluator, MAX_BODY_BYTES, MAX_RETRIES } from "./evaluator.ts";
 import { EvaluatorError, FALLBACK } from "./types.ts";
-import type { ChoiceQuestion, EvaluatorRequest } from "./types.ts";
+import type { ChoiceQuestion, EvaluatorRequest, NoulQuestion } from "./types.ts";
 
 const question: ChoiceQuestion = {
   type: "choice",
@@ -50,6 +50,20 @@ describe("evaluator", () => {
     expect(Object.keys(body).sort()).toEqual(["questions", "state"]);
     const headers = fetch.mock.calls[0]![1].headers as Record<string, string>;
     expect(Object.keys(headers).map((k) => k.toLowerCase())).not.toContain("authorization");
+  });
+
+  it("carries a Noul answer on as a yes/no distribution", async () => {
+    const fit: NoulQuestion = { type: "noul", instructions: "Does it fit?", criteria: { true: "yes", false: "no" } };
+    const body = { answers: { fit: { type: "noul", noul: 0.8 } }, usage: { input_tokens: 5 } };
+    const ev = createEvaluator({ url: "/x", fetch: vi.fn().mockResolvedValue(reply(body)) as never });
+    const out = await ev(request({ questions: { fit } }));
+    expect(out.answers.fit).toEqual({ choice: "yes", probabilities: { yes: 0.8, no: expect.closeTo(0.2, 9) }, confidence: null });
+  });
+
+  it("rejects an answer of the wrong kind", async () => {
+    const fit: NoulQuestion = { type: "noul", instructions: "Does it fit?", criteria: { true: "yes", false: "no" } };
+    const ev = createEvaluator({ url: "/x", fetch: vi.fn().mockResolvedValue(reply(good)) as never });
+    await expectPath(ev(request({ questions: { pick: fit } })), "invalid");
   });
 
   it("rejects an answer outside the offered criteria", async () => {

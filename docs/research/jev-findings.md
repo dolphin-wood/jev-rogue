@@ -982,6 +982,93 @@ measured.
 whenever Jev's taste is steady, however varied the thing itself is, and then
 needs a rule to hold it. Decide the thing, and read the label off it.
 
+<a id="finding-35"></a>
+
+### 35. A choice over a pool says which card is *the* answer; ask each card on its own (2026-09-27)
+Reported from play: in the Jev arm some spells and affixes almost never come up.
+Measured with `pnpm card-exposure` (ten runs, styles rotated, the Director's
+own draw replayed over each request's answers): 17 of 39 spells drew under a
+quarter of a uniform share of the offer, the coldest at 0.01; the top ten held
+72% of it. The rule arm, same seeds: none under a quarter, coldest 0.67.
+
+It was not the style lean. Every spell belongs to a style, and the cold ones
+were cold **in their own style, from the first offer**, before the player had
+picked anything: on spam's first screen Shock Arc (the starter's copy) held
+25.7× a uniform share and Mana Darts 5.5×, and Frost Needle and Spirit Ally,
+both spam, 0. Nor was it power: Doom Sigil is the fourth-strongest spell by
+`spell-bench` and sat at 0.03; the most-shown were Stone Ward (a defence the
+`for_needs` axis pushed on every style, 4.6×) and Crescent Edge, the weakest
+spell in the pool. Nor wording: finding 28 had already shown the card text
+inert. Nor variety: `variety` answered `high` more often than `low`, and at
+temperature 1.0 that leaves the distribution as it came.
+
+**The question was the wrong shape.** `overall` asked "which spell most
+deserves to appear", and a choice distribution is the probability that each
+option is *the* answer. Over thirty-nine cards the second-best card of a style
+is, correctly, almost never the best — so a draw from that distribution is a
+draw from the winners. Asking it more clearly would not change that, and
+writing the history into the state makes it worse (finding 5).
+
+**Now:** on the Jev arm each candidate is its own Noul, `fit_<id>` — "would
+this card be a good one to show this player on this reward screen?", with its
+description and what it is not for; the brief goes once in the state. The offer
+is drawn in proportion to each card's yes raised to 4, 3 or 2 by Jev's own
+`variety` answer (a yes is a judgement of one card, so drawn as given it barely
+leans at all). The rule arm keeps the three choice axes. Before this, a probe
+on ten logged requests set Noul against Score on the same cards: Noul separated
+a style's own cards from the rest better (AUC 0.93 against 0.89; the choice
+answer 0.83), Score used the bottom half of its four levels, and cost more.
+
+Ten runs, same seeds, choice then Noul:
+
+| | choice | Noul | rule arm |
+|---|---|---|---|
+| spells under a quarter of a uniform share | 17 | **3** | 0 |
+| coldest spell | 0.01 | **0.09** | 0.67 |
+| top ten spells' share of the offer | 72% | **47%** | 34% |
+| a style's own spells on a screen in two runs of it | 28 of 49 | **42 of 49** | 40 of 49 |
+| distinct spells a run / spell cards a run | 10.8 / 18.0 | 11.3 / 16.3 | 16.2 / 22.9 |
+| Stone Ward / Crescent Edge | 4.6× / 4.0× | 0.95× / 1.9× | 1.1× / 0.8× |
+| affixes under a quarter of uniform | 2 | 0 | 0 |
+| input tokens an offer request | 25.9k | **21.8k** | — |
+
+The starter's copy still leads early and Meteor still rises through a nuke
+run: the lean on the build is kept, and it is Jev's. The coldest spells are
+now Frost Needle and Glacier Spike at 0.09 — Jev rates ice below the rest of
+every style, and that is a reading, not a collapse. Affixes moved less (they
+were never as concentrated), and two runs of a style still share two thirds of
+the affixes they see, which is the affix door's count (21 affix cards a run in
+a pool of 19) rather than the draw.
+
+**The player's words have to be in the criteria.** Worded first as "worth a
+place: it fits this build and this player now", the Noul read the build over
+the player: on the same ten logged spell offers with only the typed words
+changed, "only fire spells" (typed in Chinese) took fire from 11% to 18% of
+the sampled slots, rising only in the dot runs, and "I only want Frozen Orb"
+put it top of one offer in ten (2% → 10%). The choice questions had done better
+(fire 17% → 40%; Frozen Orb top of all ten, 44%). With the words named in the
+instruction and in `true` — "what the player's own words ask for, or a fit for
+this build" — the same requests gave fire 55% and Frozen Orb top of all ten at
+36%, and the typed-nothing requests did not move (fire 12%, the style's own
+cards 78% against 76%).
+
+**How a card is judged goes once in the state.** The judging paragraph was the
+same ~500 characters in every card's instruction, seventy times a door request;
+it now rides once as `card_judging`, and each question keeps its own card text
+and the criteria. On the ten offers above, the cards' yes correlated 0.97–0.98
+with the per-card wording (a repeat of that wording: 0.99), the typed-words
+results held (fire 55%, Frozen Orb top of all ten), and the spell pool's request
+fell from 14.7k to 10.7k input tokens. Ten runs on it: 4 spells under a quarter
+of uniform, the top ten at 48%, a style's own spells on a screen in two runs
+43 of 49, 12.6 distinct spells in 18.4 spell cards a run; an offer request
+19.3k input tokens (choice 25.9k, the first Noul wording 21.8k), and a run's
+requests 16% fewer tokens than the choice arm's.
+
+**Rule:** a choice question is for picking one thing. Where code draws several
+from a list, ask each item on its own — one Noul each — and let code set how
+sharply the judgements are read; a choice distribution used as a sampling
+distribution is a draw from the winners.
+
 ## Standing rules that follow
 - State: facts from play, in words, with counts precomputed; no verdicts, no
   prescriptions; every coined term explained. An instruction may name a fact
