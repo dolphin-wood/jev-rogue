@@ -42,7 +42,7 @@ import {
   cardPool, cardsFor, doorSpecs, goldRoomCoins, portalChoices, ruleDoors, CARDS_PER_OFFER, cardNeedsFor,
   heldSpell, fixedExit, buildShapeFor, expectedClearMsFor, COIN_BOOST_MAX, bucketConsistency, cardStyleTags,
   measureOf, observedLabels, UNMEASURED, type HeldSpell, type RoomMeasure,
-  SMITH_PRICE, MERCHANT_PRICE, FOUNTAIN_HEAL_FRACTION, fountainDrink, fountainWouldHeal,
+  SMITH_PRICE, MERCHANT_PRICE, FOUNTAIN_HEAL_FRACTION, fountainDrink, fountainWouldHeal, fountainWanted,
   ARCHETYPES, STYLE_CARDS, observedFigures, journalDoor,
 } from "@jr/core";
 import type { BaseItem, CardNeeds, DoorOffer, NpcKind, OfferPromise, RoomStage, RunShape, WorldEvent } from "@jr/core";
@@ -2340,7 +2340,7 @@ export class PlayScene extends Phaser.Scene {
       npcOffers: this.npcOffers,
       fountains: this.fountains,
       fountainOffers: this.fountainOffers,
-      hurt: startHearts < MAX_HEARTS + this.liveMods().maxHearts,
+      hurt: fountainWanted(startHearts, MAX_HEARTS + this.liveMods().maxHearts),
       lastWasNpc: this.npcRoom !== null,
     };
     this.roomRun = run;
@@ -11301,7 +11301,7 @@ export class PlayScene extends Phaser.Scene {
         const level = this.spellLevels[i] ?? 1;
         const price = SMITH_PRICE[level] ?? 0;
         if (!slot || level >= SPELL_LEVEL_MAX) { this.sfx.play("ui_deny"); return; }
-        if (!this.canAfford(price)) { this.tookLabel = t("toast.need", { price, coin: "{coin}" }); this.tookMs = 1400; this.sfx.play("ui_deny"); return; }
+        if (!this.canAfford(price)) { this.tookLabel = t("toast.need", { price: price - this.goldHeld(), coin: "{coin}" }); this.tookMs = 1400; this.sfx.play("ui_deny"); return; }
         this.spendGold(price);
         this.spellLevels[i] = level + 1;
         this.world.spells[i] = withLevel(slot, level + 1);
@@ -11392,7 +11392,7 @@ export class PlayScene extends Phaser.Scene {
     if (this.shopping) {
       const price = MERCHANT_PRICE[card.kind] ?? 0;
       if (!this.canAfford(price)) {
-        this.tookLabel = t("toast.need", { price, coin: "{coin}" });
+        this.tookLabel = t("toast.need", { price: price - this.goldHeld(), coin: "{coin}" });
         this.tookMs = 1400;
         return;
       }
@@ -11549,7 +11549,7 @@ export class PlayScene extends Phaser.Scene {
     const hearts = world.player.hearts;
     const ctx = this.directorContext(index, hearts, world.staff, this.roomSoFar());
     const run: RunShape = {
-      ...this.roomRun, critical: hearts <= 1, hurt: hearts < MAX_HEARTS + this.liveMods().maxHearts,
+      ...this.roomRun, critical: hearts <= 1, hurt: fountainWanted(hearts, MAX_HEARTS + this.liveMods().maxHearts),
     };
     const src = new RngSource(`${this.runSeed}-${index}`);
     const held = this.slots.flatMap((x, i) =>

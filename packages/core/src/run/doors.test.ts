@@ -4,6 +4,7 @@ import {
   RUN_BOSS_ROOM, RUN_COMBAT_ROOMS, REWARD_KINDS, RUN_SHOP_ROOM,
   bossExit, fixedExit, legalDifficulties, cardTypesOf, NPC_OFFERS_MAX, portalChoices, ruleDoors, shopExit, stageFor,
 } from "./doors.ts";
+import { fountainWanted } from "./offer.ts";
 
 const rng = (seed = "d"): ReturnType<RngSource["stream"]> => new RngSource(seed).stream("doors");
 const run = (over: Partial<Parameters<typeof ruleDoors>[0]> = {}) =>
@@ -162,5 +163,17 @@ describe("what a door's badge names", () => {
   it("names nothing for a kind whose cards have no school or family", () => {
     expect(cardTypesOf("affix", ["chain", "pierce", "fork"])).toEqual({});
     expect(cardTypesOf("spell", [])).toEqual({});
+  });
+});
+
+describe("the mid-run fountain", () => {
+  it("is offered only once the bar is down to two thirds, not after a scratch", () => {
+    expect(fountainWanted(5.5, 6)).toBe(false);
+    expect(fountainWanted(4.5, 6)).toBe(false);
+    expect(fountainWanted(4, 6)).toBe(true);
+    expect(fountainWanted(1, 7)).toBe(true);
+    const at = (hurt: boolean) => portalChoices({ ...run({ roomIndex: 6 }), hurt }, rng(), 3).npcKinds;
+    expect(at(false)).not.toContain("fountain");
+    expect(at(true)).toContain("fountain");
   });
 });

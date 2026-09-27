@@ -203,12 +203,14 @@ export interface RunShape {
   /** Fountain portals put on the list this run, taken or declined. */
   readonly fountainOffers?: number;
   /**
-   * Whether the player has lost health this run.
+   * Whether the player is hurt enough for a fountain (`fountainWanted`: the
+   * bar at or under `FOUNTAIN_OFFER_AT` of its maximum).
    *
-   * The fountain is the run's answer to a bad stretch, and on a full bar it
-   * is a door that pays nothing — so a run that has not been hurt yet is not
-   * offered one at all. A code bound rather than a question, because "is the
-   * drink worth a room" has one right answer when the bar is full.
+   * The fountain is the run's answer to a bad stretch, and on a full or
+   * nearly full bar it is a door that pays little — so a run that has only
+   * been scratched is not offered one at all. A code bound rather than a
+   * question, because "is the drink worth a room" has one right answer when
+   * the bar is nearly full.
    */
   readonly hurt?: boolean;
 }
@@ -438,6 +440,22 @@ export const NPC_OFFERS_MAX = 2;
 export const FOUNTAIN_FIRST_ROOM = 5;
 export const FOUNTAIN_ROOMS_MAX = 1;
 export const FOUNTAIN_OFFERS_MAX = 2;
+/**
+ * **The least the Director must give a room with no fight for it to take a
+ * door**, as a share of the need ranking. The doors after the first come from
+ * the spread tail of that ranking (`PORTAL_TAIL_TEMPERATURE`), and with three
+ * doors from five or more options the third is close to a coin toss among
+ * what was left — so a fountain the Director gave under one percent stood on
+ * a door twice in one played run, and a smith at three percent took one too.
+ * Below its floor the option leaves the ranking entirely.
+ *
+ * The smith's floor is higher: it spends the run's one vendor room on a
+ * single level for a single key, where the merchant lets the player choose
+ * among three kinds, so it has to be what the Director clearly wanted.
+ */
+export const NPC_MIN_NEED: Readonly<Record<NpcKind, number>> = {
+  merchant: 0.1, fountain: 0.1, smith: 0.2,
+};
 
 export function portalChoices(run: RunShape, rng: Rng, count = drawPortalCount(rng)): PortalChoices {
   const n = Math.max(1, Math.min(count, REWARD_KINDS.length));
@@ -455,7 +473,7 @@ export function portalChoices(run: RunShape, rng: Rng, count = drawPortalCount(r
    */
   const fountain = roomToSpare && run.roomIndex >= FOUNTAIN_FIRST_ROOM && run.roomIndex < RUN_COMBAT_ROOMS
     && (run.fountains ?? 0) < FOUNTAIN_ROOMS_MAX && (run.fountainOffers ?? 0) < FOUNTAIN_OFFERS_MAX
-    // A drink on a full bar is a room that pays nothing; see `RunShape.hurt`.
+    // A drink on a (nearly) full bar is a room that pays little; see `RunShape.hurt`.
     && run.hurt !== false;
   return {
     count: n,

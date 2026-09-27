@@ -1,12 +1,11 @@
 /**
  * English content for the player: descriptions keyed by the id `core` uses.
  *
- * **The table itself lives in core** (`content/player-text.ts`), because two
- * readers need it and they are not both here: the player, on a card, and the
- * Director, which writes its card options from it. Core's *own* descriptions
- * are the designer's — they say which build a spell suits and where it sits
- * in the pool — and a Director that reads those is handed the answer to the
- * question it is being asked (finding 11). One table, one voice, one place.
+ * The table itself lives in core (`content/player-text.ts`) so the tests that
+ * walk core's pools can check every offerable card has a player line. It is
+ * the player's text only: the Director is sent core's own neutral
+ * `description` instead (doc 006, "What a spell tells Jev"; finding 11), so
+ * this copy can be rewritten freely without moving a single plan.
  *
  * This file is what makes it a `ContentTable`: names are core's own and are
  * not repeated, so every entry here is a description and nothing else.
