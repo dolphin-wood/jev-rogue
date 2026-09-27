@@ -11183,7 +11183,7 @@ export class PlayScene extends Phaser.Scene {
         const level = this.spellLevels[i] ?? 1;
         const price = SMITH_PRICE[level] ?? 0;
         if (!slot || level >= SPELL_LEVEL_MAX) { this.sfx.play("ui_deny"); return; }
-        if (!this.canAfford(price)) { this.tookLabel = t("toast.need", { price, coin: "{coin}" }); this.tookMs = 1400; this.sfx.play("ui_deny"); return; }
+        if (!this.canAfford(price)) { this.tookLabel = t("toast.need", { price: price - this.goldHeld(), coin: "{coin}" }); this.tookMs = 1400; this.sfx.play("ui_deny"); return; }
         this.spendGold(price);
         this.spellLevels[i] = level + 1;
         this.world.spells[i] = withLevel(slot, level + 1);
@@ -11274,7 +11274,7 @@ export class PlayScene extends Phaser.Scene {
     if (this.shopping) {
       const price = MERCHANT_PRICE[card.kind] ?? 0;
       if (!this.canAfford(price)) {
-        this.tookLabel = t("toast.need", { price, coin: "{coin}" });
+        this.tookLabel = t("toast.need", { price: price - this.goldHeld(), coin: "{coin}" });
         this.tookMs = 1400;
         return;
       }
