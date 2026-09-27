@@ -268,6 +268,25 @@ export function fitName(id: string): string {
   return `fit_${id}`;
 }
 
+/**
+ * **How a card's fit is judged, once a request** rather than once a card.
+ *
+ * It was the tail of every card's instruction — about 500 characters, the
+ * same in all seventy of a door request's Nouls. In the state once, on ten
+ * logged spell offers, the cards' yes correlated 0.97–0.98 with the per-card
+ * wording (a repeat of that wording: 0.99), "only fire spells" still took
+ * fire to 55% and a named spell still led all ten offers, and the spell
+ * pool's request came to 10.7k input tokens against 14.7k (jev-findings 35).
+ * The criteria stay on each question: they are what a yes is weighed
+ * against, and naming the player's words there is what made the words count.
+ */
+export const CARD_JUDGING =
+  "Each fit question asks whether one card belongs on this reward screen. Judge it against the build as held " +
+  "spells writes it out — every key with its level, its school, its element, what it costs and what is already " +
+  "attached to it — against the player's stated style, and against the player's own words (the line \"In their " +
+  "own words\"). When those words ask for a kind of card or name one, a card they ask for belongs on the screen " +
+  "ahead of any card they do not; when they typed nothing, go by the build and the style. " + INTENT_CLAUSE;
+
 function fitQuestion(
   card: { readonly id: string }, text: string, what: string, extra: string,
 ): NoulQuestion {
@@ -275,13 +294,9 @@ function fitQuestion(
     type: "noul",
     instructions:
       `Would ${titleOfId(card.id)} be a good ${what} to show this player on this reward screen? ${text} ` +
-      "Read it against the build as held spells writes it out — every key with its level, its school, its " +
-      "element, what it costs and what is already attached to it — against the player's stated style, and " +
-      "against the player's own words (the line \"In their own words\"). When those words ask for a kind of " +
-      `${what} or name one, a card they ask for belongs on the screen ahead of any card they do not; when they ` +
-      "typed nothing, go by the build and the style. " + INTENT_CLAUSE + extra,
+      "Judge it as card judging in the state says." + extra,
     /*
-     * **The player's words are in the criteria, not only in the instruction.**
+     * **The player's words are in the criteria, not only in the judging.**
      * Worded as "it fits this build and this player now", a card the player
      * had named was judged mostly against the build: over ten logged spell
      * offers, "I only want Frozen Orb" moved Frozen Orb from 2% to 10% of the
@@ -471,8 +486,9 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
     const sent = briefed && brief && use.kind === "jev"
       ? {
         briefing: briefingFrom(brief.ctx, { ...brief, deciding: decidingPhrases(Object.keys(questions)) }),
-        // Per-card questions carry the Director's brief once, beside the run.
-        ...(typeof state["director_brief"] === "string" ? { director_brief: state["director_brief"] } : {}),
+        // Per-card questions carry the Director's brief and how a card is judged once, beside the run.
+        ...Object.fromEntries(["director_brief", "card_judging"].flatMap((k) =>
+          typeof state[k] === "string" ? [[k, state[k]]] : [])),
       }
       : state;
     const seen = (
@@ -1081,7 +1097,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
       questions,
       state: {
         // The brief once for every card, rather than once in each card's question.
-        ...(perCard ? { director_brief: DIRECTOR_BRIEF } : {}),
+        ...(perCard ? { director_brief: DIRECTOR_BRIEF, card_judging: CARD_JUDGING } : {}),
         [`${prefix}reward_kind`]: pool.kind, [`${prefix}card_facts`]: facts,
         ...(compatibility ? { [`${prefix}affixes_by_spell`]: compatibility } : {}),
       },

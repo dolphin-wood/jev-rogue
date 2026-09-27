@@ -5,7 +5,7 @@ import {
   portalChoices, RngSource, schoolOf, heldDominantTags, NPC_OFFERS_MAX, RUN_COMBAT_ROOMS,
 } from "@jr/core";
 import type { RunContext, RunShape } from "@jr/core";
-import { createDirector } from "./director.ts";
+import { CARD_JUDGING, createDirector } from "./director.ts";
 import { EvaluatorError, FALLBACK } from "./types.ts";
 import type { Evaluator } from "./types.ts";
 import { answerKeys, optionText } from "./questions/common.ts";
@@ -250,10 +250,24 @@ describe("the Director's cards (doc 007)", () => {
       .planCards(ctx(4), { room_index: 4, pool, count: 3, pity: false, temptation: false });
     const fits = Object.keys(seen[0]!.questions).filter((n) => n.startsWith("fit_"));
     expect(fits).toHaveLength(pool.candidates.length);
+    // How a card is judged is said once, in the state, not in every card's question.
+    expect(seen[0]!.state["card_judging"]).toBe(CARD_JUDGING);
+    const fit = seen[0]!.questions[fits[0]!]!;
+    expect(fit.instructions).toContain("Judge it as card judging in the state says.");
+    expect(fit.instructions).not.toContain("Read it against the build");
     expect(seen[0]!.questions.overall).toBeUndefined();
     const sampled = plan.ids.filter((_, i) => plan.origins[i] === "sampled");
     expect(new Set(sampled)).toEqual(liked);
     expect(plan.source).toBe("jev");
+  });
+
+  it("sends how a card is judged beside the briefing", async () => {
+    const seen: import("./director.ts").ObservedRequest[] = [];
+    const evaluate: Evaluator = async () => { throw new EvaluatorError("timeout", "timed out"); };
+    const pool = cardPool(ITEMS, [], "spell", [], {}, { style: "spam" });
+    await createDirector("jev", { evaluate, state_format: "briefing", observe: (r) => seen.push(r) })
+      .planCards(ctx(4), { room_index: 4, pool, count: 3, pity: false, temptation: false });
+    expect(Object.keys(seen[0]!.state).sort()).toEqual(["briefing", "card_judging", "director_brief"]);
   });
 
   it("keeps the three choice axes on the rule arm", async () => {
