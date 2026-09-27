@@ -66,6 +66,7 @@ export const EN = {
   "menu.damageNumbers": "Damage numbers",
   "menu.autoMeleeAim": "Melee auto-target",
   "menu.autoCast": "Auto-cast",
+  "menu.autoCastNote": "Recommended if this is your first action game, or if you would rather fight with the sword.",
   "menu.tabGeneral": "General",
   "menu.assistHeading": "Combat assists",
   "menu.roomPlan": "Plan page before each floor",

@@ -1603,7 +1603,7 @@ export class PlayScene extends Phaser.Scene {
    * starting staff, the second starting spell, and which spells the doors
    * and cards lean toward.
    */
-  private intent: { preset: "spam" | "nuke" | "area" | "dot" | "melee"; free_text?: string } = { preset: "spam" };
+  private intent: { preset: "spam" | "nuke" | "area" | "dot" | "melee"; free_text?: string } = { preset: STYLE_ORDER[0] };
   private intentUi: { selected: number; text: string; objects: Phaser.GameObjects.GameObject[] } | null = null;
   private demo: {
     spell: string; world: World; acc: number; ageMs: number;
@@ -5477,7 +5477,7 @@ export class PlayScene extends Phaser.Scene {
 
   private pauseRows(): {
     label: string; value?: string; act: () => void;
-    adjust?: (dir: 1 | -1) => void; disabled?: boolean; heading?: string;
+    adjust?: (dir: 1 | -1) => void; disabled?: boolean; heading?: string; note?: string;
   }[] {
     const ui = this.pauseUi!;
     const step = (key: string, now: number, dir: 1 | -1): number => {
@@ -5521,7 +5521,8 @@ export class PlayScene extends Phaser.Scene {
       { label: t("menu.damageDealt"), value: `x${this.dealtMult}`, act: () => setDealt(this.dealtMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setDealt },
       { label: t("menu.damageTaken"), value: `x${this.takenMult}`, act: () => setTaken(this.takenMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setTaken },
       { label: t("menu.autoMeleeAim"), value: t(this.autoMeleeAim ? "menu.on" : "menu.off"), act: setAutoMeleeAim, adjust: setAutoMeleeAim },
-      { label: t("menu.autoCast"), value: t(this.autoCast ? "menu.on" : "menu.off"), act: setAutoCast, adjust: setAutoCast },
+      // Who it is for, under the row: without it the switch reads as a cheat rather than as the way in.
+      { label: t("menu.autoCast"), value: t(this.autoCast ? "menu.on" : "menu.off"), act: setAutoCast, adjust: setAutoCast, note: t("menu.autoCastNote") },
     ];
     if (ui.page === "firstAssist") return [
       ...assistRows,
@@ -5538,7 +5539,7 @@ export class PlayScene extends Phaser.Scene {
        */
       const tabRows: {
         label: string; value?: string; act: () => void;
-        adjust?: (dir: 1 | -1) => void; disabled?: boolean; heading?: string;
+        adjust?: (dir: 1 | -1) => void; disabled?: boolean; heading?: string; note?: string;
       }[][] = [
         [
           { label: t("menu.damageNumbers"), value: t(this.damageNumbersOn ? "menu.on" : "menu.off"), act: setNumbers, adjust: setNumbers },
@@ -5597,14 +5598,26 @@ export class PlayScene extends Phaser.Scene {
     // under it — which is what "JEV" was doing to "Jev Director".
     const headingH = pitch;
     const headings = rows.filter((r) => r.heading).length * headingH;
+    /*
+     * A row's note is a line of small print under it, as tall as it wraps:
+     * measured here, before the panel is sized, so the panel grows to hold it.
+     */
+    const noteW = (panelWFor(ui.page) - 56) * ZOOM;
+    const noteH = (note: string): number => {
+      const tx = this.uiText(0, 0, note, 6, "#000", { wordWrap: { width: noteW } }).setVisible(false);
+      const h = tx.displayHeight;
+      tx.destroy();
+      return h + 2;
+    };
+    const notes = rows.reduce((sum, r) => sum + (r.note ? noteH(r.note) : 0), 0);
     const jevTab = ui.page === "settings" && ui.tab === SETTINGS_TABS.length - 1;
     const firstAssist = ui.page === "firstAssist";
     // The settings panel is as tall as its tallest tab, and the tab strip, so turning a tab never resizes it.
     const tabsH = ui.page === "settings" ? 22 + pitch / 2 : 0;
     const bodyH = (ui.page === "controls" ? controlRows.length * 12 * linePitch() + 16 : 0)
       + (ui.page === "settings" ? Math.max(rows.length, SETTINGS_TAB_ROWS) : rows.length) * pitch + headings + tabsH
-      + (firstAssist ? 30 : 0);
-    const panelW = ui.page === "controls" ? 400 : ui.page === "settings" || firstAssist ? 340 : 190;
+      + (firstAssist ? 30 + notes : 0);
+    const panelW = panelWFor(ui.page);
     const panelH = bodyH + 62;
     ui.objects.push(...this.modalPanel(panelW, panelH, { depth: 230, cy }));
     const top = cy - panelH / 2;
@@ -5702,6 +5715,11 @@ export class PlayScene extends Phaser.Scene {
           if (this.pauseUi === ui) this.renderPause();
         }));
       rowY += pitch;
+      if (r.note) {
+        ui.objects.push(this.uiText(labelX + 8, rowY - pitch * 0.4, r.note, 6, "#7a8098",
+          { wordWrap: { width: noteW } }).setOrigin(0, 0).setDepth(231));
+        rowY += noteH(r.note);
+      }
     });
     // The same line the title menu carries, for the same reason.
     if (jevTab && !jevAvailable()) {
@@ -17574,13 +17592,26 @@ function styleStageX(): number {
   return UI_W / 2 - styleRowWidth() / 2 + 10 + STYLE_STAGE_W / 2;
 }
 
-/** The five style cards, from the one place they are written (`STYLE_CARDS`). */
+/**
+ * The five style cards, from the one place they are written (`STYLE_CARDS`).
+ *
+ * **Blade first, and chosen by default.** Its spells are cast by the sword,
+ * so a first run asks for one thing — swing — where every other style asks
+ * the player to steer, dodge and spend three spell keys at once. The card
+ * order is the screen's only; `ARCHETYPES` keeps its own for the Director.
+ */
+const STYLE_ORDER = ["melee", "spam", "nuke", "area", "dot"] as const satisfies readonly (typeof ARCHETYPES)[number][];
 const STYLES: readonly { id: "spam" | "nuke" | "area" | "dot" | "melee"; name: string; desc: string }[] =
-  ARCHETYPES.map((id) => ({ id, ...STYLE_CARDS[id] }));
+  STYLE_ORDER.map((id) => ({ id, ...STYLE_CARDS[id] }));
 
 const DAMAGE_NUMBERS_KEY = "jr-damage-numbers";
 const AUTO_MELEE_AIM_KEY = "jr-auto-melee-aim";
 const AUTO_CAST_KEY = "jr-auto-cast";
+/** The pause panel's width on each page: the controls table is the wide one. */
+function panelWFor(page: "main" | "settings" | "controls" | "firstAssist"): number {
+  return page === "controls" ? 400 : page === "settings" || page === "firstAssist" ? 340 : 190;
+}
+
 /** The settings page's tabs, in order: their titles' string keys. */
 const SETTINGS_TABS = ["menu.tabGeneral", "menu.assistHeading", "menu.jevHeading"] as const;
 /** The most rows any settings tab holds, with its controls and Back: the panel is this tall on every tab. */

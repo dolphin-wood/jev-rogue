@@ -66,6 +66,7 @@ export const ZH: Table = {
   "menu.damageNumbers": "伤害数字",
   "menu.autoMeleeAim": "近战自动瞄准",
   "menu.autoCast": "自动施法",
+  "menu.autoCastNote": "推荐第一次玩动作游戏、或偏好近战攻击的玩家开启。",
   "menu.tabGeneral": "通用",
   "menu.assistHeading": "战斗辅助",
   "menu.roomPlan": "每层开始前显示规划",

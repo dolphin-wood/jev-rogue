@@ -65,6 +65,7 @@ export const JA: Table = {
   "menu.damageNumbers": "ダメージ表示",
   "menu.autoMeleeAim": "近接攻撃の自動照準",
   "menu.autoCast": "自動詠唱",
+  "menu.autoCastNote": "アクションゲームが初めての人や、剣で戦いたい人におすすめ。",
   "menu.tabGeneral": "一般",
   "menu.assistHeading": "戦闘アシスト",
   "menu.roomPlan": "階の開始前にプランを表示",
