@@ -15250,14 +15250,15 @@ export class PlayScene extends Phaser.Scene {
       const held = autoCastable(params, chargeMsOf(ITEMS, slot.item.base));
       /*
        * Only a key whose own reach the body stands in: a short spell is not
-       * thrown at a far body. An enchant needs only a fight, and not while
-       * its own is still on the sword: recast early, it spends the bar to
-       * renew what is running. It comes back into the draw as the enchant
-       * runs out, owed every draw it sat out (`AutoCaster`).
+       * thrown at a far body. An enchant needs only a fight. And no spell
+       * that is still running (`keyRunningMs`) — an enchant on the sword,
+       * the blades round the body, a trail underfoot, the companion: recast
+       * early, it spends the bar to renew what is already there. It comes
+       * back into the draw as its effect runs out, owed every draw it sat
+       * out (`AutoCaster`).
        */
-      const any = autoCastAnyReach(params);
-      const inReach = any ? fight : !!target && dist <= autoCastReach(params);
-      const running = any && p.enchant && p.enchant.spellIndex === i ? Math.max(0, p.enchant.ms) : 0;
+      const inReach = autoCastAnyReach(params) ? fight : !!target && dist <= autoCastReach(params);
+      const running = this.keyRunningMs(i);
       if (!held || !inReach || running > AUTO_CAST_SOON_MS) return { eligible: false, coming: false, held };
       const cost = slotCost(slot, ITEMS, w.staff);
       // How long until the key is back: its cooldown, or its bank's next charge, or its enchant's end.
@@ -15276,6 +15277,23 @@ export class PlayScene extends Phaser.Scene {
     // An enchant with no body in reach aims nowhere in particular: the facing the player has.
     if (key !== null) this.autoTargetId = target?.id ?? null;
     return key;
+  }
+
+  /**
+   * **How long a key's last cast is still running**, in ms, for the spells
+   * a recast renews rather than adds to: an enchant on the sword, a trail
+   * underfoot, a ring of orbiting blades, a companion. Zero for everything
+   * else, and for a key whose effect has run out.
+   */
+  private keyRunningMs(key: number): number {
+    const w = this.world;
+    const p = w.player;
+    let ms = 0;
+    if (p.enchant?.spellIndex === key) ms = Math.max(ms, p.enchant.ms);
+    if (p.trail?.spellIndex === key) ms = Math.max(ms, p.trail.ms);
+    for (const b of w.playerBullets) if (b.alive && b.orbitMs > 0 && b.spellIndex === key) ms = Math.max(ms, b.orbitMs);
+    for (const pet of w.pets) if (pet.alive && pet.spellIndex === key) ms = Math.max(ms, pet.lifeMs);
+    return Math.max(0, ms);
   }
 
   /** The body an auto-cast goes at, from its press until it has left the hand; null for none. */
