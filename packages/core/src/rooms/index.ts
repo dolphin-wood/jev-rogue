@@ -40,7 +40,7 @@ export type { GeneratedRoom, RoomZone } from "./generate.ts";
 export {
   FEATURES, HAZARD_CAP_BUDGET, feature, featureCells, featuresByResource, featuresForCap, featuresForZone,
   centralZone, assignZoneFeatures, SPIKE_PERIOD_MS, spikesOut,
-  isHazard, totalHazardBudget,
+  isHazard, totalHazardBudget, audienceZones, AUDIENCE_FLOOR_FEATURES,
 } from "./features.ts";
 export type { FeatureId } from "./features.ts";
 export * from "./melee-metrics.ts";
@@ -49,5 +49,5 @@ export {
 } from "./skeletons.ts";
 export type { Skeleton } from "./skeletons.ts";
 export { throneHall, merchantHall, THRONE_CELLS } from "./fixed.ts";
-export { BIOMES, biomeFor } from "./biome.ts";
+export { BIOMES, biomeFor, BIOME_GROUND, BIOME_TEMPERATURE, GROUND_FEATURES, groundFits } from "./biome.ts";
 export type { Biome } from "./biome.ts";

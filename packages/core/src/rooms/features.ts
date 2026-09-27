@@ -10,6 +10,8 @@
 import type { Extent, Feature } from "../types.ts";
 import { rectAt } from "./extent.ts";
 import type { HazardCap } from "../content/tags.ts";
+import { groundFits } from "./biome.ts";
+import type { Biome } from "./biome.ts";
 
 export const FEATURES: readonly Feature[] = [
   {
@@ -218,8 +220,10 @@ export function centralZone(cells: readonly (readonly [number, number])[], ext: 
 /** What may fill one zone: the cap's features, minus solids in the middle. */
 export function featuresForZone(
   cap: HazardCap, cells: readonly (readonly [number, number])[], ext: Extent,
+  /** The room's depth: only its own ground is offered (`BIOME_GROUND`). */
+  biome?: Biome,
 ): readonly Feature[] {
-  const offered = featuresForCap(cap);
+  const offered = featuresForCap(cap).filter((f) => groundFits(biome, f.id));
   return centralZone(cells, ext) ? offered.filter((f) => !f.fixture) : offered;
 }
 
@@ -252,11 +256,12 @@ export function assignZoneFeatures<
   cap: HazardCap,
   rng: { next(): number },
   ext: Extent,
+  biome?: Biome,
 ): Z[] {
   const weightNone = 2;
   const seen = new Set<string>();
   return zones.map((z) => {
-    const offered = featuresForZone(cap, z.cells, ext);
+    const offered = featuresForZone(cap, z.cells, ext, biome);
     const total = weightNone + offered.length;
     let roll = rng.next() * total;
     let picked: Feature | null = null;
@@ -271,4 +276,32 @@ export function assignZoneFeatures<
     }
     return { ...z, feature: picked.id };
   });
+}
+
+/**
+ * The floor features the first audience's edge may carry (doc 022, "The
+ * arena"): ground that asks something, each within a hazard budget of 2 and
+ * drawn (`lava_channel` waits on its tiles, `UNDRAWN`). No
+ * `turret_mount` — a turret is a body, and the landing leaves none — and no
+ * brazier here, because the braziers are the other edge's.
+ */
+export const AUDIENCE_FLOOR_FEATURES: readonly string[] = [
+  "spike_strip", "poison_pool", "ice_patch", "grass_patch",
+];
+
+/**
+ * **The first audience's edges**, chosen by code (doc 022): one edge stands
+ * braziers, cover the player can spend and one of his blows breaks; the other
+ * stands braziers too, or carries at most one floor feature. Which edge is
+ * which, and which ground, come from the room's own stream.
+ */
+export function audienceZones<Z extends { readonly id: string; readonly feature: string }>(
+  zones: readonly Z[],
+  rng: { next(): number },
+): Z[] {
+  const braziers = rng.next() < 0.5 ? 0 : 1;
+  const ground = rng.next() < 0.5
+    ? AUDIENCE_FLOOR_FEATURES[Math.floor(rng.next() * AUDIENCE_FLOOR_FEATURES.length)]!
+    : "brazier";
+  return zones.map((z, i) => ({ ...z, feature: i === braziers ? "brazier" : ground }));
 }

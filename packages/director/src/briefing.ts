@@ -20,7 +20,7 @@
 import {
   AFFIX_SLOTS, ARCHETYPES, COIN_VALUE, FOUNTAIN_HEAL_FRACTION, GOLD_ROOM_COINS, HP_PER_HEART, ITEMS,
   MANA_PER_HIT_FRACTION, MANA_REGEN_FRACTION_PER_S, MERCHANT_PRICE, RUN_BOSS_ROOM,
-  RUN_COMBAT_ROOMS, RUN_SHOP_ROOM, SMITH_PRICE, SPELL_LEVEL_MAX, SPELL_SCHOOLS, STAT_FAMILIES,
+  RUN_AUDIENCE_ROOM, RUN_COMBAT_ROOMS, RUN_SHOP_ROOM, SMITH_PRICE, SPELL_LEVEL_MAX, SPELL_SCHOOLS, STAT_FAMILIES,
   MAX_HEARTS, STYLE_CARDS, TYPICAL_RUN_HEALTH_LOST, UNMEASURED, archetype, buildFacts, cardStyleTags, enemy,
   keyCost, keysLean, levelDamageMult, schoolOf, spellAffixById, statById, typicalHealthLostBy,
   baseXp, LEVEL_HP, LEVEL_SWORD_DAMAGE, LEVEL_MANA, swordAt,
@@ -1026,6 +1026,13 @@ function aheadLines(n: BriefingNow): string[] {
     `- ${n.roomIndex === RUN_SHOP_ROOM ? "This room" : `Room ${RUN_SHOP_ROOM}`} is the fixed stop: a `
       + "merchant, a smith and a fountain, no enemies. It is the last room gold can be spent in and the "
       + "last room health comes back in.",
+    // The first audience (doc 022): stated as the run's shape, the same way the stop and the boss are.
+    n.roomIndex <= RUN_AUDIENCE_ROOM
+      ? `- ${n.roomIndex === RUN_AUDIENCE_ROOM ? "This room" : `Room ${RUN_AUDIENCE_ROOM}`} is a fight the boss drops `
+        + "into partway through: the room's bodies are crushed, the player's health is filled, and he fights "
+        + "until his armour breaks, then leaves. It pays its door's reward one grade higher, and about a room's "
+        + "experience as he leaves; the crushed bodies pay none."
+      : `- The boss was met in room ${RUN_AUDIENCE_ROOM} and driven off; he waits in room ${RUN_BOSS_ROOM}.`,
     `- ${n.roomIndex === RUN_BOSS_ROOM ? "This room" : `Room ${RUN_BOSS_ROOM}`} is the boss: one long fight `
       + "in an open hall against a single body with far more health than anything else in the run. It is "
       + "one body rather than a crowd, the fight is long, and the health bar the player arrives on is the "

@@ -116,6 +116,16 @@ export function xpForKill(id: EnemyId, ctx: KillXpContext = {}): number {
   return Math.round(baseXp(id) * (ctx.elite ? XP_ELITE : 1));
 }
 
+/**
+ * **What driving the king off in room 5 pays** (doc 022). Nothing else in that
+ * room does: the bodies are crushed by the roof, not killed by the player, and
+ * he is not killed at all but leaves. A room the player fought hardest in that
+ * paid no experience would be the one room of the run with no level in it, so
+ * his leaving pays **an ordinary room's whole take at its top**, the 110 that
+ * a fight of 10 to 14 bodies is worth (`XP_TO_NEXT`) — at room 5 about a level.
+ */
+export const KING_AUDIENCE_XP = 110;
+
 /* --------------------------------- the curve ------------------------------- */
 
 /**

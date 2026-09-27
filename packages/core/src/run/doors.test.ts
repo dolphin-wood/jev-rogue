@@ -177,3 +177,32 @@ describe("the mid-run fountain", () => {
     expect(at(true)).toContain("fountain");
   });
 });
+
+describe("the doors onto the king's first audience (doc 022)", () => {
+  it("is room 5, one of the fourteen fights, and pays a grade higher up to 3", async () => {
+    const { RUN_AUDIENCE_ROOM, isAudienceRoom, leadsToAudience, audienceGrade } = await import("./doors.ts");
+    expect(RUN_AUDIENCE_ROOM).toBe(5);
+    expect(stageFor(RUN_AUDIENCE_ROOM)).toBe("combat");
+    expect(isAudienceRoom(5)).toBe(true);
+    expect(isAudienceRoom(4)).toBe(false);
+    expect(leadsToAudience(4)).toBe(true);
+    expect(leadsToAudience(5)).toBe(false);
+    expect([1, 2, 3].map(audienceGrade)).toEqual([2, 3, 3]);
+  });
+
+  it("never offers an elite, a vendor or the fountain out of room 4", () => {
+    for (let s = 0; s < 40; s++) {
+      const shape = run({
+        roomIndex: 4, hurt: true, fightsSinceElite: 5, elitesSoFar: 0, npcRooms: 0, npcOffers: 0, fountains: 0, fountainOffers: 0,
+      });
+      expect(legalDifficulties(shape)).toEqual(["normal"]);
+      const choices = portalChoices(shape, rng(`a${s}`), 3);
+      expect(choices.elite).toBe(false);
+      expect(choices.npcKinds).toEqual([]);
+      expect(ruleDoors(shape, rng(`r${s}`)).every((d) => d.difficulty === "normal")).toBe(true);
+    }
+    // Out of room 5 the ordinary rules are back.
+    const after = run({ roomIndex: 6, hurt: true, fightsSinceElite: 5, elitesSoFar: 0 });
+    expect(legalDifficulties(after)).toContain("elite");
+  });
+});

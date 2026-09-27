@@ -66,7 +66,7 @@ export type SpaceArchetypeId =
   | "open_arena" | "scattered_arena" | "pillared_arena" | "tight_arena"
   | "long_corridor" | "broken_corridor" | "gallery" | "choked_corridor"
   | "open_ring" | "cover_ring" | "cross_open" | "cross_tight"
-  | "boss_open" | "boss_scattered" | "boss_pillared";
+  | "boss_open" | "boss_scattered" | "boss_pillared" | "audience_arena";
 
 export interface ZoneSlot { readonly id: string; readonly cells: readonly Cell[] }
 export interface SpawnGroup { readonly id: string; readonly cells: readonly Cell[] }

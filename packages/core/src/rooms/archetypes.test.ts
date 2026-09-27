@@ -95,13 +95,13 @@ describe("masks", () => {
 });
 
 describe("space archetypes", () => {
-  it("are the twelve of the table plus three boss arenas", () => {
+  it("are the twelve of the table plus three boss arenas and the first audience's", () => {
     expect(PLAYABLE_ARCHETYPES.map((a) => a.id)).toEqual([
       "open_arena", "scattered_arena", "pillared_arena", "tight_arena",
       "long_corridor", "broken_corridor", "gallery", "choked_corridor",
       "open_ring", "cover_ring", "cross_open", "cross_tight",
     ]);
-    expect(BOSS_ARCHETYPES.map((a) => a.id)).toEqual(["boss_open", "boss_scattered", "boss_pillared"]);
+    expect(BOSS_ARCHETYPES.map((a) => a.id)).toEqual(["boss_open", "boss_scattered", "boss_pillared", "audience_arena"]);
   });
 
   it("declare the shape / openness / cover triple of the doc's table", () => {
@@ -130,10 +130,15 @@ describe("space archetypes", () => {
       expect(a.spawnGroups.length).toBeGreaterThanOrEqual(2);
       expect(a.spawnGroups.length).toBeLessThanOrEqual(4);
     }
-    for (const a of BOSS_ARCHETYPES) {
+    for (const a of BOSS_ARCHETYPES.filter((x) => x.id !== "audience_arena")) {
       expect(a.zoneSlots).toEqual([]);
       expect(a.spawnGroups.map((g) => g.id)).toEqual(["surround"]);
     }
+    // The first audience opens as an ordinary fight, so it spawns like one; its slots are the edges only (doc 022).
+    const audience = archetype("audience_arena");
+    expect(audience.zoneSlots.map((z) => z.id)).toEqual(["edge_n", "edge_s"]);
+    expect(audience.spawnGroups.map((g) => g.id)).toEqual(archetype("open_arena").spawnGroups.map((g) => g.id));
+    expect(`${audience.shape}/${audience.openness}/${audience.cover}`).toBe("arena/open/none");
   });
 
   /** The claim the whole design rests on: no seed can ever put a hazard or a

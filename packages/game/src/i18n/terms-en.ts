@@ -244,6 +244,7 @@ export const EN_TERMS = {
   "term.boss_open": "open boss arena",
   "term.boss_scattered": "scattered boss arena",
   "term.boss_pillared": "pillared boss arena",
+  "term.audience_arena": "open arena",
 
   /* ------------------------- symmetry, size, mood ------------------------ */
   "term.mirrored": "mirrored",

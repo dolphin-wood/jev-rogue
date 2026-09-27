@@ -154,6 +154,12 @@ describe("generateRoom", () => {
         const rng = new RngSource("boss").stream("decision", a.id, entry, seed);
         const room = generateRoom(params(a.id, "mirrored", sizeFor(seed)), entry, "boss", rng);
         checkRoom(room, `${a.id}/${entry}/${seed}`);
+        // The first audience's edges carry its braziers and ground (doc 022); the throne arenas carry nothing.
+        if (a.id === "audience_arena") {
+          expect(room.zones.map((z) => z.id)).toEqual(["edge_n", "edge_s"]);
+          expect(room.measured.pillar_count).toBe(0);
+          continue;
+        }
         expect(room.zones).toEqual([]);
         expect(room.spawn_groups.map((g) => g.id)).toEqual(["surround"]);
         expect(inMetricBand(room.measured.pillar_count, bandsFor(a, room.extent).pillars)).toBe(true);
