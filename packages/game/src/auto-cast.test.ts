@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
-  AUTO_CAST_DELAY_MS, AUTO_CAST_FORGET_MS, AUTO_CAST_MIN_WEIGHT, AUTO_CAST_SPREAD_MS, AUTO_CAST_YIELD_MS,
-  AUTO_CAST_MAX_REACH_PX, AutoCaster, autoCastable, autoCastReach, recencyWeight,
+  AUTO_CAST_DELAY_MS, AUTO_CAST_MAX_WEIGHT, AUTO_CAST_MIN_WEIGHT, AUTO_CAST_MISS_WEIGHT, AUTO_CAST_SPREAD_MS,
+  AUTO_CAST_START_WEIGHT, AUTO_CAST_YIELD_MS, AUTO_CAST_MAX_REACH_PX, AutoCaster, autoCastable, autoCastAnyReach,
+  autoCastReach,
 } from "./auto-cast.ts";
 import { ITEMS, TILE_PX } from "@jr/core";
 
-const on = { eligible: true, coming: true };
-const soon = { eligible: false, coming: true };
-const off = { eligible: false, coming: false };
+const on = { eligible: true, coming: true, held: true };
+const soon = { eligible: false, coming: true, held: true };
+/** Held, but sitting the draw out: cooling down, out of reach, or an enchant still running. */
+const out = { eligible: false, coming: false, held: true };
+const off = { eligible: false, coming: false, held: false };
 
 describe("auto-cast", () => {
   it("never presses a spell that moves the body: every dash, Dash Slash among them", () => {
@@ -64,11 +67,61 @@ describe("auto-cast", () => {
     expect(a.pick(freeAt + AUTO_CAST_DELAY_MS, [on, on], true)).not.toBe(null);
   });
 
-  it("weighs a key just cast low, growing back to full over the forget time", () => {
-    expect(recencyWeight(0)).toBeCloseTo(AUTO_CAST_MIN_WEIGHT);
-    expect(recencyWeight(AUTO_CAST_FORGET_MS / 2)).toBeCloseTo((1 + AUTO_CAST_MIN_WEIGHT) / 2);
-    expect(recencyWeight(AUTO_CAST_FORGET_MS * 3)).toBe(1);
-    expect(recencyWeight(Infinity)).toBe(1);
+  it("raises every key that loses a draw, sat out or not, and drops the one that casts", () => {
+    const a = new AutoCaster(() => 0);
+    a.pick(0, [on, out, off], true);
+    // Key 0 is the only one in the draw, and wins it.
+    expect(a.pick(AUTO_CAST_DELAY_MS, [on, out, off], true)).toBe(0);
+    expect(a.weight(0)).toBeCloseTo(AUTO_CAST_MIN_WEIGHT);
+    // Key 1 sat the draw out and is owed for it; key 2 holds nothing and is not.
+    expect(a.weight(1)).toBeCloseTo(AUTO_CAST_START_WEIGHT + AUTO_CAST_MISS_WEIGHT);
+    expect(a.weight(2)).toBeCloseTo(AUTO_CAST_START_WEIGHT);
+    // It grows no further than the cap.
+    for (let n = 0, t = 2 * AUTO_CAST_DELAY_MS; n < 20; n++, t += 2 * AUTO_CAST_DELAY_MS) {
+      a.pick(t, [on, out, off], true);
+      a.pick(t + AUTO_CAST_DELAY_MS, [on, out, off], true);
+    }
+    expect(a.weight(1)).toBeCloseTo(AUTO_CAST_MAX_WEIGHT);
+  });
+
+  it("gives an enchant back its turn once it runs out: it was owed every draw it sat out", () => {
+    // Key 0 an enchant on the sword, key 1 a spell always ready (Meteor). While
+    // the enchant runs, key 1 takes every turn; once it has run out, the
+    // enchant goes first nearly every time.
+    let seed = 11;
+    const rand = () => { seed = (seed * 1103515245 + 12345) % 2 ** 31; return seed / 2 ** 31; };
+    let enchantFirst = 0;
+    const trials = 200;
+    for (let n = 0; n < trials; n++) {
+      const a = new AutoCaster(rand);
+      let t = 0;
+      for (let c = 0; c < 3; c++) {
+        for (; t < 1e6; t += 16) if (a.pick(t, [out, on], true) !== null) break;
+        t += 16;
+      }
+      for (; t < 1e6; t += 16) {
+        const k = a.pick(t, [on, on], true);
+        if (k !== null) { if (k === 0) enchantFirst++; break; }
+      }
+    }
+    expect(enchantFirst / trials).toBeGreaterThan(0.9);
+  });
+
+  it("takes the player's press as the key's turn: its weight drops, and a turn held for it is drawn again", () => {
+    // Key 0's wait (0), then the draw (0.99: key 1, still coming back).
+    const draws = [0, 0.99];
+    const a = new AutoCaster(() => draws.shift() ?? 0);
+    a.pick(0, [on, soon], true);
+    expect(a.pick(AUTO_CAST_DELAY_MS, [on, soon], true)).toBe(null);
+    // The player casts key 1 by hand: its weight goes down, not up.
+    a.noteManual(1, AUTO_CAST_DELAY_MS + 100);
+    expect(a.weight(1)).toBeCloseTo(AUTO_CAST_MIN_WEIGHT);
+    // The turn is drawn again at once, without key 1, and key 0 goes after its fresh wait.
+    const t = AUTO_CAST_DELAY_MS + 200;
+    expect(a.pick(t, [on, out], true)).toBe(null);
+    expect(a.pick(t + AUTO_CAST_DELAY_MS, [on, out], true)).toBe(0);
+    // The draw it was left out of is not held against it.
+    expect(a.weight(1)).toBeCloseTo(AUTO_CAST_MIN_WEIGHT);
   });
 
   it("gives the turn to a key still coming back, and casts nothing else while it holds it", () => {
@@ -109,7 +162,7 @@ describe("auto-cast", () => {
     let mana = 100;
     for (let now = 0; now < 600_000; now += 16) {
       mana = Math.min(100, mana + 6 * 0.016);
-      const keys = cd.map((_, i) => ({ eligible: back[i]! <= now && mana - cost[i]! >= 30, coming: back[i]! - now <= 1500 }));
+      const keys = cd.map((_, i) => ({ eligible: back[i]! <= now && mana - cost[i]! >= 30, coming: back[i]! - now <= 1500, held: true }));
       const k = a.pick(now, keys, true);
       if (k !== null) { casts[k]!++; back[k] = now + cd[k]!; mana -= cost[k]!; }
     }
@@ -119,6 +172,9 @@ describe("auto-cast", () => {
 
   it("gives every spell a reach of its own, short spells short and none past the screen", () => {
     const reach = (id: string) => autoCastReach(ITEMS.get(id)!.params!);
+    // An enchant is cast at the fight, whatever its reach says.
+    expect(autoCastAnyReach(ITEMS.get("crescent_edge")!.params!)).toBe(true);
+    expect(autoCastAnyReach(ITEMS.get("meteor")!.params!)).toBe(false);
     for (const [id, item] of ITEMS) {
       if (!item.params) continue;
       const r = autoCastReach(item.params);
