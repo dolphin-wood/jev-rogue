@@ -590,6 +590,22 @@ export function fountainWouldHeal(health: number, max: number): boolean {
 }
 
 /**
+ * **How low the bar must be before a mid-run fountain is offered**, as a
+ * share of the maximum. The gate used to be "any health lost", and a level-up
+ * or a pickup keeps most bars a chip short of full — so a player who had
+ * barely been scratched met a fountain door, drawn from the tail of the need
+ * ranking where the Director had given it next to nothing. At two thirds a
+ * drink restores at least a third of the bar before it is capped, which is
+ * what a room given up for it has to be worth.
+ */
+export const FOUNTAIN_OFFER_AT = 2 / 3;
+
+/** Whether the run is hurt enough for a mid-run fountain door (`RunShape.hurt`). */
+export function fountainWanted(health: number, max: number): boolean {
+  return health <= max * FOUNTAIN_OFFER_AT + 1e-6;
+}
+
+/**
  * **What the last rooms were shortest of**, from the observed facts alone.
  *
  * It replaces the build simulator's `bottleneck` verdict, which was a

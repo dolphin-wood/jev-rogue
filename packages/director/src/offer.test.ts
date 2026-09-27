@@ -76,6 +76,22 @@ describe("the Director's portals (doc 003)", () => {
     }
   });
 
+  it("puts no fountain on a door the need ranking barely weighed, and one where it leads", async () => {
+    const d = createDirector("rule");
+    let low = 0;
+    let high = 0;
+    for (let seed = 0; seed < 40; seed++) {
+      const choices = portalChoices(run(7, { hurt: true }), new RngSource(`f${seed}`).stream("c"), 3);
+      expect(choices.npcKinds).toContain("fountain");
+      const fine = await d.planPortals(ctx(7, { seed: `f${seed}`, hearts: 4 }), choices);
+      const dying = await d.planPortals(ctx(7, { seed: `f${seed}`, hearts: 1 }), choices);
+      if (fine.doors.some((x) => x.npc === "fountain")) low++;
+      if (dying.doors.some((x) => x.npc === "fountain")) high++;
+    }
+    expect(low).toBe(0);
+    expect(high).toBeGreaterThan(20);
+  });
+
   /*
    * Doc 003's early economy, measured **over a run** rather than per offer,
    * because the cap is what a player actually meets: `NPC_OFFERS_MAX` bounds

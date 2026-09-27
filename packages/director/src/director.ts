@@ -16,7 +16,7 @@ import {
   allowedTensions, PLAYABLE_ARCHETYPES, FEATURES,
   assemblePortals, SCHOOL_OF,
   rampDensities, rampAnchors, rampSubspecies, rampElitePresence, rampFor, rampRoster,
-  keysLean, UNMEASURED, PORTAL_NEED_TEMPERATURE, PORTAL_TAIL_TEMPERATURE,
+  keysLean, UNMEASURED, PORTAL_NEED_TEMPERATURE, PORTAL_TAIL_TEMPERATURE, FOUNTAIN_MIN_NEED,
   buildFacts, NO_BUILD, enemy,
 } from "@jr/core";
 import type {
@@ -717,7 +717,12 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
          * put it, and left in it would have become a door with `fallback`
          * written on the badge.
          */
-        const legal = restrictTo(dists.portal_need!, [...choices.kinds, ...choices.npcKinds]);
+        const asked = restrictTo(dists.portal_need!, [...choices.kinds, ...choices.npcKinds]);
+        // A fountain the Director barely weighed leaves the ranking, so the
+        // spread tail cannot hand it a door (`FOUNTAIN_MIN_NEED`).
+        const legal = (asked.fountain ?? 1) < FOUNTAIN_MIN_NEED
+          ? restrictTo(asked, Object.keys(asked).filter((k) => k !== "fountain"))
+          : asked;
         // A run gets at most one optional vendor room. Jev tended to spend it
         // on the smith, while the merchant lets the player choose among three
         // kinds and refresh the shelf. Keep the model's ranking, but make the
