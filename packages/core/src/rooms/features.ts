@@ -10,6 +10,8 @@
 import type { Extent, Feature } from "../types.ts";
 import { rectAt } from "./extent.ts";
 import type { HazardCap } from "../content/tags.ts";
+import { groundFits } from "./biome.ts";
+import type { Biome } from "./biome.ts";
 
 export const FEATURES: readonly Feature[] = [
   {
@@ -218,8 +220,10 @@ export function centralZone(cells: readonly (readonly [number, number])[], ext: 
 /** What may fill one zone: the cap's features, minus solids in the middle. */
 export function featuresForZone(
   cap: HazardCap, cells: readonly (readonly [number, number])[], ext: Extent,
+  /** The room's depth: only its own ground is offered (`BIOME_GROUND`). */
+  biome?: Biome,
 ): readonly Feature[] {
-  const offered = featuresForCap(cap);
+  const offered = featuresForCap(cap).filter((f) => groundFits(biome, f.id));
   return centralZone(cells, ext) ? offered.filter((f) => !f.fixture) : offered;
 }
 
@@ -252,11 +256,12 @@ export function assignZoneFeatures<
   cap: HazardCap,
   rng: { next(): number },
   ext: Extent,
+  biome?: Biome,
 ): Z[] {
   const weightNone = 2;
   const seen = new Set<string>();
   return zones.map((z) => {
-    const offered = featuresForZone(cap, z.cells, ext);
+    const offered = featuresForZone(cap, z.cells, ext, biome);
     const total = weightNone + offered.length;
     let roll = rng.next() * total;
     let picked: Feature | null = null;
@@ -275,12 +280,13 @@ export function assignZoneFeatures<
 
 /**
  * The floor features the first audience's edge may carry (doc 022, "The
- * arena"): ground that asks something, each within a hazard budget of 2. No
+ * arena"): ground that asks something, each within a hazard budget of 2 and
+ * drawn (`lava_channel` waits on its tiles, `UNDRAWN`). No
  * `turret_mount` — a turret is a body, and the landing leaves none — and no
  * brazier here, because the braziers are the other edge's.
  */
 export const AUDIENCE_FLOOR_FEATURES: readonly string[] = [
-  "spike_strip", "poison_pool", "ice_patch", "lava_channel", "grass_patch",
+  "spike_strip", "poison_pool", "ice_patch", "grass_patch",
 ];
 
 /**

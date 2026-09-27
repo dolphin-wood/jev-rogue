@@ -49,5 +49,5 @@ export {
 } from "./skeletons.ts";
 export type { Skeleton } from "./skeletons.ts";
 export { throneHall, merchantHall, THRONE_CELLS } from "./fixed.ts";
-export { BIOMES, biomeFor } from "./biome.ts";
+export { BIOMES, biomeFor, BIOME_GROUND, BIOME_TEMPERATURE, GROUND_FEATURES, groundFits } from "./biome.ts";
 export type { Biome } from "./biome.ts";

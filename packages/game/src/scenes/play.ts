@@ -779,6 +779,8 @@ const CLOSE_DEAD_X = 34;
  * its one cell of wall, and the HUD lies over the room as it does everywhere.
  */
 const BOSS_VIEW_SPARE = 1;
+/** The level a depth's own sound sits at everywhere in it (`ambienceLevels`): under a brazier or a grate beside the player. */
+const DEPTH_AMBIENCE = 0.3;
 /** The first audience's pull out to the whole room, and back (doc 022): about the rumble's length. */
 const AUDIENCE_PULL_MS = 1500;
 /** How long the whole-room view holds after he has gone: long enough to watch him leave the top of it. */
@@ -8447,7 +8449,16 @@ export class PlayScene extends Phaser.Scene {
     const fountains = this.shopping && !this.fountainDry
       ? this.vendorSpots().filter((v) => v.kind === "fountain").map((v) => ({ x: (v.gx + 0.5) * TILE_PX, y: (v.gy + 0.5) * TILE_PX }))
       : [];
-    return { fire: near(fires), drip: near(this.drainSpots), fountain: near(fountains) };
+    /*
+     * **Each depth is heard as well as seen**: water dripping through the
+     * flooded catacombs and embers ticking in the undercroft, low under
+     * whatever the room's own grates and braziers add (`biomeFor`).
+     */
+    const depth = this.world.room.room_type === "boss" || this.shopping ? null : biomeFor(this.roomIndex);
+    const floor = { fire: depth === "furnace" ? DEPTH_AMBIENCE : 0, drip: depth === "flooded" ? DEPTH_AMBIENCE : 0 };
+    return {
+      fire: Math.max(floor.fire, near(fires)), drip: Math.max(floor.drip, near(this.drainSpots)), fountain: near(fountains),
+    };
   }
 
   private musicStateNow(): MusicState {

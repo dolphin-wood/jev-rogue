@@ -17,7 +17,7 @@ import {
   assemblePortals, SCHOOL_OF,
   rampDensities, rampAnchors, rampSubspecies, rampElitePresence, rampFor, rampRoster,
   keysLean, UNMEASURED, PORTAL_NEED_TEMPERATURE, PORTAL_TAIL_TEMPERATURE,
-  buildFacts, NO_BUILD, enemy, isAudienceRoom, audienceZones,
+  buildFacts, NO_BUILD, enemy, isAudienceRoom, audienceZones, biomeFor, BIOME_TEMPERATURE,
 } from "@jr/core";
 import type {
   CounterScore, Distribution, EncounterProfile, RoomPlan,
@@ -1326,7 +1326,14 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
        */
       const firstLook: string[] = ctx.room_index <= 1 && recent.last_symmetry === "none"
         ? ["symmetry", "mood_temperature", "mood_brightness", "mood_particles"].filter((n) => q1[n]) : [];
-      const askQ1 = Object.fromEntries(Object.entries(q1).filter(([n]) => !firstLook.includes(n)));
+      /*
+       * **A depth's light is the depth's** (`BIOME_TEMPERATURE`): the flooded
+       * catacombs are cold and the undercroft warm, so the question has one
+       * answer there and is not asked (doc 002).
+       */
+      const depthTemperature = BIOME_TEMPERATURE[biomeFor(door.room_index)];
+      const askQ1 = Object.fromEntries(Object.entries(q1).filter(([n]) =>
+        !firstLook.includes(n) && !(depthTemperature && n === "mood_temperature")));
       const r1 = await ask(
         offerQ ? mergeQuestions([askQ1, offerQ.questions]) : askQ1,
         offerQ ? { ...flatState(ctx, offerQ.state), ...state1 } : state1 as unknown as Record<string, unknown>,
@@ -1399,7 +1406,8 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
         heldTwice(syms, (x) => x)) as "mirrored" | "asymmetric";
       const size = pick("size", ROOM_TEMPERATURES.size ?? 0.8) as RoomSize;
       const mood = moodFrom({
-        temperature: lookPick("mood_temperature", ROOM_TEMPERATURES.mood_temperature ?? 0.9, heldTwice(moods, (m) => m.temperature)),
+        temperature: depthTemperature
+          ?? lookPick("mood_temperature", ROOM_TEMPERATURES.mood_temperature ?? 0.9, heldTwice(moods, (m) => m.temperature)),
         brightness: lookPick("mood_brightness", ROOM_TEMPERATURES.mood_brightness ?? 0.9, heldTwice(moods, (m) => m.brightness)),
         particles: lookPick("mood_particles", ROOM_TEMPERATURES.mood_particles ?? 0.9, heldTwice(moods, (m) => m.particle_intensity)),
       });
@@ -1420,7 +1428,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
       const q2: Record<string, ChoiceQuestion> = {
         ...buildZoneQuestions({
           zones: base.zones, extent: base.extent, hazard_cap: pacing.hazard_cap,
-          state: state2, labels: ctx.labels, style,
+          state: state2, labels: ctx.labels, style, biome: biomeFor(door.room_index),
         }),
         ...encounterQuestions(ctx, base, tension, door.room_index, style, capRuns),
         ...(offerStage?.questions ?? {}),

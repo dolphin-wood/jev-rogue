@@ -12,12 +12,12 @@
  */
 import {
   COVER_BANDS, FEATURES, OPENNESS_BANDS, PLAYABLE_ARCHETYPES, ROOM_SIZES, coverOfRoom,
-  featuresForCap, featuresForZone, UNMEASURED,
+  featuresForCap, featuresForZone, groundFits, UNMEASURED,
 } from "@jr/core";
 import type {
   Cover, Extent, Feature, HazardCap, KeysLean, Mood, ObservedLabels, Openness, RoomPlan, RoomSize,
   RoomType, SpaceArchetype, SpaceArchetypeId, SummaryLabels, Symmetry, Tension,
-  BuildFacts,
+  BuildFacts, Biome,
 } from "@jr/core";
 import { labelSet } from "../describe.ts";
 import type { ChoiceQuestion } from "../types.ts";
@@ -99,8 +99,12 @@ export function spaceOptions(filter: SpaceFilter): SpaceArchetype[] {
 /** Doc 004: when `hazard_cap` is `none`, only non-hazard features are offered. */
 export function zoneFeatureOptions(
   cap: HazardCap, cells: readonly (readonly [number, number])[], ext: Extent,
+  /** The room's depth: only its own ground is offered (`BIOME_GROUND`). */
+  biome?: Biome,
 ): readonly Feature[] {
-  return cells.length > 0 ? featuresForZone(cap, cells, ext) : featuresForCap(cap);
+  return cells.length > 0
+    ? featuresForZone(cap, cells, ext, biome)
+    : featuresForCap(cap).filter((f) => groundFits(biome, f.id));
 }
 
 /* ------------------------------ label helpers ------------------------------ */
@@ -608,6 +612,8 @@ export function buildZoneQuestions(input: {
   readonly state: RoomRound2State;
   readonly labels: SummaryLabels;
   readonly style?: QuestionStyle;
+  /** The room's depth, which narrows the ground a slot may be offered (`BIOME_GROUND`). */
+  readonly biome?: Biome;
 }): Record<string, ChoiceQuestion> {
   const labels = labelSet(input.state as unknown as Record<string, unknown>);
   const questions: Record<string, ChoiceQuestion> = {};
@@ -615,7 +621,7 @@ export function buildZoneQuestions(input: {
     // A solid is never offered for a slot in the middle of the arena; see
     // `centralZone`. The Director is not asked a question whose best answer
     // would be furniture standing where the fight is.
-    const offered = zoneFeatureOptions(input.hazard_cap, zone.cells, input.extent);
+    const offered = zoneFeatureOptions(input.hazard_cap, zone.cells, input.extent, input.biome);
     questions[zoneQuestionName(zone.id)] = choiceQuestion({
       instructions:
         `Choose what fills the ${zone.id} zone of this room. The slot takes at most one feature. A ` +

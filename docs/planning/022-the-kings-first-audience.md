@@ -273,7 +273,7 @@ drop-in), so it can't be the throne hall's bare stage either.
 | Outline | the arena skeletons that only move the outer wall: `arena`, `arena_octagon`, `arena_bastions` | an outline is the room's edge, not an obstacle in it. `arena_waist`, `arena_horseshoe` and `arena_notched` bite into the floor and are left out |
 | Scattered props | the ordinary room's pots, crates and urns (`PROPS_PER_ROOM`) | part of the disguise. **The collapse shatters every one of them, room-wide**, along with the bodies |
 | Standing cover | two to four **braziers** (`brazier` fixture, 16 health) on the edge zones, never in the centre | cover the player can spend, and one of the king's blows breaks one (`BOSS_PROP_DAMAGE` 18). They survive the entrance, since neither the stones nor his mark are put on them, and the fight wears them away, the way the throne hall's columns go |
-| Floor features | at most one floor feature on an edge zone: `spike_strip`, `poison_pool`, `ice_patch`, `lava_channel` or `grass_patch`, hazard budget ≤ 2 | the ground can ask something, but never in the centre where his landings and slams fall. No `turret_mount`: a turret is a body, and the landing leaves none |
+| Floor features | at most one floor feature on an edge zone: `spike_strip`, `poison_pool`, `ice_patch` or `grass_patch`, hazard budget ≤ 2 (`lava_channel` once its tiles are drawn) | the ground can ask something, but never in the centre where his landings and slams fall. No `turret_mount`: a turret is a body, and the landing leaves none |
 
 - **Zone slots** are `edge_n` and `edge_s` only (`A_EDGE_N`, `A_EDGE_S`). The
   centre slot is left out, and it is where the king's landing mark goes.
