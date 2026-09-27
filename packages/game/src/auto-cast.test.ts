@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AUTO_CAST_DELAY_MS, AUTO_CAST_FORGET_MS, AUTO_CAST_MIN_WEIGHT, AUTO_CAST_SPREAD_MS, AUTO_CAST_YIELD_MS,
-  AUTO_CAST_MAX_REACH_PX, AutoCaster, autoCastReach, recencyWeight,
+  AUTO_CAST_MAX_REACH_PX, AutoCaster, autoCastable, autoCastReach, recencyWeight,
 } from "./auto-cast.ts";
 import { ITEMS, TILE_PX } from "@jr/core";
 
@@ -10,6 +10,13 @@ const soon = { eligible: false, coming: true };
 const off = { eligible: false, coming: false };
 
 describe("auto-cast", () => {
+  it("never presses a spell that moves the body: every dash, Dash Slash among them", () => {
+    const dashes = [...ITEMS.values()].filter((i) => i.params["shape"] === "dash").map((i) => i.id);
+    expect(dashes).toEqual(expect.arrayContaining(["blink_strike", "leap_slam", "dash_slash"]));
+    for (const id of dashes) expect(autoCastable(ITEMS.get(id)!.params, 0), id).toBe(false);
+    expect(autoCastable(ITEMS.get("magic_bolt")!.params, 0)).toBe(true);
+  });
+
   it("waits a random moment after a key is ready, never pressing it at once", () => {
     const a = new AutoCaster(() => 0.5);
     const wait = AUTO_CAST_DELAY_MS + 0.5 * AUTO_CAST_SPREAD_MS;

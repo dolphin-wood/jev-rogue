@@ -106,7 +106,7 @@ import { layoutDecisionTable, maxScrollFor } from "../ui/plan-table.ts";
 import { questionAsked, questionBase, questionName } from "../ui/question-names.ts";
 import type { TableRow } from "../ui/plan-table.ts";
 import type { AtlasJson } from "../assets/atlas.ts";
-import { AUTO_CAST_MAX_REACH_PX, AUTO_CAST_RESERVE, AUTO_CAST_SOON_MS, AutoCaster, autoCastReach } from "../auto-cast.ts";
+import { AUTO_CAST_MAX_REACH_PX, AUTO_CAST_RESERVE, AUTO_CAST_SOON_MS, AutoCaster, autoCastable, autoCastReach } from "../auto-cast.ts";
 import { freshRerollPool, rerollPrice } from "../offer-reroll.ts";
 
 /**
@@ -15149,8 +15149,8 @@ export class PlayScene extends Phaser.Scene {
       const params = ITEMS.get(slot?.item.base ?? "")?.params;
       // Only a key whose own reach the body stands in: a short spell is not thrown at a far body.
       if (!slot || !target || !params || dist > autoCastReach(params)) return { eligible: false, coming: false };
-      const shape = params["shape"];
-      const tap = chargeMsOf(ITEMS, slot.item.base) === 0 && shape !== "stance" && shape !== "dash";
+      // A tap, never a guard or a move of the body (`autoCastable`).
+      const tap = autoCastable(params, chargeMsOf(ITEMS, slot.item.base));
       const cost = slotCost(slot, ITEMS, w.staff);
       // How long until the key is back: its cooldown, or its bank's next charge.
       const back = chargesOf(ITEMS, slot.item.base) > 0 && bankOf(slot, ITEMS) < 1
