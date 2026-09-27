@@ -64,3 +64,13 @@ describe("base items (doc 013 and doc 010)", () => {
     expect(plainInstance("void_orb")).toEqual({ uid: "void_orb", base: "void_orb", rarity: "rare" });
   });
 });
+
+describe("the sword-energy spells' constants", () => {
+  it("are the sim's own: the sword's hit and the pool's damage scale", async () => {
+    const { SWORD_HIT, SPELL_SCALE } = await import("./items.ts");
+    const { SWING_DAMAGE } = await import("../sim/melee.ts");
+    const { SPELL_DAMAGE_SCALE } = await import("../sim/cast.ts");
+    expect(SWORD_HIT).toBe(SWING_DAMAGE);
+    expect(SPELL_SCALE).toBe(SPELL_DAMAGE_SCALE);
+  });
+});

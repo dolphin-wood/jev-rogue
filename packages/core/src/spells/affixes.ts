@@ -198,7 +198,14 @@ const BASE_AFFIXES: SpellAffix[] = [
     id: "chain",
     name: "Chain",
     hook: "hit",
-    shapes: [...HITTING],
+    /*
+     * **Only what is thrown.** A lesser copy is a thing that flies to the next
+     * body, and on a bolt, a boomerang or an orb's strike that is the spell
+     * again. On a ring of blades at the caster or a wave of sword energy it
+     * was neither: each hit spat a small homing shot drawn as a blade or a
+     * crescent, a projectile the spell does not have.
+     */
+    shapes: ["bolt", "boomerang", "orb"],
     element: null,
     tiers: [
       { effect: { kind: "arc", jumps: 1, rangePx: 120 }, text: "releases a lesser copy of itself at one more body" },
@@ -250,8 +257,13 @@ const BASE_AFFIXES: SpellAffix[] = [
     id: "bloom",
     name: "Bloom",
     hook: "expire",
-    // An enchant's wave runs out at its reach; a boomerang is caught and an orb's strike lands.
-    shapes: ["bolt", "orbit", "enchant"],
+    /*
+     * Where a shot lands or a ring of blades winds down. Not an enchant: its
+     * wave runs out in the air at its reach, four times a second while the
+     * sword swings, so every swing set a patch of floor alight at arm's
+     * length and a held key carpeted the room — ground that no shot landed on.
+     */
+    shapes: ["bolt", "orbit"],
     element: null,
     tiers: [
       { effect: { kind: "field", radiusPx: 36, durationMs: 1400 }, text: "leaves burning ground" },
@@ -565,9 +577,12 @@ BASE_AFFIXES.push({
    * **Every shape but the stance.** A stance forbids the swing for as long as
    * it holds (doc 006), so a sword hit that raised one would switch off the
    * very hits the affix counts: the sword stops, and the card is a way to
-   * lose the sword for a second rather than a guard.
+   * lose the sword for a second rather than a guard.   *
+   * **Nor the enchant.** A sword hit that casts the sword's own enchant
+   * renews it: every few hits it was up again for nothing, so the waves ran
+   * for the whole fight free and the key was pressed once.
    */
-  shapes: SPELL_SHAPES.filter((s) => s !== "stance"),
+  shapes: SPELL_SHAPES.filter((s) => s !== "stance" && s !== "enchant"),
   element: null,
   tiers: [
     { effect: { kind: "resonate", every: 5 }, text: "every fifth sword hit casts it" },
@@ -604,6 +619,11 @@ export function affixFits(affix: SpellAffix, shape: SpellShape): boolean {
  * missed — so `seek` does not go on a spell that fires several shots, nor
  * with `scatter`, and `scatter` not with `seek`.
  */
+/** A spell's own `seek` from which the affix's turn adds nothing. */
+const STRONG_SEEK = 250;
+/** A spell's own `pierce` that is every body in its path. */
+const PIERCES_ALL = 99;
+
 export function affixFitsSpell(affix: SpellAffix, item: Pick<BaseItem, "params"> | null | undefined, held: readonly string[]): boolean {
   if (!affixFits(affix, itemShape(item))) return false;
   const count = Number(item?.params["count"] ?? 1);
@@ -627,6 +647,21 @@ export function affixFitsSpell(affix: SpellAffix, item: Pick<BaseItem, "params">
    * answer to the sides.
    */
   if (affix.id === "scatter" && Number(item?.params["wake_reach"] ?? 0) > 0) return false;
+  // And for the same reason no `slipstream`: a dash through a body cast it as that cut at the body, and nothing more.
+  if (affix.id === "slipstream" && Number(item?.params["wake_reach"] ?? 0) > 0) return false;
+  /*
+   * **An affix a spell already is, is no affix.** Each of these was a pick
+   * that changed nothing and took a slot:
+   * - `seek` on a shot that already steers hard (Shock Arc, Arc Lance, Mana
+   *   Darts): the affix's turn is below the spell's own.
+   * - `pierce` on a shot that already passes through everything (Fault Line,
+   *   Frozen Orb).
+   * - `fork` on a spell that already goes out all round (Frost Nova), for
+   *   the reason `scatter` is kept off it: eleven shards split three ways.
+   */
+  if (affix.id === "seek" && Number(item?.params["seek"] ?? 0) >= STRONG_SEEK) return false;
+  if (affix.id === "pierce" && Number(item?.params["pierce"] ?? 0) >= PIERCES_ALL) return false;
+  if (affix.id === "fork" && Number(item?.params["spread"] ?? 0) >= 180) return false;
   return true;
 }
 

@@ -363,6 +363,8 @@ export const JA: Table = {
   "stat.mana": "マナ {n}",
   "stat.dmg": "ダメージ {n}",
   "stat.dmgCount": "ダメージ {n} ×{count}",
+  "stat.swordDmg": "剣ダメージ ×{mult}",
+  "stat.wakeDmg": "両側の剣気：剣ダメージ ×{mult}",
   "stat.line": "{count}段の直線",
   "stat.orbit": "自分の周りを回る",
   "stat.field": "地面を焼く",

@@ -21,6 +21,7 @@ import { lightFire } from "./fire.ts";
 import { addPower, addPowers, copyPowers, dominantElement, noPowers } from "../content/tags.ts";
 import { raisePillar } from "./props.ts";
 import { startWake } from "./attacks.ts";
+import { SWING_DAMAGE } from "./melee.ts";
 
 /**
  * What one cast carries onto everything it fires: the key's multipliers, the
@@ -237,7 +238,14 @@ export function fireUnit(
   const charged = num(base.params, "charge", 0) > 0;
   const share = Math.max(0, Math.min(1, mods.charge));
   const chargeMult = charged ? chargeScale(share) : 1;
-  const damage = num(base.params, "damage") * mods.damageMult * SPELL_DAMAGE_SCALE * chargeMult;
+  /*
+   * A sword-energy spell (`sword`, `swordShare` in items.ts) hits for that
+   * many swings of the sword **as the build has it**, so `keen_edge` sharpens
+   * its waves as it does the blade; every other spell for its own figure.
+   */
+  const swordK = num(base.params, "sword", 0);
+  const damage = (swordK > 0 ? swordK * SWING_DAMAGE * (world.player.mods?.swordDamage ?? 1)
+    : num(base.params, "damage") * SPELL_DAMAGE_SCALE) * mods.damageMult * chargeMult;
   /*
    * **What the build is worth, as a multiplier**: the spell's level and every
    * affix that multiplies its damage, without the pool-wide scale or

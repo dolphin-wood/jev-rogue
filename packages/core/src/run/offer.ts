@@ -147,6 +147,11 @@ export function offerStats(item: BaseItem, level = 1): string {
   return offerStatParts(item, level).map((p) => p.text).join("  ");
 }
 
+/** A multiple of the sword, to two places and no trailing zeros: 0.85, 2.15, 1.2. */
+function fmtMult(k: number): string {
+  return String(Math.round(k * 100) / 100);
+}
+
 export function offerStatParts(item: BaseItem, level = 1): StatPart[] {
   const parts: StatPart[] = [];
   const push = (text: string, tone: StatTone, key?: string, args?: StatArgs) =>
@@ -179,7 +184,22 @@ export function offerStatParts(item: BaseItem, level = 1): StatPart[] {
    */
   const el = item.params.element;
   const dmgTone: StatTone = el === "fire" || el === "ice" || el === "poison" ? el : "damage";
-  if (typeof dmg === "number" && dmg > 0) {
+  /*
+   * **A sword-energy spell says what it is: so many swings of the sword**
+   * (`sword`), at the spell's level, since what it lands is the sword's hit as
+   * the build has sharpened it and no figure printed here could say that.
+   * Its wake, when it has one, is its own part at its own share.
+   */
+  const sword = item.params.sword;
+  if (typeof sword === "number" && sword > 0) {
+    const k = fmtMult(sword * levelDamageMult(level));
+    push(`sword dmg x${k}`, dmgTone, "stat.swordDmg", { mult: k });
+    const wake = item.params.wake_share;
+    if (typeof wake === "number" && wake > 0 && Number(item.params.wake_reach ?? 0) > 0) {
+      const w = fmtMult(sword * wake * levelDamageMult(level));
+      push(`wake: sword dmg x${w}`, dmgTone, "stat.wakeDmg", { mult: w });
+    }
+  } else if (typeof dmg === "number" && dmg > 0) {
     const many = typeof count === "number" && count > 1;
     /*
      * **`x5` is a lie for a line.** A spell whose `count` is cells of ground
@@ -991,6 +1011,9 @@ export interface HeldSpell {
   readonly spread?: number;
   /** How far its run's wake rolls, px (Dash Slash); absent reads as none. A run with a wake takes no `scatter`. */
   readonly wake?: number;
+  /** Its own steer and pierce: a shot that already hunts or passes through everything takes no `seek` or `pierce`. */
+  readonly seek?: number;
+  readonly pierce?: number;
   /** Affix ids already attached, which both exclude and upgrade. */
   readonly affixes: readonly string[];
 }
@@ -1003,7 +1026,8 @@ export function heldSpell(
   return {
     ...(item?.id ? { id: item.id } : {}),
     shape: itemShape(item), count: Number(item?.params["count"] ?? 1),
-    spread: Number(item?.params["spread"] ?? 0), wake: Number(item?.params["wake_reach"] ?? 0), affixes,
+    spread: Number(item?.params["spread"] ?? 0), wake: Number(item?.params["wake_reach"] ?? 0),
+    seek: Number(item?.params["seek"] ?? 0), pierce: Number(item?.params["pierce"] ?? 0), affixes,
   };
 }
 
@@ -1018,7 +1042,10 @@ export function affixFitsHeld(affix: SpellAffix, key: HeldSpell): boolean {
   if (key.affixes.includes(affix.id)) return true;
   if (key.affixes.length >= AFFIX_SLOTS) return false;
   return affixFitsSpell(affix, {
-    params: { shape: key.shape, count: key.count, spread: key.spread ?? 0, wake_reach: key.wake ?? 0 },
+    params: {
+      shape: key.shape, count: key.count, spread: key.spread ?? 0, wake_reach: key.wake ?? 0,
+      seek: key.seek ?? 0, pierce: key.pierce ?? 0,
+    },
   }, key.affixes);
 }
 

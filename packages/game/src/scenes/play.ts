@@ -18,7 +18,7 @@ import {
   portalInReach, pendingPortalNear, pendingDoors, resolvePortals, cardTypesOf, answerOffer, PORTAL_RISE_MS, bucketHealth, bucketRecentDamage,
   rewardInReach, REWARD_RISE_MS, NO_INPUT, tetherEnds, TOLL_PULSE_MS, ALERT_MS, MINE_BLAST, MINE_PRIME_MS, MINE_BURST_MS,
   MUSKET_RANGE, MUSKET_SPREAD_DEG, MUSKET_WINDUP_MS, FLAME_ROLL_MS, FLAME_LIFE_MS, flameRays, muzzleOf,
-  ELEMENT_TINT, spellLookOf,
+  ELEMENT_TINT, spellLookOf, swordEnergyLook,
   levelAt, withLevels, levelBonus, LEVEL_HP, swordAt,
   HIT_FLASH_MS, BOSS_ROAR_MS, spellReady, castTiming, hasLineOfSight,
 } from "@jr/core";
@@ -7192,7 +7192,7 @@ export class PlayScene extends Phaser.Scene {
         this.shed({ x: p.x + (Math.random() - 0.5) * 8, y: p.y + 3, vx: (Math.random() - 0.5) * 18, vy: -20 - Math.random() * 25, ms: 0, life: 280 + Math.random() * 200, size: 0.9 + Math.random() * 0.5, colour: Math.random() < 0.5 ? 0xffc85a : 0xff8a3a, gravity: -30 });
     }
     if (p.enchant) {
-      const look = spellLookOf(w.spells[p.enchant.spellIndex]?.item.base ?? "crescent_edge", "none");
+      const look = swordEnergyLook(w.spells[p.enchant.spellIndex]?.item.base ?? "crescent_edge", p.enchant.element);
       const at = this.frameCrystal ?? this.handAt;
       if (at && swingPhase(p) === "none") {
         const k = ending(p.enchant.ms, 1000) ? 0.35 : 1;
@@ -7868,7 +7868,7 @@ export class PlayScene extends Phaser.Scene {
        * the ground's (`drawShockwaves`).
        */
       const slot = p.strikeWake.byPlayer ? w.spells[p.strikeWake.byPlayer.spellIndex] : null;
-      const look = spellLookOf(slot?.item.base ?? "dash_slash", "none");
+      const look = swordEnergyLook(slot?.item.base ?? "dash_slash", p.strikeElement);
       const ux = p.dashX, uy = p.dashY, nx = -uy, ny = ux;
       const bx = p.x + ux * 4, by = p.y - BODY_LIFT + uy * 4;
       const reach = 30;
@@ -13233,7 +13233,8 @@ export class PlayScene extends Phaser.Scene {
       const m = this.waveMemo(b);
       const c = waveCentre(b);
       const life = this.waveLife(b);
-      const look = lookOf(b, w.spells);
+      // In its element's colour when the enchant carries one (`swordEnergyLook`).
+      const look = swordEnergyLook(b.spellIndex >= 0 ? w.spells[b.spellIndex]?.item.base ?? null : null, b.element);
       const wave = {
         x: c.x, y: c.y, radius: waveRadius(b), facing: Math.atan2(b.vy, b.vx), half: waveHalfSpan(),
         thick: WAVE_BODY_PX, life, flash: b.outPx - b.outLeftPx < WAVE_FLASH_PX, tick: w.tick, seed: m.seed,
@@ -14135,21 +14136,21 @@ export class PlayScene extends Phaser.Scene {
      * the danger palette. Each stretch fades over its last tile of roll.
      */
     // One ribbon per wake and side: the two sides of a run roll out on opposite facings.
-    const wakes = new Map<string, { facing: number; player: number; stretches: WakeStretch[] }>();
+    const wakes = new Map<string, { facing: number; player: number; element: string; stretches: WakeStretch[] }>();
     const wakeIds = new Map<object, number>();
     for (const s of w.shockwaves) {
       if (!s.alive || !s.wake || s.facing === undefined || s.width === undefined) continue;
       if (!wakeIds.has(s.wake)) wakeIds.set(s.wake, wakeIds.size);
       const key = `${wakeIds.get(s.wake)}:${Math.round(s.facing * 100)}`;
       let entry = wakes.get(key);
-      if (!entry) wakes.set(key, entry = { facing: s.facing, player: s.byPlayer ? s.byPlayer.spellIndex : -2, stretches: [] });
+      if (!entry) wakes.set(key, entry = { facing: s.facing, player: s.byPlayer ? s.byPlayer.spellIndex : -2, element: s.byPlayer?.element ?? "none", stretches: [] });
       entry.stretches.push({
         x: s.x, y: s.y, inner: s.inner, thick: s.thickness, width: s.width,
         life: Math.max(0, Math.min(1, (s.maxRadius - s.inner) / TILE_PX)),
       });
     }
     for (const v of wakes.values()) {
-      const look = v.player > -2 ? spellLookOf(w.spells[v.player]?.item.base ?? "dash_slash", "none") : null;
+      const look = v.player > -2 ? swordEnergyLook(w.spells[v.player]?.item.base ?? "dash_slash", v.element) : null;
       drawWakeRibbon(this.soilGfx, {
         stretches: v.stretches, facing: v.facing, rise: look ? 12 : 18, trail: look ? 26 : 34, tick: w.tick,
         seed: Math.round(v.stretches[0]!.x + v.stretches[0]!.y) % 97,

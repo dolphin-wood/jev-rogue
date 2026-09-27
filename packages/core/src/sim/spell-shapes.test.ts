@@ -19,7 +19,7 @@ import { makeEnemy } from "./enemy.ts";
 import { lastingMs, slotCooldownMs, slotCost } from "./spells.ts";
 import { fireUnit } from "./cast.ts";
 import { freeCastScope } from "./spells.ts";
-import { fullReach, SWING_ACTIVE_MS, SWING_DAMAGE } from "./melee.ts";
+import { fullReach, SWING_ACTIVE_MS, SWING_DAMAGE, SWING_DAMAGE as SWORD_DAMAGE } from "./melee.ts";
 import { waveCentre, waveRadius } from "./shapes.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
 import { ITEMS, plainInstance } from "../spells/index.ts";
@@ -499,6 +499,34 @@ describe("Dash Slash's shove", () => {
     for (let i = 0; i < 60; i++) run(w, at(PX + 300, PY), 1, [ahead], false);
     expect(hurt(e)).toBeGreaterThan(0);
     expect((PY - 38) - e.y).toBeGreaterThan(30);
+  });
+});
+
+describe("sword energy is the sword's damage", () => {
+  it("cuts twice as hard when the sword does, and the base figure is the same swings at a plain sword", () => {
+    const cut = (swordDamage: number): number => {
+      const w = arena("dash_slash");
+      w.player.mods = { ...w.player.mods, swordDamage };
+      const e = body(w, 90, 0);
+      press(w, at(PX + 300, PY), [e]);
+      run(w, at(PX + 300, PY), 40, [e], false);
+      return hurt(e);
+    };
+    expect(cut(2) / cut(1)).toBeCloseTo(2, 1);
+    for (const id of ["dash_slash", "crescent_edge"]) {
+      const p = ITEMS.get(id)!.params;
+      expect(Number(p["damage"]) * SPELL_DAMAGE_SCALE, id).toBeCloseTo(Number(p["sword"]) * SWORD_DAMAGE, 1);
+    }
+  });
+
+  it("puts the sword's damage into Crescent Edge's waves", () => {
+    const w = arena("crescent_edge");
+    press(w, at(PX + 300, PY));
+    const plain = w.player.enchant!.damage;
+    const v = arena("crescent_edge");
+    v.player.mods = { ...v.player.mods, swordDamage: 1.5 };
+    press(v, at(PX + 300, PY));
+    expect(v.player.enchant!.damage / plain).toBeCloseTo(1.5, 2);
   });
 });
 

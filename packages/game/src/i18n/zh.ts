@@ -364,6 +364,8 @@ export const ZH: Table = {
   "stat.mana": "{n} 法力",
   "stat.dmg": "{n} 伤害",
   "stat.dmgCount": "{n} 伤害 ×{count}",
+  "stat.swordDmg": "剑伤害 ×{mult}",
+  "stat.wakeDmg": "两侧剑气：剑伤害 ×{mult}",
   "stat.line": "直线 ×{count}",
   "stat.orbit": "环绕自身",
   "stat.field": "灼烧地面",

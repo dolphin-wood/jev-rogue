@@ -371,6 +371,8 @@ export const EN = {
   "stat.mana": "{n} mana",
   "stat.dmg": "{n} dmg",
   "stat.dmgCount": "{n} dmg x{count}",
+  "stat.swordDmg": "sword dmg x{mult}",
+  "stat.wakeDmg": "wake: sword dmg x{mult}",
   "stat.line": "line of {count}",
   "stat.orbit": "orbits you",
   "stat.field": "burning ground",

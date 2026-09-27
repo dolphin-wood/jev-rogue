@@ -46,6 +46,23 @@ export type ItemRegistry = ReadonlyMap<string, BaseItem>;
  * - `chain` — how many bodies it arcs to after the first, without needing the
  *   `chain` affix attached.
  */
+/**
+ * **A sword-energy spell's damage is the sword's** (Crescent Edge's waves,
+ * Dash Slash): its `sword` param is how many swings a hit is worth, and at
+ * cast it is multiplied by the sword's own damage as the build has it
+ * (`keen_edge`), so the two grow together. `damage` is the same figure at
+ * the unupgraded sword, kept for what reads a spell's base figure — the
+ * bench, the Director, the card's reach — and the tests hold the two equal.
+ *
+ * The two constants are the sword's hit and the pool's damage scale, copied
+ * rather than imported, because the sim imports this file.
+ */
+export const SWORD_HIT = 9;
+export const SPELL_SCALE = 1.85;
+function swordShare(k: number): number {
+  return Math.round((k * SWORD_HIT / SPELL_SCALE) * 1000) / 1000;
+}
+
 const ATTACKS: readonly BaseItem[] = [
   {
     id: "magic_bolt",
@@ -759,7 +776,7 @@ const ATTACKS: readonly BaseItem[] = [
        * waves alone. Its cooldown outlasts the enchant (`lastingMs`), so a
        * held key keeps one up.
        */
-      shape: "enchant", damage: 4.1, speed: 320, radius: 12, count: 1, spread: 0, lifetime: 5, pierce: 0,
+      shape: "enchant", damage: swordShare(0.85), sword: 0.85, speed: 320, radius: 12, count: 1, spread: 0, lifetime: 5, pierce: 0,
       element: "none", seek: 0, curve: 0, weight: 0.6, enchant_ms: 5000, wave_reach: 80,
       windup_ms: 0, recover_ms: 80, move_scale: 1,
     },
@@ -815,7 +832,7 @@ const ATTACKS: readonly BaseItem[] = [
        * and a half the way the wake rolls, and both are staggered by the
        * weight. A Dash Slash is how a pack in the way is opened up.
        */
-      shape: "dash", damage: 10.5, speed: 0, radius: 12, count: 1, spread: 0, lifetime: 0.26,
+      shape: "dash", damage: swordShare(2.15), sword: 2.15, speed: 0, radius: 12, count: 1, spread: 0, lifetime: 0.26,
       pierce: 0, element: "none", seek: 0, curve: 0, weight: 1.3, knock: 720, windup_ms: 40, recover_ms: 140,
       wake_reach: 40, wake_share: 0.55, wake_step: 10, wake_speed: 240, wake_thick: 12,
     },
