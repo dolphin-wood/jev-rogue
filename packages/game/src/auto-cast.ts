@@ -27,6 +27,14 @@
  * is ready, or until `AUTO_CAST_YIELD_MS` passes and the turn is drawn
  * again, so a key that keeps not arriving never stalls the rest.
  *
+ * **One cast at a time, on a beat.** A cast starts every key's wait over,
+ * as the player's own press does, and no wait starts while a cast is still
+ * in the hand (`free`): so between any two auto-casts there is the cast's
+ * own windup and recovery and then a fresh random wait. Waits only used to
+ * be cleared for the key that cast, so a key whose wait had already run out
+ * went the moment the caster was free again — two spells back to back,
+ * which reads as a stutter rather than a rhythm.
+ *
  * **It does not break the player's stride.** A spell's windup and recovery
  * slow the caster, and a slow the player did not choose, dropped into a
  * walk or a run of swings, is a stumble. So the press goes as
@@ -118,9 +126,10 @@ export class AutoCaster {
   pick(now: number, keys: readonly AutoCastKey[], free: boolean): number | null {
     keys.forEach((k, i) => {
       if (!k.eligible) this.due[i] = null;
-      else this.due[i] ??= now + AUTO_CAST_DELAY_MS + this.random() * AUTO_CAST_SPREAD_MS;
+      // A wait starts only with the hands free, so it is counted from the end of the last cast.
+      else if (free) this.due[i] ??= now + AUTO_CAST_DELAY_MS + this.random() * AUTO_CAST_SPREAD_MS;
     });
-    const ready = (i: number) => keys[i]!.eligible && this.due[i]! <= now;
+    const ready = (i: number) => keys[i]!.eligible && this.due[i] != null && this.due[i]! <= now;
     // A turn given to a key that has dropped out of the draw, or waited too long, is drawn again.
     if (this.turn && (!keys[this.turn.key]?.coming || now - this.turn.at > AUTO_CAST_YIELD_MS)) this.turn = null;
     // The draw happens when some key is ready to go, among every key in it.
@@ -138,7 +147,8 @@ export class AutoCaster {
     if (!free || !this.turn || !ready(this.turn.key)) return null;
     const key = this.turn.key;
     this.turn = null;
-    this.due[key] = null;
+    // Every wait starts over, not only this key's: the next cast waits its own beat.
+    this.due.fill(null);
     this.last[key] = now;
     return key;
   }

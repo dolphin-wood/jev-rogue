@@ -41,6 +41,21 @@ describe("auto-cast", () => {
     expect(a.pick(AUTO_CAST_DELAY_MS + 16, [on], true)).toBe(0);
   });
 
+  it("never casts two keys back to back: every wait starts over after a cast, counted from when the hands are free", () => {
+    const a = new AutoCaster(() => 0);
+    a.pick(0, [on, on], true);
+    // Both keys are due at once; one goes.
+    const first = a.pick(AUTO_CAST_DELAY_MS, [on, on], true);
+    expect(first).not.toBe(null);
+    // The cast's windup and recovery: no wait runs while it is in the hand.
+    const freeAt = AUTO_CAST_DELAY_MS + 500;
+    for (let t = AUTO_CAST_DELAY_MS + 16; t < freeAt; t += 16) expect(a.pick(t, [on, on], false)).toBe(null);
+    // Free again: the other key was due long ago, but waits a full beat first.
+    expect(a.pick(freeAt, [on, on], true)).toBe(null);
+    expect(a.pick(freeAt + AUTO_CAST_DELAY_MS - 1, [on, on], true)).toBe(null);
+    expect(a.pick(freeAt + AUTO_CAST_DELAY_MS, [on, on], true)).not.toBe(null);
+  });
+
   it("weighs a key just cast low, growing back to full over the forget time", () => {
     expect(recencyWeight(0)).toBeCloseTo(AUTO_CAST_MIN_WEIGHT);
     expect(recencyWeight(AUTO_CAST_FORGET_MS / 2)).toBeCloseTo((1 + AUTO_CAST_MIN_WEIGHT) / 2);
