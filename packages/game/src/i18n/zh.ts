@@ -206,6 +206,7 @@ export const ZH: Table = {
   "card.rare": "稀有",
   "card.legendary": "传奇",
   "hud.bossTitle": "地穴之王",
+  "hud.bossUnknown": "???",
   "hud.bossPhase": "第 {n} 阶段",
   "prompt.cutTheLink": "站到锁链上将其斩断",
   "card.upgradeLv": "升级 Lv {from} → {to}",

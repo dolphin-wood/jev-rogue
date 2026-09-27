@@ -592,7 +592,7 @@ export async function playRun(
       if (slot && level > 1) world.spells[i] = withLevel(slot, level);
     });
     if (stage === "boss") {
-      // The final (doc 022): phase II from full, the armour broken in room 5 already gone.
+      // The final (doc 022): a short phase I, then II and III on the larger bar.
       const boss = makeKing(world.nextEnemyId++, (GRID_W / 2) * TILE_PX, (GRID_H / 2) * TILE_PX, "final");
       boss.spawnFadeMs = 0;
       boss.awake = true;

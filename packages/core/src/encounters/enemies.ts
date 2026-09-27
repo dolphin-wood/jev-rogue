@@ -1021,9 +1021,9 @@ export const BOSS_PHASES: readonly BossPhase[] = [
  * **The king is met twice** (doc 022). In room 5 he drops into an ordinary
  * fight and plays phase I only (`"audience"`): at `KING_RETREAT_AT` of that bar
  * the armour breaks, as it always has at 60%, and he goes back up out of the
- * room rather than calling his adds. In the throne hall he stands already in
- * phase II (`"final"`), without the armour the player broke, and phases II and
- * III share a larger bar. A body with no script is the one fight he was before:
+ * room rather than calling his adds. In the throne hall (`"final"`) a short
+ * phase I breaks his armour again, and phases II and III share the rest of a
+ * larger bar. A body with no script is the one fight he was before:
  * the bench, the lab and every test that predates the document.
  */
 export type BossScript = "audience" | "final";
@@ -1047,8 +1047,15 @@ export const KING_RETREAT_AT = 0.6;
  * 020's two minutes, against a player who has seen him once already.
  */
 export const KING_FINAL_HP = 4500;
-/** Where phase III begins in the final fight: the bar shared evenly by II and III. */
-export const KING_FINAL_III_AT = 0.5;
+/**
+ * Where the final's phases begin. **A short phase I first**: he rises from the
+ * throne in the armour the throne's drawing wears, and a first stretch of the
+ * bar breaks it off him, as the fight always has — so the body the player sees
+ * stand is the body the seated drawing showed. Then phases II and III, the
+ * fight's weight, share the rest nearly evenly.
+ */
+export const KING_FINAL_II_AT = 0.85;
+export const KING_FINAL_III_AT = 0.45;
 
 /** The king's bar under a script. */
 export function kingHp(script?: BossScript): number {
@@ -1061,14 +1068,14 @@ export function kingHp(script?: BossScript): number {
  * leaves; the whole fight's two.
  */
 export function kingMarks(script?: BossScript): readonly number[] {
-  if (script === "final") return [KING_FINAL_III_AT];
+  if (script === "final") return [KING_FINAL_II_AT, KING_FINAL_III_AT];
   if (script === "audience") return [KING_RETREAT_AT];
   return BOSS_PHASES.slice(1).map((p) => p.at);
 }
 
 /** The health fraction a phase begins at under a script (the lab's phase buttons). */
 export function kingPhaseStart(script: BossScript | undefined, phase: number): number {
-  if (script === "final") return phase >= 3 ? KING_FINAL_III_AT : 1;
+  if (script === "final") return phase >= 3 ? KING_FINAL_III_AT : phase === 2 ? KING_FINAL_II_AT : 1;
   if (script === "audience") return phase >= 2 ? KING_RETREAT_AT : 1;
   return BOSS_PHASES[Math.min(BOSS_PHASES.length, Math.max(1, phase)) - 1]!.at;
 }
@@ -1079,11 +1086,11 @@ export function kingPhaseStart(script: BossScript | undefined, phase: number): n
  * Under `"audience"` the phase II threshold is the retreat's: the change into
  * phase 2 is the armour breaking, and what follows the roar is his leaving
  * (`stepBoss`), never phase II's call. Under `"final"` he is in phase II from
- * full and phase III from `KING_FINAL_III_AT`.
+ * `KING_FINAL_II_AT` and phase III from `KING_FINAL_III_AT`.
  */
 export function bossPhaseAt(hpFraction: number, script?: BossScript): number {
   if (script === "audience") return hpFraction <= KING_RETREAT_AT ? 2 : 1;
-  if (script === "final") return hpFraction <= KING_FINAL_III_AT ? 3 : 2;
+  if (script === "final") return hpFraction <= KING_FINAL_III_AT ? 3 : hpFraction <= KING_FINAL_II_AT ? 2 : 1;
   let phase = 1;
   BOSS_PHASES.forEach((p, i) => { if (hpFraction <= p.at) phase = i + 1; });
   return phase;

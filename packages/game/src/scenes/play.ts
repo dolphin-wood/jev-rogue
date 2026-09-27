@@ -9,7 +9,7 @@ import {
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
   moodTransform, tintRGBA, dashInvulnerable, MELEE, ARMOUR_BREAK_MS, brakeFraction, ENEMIES,
-  BOSS_ARCHETYPES, makeEnemy, makeKing, kingHp, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
+  BOSS_ARCHETYPES, makeEnemy, makeKing, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, audienceGrade, RUN_AUDIENCE_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTierKey, affixFitsSpell, itemShape,
@@ -1977,15 +1977,7 @@ export class PlayScene extends Phaser.Scene {
         enter: () => this.enterBossLab(),
         setPhase: (phase) => {
           const boss = this.world.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
-          /*
-           * Just inside the phase; the change itself is the sim's, as in a fight. The final
-           * has no phase I (doc 022), so asking for it gives him back the unscripted fight,
-           * whose first phase is the one room 5 plays.
-           */
-          if (boss && phase === 1 && boss.bossScript) {
-            boss.bossScript = undefined;
-            boss.hp = boss.maxHp = kingHp();
-          }
+          // Just inside the phase; the change itself is the sim's, as in a fight.
           if (boss) boss.hp = Math.max(1, Math.round(boss.maxHp * (kingPhaseStart(boss.bossScript, phase) - 0.005)));
           // And the fight clock back to its start when he is between moves, so a
           // long session in the lab does not drift into the enrage (125 s) unseen.
@@ -2913,8 +2905,7 @@ export class PlayScene extends Phaser.Scene {
     const y = hall ? (THRONE_CELLS[1]![1] + KING_STAND_ROW) * TILE_PX : (ext.h / 2) * TILE_PX;
     // From the world's own counter: a fixed id 1 was also the first add's, and the renderer's per-body
     // state (the phase-change burst among it) drew the add as the king.
-    // The final (doc 022): he stands in phase II, without the armour broken in room 5 — in the lab too, which is
-    // where the final is tuned. The lab's phase I button puts back the fight's first phase (`bossLab.setPhase`).
+    // The final (doc 022), in the lab too, which is where the final is tuned: a short phase I, then II and III.
     const boss = makeKing(w.nextEnemyId++, x, y, "final");
     boss.spawnFadeMs = 0;
     boss.awake = true;
@@ -3133,7 +3124,12 @@ export class PlayScene extends Phaser.Scene {
    * rule drawn out either side of it. When it has gone the HUD comes back and
    * the controls are the player's (`bossCine`).
    */
-  private showKingName(): void {
+  /**
+   * His name over the fight, as it is shown in the hall. At the first audience
+   * he is not named (doc 022): an armoured figure out of the roof is a question,
+   * and the throne hall is where it is answered.
+   */
+  private showKingName(title = t("hud.bossTitle")): void {
     // Between the two of them: halfway from his boots to the player's head, carried into the HUD's frame.
     const boss = this.world.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
     const cam = this.cameras.main, ui = this.uiCam;
@@ -3141,7 +3137,7 @@ export class PlayScene extends Phaser.Scene {
     const y = midY !== null && ui
       ? ui.worldView.y + (midY - cam.worldView.y) * (cam.zoom / ui.zoom)
       : UI_H / 2;
-    const text = this.uiText(UI_W / 2, y, t("hud.bossTitle"), 30, "#ffe9a8").setOrigin(0.5).setDepth(CINE_NAME_DEPTH + 5).setAlpha(0);
+    const text = this.uiText(UI_W / 2, y, title, 30, "#ffe9a8").setOrigin(0.5).setDepth(CINE_NAME_DEPTH + 5).setAlpha(0);
     const ruleY = y + text.displayHeight / 2 + 6;
     const rules = [-1, 1].map((side) => this.add.rectangle(UI_W / 2, ruleY, text.displayWidth * 0.6, 1, 0xd8b060, 1)
       .setOrigin(side < 0 ? 1 : 0, 0.5).setDepth(CINE_NAME_DEPTH + 5).setScale(0, 1).setAlpha(0));
@@ -8057,7 +8053,7 @@ export class PlayScene extends Phaser.Scene {
           }
           // The first audience (doc 022): his name over the crater he made, as it is shown in the hall.
           if (ev.what === "boss_arrives") {
-            this.showKingName();
+            this.showKingName(t("hud.bossUnknown"));
             sfx.play("boss_impact", 0.85);
           }
           // The king's chain shares the snarecaster's event; his is silent like his other tells (`telegraphFor`).
@@ -16008,7 +16004,7 @@ export class PlayScene extends Phaser.Scene {
       // The marks are the script's (doc 022): the final's phase III at the half; none on the first audience's.
       for (const mark of boss.bossScript === "audience" ? [] : kingMarks(boss.bossScript))
         this.sprites.rectangle(BX + BW * mark, BY, 1, 9, 0xffe9a8, 0.8).setOrigin(0.5).setDepth(102);
-      this.ftext("boss:title", BX, BY - 11, t("hud.bossTitle"), {
+      this.ftext("boss:title", BX, BY - 11, t(boss.bossScript === "audience" ? "hud.bossUnknown" : "hud.bossTitle"), {
         fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(7, ZOOM) * ZOOM)}px`, color: "#ffe9a8",
       }).setScale(1 / ZOOM).setOrigin(0, 0.5).setDepth(102);
       // The phase is named in the lab only: in a run the fight says it — the armour, the roar, the bar's colour.

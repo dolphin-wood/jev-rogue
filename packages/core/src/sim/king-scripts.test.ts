@@ -1,6 +1,6 @@
 /**
  * The king's two meetings (doc 022): the first audience is phase I and ends in
- * his leaving at the retreat's line; the final starts in phase II on a larger
+ * his leaving at the retreat's line; the final opens in a short phase I on a larger
  * bar. What each asserts is a promise the document makes to the player.
  */
 import { describe, expect, it } from "vitest";
@@ -13,7 +13,7 @@ import { plainInstance } from "../spells/index.ts";
 import { RngSource } from "../rng.ts";
 import { KING_AUDIENCE_XP } from "../run/levels.ts";
 import {
-  bossPhaseAt, kingMarks, kingPhaseStart, ENEMIES, KING_AUDIENCE_HP, KING_FINAL_HP, KING_FINAL_III_AT, KING_RETREAT_AT,
+  bossPhaseAt, kingMarks, kingPhaseStart, ENEMIES, KING_AUDIENCE_HP, KING_FINAL_HP, KING_FINAL_II_AT, KING_FINAL_III_AT, KING_RETREAT_AT,
 } from "../encounters/enemies.ts";
 
 function hall(seed: string): World {
@@ -51,37 +51,41 @@ describe("the king's scripts: phases", () => {
     expect(kingFloorHp(k)).toBe(Math.ceil(KING_AUDIENCE_HP * KING_RETREAT_AT));
   });
 
-  it("starts the final in phase II, its call spent, with phase III at the half", () => {
+  it("opens the final in a short phase I, in the armour the throne shows, then II and III", () => {
     const k = makeKing(1, 0, 0, "final");
     expect(k.maxHp).toBe(KING_FINAL_HP);
     expect(k.hp).toBe(KING_FINAL_HP);
-    expect(k.phase).toBe(2);
-    expect(k.bossAddsPhase).toBe(2);
+    expect(k.phase).toBe(1);
     expect(kingFloorHp(k)).toBe(0);
-    expect(bossPhaseAt(1, "final")).toBe(2);
+    expect(bossPhaseAt(1, "final")).toBe(1);
+    expect(bossPhaseAt(KING_FINAL_II_AT + 0.01, "final")).toBe(1);
+    expect(bossPhaseAt(KING_FINAL_II_AT, "final")).toBe(2);
     expect(bossPhaseAt(KING_FINAL_III_AT + 0.01, "final")).toBe(2);
     expect(bossPhaseAt(KING_FINAL_III_AT, "final")).toBe(3);
+    // Phase I is the short stretch; II and III are the fight's weight.
+    expect(1 - KING_FINAL_II_AT).toBeLessThan(KING_FINAL_II_AT - KING_FINAL_III_AT);
   });
 
   it("marks each script's own changes on the bar", () => {
-    expect(kingMarks("final")).toEqual([KING_FINAL_III_AT]);
+    expect(kingMarks("final")).toEqual([KING_FINAL_II_AT, KING_FINAL_III_AT]);
     expect(kingMarks("audience")).toEqual([KING_RETREAT_AT]);
     expect(kingMarks()).toEqual([0.6, 0.3]);
-    expect(kingPhaseStart("final", 2)).toBe(1);
+    expect(kingPhaseStart("final", 1)).toBe(1);
+    expect(kingPhaseStart("final", 2)).toBe(KING_FINAL_II_AT);
     expect(kingPhaseStart("final", 3)).toBe(KING_FINAL_III_AT);
     expect(kingPhaseStart(undefined, 2)).toBe(0.6);
   });
 
-  it("opens the final with no roar and no call", () => {
-    const w = hall("final-open");
+  it("breaks the final's armour at its line with the roar and phase II's call, as the fight always has", () => {
+    const w = hall("final-break");
     const k = makeKing(w.nextEnemyId++, 368, 200, "final");
     k.spawnFadeMs = 0; k.awake = true;
     w.enemies.push(k);
-    for (let i = 0; i < 120; i++) step(w, NO_INPUT);
-    expect(k.bossRoarMs).toBe(0);
+    step(w, NO_INPUT);
+    k.hp = Math.floor(KING_FINAL_HP * KING_FINAL_II_AT);
+    step(w, NO_INPUT);
     expect(k.phase).toBe(2);
-    // No adds rose about him.
-    expect(w.enemies.filter((e) => e !== k)).toHaveLength(0);
+    expect(k.bossRoarMs).toBeGreaterThan(0);
   });
 });
 

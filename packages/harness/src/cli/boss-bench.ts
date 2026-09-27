@@ -16,7 +16,7 @@
  * `pnpm boss-bench [seeds] [tier|all] [profile|all] [final|audience|whole]`
  *
  * The last argument is which meeting (doc 022): `final` (the default) is the
- * throne hall as the run plays it now, phase II from full on the larger bar;
+ * throne hall as the run plays it now, a short phase I then II and III on the larger bar;
  * `audience` is room 5's first audience, phase I until he leaves, against the
  * builds a run brings to room 5; `whole` is the single three-phase fight the
  * king was before the document, for comparison.

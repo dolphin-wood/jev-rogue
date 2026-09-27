@@ -2153,19 +2153,13 @@ const BOSS_PATTERN_MIN_GAP = 70;
 
 /**
  * **The king for one of his two meetings** (doc 022). His bar is the script's
- * (`kingHp`); the final starts in phase II, its call already spent, because the
- * armour it follows was broken in room 5 and no change of phase opens the
- * fight.
+ * (`kingHp`), and his phases its thresholds (`bossPhaseAt`).
  */
 export function makeKing(id: number, x: number, y: number, script?: BossScript): Enemy {
   const e = makeEnemy(id, "boss", x, y, []);
   if (!script) return e;
   e.bossScript = script;
   e.hp = e.maxHp = kingHp(script);
-  if (script === "final") {
-    e.phase = 2;
-    e.bossAddsPhase = 2;
-  }
   return e;
 }
 

@@ -209,6 +209,7 @@ export const EN = {
   "card.rare": "RARE",
   "card.legendary": "LEGENDARY",
   "hud.bossTitle": "THE CRYPT KING",
+  "hud.bossUnknown": "???",
   "hud.bossPhase": "phase {n}",
   "prompt.cutTheLink": "Stand on the link to cut it",
   "card.upgradeLv": "upgrade Lv {from} → {to}",

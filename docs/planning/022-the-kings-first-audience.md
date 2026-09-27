@@ -3,7 +3,7 @@ id: 022
 title: The King's First Audience
 status: proposed
 date: 2026-09-27
-summary: The Crypt King is met twice. In room 5, the last fight of the ossuary, the roof comes down on an ordinary fight, a stone on each body and none on the player, and he lands on the far side of the arena. The bodies spill enough hearts to fill the player's bar and three more that stay on the floor. That first audience is phase I alone. At 60% of its bar the armour breaks and he goes back up out of the room, and the room pays its door's reward a grade higher and an ordinary room's experience. The final fight in the throne hall starts where the first one stopped, with the armour already gone. Phases II and III are stretched over a full bar that is larger than the one they had before. It takes the place of the guardian that seam would have held, not a room of its own, so the run is no longer and the count of fights is unchanged. Placed at room 5 rather than 10 because real players die before room 8: the meeting comes to every run, and its peak buys room 6 as the trough at the ramp's steepest step. Code decides all of it. The one Jev question the room keeps is its door's reward.
+summary: The Crypt King is met twice, unnamed the first time. In room 5, the last fight of the ossuary, the roof comes down on an ordinary fight, a stone on each body and none on the player, and he lands on the far side of the arena. The bodies spill enough hearts to fill the player's bar and three more that stay on the floor. That first audience is phase I alone. At 60% of its bar the armour breaks and he goes back up out of the room, and the room pays its door's reward a grade higher and an ordinary room's experience. The final fight in the throne hall opens with a short phase I in the armour the throne shows, then phases II and III take the rest of a larger bar. It takes the place of the guardian that seam would have held, not a room of its own, so the run is no longer and the count of fights is unchanged. Placed at room 5 rather than 10 because real players die before room 8: the meeting comes to every run, and its peak buys room 6 as the trough at the ramp's steepest step. Code decides all of it. The one Jev question the room keeps is its door's reward.
 depends_on: [003, 005, 014, 019, 020]
 ---
 
@@ -132,8 +132,17 @@ reward badge like any other, and the room fills like any other.
      part of the arena.
    - `CRASH_HEARTS_SPARE` is a starting figure. It is about three of phase I's
      blows at the room-5 band, and `boss-bench` and the playtest logs set it.
-5. **His name** comes up as it does in the hall (`showKingName`), and after a
-   beat the fight is phase I as doc 020 wrote it. Nothing else is in the room.
+5. **He is not named.** The card that shows his name in the hall
+   (`showKingName`) shows `???` here, and so does his health bar. An armoured
+   figure crashing through the roof is a question, and the throne hall answers
+   it: the name first appears over the throne, where a JRPG's unidentified foe
+   and a Souls boss's title card both put it. After a beat the fight is phase I
+   as doc 020 wrote it. Nothing else is in the room.
+   - **His bar has no marks**, and it is drawn from full down to his retreat
+     line, so it empties as he leaves. It never stops at 60% for no reason the
+     player is given. The final's bar marks where phases II and III begin.
+     Neither bar names the phase: the armour, the roar and the bar's colour say
+     it.
 
 ## The first audience
 
@@ -143,9 +152,9 @@ here and is not asked again.
 
 | | First audience (room 5) | Final (room 16) |
 |---|---|---|
-| Phases | I | II, III |
+| Phases | I | a short I, then II and III |
 | Bar | `KING_AUDIENCE_HP`, spent down to the retreat | `KING_FINAL_HP`, all of it |
-| Phase thresholds | none. At `KING_RETREAT_AT` he leaves | II from full, III at `KING_FINAL_III_AT` |
+| Phase thresholds | none. At `KING_RETREAT_AT` he leaves | II at `KING_FINAL_II_AT` (0.85), III at `KING_FINAL_III_AT` (0.45) |
 | Power | the room-5 ramp band's (body damage ×1, hit damage ×0.8) | the boss band's (×2.05), unchanged |
 | Adds | none. The landing killed them | doc 005's phase II call, unchanged |
 | Pays | the door's reward, one grade higher, and `KING_AUDIENCE_XP` (110) experience as he leaves | the run |
@@ -196,23 +205,23 @@ goes up.
 
 ## The final fight
 
-**He comes back without what the player broke.** The throne entrance plays as
-it does now (`kingIntro`, the goblet, the rise), and he stands **already in
-phase II**. His body is drawn from the phase II frames (`boss_p2_*`, which the
-renderer already picks by `e.phase`), so his missing armour is the player's own
-doing, seen at a glance. The roar and the phase II call do not play at the
-start, because he broke that armour in room 5. The phase II call belongs to
-the phase *change*, and there is no change here.
+**He rises in his armour, and it comes off again, quickly.** The throne
+entrance plays as it does now (`kingIntro`, the goblet, the rise), and the
+throne's drawings show him armoured, so he stands in phase I. Starting him
+without the armour would have put an armoured seated drawing and an unarmoured
+standing body a frame apart. **Phase I is short**: at `KING_FINAL_II_AT = 0.85`
+the armour breaks with the roar and phase II's call, as the fight always has.
+For the player who met him in room 5, the stretch is the part they have
+already learned, played briefly and not asked of them again at length.
 
-**Phases II and III are stretched over a full bar, and the bar grows.** Today
-II and III together are 60% of 3750, or 2250 health. The final bar is
-`KING_FINAL_HP = 4500`, twice that. Phase III begins at
-`KING_FINAL_III_AT = 0.5`, so each phase gets half. Doc 020 sized the fight to
-about two minutes and two and a half passes of its music. Phase I has moved to
-room 5, so the final fight needs more health to hold that length with the
-denser phases alone. It also has to answer a player who has already seen the
-king once. 4500 is a starting figure: `boss-bench` sets it, against a fight
-length of 100 to 130 s and a win rate near today's 55% for the fitted `player`.
+**Phases II and III take the rest of a larger bar.** Today II and III together
+are 60% of 3750, or 2250 health. The final bar is `KING_FINAL_HP = 4500`, and
+II and III take 85% of it (II from 0.85, III from `KING_FINAL_III_AT = 0.45`):
+about 1800 and 2000, near double what each had. Doc 020 sized the fight to
+about two minutes and two and a half passes of its music, and most of phase I
+has moved to room 5, so the denser phases have to hold that length. 4500 is a
+starting figure, set once the king's own balance pass lets a profile win
+(see "Measured").
 
 The meteor into phase III, the rage tempo and the music's layers are
 unchanged, because they already hang on `e.phase`.
