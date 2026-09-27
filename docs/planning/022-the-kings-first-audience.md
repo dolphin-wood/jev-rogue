@@ -243,7 +243,7 @@ the roof gives**, and holds the fixed view for the rest of the fight.
 | Beat | Camera |
 |---|---|
 | The opening stretch (step 1) | the close camera, as in every room. Part of the disguise |
-| The rumble (step 2) | **eases out to fit the whole room** over `AUDIENCE_PULL_MS` (about the rumble's length, a second and a half), under the rumble's shake and falling dust |
+| The rumble (step 2) | **pulls out to fit the whole room** over `AUDIENCE_PULL_MS` (450 ms, quick: a slower ease shimmered at its fractional zooms and read as the view shaking), as the rumble begins |
 | The stones, the landing, phase I | the fixed whole-room view, the throne hall's rule. The minimap and the edge pointers go away, since nothing is off the view |
 | The retreat and the room's reward | holds while he rises out of the top of the view, then eases back to the close camera for the offer and the portals, so the portals are met the way they are in every room |
 

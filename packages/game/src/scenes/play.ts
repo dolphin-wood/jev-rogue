@@ -781,8 +781,13 @@ const CLOSE_DEAD_X = 34;
 const BOSS_VIEW_SPARE = 1;
 /** The level a depth's own sound sits at everywhere in it (`ambienceLevels`): under a brazier or a grate beside the player. */
 const DEPTH_AMBIENCE = 0.3;
-/** The first audience's pull out to the whole room, and back (doc 022): about the rumble's length. */
-const AUDIENCE_PULL_MS = 1500;
+/**
+ * The first audience's pull out to the whole room, and back (doc 022). Quick:
+ * every frame of the ease is drawn at a fractional zoom, where pixel art
+ * shimmers, and at the rumble's length the pull itself read as the view
+ * shaking. Under half a second it reads as a cut with a push in it.
+ */
+const AUDIENCE_PULL_MS = 450;
 /** How long the whole-room view holds after he has gone: long enough to watch him leave the top of it. */
 const AUDIENCE_HOLD_MS = 900;
 const CLOSE_DEAD_Y = 20;
