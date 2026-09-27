@@ -8,7 +8,7 @@ import {
 import { BAR_MS, BEAT_MS, BOSS_RAGE_TEMPO } from "./beat.ts";
 import { NO_INPUT, noMods } from "./types.ts";
 import type { World } from "./types.ts";
-import { makeEnemy, BOSS_ROAR_MS, BOSS_DASH_PAST_PX, bossTempo, bossMusicPhase } from "./enemy.ts";
+import { makeEnemy, BOSS_ROAR_MS, BOSS_DASH_PAST_PX, BOSS_WAKE_STEP_PX, bossTempo, bossMusicPhase } from "./enemy.ts";
 import { armHits } from "./attacks.ts";
 import { PLAYER_RADIUS, STEP_MS } from "./types.ts";
 import { acquire } from "./bullets.ts";
@@ -619,15 +619,30 @@ describe("the boss", () => {
     while (b.attack === "windup") step(w, NO_INPUT);
     // Stepped off its line, so the run goes by.
     w.player.y = b.y + 70;
-    for (let i = 0; i < 60 && b.attack === "lunge"; i++) { w.player.invulnMs = 1e9; step(w, NO_INPUT); }
+    const x0 = b.x;
+    const born: { x: number; bossX: number }[] = [];
+    for (let i = 0; i < 60 && b.attack === "lunge"; i++) {
+      w.player.invulnMs = 1e9;
+      const before = new Set(w.shockwaves);
+      step(w, NO_INPUT);
+      for (const s of w.shockwaves) if (!before.has(s) && s.width !== undefined) born.push({ x: s.x, bossX: b.x });
+    }
     const wake = w.shockwaves.filter((x) => x.alive && x.width !== undefined);
-    expect(wake.length).toBe(2);
-    // One each side of the run, along it, and as long as it.
-    const sides = wake.map((x) => Math.round(Math.sin(x.facing!)));
-    expect(sides.sort()).toEqual([-1, 1]);
-    expect(wake[0]!.width).toBeGreaterThan(80);
+    // Short stretches, a pair for each stretch of the run, not two edges as long as it.
+    expect(wake.length).toBeGreaterThanOrEqual(10);
+    const sides = new Set(wake.map((x) => Math.round(Math.sin(x.facing!))));
+    expect([...sides].sort()).toEqual([-1, 1]);
+    for (const x of wake) expect(x.width).toBeLessThanOrEqual(BOSS_WAKE_STEP_PX + 0.01);
+    // Together they run the length of the run.
+    const xs = wake.map((x) => x.x);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan((b.x - x0) * 0.7);
+    // Each set off as he passed its ground: laid just behind him, never ahead.
+    for (const s of born) expect(s.bossX - s.x).toBeGreaterThanOrEqual(-0.01);
+    for (const s of born) expect(s.bossX - s.x).toBeLessThan(BOSS_WAKE_STEP_PX * 3);
     // A short roll, not a blast across the hall.
     for (const x of wake) expect(x.maxRadius).toBeLessThanOrEqual(TILE_PX * 3.5);
+    // One attack: every stretch shares the one hit.
+    expect(new Set(wake.map((x) => x.wake)).size).toBe(1);
   });
 
   it("dashcut: a run that misses ends a body past where the player stood, not in the wall", () => {

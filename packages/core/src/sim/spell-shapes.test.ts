@@ -424,6 +424,54 @@ describe("enchant (Crescent Edge)", () => {
   });
 });
 
+describe("dash with a wake (Dash Slash)", () => {
+  it("lays its wake a stretch at a time as the player passes, each stretch set off where they then were", () => {
+    const w = arena("dash_slash");
+    press(w, at(PX + 300, PY));
+    const laidAt: number[][] = [];
+    for (let i = 0; i < 40 && (w.player.strikeMs > 0 || i === 0); i++) {
+      step(w, at(PX + 300, PY));
+      laidAt.push(w.shockwaves.filter((s) => s.byPlayer).map((s) => s.x));
+    }
+    const all = w.shockwaves.filter((s) => s.byPlayer);
+    // Many short stretches, in pairs either side of the run, not two long edges.
+    expect(all.length).toBeGreaterThanOrEqual(10);
+    expect(all.length % 2).toBe(0);
+    for (const s of all) expect(s.width!).toBeLessThanOrEqual(12);
+    expect(new Set(all.map((s) => Math.round(Math.sin(s.facing!)))).size).toBe(2);
+    // They came one step after another, not all at once.
+    const counts = laidAt.map((xs) => xs.length);
+    expect(counts.filter((n, i) => i > 0 && n > counts[i - 1]!).length).toBeGreaterThanOrEqual(4);
+    // And the earlier ones are further out: the wake opens behind the run.
+    const upper = all.filter((s) => Math.sin(s.facing!) < 0).sort((a, b) => a.x - b.x);
+    expect(upper[0]!.inner).toBeGreaterThan(upper[upper.length - 1]!.inner);
+  });
+
+  it("its wake cuts a body beside the run the run missed, once; one the run cut, not again; never the player", () => {
+    const w = arena("dash_slash");
+    const side = body(w, 70, 38);
+    const onPath = body(w, 100, 0);
+    const hearts = w.player.hearts;
+    let sideHits = 0, pathHits = 0;
+    press(w, at(PX + 300, PY), [side, onPath]);
+    for (let i = 0; i < 60; i++) {
+      w.player.invulnMs = 0;
+      w.player.dashIframeMs = 0;
+      step(w, at(PX + 300, PY));
+      sideHits += hitsOn(w, side);
+      pathHits += hitsOn(w, onPath);
+      side.x = PX + 70; side.y = PY + 38;
+      onPath.x = PX + 100; onPath.y = PY;
+      onPath.knockX = 0; onPath.knockY = 0; side.knockX = 0; side.knockY = 0;
+    }
+    expect(sideHits).toBe(1);
+    expect(pathHits).toBe(1);
+    const cut = Number(ITEMS.get("dash_slash")!.params["wake_share"]);
+    expect(hurt(side)).toBeLessThan(hurt(onPath) * (cut + 0.05));
+    expect(w.player.hearts).toBe(hearts);
+  });
+});
+
 describe("stance (Counter Stance)", () => {
   const item = ITEMS.get("counter_stance")!;
   const full = Math.floor(Number(item.params["damage"]) * SPELL_DAMAGE_SCALE);

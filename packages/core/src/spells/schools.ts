@@ -27,7 +27,7 @@ export const SCHOOL_OF: Readonly<Record<string, SpellSchool>> = {
   mana_darts: "void", arcane_cannon: "void", doom_sigil: "void",
   frozen_orb: "frost", contagion: "venom", meteor: "flame",
   quake_ring: "stone", leap_slam: "stone",
-  ball_lightning: "storm", returning_edge: "spirit", crescent_edge: "spirit", counter_stance: "spirit",
+  ball_lightning: "storm", returning_edge: "spirit", crescent_edge: "spirit", counter_stance: "spirit", dash_slash: "spirit",
   cinder_stride: "flame", toxic_cloud: "venom",
 };
 

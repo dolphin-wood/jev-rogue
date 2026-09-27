@@ -1123,9 +1123,18 @@ function score(
    * candidate step is taken the ring has moved.
    */
   for (const s of w.shockwaves) {
-    if (!s.alive) continue;
+    // The player's own wake is no threat, and a wake that has landed is spent.
+    if (!s.alive || s.byPlayer || s.wake?.struck) continue;
     const d = Math.hypot(s.x - x, s.y - y);
     const lead = s.chargeMs > 0 ? 0 : (s.speed * SHOCK_LOOKAHEAD_MS) / 1000;
+    // A straight edge (a cleave's, a wake's stretch) is a band along its line, only as wide as it is.
+    if (s.facing !== undefined && s.width !== undefined) {
+      const along = (x - s.x) * Math.cos(s.facing) + (y - s.y) * Math.sin(s.facing);
+      const across = -(x - s.x) * Math.sin(s.facing) + (y - s.y) * Math.cos(s.facing);
+      if (Math.abs(across) <= s.width / 2 + PLAYER_RADIUS + 4
+        && along >= s.inner - PLAYER_RADIUS && along <= s.inner + s.thickness + lead + PLAYER_RADIUS) cost += 320;
+      continue;
+    }
     // A sword wave is one arc of the ring; outside its arc is safe, and is the answer.
     if (s.facing !== undefined && s.half !== undefined) {
       let off = Math.atan2(y - s.y, x - s.x) - s.facing;

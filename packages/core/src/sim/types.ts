@@ -779,6 +779,60 @@ export interface Shockwave {
    * out from (x, y), and does not widen as it goes.
    */
   width?: number;
+  /**
+   * The wake it is one stretch of (`layWake`): a run leaves many short edges
+   * either side of it, one for each stretch of ground it crosses, and they
+   * are one attack — the first to catch the player spends all of them.
+   */
+  wake?: WakeGroup;
+  /**
+   * A wake the **player** laid (the Dash Slash, `layWake`): it cuts the
+   * bodies it crosses rather than the player, once each across the whole
+   * wake, and never breaks stone.
+   */
+  byPlayer?: PlayerWakeCut;
+}
+
+/** The stretches of one wake, which strike as one (`Shockwave.wake`). */
+export interface WakeGroup {
+  struck: boolean;
+}
+
+/** What a player's wake cuts with, shared by every stretch of it. */
+export interface PlayerWakeCut {
+  damage: number;
+  element: string;
+  powers: ElementPowers;
+  proc: number;
+  statusMult: number;
+  spellIndex: number;
+  /** Bodies already cut by this wake, by id: one cut each, however many stretches cross them. */
+  hits: number[];
+}
+
+/**
+ * **A wake being laid** (`layWake`): where the next stretch starts, which way
+ * the run is going, and what each stretch is. The run drops a stretch every
+ * `stepPx` it covers, centred where it now is, so each edge sets off the
+ * moment the runner passes — the wake unfolds behind the runner rather than
+ * appearing along the whole line at once.
+ */
+export interface WakeTrail {
+  fromX: number;
+  fromY: number;
+  dirX: number;
+  dirY: number;
+  stepPx: number;
+  /** How far off the line each edge rolls, px, from `inner`. */
+  reachPx: number;
+  inner: number;
+  thick: number;
+  speed: number;
+  damage: number;
+  /** Stretches laid so far. */
+  laid: number;
+  group: WakeGroup;
+  byPlayer?: PlayerWakeCut;
 }
 
 /**
@@ -1045,9 +1099,8 @@ export interface Enemy {
    * misses ends there rather than in the far wall.
    */
   dashLeftPx: number;
-  /** Where the dashcut's run started, for the wake it leaves in phase III (`bossDashWake`). */
-  dashFromX: number;
-  dashFromY: number;
+  /** The wake the dashcut's run is laying in phase III (`bossDashWake`), or null. */
+  dashWake: WakeTrail | null;
   /** The hop back before the dashcut's windup, ms left (`stepBossHop` in world.ts). */
   bossHopMs: number;
   /** Distance to the player last step, for choices that depend on range. */
@@ -1705,6 +1758,12 @@ export interface Player {
   strikeProc: number;
   strikeStatusMult: number;
   strikeHits: number[];
+  /**
+   * The wake a Dash Slash is laying as it goes (`layWake`), or null: the
+   * sword held out ahead through the run, and either side of it the cut's
+   * edge rolling off the line, one short stretch for every stretch run.
+   */
+  strikeWake: WakeTrail | null;
   /**
    * How long the player is still sliding, in ms.
    *

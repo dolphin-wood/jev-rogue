@@ -7829,6 +7829,33 @@ export class PlayScene extends Phaser.Scene {
     // A leap cuts nothing on the way (doc 006), so it draws no cut along the floor.
     if (p.strikeMs <= 0 || p.landing) return;
     const g = this.fxTopGfx;
+    if (p.strikeWake) {
+      /*
+       * **A Dash Slash**: the sword held out ahead through the run, a blade of
+       * the spell's light pointing the way the player goes — tapered to the
+       * point, white along its spine — with the streak behind it. Its wake is
+       * the ground's (`drawShockwaves`).
+       */
+      const slot = p.strikeWake.byPlayer ? w.spells[p.strikeWake.byPlayer.spellIndex] : null;
+      const look = spellLookOf(slot?.item.base ?? "dash_slash", "none");
+      const ux = p.dashX, uy = p.dashY, nx = -uy, ny = ux;
+      const bx = p.x + ux * 4, by = p.y - BODY_LIFT + uy * 4;
+      const reach = 30;
+      for (const [half, colour, alpha] of [[5, look.glow, 0.35], [3, look.glow, 0.85], [1.2, look.core, 1]] as const) {
+        g.fillStyle(colour, alpha);
+        g.beginPath();
+        g.moveTo(bx + nx * half, by + ny * half);
+        g.lineTo(bx + ux * reach, by + uy * reach);
+        g.lineTo(bx - nx * half, by - ny * half);
+        g.closePath();
+        g.fillPath();
+      }
+      g.lineStyle(5, look.glow, 0.3);
+      g.lineBetween(p.x - ux * 34, p.y - uy * 34 - BODY_LIFT, p.x, p.y - BODY_LIFT);
+      g.lineStyle(2, look.core, 0.8);
+      g.lineBetween(p.x - ux * 34, p.y - uy * 34 - BODY_LIFT, p.x, p.y - BODY_LIFT);
+      return;
+    }
     const len = 34;
     g.lineStyle(6, 0xffe9a8, 0.35);
     g.lineBetween(p.x - p.dashX * len, p.y - p.dashY * len - BODY_LIFT, p.x, p.y - BODY_LIFT);
@@ -14029,11 +14056,22 @@ export class PlayScene extends Phaser.Scene {
      */
     for (const s of w.shockwaves) {
       if (s.alive && s.facing !== undefined && s.width !== undefined) {
-        // The greatcleave's edge: a blade standing on the floor, running along the cut (`drawEdgeWave`).
+        /*
+         * The greatcleave's edge: a blade standing on the floor, running along the cut (`drawEdgeWave`).
+         * A wake's stretches (`layWake`) are the same edge cut short, many side by side: each lower, and
+         * fading over its own short roll, so together they are one edge opening out behind the run. The
+         * player's is in the light of the spell that laid it; the king's in the danger palette.
+         */
+        const wake = s.wake !== undefined;
+        // A stretch's roll is short, so it fades over its last tile rather than the cleave's three.
+        const roll = wake ? TILE_PX : TILE_PX * 3;
+        const slot = s.byPlayer ? w.spells[s.byPlayer.spellIndex] : null;
+        const look = s.byPlayer ? spellLookOf(slot?.item.base ?? "dash_slash", "none") : null;
         drawEdgeWave(this.soilGfx, {
-          x: s.x, y: s.y, facing: s.facing, back: s.inner, front: s.inner + s.thickness, width: s.width,
-          rise: 26, life: Math.max(0, Math.min(1, (s.maxRadius - s.inner) / (TILE_PX * 3))),
-          tick: w.tick, seed: Math.round(s.x + s.y) % 97, palette: KING_WAVE,
+          // A stretch drawn a little wider than it hits, so neighbours overlap into one edge.
+          x: s.x, y: s.y, facing: s.facing, back: s.inner, front: s.inner + s.thickness, width: wake ? s.width + 4 : s.width,
+          rise: wake ? (s.byPlayer ? 12 : 18) : 26, life: Math.max(0, Math.min(1, (s.maxRadius - s.inner) / roll)),
+          tick: w.tick, seed: Math.round(s.x + s.y) % 97, palette: look ? wavePalette(look.glow, look.core) : KING_WAVE,
         });
         continue;
       }

@@ -59,7 +59,7 @@ import type { Destructible } from "./props.ts";
 import type { SpellSlot } from "./spells.ts";
 import type { BulletEmission } from "../encounters/patterns.ts";
 import { turnToward } from "./aim.ts";
-import { ARM_TELE_MS, castArm, castRift, castRanged, castShockwave, dragStep, interruptToll, lineToWall, onExpansionDeath, shockwaveHits, spendWard, stepAttacks } from "./attacks.ts";
+import { ARM_TELE_MS, castArm, castRift, castRanged, castShockwave, dragStep, interruptToll, layWake, lineToWall, onExpansionDeath, shockwaveHits, spendWard, stepAttacks } from "./attacks.ts";
 import type { AttackHooks } from "./attacks.ts";
 import { computeFlowField, tileOf } from "./flow.ts";
 import {
@@ -516,7 +516,7 @@ export function createWorld(input: CreateWorldOptions): World {
       burnBuild: 0, poisonBuild: 0, burnFedMs: 0, poisonFedMs: 0, burnMs: 0, poisonMs: 0, dotTickMs: 0,
       rage: Math.max(0, Math.min(o.mods?.rageMax ?? Infinity, o.rage ?? 0)), swingStretch: 1, spinTurn: 0, spinBufferMs: 0, spellBuffer: -1, spellBufferMs: 0,
       strikeMs: 0, strikeDamage: 0, strikeRadius: 0,
-      strikeElement: "none" as const, strikeElementPower: 1, strikePowers: noPowers(), strikeProc: 1, strikeStatusMult: 1, strikeHits: [],
+      strikeElement: "none" as const, strikeElementPower: 1, strikePowers: noPowers(), strikeProc: 1, strikeStatusMult: 1, strikeHits: [], strikeWake: null,
       stunMs: 0, dragMs: 0, dragX: 0, dragY: 0, slipMs: 0, slideX: 0, slideY: 0,
       swingMs: 0, swingFacing: 0, swung: false, chainMs: 0, swingRun: 0, swingBreathMs: 0,
       trail: null, enchant: null, stance: null,
@@ -730,7 +730,7 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   stepAttacks(w, dtMs, attackHooks(w));
   // A travelling band — the slam's, a sword wave — breaks the stone it runs into, once a wave each.
   for (const s of w.shockwaves) {
-    if (!s.alive || s.chargeMs > 0) continue;
+    if (!s.alive || s.chargeMs > 0 || s.byPlayer) continue;
     s.propsStruck ??= [];
     bossStrikesProps(w, (q) => shockwaveHits(s, q.x, q.y, q.radius), s.propsStruck, BOSS_PROP_WAVE_DAMAGE);
   }
@@ -5135,8 +5135,14 @@ function stepDashStrike(w: World, dtMs: number): void {
     }
     w.freeStrikes = [];
   }
+  stepPlayerWakes(w);
   if (p.strikeMs <= 0) return;
   p.strikeMs -= dtMs;
+  // A Dash Slash's wake, laid where the player has got to; the rest of it as the run ends.
+  if (p.strikeWake) {
+    layWake(w, p.strikeWake, p.x, p.y, p.strikeMs <= 0);
+    if (p.strikeMs <= 0) p.strikeWake = null;
+  }
   /*
    * A `land` dash comes down (doc 006): the ring goes off where the player
    * actually is when the travel ends, which a wall may have made short of
@@ -5154,6 +5160,8 @@ function stepDashStrike(w: World, dtMs: number): void {
     if (!isActive(e) || e.hp <= 0 || p.strikeHits.includes(e.id)) continue;
     if (!circlesOverlap(p.x, p.y, PLAYER_RADIUS + p.strikeRadius, e.x, e.y, e.radius)) continue;
     p.strikeHits.push(e.id);
+    // A body the run itself cut is not cut again by its wake: the wake is for the ground beside the run.
+    p.strikeWake?.byPlayer?.hits.push(e.id);
     wake(w, e);
     hurtEnemy(w, e, p.strikeDamage, p.strikeElement !== "none" ? p.strikeElement : "", p);
     w.stats.damageDealt += p.strikeDamage;
@@ -5166,6 +5174,34 @@ function stepDashStrike(w: World, dtMs: number): void {
     impact(w, HITSTOP_HIT, TRAUMA_HIT);
     w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: e.archetype, amount: p.strikeDamage });
     emit(w, e.x, e.y, "hit", 4);
+  }
+}
+
+/**
+ * **A player's wake** (the Dash Slash, `layWake`): each stretch cuts the
+ * bodies its band crosses, once each across the whole wake, and shoves them
+ * on the way it is rolling. Stone stops it as it stops the king's.
+ */
+function stepPlayerWakes(w: World): void {
+  for (const s of w.shockwaves) {
+    const cut = s.byPlayer;
+    if (!cut || !s.alive || s.chargeMs > 0) continue;
+    for (const e of w.enemies) {
+      if (!isActive(e) || e.hp <= 0 || e.airborne || cut.hits.includes(e.id)) continue;
+      if (!shockwaveHits(s, e.x, e.y, e.radius) || !hasLineOfSight(w.room.grid, s.x, s.y, e.x, e.y)) continue;
+      cut.hits.push(e.id);
+      wake(w, e);
+      hurtEnemy(w, e, cut.damage, cut.element !== "none" ? cut.element : "", s);
+      w.stats.damageDealt += cut.damage;
+      applyElementsTo(e, cut.powers, cut.statusMult, cut.proc);
+      e.hitFlashMs = HIT_FLASH_MS;
+      const push = 160 / Math.max(1, e.radius / 10);
+      e.knockX += Math.cos(s.facing ?? 0) * push;
+      e.knockY += Math.sin(s.facing ?? 0) * push;
+      impact(w, HITSTOP_HIT, TRAUMA_HIT);
+      w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: e.archetype, amount: cut.damage });
+      emit(w, e.x, e.y, "hit", 4);
+    }
   }
 }
 

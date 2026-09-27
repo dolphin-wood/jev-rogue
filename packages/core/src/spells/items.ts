@@ -790,6 +790,33 @@ const ATTACKS: readonly BaseItem[] = [
       "Counter Stance raises a short guard that slows the caster and holds the sword; the next hit that would land is cancelled and answered with a spin slash that staggers. Untouched, it answers at a fraction as it ends.",
   },
   {
+    id: "dash_slash",
+    rarity: "uncommon",
+    tags: ["attack", "short", "none", "melee"],
+    mana: 4,
+    params: {
+      /*
+       * A `dash` with a **wake** (`wake_reach`), after Minish Cap's dash
+       * attack: the sword held out ahead through a short run, cutting each
+       * body it passes once, and either side of the line the cut's edge
+       * rolls off it — a stretch every `wake_step` px, each set off as the
+       * player passes, out `wake_reach` px at `wake_speed` — cutting each
+       * body it crosses at `wake_share` of the run's cut — a body the run
+       * itself cut is not cut again. Where Blink Strike is a line, this is
+       * a line and the ground beside it: a pack that parts round the player
+       * is still cut. Aimed and committed to, so the middle of the band,
+       * held down by the pack as the other dashes are; measured, a wake that
+       * cut the run's own bodies a second time put its pack at eight times
+       * its single, past every other dash.
+       */
+      shape: "dash", damage: 10.5, speed: 0, radius: 12, count: 1, spread: 0, lifetime: 0.26,
+      pierce: 0, element: "none", seek: 0, curve: 0, weight: 1.1, windup_ms: 40, recover_ms: 140,
+      wake_reach: 40, wake_share: 0.55, wake_step: 10, wake_speed: 240, wake_thick: 12,
+    },
+    description:
+      "Dash Slash runs the caster a short way forward with the sword held out, cutting each body passed through; the cut's edge rolls off either side of the run and cuts what it crosses. The run cannot be hit.",
+  },
+  {
     id: "cinder_stride",
     rarity: "uncommon",
     tags: ["attack", "short", "fire", "dot"],

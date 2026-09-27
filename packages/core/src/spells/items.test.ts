@@ -13,10 +13,10 @@ import { BASE_ITEMS, ITEMS, STYLE_START, plainInstance } from "./items.ts";
  * stance, cinder stride, toxic cloud). Every item is a self-contained spell:
  * nothing in the pool modifies another.
  */
-const ATTACKS = 39;
+const ATTACKS = 40;
 
 describe("base items (doc 013 and doc 010)", () => {
-  it("ships exactly the thirty-nine attacks", () => {
+  it("ships exactly the forty attacks", () => {
     expect(BASE_ITEMS).toHaveLength(ATTACKS);
     expect(ITEMS.size).toBe(ATTACKS);
   });
