@@ -3,7 +3,7 @@ id: 022
 title: The King's First Audience
 status: proposed
 date: 2026-09-27
-summary: The Crypt King is met twice. In room 5, the last fight of the ossuary, he drops out of the roof into an ordinary fight, and his landing kills the bodies under it, each of which spills a heart for the player. That first audience is phase I alone. At 60% of its bar the armour breaks and he goes back up out of the room, and the room pays its door's reward a grade higher. The final fight in the throne hall starts where the first one stopped, with the armour already gone. Phases II and III are stretched over a full bar that is larger than the one they had before. It takes the place of the guardian that seam would have held, not a room of its own, so the run is no longer and the count of fights is unchanged. Placed at room 5 rather than 10 because real players die before room 8: the meeting comes to every run, and its peak buys room 6 as the trough at the ramp's steepest step. Code decides all of it. The one Jev question the room keeps is its door's reward.
+summary: The Crypt King is met twice. In room 5, the last fight of the ossuary, he drops out of the roof into an ordinary fight, and his landing kills every body in the room, which spill enough hearts to fill the player's bar and three more that stay on the floor. That first audience is phase I alone. At 60% of its bar the armour breaks and he goes back up out of the room, and the room pays its door's reward a grade higher. The final fight in the throne hall starts where the first one stopped, with the armour already gone. Phases II and III are stretched over a full bar that is larger than the one they had before. It takes the place of the guardian that seam would have held, not a room of its own, so the run is no longer and the count of fights is unchanged. Placed at room 5 rather than 10 because real players die before room 8: the meeting comes to every run, and its peak buys room 6 as the trough at the ramp's steepest step. Code decides all of it. The one Jev question the room keeps is its door's reward.
 depends_on: [003, 005, 014, 019, 020]
 ---
 
@@ -78,32 +78,42 @@ reward badge like any other, and the room fills like any other.
    encounter itself, the way it builds the boss room's. It is one round of the
    `build` band with no subspecies share and no elites, and the room's later
    waves are never queued. These bodies are there to be crushed.
-2. **The roof gives.** The king comes once the player has killed two bodies,
-   or 8 s after the room opens, whichever comes first. His mark goes down the
-   way the meteor's landing mark does (`BOSS_METEOR_LAND_TELL_MS`, three beats).
-   Code places it on the densest cluster of the room's bodies, **at least
-   `BOSS_METEOR_LAND_PX` plus two tiles from the player**. The first landing is
-   a spectacle, not a test: the player is never under it. A player who has read
-   the mark can pull more bodies onto it.
+2. **The roof gives** once the player has killed **one** body, or 5 s after the
+   room opens, whichever comes first. Nothing the player does before this can
+   cost them anything, since step 3 heals it all back. So the opening stretch
+   is pure setup: it exists to make room 5 look like room 4, so that the roof
+   giving is a surprise and not a cutscene the door announced. One kill is
+   enough to set that up. Two can take a room-5 build most of the 5 s. His mark
+   goes down the way the meteor's landing mark does (`BOSS_METEOR_LAND_TELL_MS`,
+   three beats), in view, **at least `BOSS_METEOR_LAND_PX` plus two tiles from
+   the player**.
 3. **The landing** is the meteor's landing, reused: the hitstop, the shake,
-   the dust, the band (`bossShock`). It **kills every non-boss body within
-   `BOSS_CRASH_KILL_PX`** (four tiles), and the band kills each body it
-   crosses. Each body he kills this way drops **one heart**, capped at
-   `CRASH_HEARTS_MAX = 3` for the room. The king kills bodies. The player
-   collects what spills out of them.
+   the dust, the band (`bossShock`). **It kills every other body in the room**,
+   in view or not. This is his entrance, and the fight after it is his alone.
+   - **The entrance band does not hurt the player.** It is a spectacle, not a
+     test. The first band that costs anything is the one his first slam
+     throws in phase I.
    - Bodies he kills pay **no experience**, the same rule as a summoned body
-     (`xpForKill`). The player did not kill them. A crushed body can drop a
-     heart, but it cannot give a level.
-   - The band still hurts the player, at the first audience's power (below).
-     The player learned to dash it in phase I, and it is the first thing they
-     are asked in this fight.
-4. **The survivors stay.** Bodies outside the radius, and any the band missed,
-   keep fighting as the king's adds. There are few of them, by the rule in step
-   1 and the kill in step 3, and they are ordinary bodies the player already
-   knows. They do not come back once they die. `worldCleared` waits on the king,
-   not on them.
+     (`xpForKill`). The player did not kill them.
+4. **The hearts.** Out of the bodies comes **enough health to fill the
+   player's bar, plus `CRASH_HEARTS_SPARE = 3` more**. The count is set by what
+   the player is missing, not by how many bodies there were: `missing + 3`
+   hearts, shared among the corpses (a room with fewer bodies than hearts
+   throws several from each).
+   - The ones that fill the bar **fly to the player** (the cleared room's pull,
+     `VACUUM_SPEED`) while his name is up. So the player starts phase I on a
+     full bar, and never has to walk round the room while the king stands.
+   - **The spare three stay on the floor as the fight's reserve.** They do not
+     expire while he is in the room (`PICKUP_LIFETIME_MS` is suspended for
+     them), and they **can't be picked up on a full bar**. At the moment a
+     heart touched on a full bar is spent for nothing, and the spare three
+     would be lost to the first step the player took. So stepping onto a spare
+     heart is a choice the player makes when hurt, and where the hearts lie is
+     part of the arena.
+   - `CRASH_HEARTS_SPARE` is a starting figure. It is about three of phase I's
+     blows at the room-5 band, and `boss-bench` and the playtest logs set it.
 5. **His name** comes up as it does in the hall (`showKingName`), and after a
-   beat the fight is phase I as doc 020 wrote it.
+   beat the fight is phase I as doc 020 wrote it. Nothing else is in the room.
 
 ## The first audience
 
@@ -117,7 +127,7 @@ here and is not asked again.
 | Bar | `KING_AUDIENCE_HP`, spent down to the retreat | `KING_FINAL_HP`, all of it |
 | Phase thresholds | none. At `KING_RETREAT_AT` he leaves | II from full, III at `KING_FINAL_III_AT` |
 | Power | the room-5 ramp band's (body damage ×1, hit damage ×0.8) | the boss band's (×2.05), unchanged |
-| Adds | the survivors of the landing | doc 005's phase II call, unchanged |
+| Adds | none. The landing killed them | doc 005's phase II call, unchanged |
 | Pays | the door's reward, one grade higher | the run |
 | Losing | the run ends, as dying anywhere does | the run ends |
 
@@ -144,8 +154,8 @@ come down. His mark never shows.
 
 - He is untouchable from the roar onward (`bossRoarMs`), so the retreat can't
   be burst through for a kill.
-- The surviving adds collapse when he leaves (`dropToken`, "the boss's adds go
-  with it"). The room clears, and the reward rises.
+- The room clears when he is gone, and the reward rises. Any spare hearts
+  still lying there are vacuumed to the player with the coins.
 - The results trace records the audience: time taken, hearts lost, whether he
   was driven off (always, unless the player died).
 
@@ -208,7 +218,7 @@ boss, and doc 002 does not ask a question with one answer.
 |---|---|
 | `encounters/enemies.ts` | `KING_AUDIENCE_HP`, `KING_RETREAT_AT`, `KING_FINAL_HP`, `KING_FINAL_III_AT`. A **boss script** (`"audience" \| "final"`) the boss body carries, read by `bossPhaseAt` for its thresholds |
 | `sim/enemy.ts` | `stepBossPhase`: under `audience`, the threshold at `KING_RETREAT_AT` roars and then retreats instead of entering phase II. Under `final`, the body is made at phase 2 with no roar |
-| `sim/world.ts` | the drop-in: trigger (two kills or 8 s), mark placement, landing, the crush (`BOSS_CRASH_KILL_PX`, the band), crushed bodies' hearts (`CRASH_HEARTS_MAX`), no experience, `worldCleared` waiting on the king, not the queue |
+| `sim/world.ts` | the drop-in: trigger (one kill or 5 s), mark placement, landing, the room-wide crush, `missing + CRASH_HEARTS_SPARE` hearts (the missing ones pulled to the player, the spare ones held on the floor, not expiring and not taken on a full bar), no experience, `worldCleared` waiting on the king, not the queue |
 | `run/doors.ts` | `RUN_AUDIENCE_ROOM = 5`. `stageFor` returns `"audience"`. `portalChoices` out of room 4 forbids elite, vendor and fountain |
 | `run/offer.ts` | room 5's offer at door grade + 1 |
 | `rooms/` | room 5 planned from a boss archetype in the room's biome, no round-2 questions |
@@ -220,11 +230,15 @@ boss, and doc 002 does not ask a question with one answer.
 
 - The first landing never touches the player, from any position at the moment
   of the trigger.
-- Crushed bodies pay no experience, and the hearts they drop never exceed
-  `CRASH_HEARTS_MAX`.
+- Crushed bodies pay no experience. Every other body in the room is dead after
+  the landing.
+- After the landing and the pull, the player is on a full bar, and exactly
+  `CRASH_HEARTS_SPARE` hearts lie on the floor. A full bar does not take them,
+  and they outlive `PICKUP_LIFETIME_MS`.
+- The entrance band never hurts the player.
 - The audience can't take the king below `KING_RETREAT_AT` of its bar. Every
   hit after the roar reads `boss_immune`.
-- The room clears when he leaves, even with adds alive.
+- The room clears when he leaves.
 - The doors out of room 4 never offer elite, vendor or fountain.
 - The final king starts at phase 2 and enters phase 3 at `KING_FINAL_III_AT`.
   No phase II call fires at spawn.
