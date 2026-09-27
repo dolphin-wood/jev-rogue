@@ -68,7 +68,8 @@ import { bodyFeel, weightOf } from "./body-feel.ts";
 import { heldStaff, staffSpriteCentre, swingStaff, type HeldStaff } from "./blade.ts";
 import type { BodyFeel } from "./body-feel.ts";
 import { BOSS_CRESCENT, drawCrescent, ENEMY_CRESCENT, PLAYER_CRESCENT } from "./crescent.ts";
-import { drawCrescentWave, drawEdgeWave, impactFrame, mix, wavePalette, waveTrailPoints } from "./wave-art.ts";
+import { drawCrescentWave, drawEdgeWave, drawWakeRibbon, impactFrame, mix, wavePalette, waveTrailPoints } from "./wave-art.ts";
+import type { WakeStretch } from "./wave-art.ts";
 import { drawCrackle, drawProjectile } from "./projectiles.ts";
 import { equipKeepingOthers } from "./equip-keys.ts";
 import { SHADOW_INK, drawLeapShadow, drawMeteorShadow } from "./spell-marks.ts";
@@ -14056,22 +14057,13 @@ export class PlayScene extends Phaser.Scene {
      */
     for (const s of w.shockwaves) {
       if (s.alive && s.facing !== undefined && s.width !== undefined) {
-        /*
-         * The greatcleave's edge: a blade standing on the floor, running along the cut (`drawEdgeWave`).
-         * A wake's stretches (`layWake`) are the same edge cut short, many side by side: each lower, and
-         * fading over its own short roll, so together they are one edge opening out behind the run. The
-         * player's is in the light of the spell that laid it; the king's in the danger palette.
-         */
-        const wake = s.wake !== undefined;
-        // A stretch's roll is short, so it fades over its last tile rather than the cleave's three.
-        const roll = wake ? TILE_PX : TILE_PX * 3;
-        const slot = s.byPlayer ? w.spells[s.byPlayer.spellIndex] : null;
-        const look = s.byPlayer ? spellLookOf(slot?.item.base ?? "dash_slash", "none") : null;
+        // A wake's stretches are drawn together, as one edge per side, below.
+        if (s.wake) continue;
+        // The greatcleave's edge: a blade standing on the floor, running along the cut (`drawEdgeWave`).
         drawEdgeWave(this.soilGfx, {
-          // A stretch drawn a little wider than it hits, so neighbours overlap into one edge.
-          x: s.x, y: s.y, facing: s.facing, back: s.inner, front: s.inner + s.thickness, width: wake ? s.width + 4 : s.width,
-          rise: wake ? (s.byPlayer ? 12 : 18) : 26, life: Math.max(0, Math.min(1, (s.maxRadius - s.inner) / roll)),
-          tick: w.tick, seed: Math.round(s.x + s.y) % 97, palette: look ? wavePalette(look.glow, look.core) : KING_WAVE,
+          x: s.x, y: s.y, facing: s.facing, back: s.inner, front: s.inner + s.thickness, width: s.width,
+          rise: 26, life: Math.max(0, Math.min(1, (s.maxRadius - s.inner) / (TILE_PX * 3))),
+          tick: w.tick, seed: Math.round(s.x + s.y) % 97, palette: KING_WAVE,
         });
         continue;
       }
@@ -14086,6 +14078,35 @@ export class PlayScene extends Phaser.Scene {
       const back = { x: -Math.cos(s.facing), y: -Math.sin(s.facing) };
       for (const q of waveTrailPoints(wave, Math.random() < 0.7 ? 2 : 1))
         this.shed({ x: q.x, y: q.y, vx: back.x * (20 + Math.random() * 30) + (Math.random() - 0.5) * 24, vy: back.y * (20 + Math.random() * 30) + (Math.random() - 0.5) * 24 - 8, ms: 0, life: 200 + Math.random() * 160, size: 1, colour: Math.random() < 0.5 ? KING_WAVE.mid : KING_WAVE.aura, gravity: -10 });
+    }
+    /*
+     * **A run's wake** (`layWake`): its stretches are one attack laid a piece
+     * at a time, and are drawn as what they are — one edge each side, opening
+     * out behind the run (`drawWakeRibbon`), never a row of separate blades.
+     * The player's is in the light of the spell that laid it; the king's in
+     * the danger palette. Each stretch fades over its last tile of roll.
+     */
+    // One ribbon per wake and side: the two sides of a run roll out on opposite facings.
+    const wakes = new Map<string, { facing: number; player: number; stretches: WakeStretch[] }>();
+    const wakeIds = new Map<object, number>();
+    for (const s of w.shockwaves) {
+      if (!s.alive || !s.wake || s.facing === undefined || s.width === undefined) continue;
+      if (!wakeIds.has(s.wake)) wakeIds.set(s.wake, wakeIds.size);
+      const key = `${wakeIds.get(s.wake)}:${Math.round(s.facing * 100)}`;
+      let entry = wakes.get(key);
+      if (!entry) wakes.set(key, entry = { facing: s.facing, player: s.byPlayer ? s.byPlayer.spellIndex : -2, stretches: [] });
+      entry.stretches.push({
+        x: s.x, y: s.y, inner: s.inner, thick: s.thickness, width: s.width,
+        life: Math.max(0, Math.min(1, (s.maxRadius - s.inner) / TILE_PX)),
+      });
+    }
+    for (const v of wakes.values()) {
+      const look = v.player > -2 ? spellLookOf(w.spells[v.player]?.item.base ?? "dash_slash", "none") : null;
+      drawWakeRibbon(this.soilGfx, {
+        stretches: v.stretches, facing: v.facing, rise: look ? 12 : 18, trail: look ? 26 : 34, tick: w.tick,
+        seed: Math.round(v.stretches[0]!.x + v.stretches[0]!.y) % 97,
+        palette: look ? wavePalette(look.glow, look.core) : KING_WAVE,
+      });
     }
     /*
      * The king's chain (doc 020). While it lies on the floor, the ground its

@@ -5167,11 +5167,26 @@ function stepDashStrike(w: World, dtMs: number): void {
     w.stats.damageDealt += p.strikeDamage;
     applyElementsTo(e, p.strikePowers, p.strikeStatusMult, p.strikeProc);
     e.hitFlashMs = HIT_FLASH_MS;
-    const d = Math.hypot(e.x - p.x, e.y - p.y) || 1;
-    const push = 260 / Math.max(1, e.radius / 10);
-    e.knockX += ((e.x - p.x) / d) * push;
-    e.knockY += ((e.y - p.y) / d) * push;
-    impact(w, HITSTOP_HIT, TRAUMA_HIT);
+    const cut = p.strikeWake?.byPlayer;
+    if (cut && cut.knock > 0) {
+      /*
+       * **A Dash Slash throws the body off its line**, square to the run, to
+       * whichever side it was on, hard: the pack parts round the player and
+       * into the wake coming off either side.
+       */
+      const side = Math.sign(-p.dashY * (e.x - p.x) + p.dashX * (e.y - p.y)) || (e.id % 2 ? 1 : -1);
+      const push = cut.knock / Math.max(1, e.radius / 10);
+      e.knockX += -p.dashY * side * push + p.dashX * push * 0.25;
+      e.knockY += p.dashX * side * push + p.dashY * push * 0.25;
+      if (cut.weight >= SPELL_STAGGER_WEIGHT) spellStagger(w, e, cut.weight);
+      impact(w, HITSTOP_HIT * 1.6, TRAUMA_HIT * 1.5);
+    } else {
+      const d = Math.hypot(e.x - p.x, e.y - p.y) || 1;
+      const push = 260 / Math.max(1, e.radius / 10);
+      e.knockX += ((e.x - p.x) / d) * push;
+      e.knockY += ((e.y - p.y) / d) * push;
+      impact(w, HITSTOP_HIT, TRAUMA_HIT);
+    }
     w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: e.archetype, amount: p.strikeDamage });
     emit(w, e.x, e.y, "hit", 4);
   }
@@ -5195,9 +5210,11 @@ function stepPlayerWakes(w: World): void {
       w.stats.damageDealt += cut.damage;
       applyElementsTo(e, cut.powers, cut.statusMult, cut.proc);
       e.hitFlashMs = HIT_FLASH_MS;
-      const push = 160 / Math.max(1, e.radius / 10);
+      // On the way the wake rolls, off the run: as hard as the spell's shove, a little under the run's own.
+      const push = Math.max(160, cut.knock * 0.8) / Math.max(1, e.radius / 10);
       e.knockX += Math.cos(s.facing ?? 0) * push;
       e.knockY += Math.sin(s.facing ?? 0) * push;
+      if (cut.weight >= SPELL_STAGGER_WEIGHT) spellStagger(w, e, cut.weight);
       impact(w, HITSTOP_HIT, TRAUMA_HIT);
       w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: e.archetype, amount: cut.damage });
       emit(w, e.x, e.y, "hit", 4);

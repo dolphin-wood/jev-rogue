@@ -808,9 +808,15 @@ const ATTACKS: readonly BaseItem[] = [
        * held down by the pack as the other dashes are; measured, a wake that
        * cut the run's own bodies a second time put its pack at eight times
        * its single, past every other dash.
+       *
+       * `knock` is its shove, and it is heavy: a body the run cuts is thrown
+       * about two tiles off the line (the knock decays to 0.82 a step, so a
+       * body travels about a twelfth of it in px), one the wake cuts a tile
+       * and a half the way the wake rolls, and both are staggered by the
+       * weight. A Dash Slash is how a pack in the way is opened up.
        */
       shape: "dash", damage: 10.5, speed: 0, radius: 12, count: 1, spread: 0, lifetime: 0.26,
-      pierce: 0, element: "none", seek: 0, curve: 0, weight: 1.1, windup_ms: 40, recover_ms: 140,
+      pierce: 0, element: "none", seek: 0, curve: 0, weight: 1.3, knock: 720, windup_ms: 40, recover_ms: 140,
       wake_reach: 40, wake_share: 0.55, wake_step: 10, wake_speed: 240, wake_thick: 12,
     },
     description:

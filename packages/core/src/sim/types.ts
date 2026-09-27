@@ -808,6 +808,14 @@ export interface PlayerWakeCut {
   spellIndex: number;
   /** Bodies already cut by this wake, by id: one cut each, however many stretches cross them. */
   hits: number[];
+  /**
+   * The shove, px/s before a body's size divides it: the run's cut throws a
+   * body off its line, the wake throws it on the way the wake rolls. Heavy
+   * on purpose — a Dash Slash parts a pack.
+   */
+  knock: number;
+  /** Heavy enough, it staggers what it cuts (`spellStagger`). */
+  weight: number;
 }
 
 /**

@@ -472,6 +472,36 @@ describe("dash with a wake (Dash Slash)", () => {
   });
 });
 
+describe("Dash Slash's shove", () => {
+  it("throws a body the run cuts well off the line, to its own side, and staggers it", () => {
+    const w = arena("dash_slash");
+    const e = body(w, 90, 6);
+    press(w, at(PX + 300, PY));
+    let staggered = false;
+    for (let i = 0; i < 60; i++) { step(w, at(PX + 300, PY)); staggered ||= e.staggerMs > 0; }
+    // Down the side it stood on, about two tiles, and far more than Blink Strike's nudge.
+    expect(e.y - (PY + 6)).toBeGreaterThan(40);
+    expect(staggered).toBe(true);
+
+    const b = arena("blink_strike");
+    const f = body(b, 90, 6);
+    press(b, at(PX + 300, PY));
+    for (let i = 0; i < 60; i++) step(b, at(PX + 300, PY));
+    expect(Math.abs(f.y - (PY + 6))).toBeLessThan((e.y - (PY + 6)) / 2);
+  });
+
+  it("throws a body its wake cuts on the way the wake rolls", () => {
+    const w = arena("dash_slash");
+    // A body dead ahead holds the run on its line, so the other is left to the wake.
+    const ahead = body(w, 110, 0);
+    const e = body(w, 70, -38);
+    press(w, at(PX + 300, PY), [ahead]);
+    for (let i = 0; i < 60; i++) run(w, at(PX + 300, PY), 1, [ahead], false);
+    expect(hurt(e)).toBeGreaterThan(0);
+    expect((PY - 38) - e.y).toBeGreaterThan(30);
+  });
+});
+
 describe("stance (Counter Stance)", () => {
   const item = ITEMS.get("counter_stance")!;
   const full = Math.floor(Number(item.params["damage"]) * SPELL_DAMAGE_SCALE);

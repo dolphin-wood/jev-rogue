@@ -675,7 +675,7 @@ export function fireUnit(
       thick: num(base.params, "wake_thick", 12), speed: num(base.params, "wake_speed", 240), damage: 0,
     }, {
       damage: damage * num(base.params, "wake_share", 0.5), element, powers: clonePowers(powers), proc, statusMult,
-      spellIndex: mods.spellIndex, hits: [],
+      spellIndex: mods.spellIndex, hits: [], knock: num(base.params, "knock", 0), weight,
     }) : null;
     p.facing = Math.atan2(dir.y, dir.x);
     shots.push({ x: from.x, y: from.y, family: base.id });
