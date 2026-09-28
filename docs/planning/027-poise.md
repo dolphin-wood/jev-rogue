@@ -3,7 +3,7 @@ id: 027
 title: Poise
 status: proposed
 date: 2026-09-28
-summary: Armour is gone. It was a pool of health on a few bodies that had to be spent before they could be interrupted, gone for good once spent, so a heavy body was unstoppable for two hits and could then be held in stagger to its death. Heavy bodies have poise instead. It is hidden and takes no health. Damage wears it, and a hit it holds through rings off it with sparks. The hit that wears it through breaks it into a long stagger and cancels what the body had started. Poise fills again after a short time unhit, and after a break the body can't be broken again for a while. The bellringer's ward now heals instead of shielding, and the armoured affix gives poise.
+summary: Armour is gone. It was a pool of health on a few bodies that had to be spent before they could be interrupted, gone for good once spent, so a heavy body was unstoppable for two hits and could then be held in stagger to its death. Heavy bodies have poise instead. It is hidden and takes no health. Damage wears it, and a hit it holds through rings off it with sparks. The hit that wears it through interrupts it, a short flinch that cancels what it had started; a stun is still a wall's. Poise fills again after a short time unhit, and after a break the body can't be broken again for a while. The bellringer's ward now heals instead of shielding, and the armoured affix gives poise.
 depends_on: [005, 013, 019, 024]
 ---
 
@@ -23,7 +23,7 @@ comes back.
 |---|---|
 | Who has it | only the heavy bodies (`POISE`): tank and breaker 24, warden and fusilier 16, the Frontier Veteran `GUARDIAN_POISE` (60); an `armored` elite doubles its body's poise, or gets `ARMORED_POISE` (18) if it has none. Everything else has none and is interrupted by any hit, as before |
 | What a hit does | all of its damage is health. The same damage wears the poise. A hit it holds through rings off it (`poise_hold`: steel sparks and the armour-hit sound) and does not interrupt it |
-| The break | the hit that wears it through knocks it into a `POISE_BREAK_STAGGER_MS` stagger and cancels its attack, windup or aim (`poise_break`: a ring, a spray, the break sound). Its poise is whole again |
+| The break | the hit that wears it through **interrupts** it: a `POISE_BREAK_STAGGER_MS` (0.35 s) flinch, longer than a hit's 0.19 s, that cancels its attack, windup or aim (`poise_break`: a ring, a spray, the break sound). Its poise is whole again. It is not a stun: the stun, the long window with its mark over the head, is a wall's (1.2 s) |
 | After a break | `POISE_GUARD_MS` past the stagger in which it can't be broken again: hits land, but they neither wear it nor interrupt it. It can't be held down |
 | Recovery | unhit for `POISE_RECOVER_MS`, it is whole again. A heavy body is broken by a burst, not by hits spread across a fight |
 | Shown | never as a bar. What a hit does is all the player is told. A visible bar would have to be a stagger bar, and most bodies die before one could matter |

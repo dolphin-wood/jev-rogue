@@ -707,8 +707,14 @@ function poiseOf(archetype: EnemyId, affixPoise: number): number {
 }
 /** Unhit this long, a body's poise is whole again: a heavy body is broken by pressure, not by hits spread across a fight. */
 export const POISE_RECOVER_MS = 1500;
-/** The stagger a break knocks it into: longer than a hit's, the opening the burst was for. */
-export const POISE_BREAK_STAGGER_MS = 700;
+/**
+ * **A break is an interrupt, not a stun.** The flinch it knocks the body into
+ * is longer than an ordinary hit's (`STAGGER_MS`) and cancels what it had
+ * started, but it stays under the knockdown's length: a stun — the long,
+ * helpless window with its mark over the head — is a wall's (`WALL_SLAM_STUN_MS`),
+ * and a break shown as one read as a body forever dazed.
+ */
+export const POISE_BREAK_STAGGER_MS = 350;
 /**
  * After a break, how long before it can be broken again, counted from the
  * end of the break's stagger: without it the next burst would break it again
