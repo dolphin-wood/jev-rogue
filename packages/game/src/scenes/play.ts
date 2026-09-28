@@ -2253,6 +2253,9 @@ export class PlayScene extends Phaser.Scene {
       viewHalf: { x: this.scale.width / this.worldZoom() / 2, y: this.scale.height / this.worldZoom() / 2 },
     });
     this.world = arena;
+    // A fresh clock: the assist's beat on the old one starts over (see `enterRoom`).
+    this.autoCaster.reset();
+    this.autoTargetId = null;
     this.world.spells.forEach((slot, i) => {
       if (!slot) return;
       let next = slot;
@@ -2496,6 +2499,13 @@ export class PlayScene extends Phaser.Scene {
     // The room that is ending banks its play time before its world is thrown
     // away; the game-over card adds the live room's own elapsed to it.
     if (this.world) this.runMs += this.world.stats.elapsedMs;
+    /*
+     * The new world's clock starts at 0, and the assist's beat is a time on
+     * the old one: kept, the first auto-cast of a room waited out about as
+     * long as the last room had run. A new room starts the beat afresh.
+     */
+    this.autoCaster.reset();
+    this.autoTargetId = null;
     this.world = createWorld({
       room, encounter, staff, slots,
       /*
