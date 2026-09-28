@@ -231,6 +231,7 @@ export function layWake(w: World, t: WakeTrail, x: number, y: number, final = fa
         maxRadius: t.inner + t.reachPx, damage: t.damage, facing: facing + side * Math.PI / 2, width: len,
       });
       s.wake = t.group;
+      s.wakeIndex = t.laid;
       if (t.byPlayer) s.byPlayer = t.byPlayer;
     }
     t.fromX += t.dirX * len;

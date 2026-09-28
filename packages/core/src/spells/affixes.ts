@@ -141,7 +141,13 @@ export type AffixEffect =
     readonly element?: Element; readonly power?: number;
   }
   /** A kill with this spell takes `fraction` off its cooldown. */
-  | { readonly kind: "haste"; readonly fraction: number };
+  | { readonly kind: "haste"; readonly fraction: number }
+  /** Each body a run's cut goes through carries the run on `px` further, `times` at most. */
+  | { readonly kind: "momentum"; readonly px: number; readonly times: number }
+  /** A run's wake draws bodies in to the run's line, at `pull` of its shove, instead of throwing them off. */
+  | { readonly kind: "undertow"; readonly pull: number }
+  /** A run ends by throwing its cut on ahead: a crescent at `share` of the cut, out `reachPx`. */
+  | { readonly kind: "finale"; readonly share: number; readonly reachPx: number };
 
 export interface AffixTier {
   readonly effect: AffixEffect;
@@ -171,6 +177,13 @@ export interface SpellAffix {
    * resolve, and inheriting is almost always right.
    */
   readonly element: Element | null;
+  /**
+   * **The least strength of door that deals it** (`affixStrengthFloor`), 1 to
+   * 3; absent is 1. A door's strength is the grade it carries — and the tier
+   * its affix card comes at — so an affix that multiplies what a press is
+   * worth waits for the doors late in the run, duplicates included.
+   */
+  readonly minStrength?: 1 | 2 | 3;
   /** Exactly three, weakest first. Enforced by the schema test. */
   readonly tiers: readonly [AffixTier, AffixTier, AffixTier];
   /** One sentence, the kind a player reads once and remembers. */
@@ -198,7 +211,14 @@ const BASE_AFFIXES: SpellAffix[] = [
     id: "chain",
     name: "Chain",
     hook: "hit",
-    shapes: [...HITTING],
+    /*
+     * **Only what is thrown.** A lesser copy is a thing that flies to the next
+     * body, and on a bolt, a boomerang or an orb's strike that is the spell
+     * again. On a ring of blades at the caster or a wave of sword energy it
+     * was neither: each hit spat a small homing shot drawn as a blade or a
+     * crescent, a projectile the spell does not have.
+     */
+    shapes: ["bolt", "boomerang", "orb"],
     element: null,
     tiers: [
       { effect: { kind: "arc", jumps: 1, rangePx: 120 }, text: "releases a lesser copy of itself at one more body" },
@@ -250,8 +270,13 @@ const BASE_AFFIXES: SpellAffix[] = [
     id: "bloom",
     name: "Bloom",
     hook: "expire",
-    // An enchant's wave runs out at its reach; a boomerang is caught and an orb's strike lands.
-    shapes: ["bolt", "orbit", "enchant"],
+    /*
+     * Where a shot lands or a ring of blades winds down. Not an enchant: its
+     * wave runs out in the air at its reach, four times a second while the
+     * sword swings, so every swing set a patch of floor alight at arm's
+     * length and a held key carpeted the room — ground that no shot landed on.
+     */
+    shapes: ["bolt", "orbit"],
     element: null,
     tiers: [
       { effect: { kind: "field", radiusPx: 36, durationMs: 1400 }, text: "leaves burning ground" },
@@ -565,9 +590,12 @@ BASE_AFFIXES.push({
    * **Every shape but the stance.** A stance forbids the swing for as long as
    * it holds (doc 006), so a sword hit that raised one would switch off the
    * very hits the affix counts: the sword stops, and the card is a way to
-   * lose the sword for a second rather than a guard.
+   * lose the sword for a second rather than a guard.   *
+   * **Nor the enchant.** A sword hit that casts the sword's own enchant
+   * renews it: every few hits it was up again for nothing, so the waves ran
+   * for the whole fight free and the key was pressed once.
    */
-  shapes: SPELL_SHAPES.filter((s) => s !== "stance"),
+  shapes: SPELL_SHAPES.filter((s) => s !== "stance" && s !== "enchant"),
   element: null,
   tiers: [
     { effect: { kind: "resonate", every: 5 }, text: "every fifth sword hit casts it" },
@@ -578,6 +606,89 @@ BASE_AFFIXES.push({
     "The sword casts this spell: every few connecting hits, free, at the body "
     + "struck.",
 });
+
+/*
+ * **The run's own affixes** (Dash Slash). A spell that runs the caster
+ * through a pack with its wake coming off either side had only the affixes
+ * every spell takes — an element, a rune, a free cast — and none that
+ * changed the run. These three do: how far it goes, where the bodies it
+ * leaves end up, and what it does when it stops. Each needs a wake
+ * (`affixFitsSpell`), so they are dealt only to a key that has one.
+ */
+BASE_AFFIXES.push(
+  {
+    id: "momentum",
+    name: "Momentum",
+    // Read once at the cast into the run's figures (`runAffixes`), not by a projectile's hook.
+    hook: "cast",
+    shapes: ["dash"],
+    element: null,
+    tiers: [
+      { effect: { kind: "momentum", px: 18, times: 3 }, text: "each body cut carries the run on" },
+      { effect: { kind: "momentum", px: 26, times: 3 }, text: "each body cut carries the run further" },
+      { effect: { kind: "momentum", px: 36, times: 3 }, text: "each body cut carries the run much further" },
+    ],
+    description:
+      "Every body the run cuts carries it on a little further, so a run into a pack goes deeper; up to three.",
+  },
+  {
+    id: "undertow",
+    name: "Undertow",
+    hook: "cast",
+    shapes: ["dash"],
+    element: null,
+    tiers: [
+      { effect: { kind: "undertow", pull: 0.6 }, text: "the wake draws bodies in" },
+      { effect: { kind: "undertow", pull: 0.8 }, text: "the wake draws bodies in hard" },
+      { effect: { kind: "undertow", pull: 1 }, text: "the wake draws bodies onto the line" },
+    ],
+    description:
+      "The wake draws the bodies it cuts in toward the run's line instead of throwing them off, and the run only "
+      + "nudges what it passes: the pack is left in a line.",
+  },
+  {
+    id: "finale",
+    name: "Finale",
+    // Read once at the cast into the run's figures (`runAffixes`), not by a projectile's hook.
+    hook: "cast",
+    shapes: ["dash"],
+    element: null,
+    tiers: [
+      { effect: { kind: "finale", share: 0.6, reachPx: 72 }, text: "the run ends in a thrown cut" },
+      { effect: { kind: "finale", share: 0.8, reachPx: 96 }, text: "the run ends in a longer thrown cut" },
+      { effect: { kind: "finale", share: 1, reachPx: 120 }, text: "the run ends in a full thrown cut" },
+    ],
+    description:
+      "Where the run stops, its cut is thrown on ahead as a crescent of sword energy that passes through each "
+      + "body in its reach.",
+  },
+);
+
+/** The affixes that change a run, and need its wake to mean anything. */
+const RUN_AFFIXES: ReadonlySet<string> = new Set(["momentum", "undertow", "finale"]);
+
+/*
+ * **The strength each affix waits for.** Measured on the bench (`pnpm
+ * spell-bench`, the affix loadouts on the bolt): `repeat` doubles what a key
+ * does to one body for a fifth more mana and tops most spells' best build, so
+ * it is a strength-III door's alone; the affixes that reach more bodies, turn
+ * a kill or a hit into more, or change what a spell does wait for II; the
+ * rest — defences, aim, elements — are dealt from the first room.
+ */
+const STRENGTH_FLOOR: Readonly<Record<string, 2 | 3>> = {
+  repeat: 3,
+  chain: 2, brand: 2, scatter: 2, haste: 2, resonance: 2, fork: 2,
+  momentum: 2, undertow: 2, finale: 2,
+};
+for (const a of BASE_AFFIXES) {
+  const floor = STRENGTH_FLOOR[a.id];
+  if (floor) (a as { minStrength?: 1 | 2 | 3 }).minStrength = floor;
+}
+
+/** The least door strength that deals this affix; 1 for any door. */
+export function affixStrengthFloor(id: string): 1 | 2 | 3 {
+  return spellAffixById(id)?.minStrength ?? 1;
+}
 
 export const AFFIX_TIERS = 3;
 
@@ -604,6 +715,11 @@ export function affixFits(affix: SpellAffix, shape: SpellShape): boolean {
  * missed — so `seek` does not go on a spell that fires several shots, nor
  * with `scatter`, and `scatter` not with `seek`.
  */
+/** A spell's own `seek` from which the affix's turn adds nothing. */
+const STRONG_SEEK = 250;
+/** A spell's own `pierce` that is every body in its path. */
+const PIERCES_ALL = 99;
+
 export function affixFitsSpell(affix: SpellAffix, item: Pick<BaseItem, "params"> | null | undefined, held: readonly string[]): boolean {
   if (!affixFits(affix, itemShape(item))) return false;
   const count = Number(item?.params["count"] ?? 1);
@@ -619,6 +735,30 @@ export function affixFitsSpell(affix: SpellAffix, item: Pick<BaseItem, "params">
    * card twice.
    */
   if (affix.id === "scatter" && Number(item?.params["spread"] ?? 0) >= 180) return false;
+  /*
+   * **Nor a run with a wake** (Dash Slash). A dash's side cast is its cut
+   * at a point in that direction with the caster left where they are — so
+   * "also behind you" on a Dash Slash was a cut behind with no run and no
+   * wake, the one part of the spell it is for. Its wake is already its
+   * answer to the sides.
+   */
+  if (affix.id === "scatter" && Number(item?.params["wake_reach"] ?? 0) > 0) return false;
+  // And for the same reason no `slipstream`: a dash through a body cast it as that cut at the body, and nothing more.
+  if (affix.id === "slipstream" && Number(item?.params["wake_reach"] ?? 0) > 0) return false;
+  /*
+   * **An affix a spell already is, is no affix.** Each of these was a pick
+   * that changed nothing and took a slot:
+   * - `seek` on a shot that already steers hard (Shock Arc, Arc Lance, Mana
+   *   Darts): the affix's turn is below the spell's own.
+   * - `pierce` on a shot that already passes through everything (Fault Line,
+   *   Frozen Orb).
+   * - `fork` on a spell that already goes out all round (Frost Nova), for
+   *   the reason `scatter` is kept off it: eleven shards split three ways.
+   */
+  if (RUN_AFFIXES.has(affix.id) && Number(item?.params["wake_reach"] ?? 0) <= 0) return false;
+  if (affix.id === "seek" && Number(item?.params["seek"] ?? 0) >= STRONG_SEEK) return false;
+  if (affix.id === "pierce" && Number(item?.params["pierce"] ?? 0) >= PIERCES_ALL) return false;
+  if (affix.id === "fork" && Number(item?.params["spread"] ?? 0) >= 180) return false;
   return true;
 }
 
@@ -683,5 +823,8 @@ export function spellAffixMagnitude(e: AffixEffect): number {
     case "resonate": return 1 / e.every;
     case "shape": return (e.pierce ?? 0) + (e.homing ?? 0) + (e.bounce ?? 0) + (e.damage ?? 0) + (e.power ?? 0);
     case "haste": return e.fraction;
+    case "momentum": return e.px * e.times;
+    case "undertow": return e.pull;
+    case "finale": return e.share * e.reachPx;
   }
 }

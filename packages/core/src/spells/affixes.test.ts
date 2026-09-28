@@ -94,10 +94,10 @@ describe("the affix pool", () => {
     // to change with it, and a test is the only thing that will say so.
     expect(SPELL_AFFIXES.map(spellAffixIcon).sort()).toEqual([
       "icon_affix_blight", "icon_affix_bloom", "icon_affix_brand", "icon_affix_chain",
-      "icon_affix_fork", "icon_affix_harvest", "icon_affix_haste", "icon_affix_kindle",
-      "icon_affix_pierce", "icon_affix_repeat", "icon_affix_resonance", "icon_affix_retort", "icon_affix_ricochet",
-      "icon_affix_rime", "icon_affix_scatter", "icon_affix_seek",
-      "icon_affix_shatter", "icon_affix_slipstream", "icon_affix_ward",
+      "icon_affix_finale", "icon_affix_fork", "icon_affix_harvest", "icon_affix_haste", "icon_affix_kindle",
+      "icon_affix_momentum", "icon_affix_pierce", "icon_affix_repeat", "icon_affix_resonance", "icon_affix_retort",
+      "icon_affix_ricochet", "icon_affix_rime", "icon_affix_scatter", "icon_affix_seek",
+      "icon_affix_shatter", "icon_affix_slipstream", "icon_affix_undertow", "icon_affix_ward",
     ]);
   });
 
@@ -132,7 +132,7 @@ describe("the affix pool", () => {
 
   it("says where it fits, in words the card can carry", () => {
     expect(affixFitsLine(spellAffixById("ward")!)).toBe("fits any spell");
-    expect(affixFitsLine(spellAffixById("chain")!)).toBe("fits bolt, orbit, boomerang, orb, enchant");
+    expect(affixFitsLine(spellAffixById("chain")!)).toBe("fits bolt, boomerang, orb");
   });
 
   it("fits nine slots with room to choose", () => {
@@ -163,5 +163,47 @@ describe("a spread does not seek", () => {
       if (count <= 1 || item.id === "seeker_swarm") continue;
       expect(Number(item.params["seek"] ?? 0), item.id).toBe(0);
     }
+  });
+});
+
+describe("a run with a wake is not cast behind", () => {
+  it("keeps scatter off Dash Slash, on the key and on the reward screen alike, and leaves the other dashes theirs", async () => {
+    const { affixFitsSpell, spellAffixById } = await import("./affixes.ts");
+    const { affixFitsHeld, heldSpell } = await import("../run/offer.ts");
+    const scatter = spellAffixById("scatter")!;
+    expect(affixFitsSpell(scatter, ITEMS.get("dash_slash"), [])).toBe(false);
+    expect(affixFitsHeld(scatter, heldSpell(ITEMS.get("dash_slash")))).toBe(false);
+    const slip = spellAffixById("slipstream")!;
+    expect(affixFitsSpell(slip, ITEMS.get("dash_slash"), [])).toBe(false);
+    expect(affixFitsHeld(slip, heldSpell(ITEMS.get("dash_slash")))).toBe(false);
+    for (const id of ["blink_strike", "leap_slam"]) {
+      expect(affixFitsSpell(scatter, ITEMS.get(id), []), id).toBe(true);
+      expect(affixFitsHeld(scatter, heldSpell(ITEMS.get(id))), id).toBe(true);
+    }
+  });
+});
+
+describe("no pairing that does nothing or reads wrong", () => {
+  it("keeps chain and bloom off sword energy and blade rings, and resonance off the enchant", async () => {
+    const { affixFitsSpell, spellAffixById } = await import("./affixes.ts");
+    const fits = (a: string, s: string): boolean => affixFitsSpell(spellAffixById(a)!, ITEMS.get(s), []);
+    expect(fits("chain", "crescent_edge")).toBe(false);
+    expect(fits("chain", "spirit_blades")).toBe(false);
+    expect(fits("bloom", "crescent_edge")).toBe(false);
+    expect(fits("resonance", "crescent_edge")).toBe(false);
+    // What they are for is kept.
+    expect(fits("chain", "magic_bolt")).toBe(true);
+    expect(fits("chain", "returning_edge")).toBe(true);
+    expect(fits("resonance", "spirit_blades")).toBe(true);
+  });
+
+  it("offers no affix a spell already is: seek on a hard steer, pierce on a shot through everything, fork on a ring", async () => {
+    const { affixFitsSpell, spellAffixById } = await import("./affixes.ts");
+    const fits = (a: string, s: string): boolean => affixFitsSpell(spellAffixById(a)!, ITEMS.get(s), []);
+    for (const s of ["shock_arc", "arc_lance", "mana_darts"]) expect(fits("seek", s), s).toBe(false);
+    for (const s of ["fault_line", "frozen_orb"]) expect(fits("pierce", s), s).toBe(false);
+    expect(fits("fork", "frost_nova")).toBe(false);
+    expect(fits("seek", "magic_bolt")).toBe(true);
+    expect(fits("pierce", "arc_lance")).toBe(true);
   });
 });

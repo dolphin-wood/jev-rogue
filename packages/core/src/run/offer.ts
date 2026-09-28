@@ -22,7 +22,7 @@ import { SPELL_DAMAGE_SCALE } from "../sim/cast.ts";
 import { AFFIX_SLOTS, SPELL_SLOTS, levelDamageMult, levelManaMult, spellCost, statusForecast, statusPerHit } from "../sim/spells.ts";
 import { num } from "../spells/items.ts";
 import { STAT_UPGRADES, statLine, statLinePart } from "./stats.ts";
-import { AFFIX_SURCHARGE_KEY, SPELL_AFFIXES, affixFitsLine, affixFitsSpell, affixSurchargePct, affixSurchargeText, affixTierKey, itemShape } from "../spells/affixes.ts";
+import { AFFIX_SURCHARGE_KEY, SPELL_AFFIXES, affixFitsLine, affixStrengthFloor, affixFitsSpell, affixSurchargePct, affixSurchargeText, affixTierKey, itemShape } from "../spells/affixes.ts";
 import { schoolOf } from "../spells/schools.ts";
 import type { SpellAffix, SpellShape } from "../spells/affixes.ts";
 import { legalDoorSets } from "./pacing.ts";
@@ -147,6 +147,11 @@ export function offerStats(item: BaseItem, level = 1): string {
   return offerStatParts(item, level).map((p) => p.text).join("  ");
 }
 
+/** A multiple of the sword, to two places and no trailing zeros: 0.85, 2.15, 1.2. */
+function fmtMult(k: number): string {
+  return String(Math.round(k * 100) / 100);
+}
+
 export function offerStatParts(item: BaseItem, level = 1): StatPart[] {
   const parts: StatPart[] = [];
   const push = (text: string, tone: StatTone, key?: string, args?: StatArgs) =>
@@ -179,7 +184,22 @@ export function offerStatParts(item: BaseItem, level = 1): StatPart[] {
    */
   const el = item.params.element;
   const dmgTone: StatTone = el === "fire" || el === "ice" || el === "poison" ? el : "damage";
-  if (typeof dmg === "number" && dmg > 0) {
+  /*
+   * **A sword-energy spell says what it is: so many swings of the sword**
+   * (`sword`), at the spell's level, since what it lands is the sword's hit as
+   * the build has sharpened it and no figure printed here could say that.
+   * Its wake, when it has one, is its own part at its own share.
+   */
+  const sword = item.params.sword;
+  if (typeof sword === "number" && sword > 0) {
+    const k = fmtMult(sword * levelDamageMult(level));
+    push(`sword dmg x${k}`, dmgTone, "stat.swordDmg", { mult: k });
+    const wake = item.params.wake_share;
+    if (typeof wake === "number" && wake > 0 && Number(item.params.wake_reach ?? 0) > 0) {
+      const w = fmtMult(sword * wake * levelDamageMult(level));
+      push(`wake: sword dmg x${w}`, dmgTone, "stat.wakeDmg", { mult: w });
+    }
+  } else if (typeof dmg === "number" && dmg > 0) {
     const many = typeof count === "number" && count > 1;
     /*
      * **`x5` is a lie for a line.** A spell whose `count` is cells of ground
@@ -733,7 +753,7 @@ const AFFIX_STYLE: Readonly<Record<string, readonly string[]>> = {
   nuke: ["haste", "shatter", "fork", "brand", "rime"],
   area: ["scatter", "chain", "harvest", "pierce"],
   dot: ["kindle", "blight", "bloom", "brand"],
-  melee: ["resonance", "retort", "slipstream", "ward"],
+  melee: ["resonance", "retort", "slipstream", "ward", "momentum", "undertow", "finale"],
 };
 
 /**
@@ -841,7 +861,8 @@ export function cardPool(
       ],
     }));
   } else if (kind === "affix") {
-    all = fittingAffixes(held).map((a) => ({
+    // A door whose strength is known deals only what it is strong enough for (`affixStrengthFloor`).
+    all = fittingAffixes(held).filter((a) => promise.grade === undefined || affixStrengthFloor(a.id) <= promise.grade).map((a) => ({
       id: a.id,
       description: cardText(a.id, a.description, a.name),
       ...(held.length > 0 && held.every((key) => key.id)
@@ -909,6 +930,31 @@ export function cardPool(
     kind, candidates, forced: [],
     ...(kept.length > 1 ? { guarantee: kept } : {}),
   };
+}
+
+/**
+ * **A door's cards, held to its strength.** The cards for every door are
+ * drawn before the doors' strengths are decided — they come in one request —
+ * so an affix the door turned out too weak for is swapped here for the next
+ * candidate of the same pool it is strong enough for, in the pool's own
+ * order, one not already on the door. A spell or a stat door, or a door
+ * strong enough for all it drew, is left as it is.
+ */
+export function holdToStrength(kind: RewardCardKind, ids: readonly string[], strength: number, pool: CardPool | undefined): string[] {
+  if (kind !== "affix") return [...ids];
+  const fits = (id: string) => affixStrengthFloor(id) <= strength;
+  if (ids.every(fits)) return [...ids];
+  const kept = ids.filter(fits);
+  const spare = (pool?.candidates ?? []).map((c) => c.id).filter((id) => fits(id) && !kept.includes(id));
+  const out: string[] = [];
+  for (const id of ids) {
+    if (fits(id)) out.push(id);
+    else {
+      const next = spare.shift();
+      if (next) out.push(next);
+    }
+  }
+  return out;
 }
 
 /** The cards for chosen ids, graded as the door promised. */
@@ -989,6 +1035,11 @@ export interface HeldSpell {
    * goes out all round takes no `scatter`.
    */
   readonly spread?: number;
+  /** How far its run's wake rolls, px (Dash Slash); absent reads as none. A run with a wake takes no `scatter`. */
+  readonly wake?: number;
+  /** Its own steer and pierce: a shot that already hunts or passes through everything takes no `seek` or `pierce`. */
+  readonly seek?: number;
+  readonly pierce?: number;
   /** Affix ids already attached, which both exclude and upgrade. */
   readonly affixes: readonly string[];
 }
@@ -1001,7 +1052,8 @@ export function heldSpell(
   return {
     ...(item?.id ? { id: item.id } : {}),
     shape: itemShape(item), count: Number(item?.params["count"] ?? 1),
-    spread: Number(item?.params["spread"] ?? 0), affixes,
+    spread: Number(item?.params["spread"] ?? 0), wake: Number(item?.params["wake_reach"] ?? 0),
+    seek: Number(item?.params["seek"] ?? 0), pierce: Number(item?.params["pierce"] ?? 0), affixes,
   };
 }
 
@@ -1015,7 +1067,12 @@ export function heldSpell(
 export function affixFitsHeld(affix: SpellAffix, key: HeldSpell): boolean {
   if (key.affixes.includes(affix.id)) return true;
   if (key.affixes.length >= AFFIX_SLOTS) return false;
-  return affixFitsSpell(affix, { params: { shape: key.shape, count: key.count, spread: key.spread ?? 0 } }, key.affixes);
+  return affixFitsSpell(affix, {
+    params: {
+      shape: key.shape, count: key.count, spread: key.spread ?? 0, wake_reach: key.wake ?? 0,
+      seek: key.seek ?? 0, pierce: key.pierce ?? 0,
+    },
+  }, key.affixes);
 }
 
 /** The affixes at least one held key can actually take; all of them if none are known. */

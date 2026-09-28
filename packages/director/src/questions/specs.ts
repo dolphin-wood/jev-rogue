@@ -205,23 +205,24 @@ export const ELITE_PORTAL_SPEC: Readonly<Record<string, OptionSpec>> = {
  */
 export const ELITE_GRADE_SPEC: Readonly<Record<string, OptionSpec>> = {
   raised: {
-    what: "The elite door's reward is graded up one step, the grade every elite door carries at the least.",
+    what: "The elite door's reward at the elite strength for this point of the run: one above a normal door's, "
+      + "and higher the later the room.",
     not_for: "A player who is low on health, has been clearing slowly, or has just lost heavily in a room.",
   },
   best: {
-    what: "The elite door's reward is graded up two steps, which is as far as a grade goes. The second "
-      + "step is how the game lets a run that is behind make up ground.",
+    what: "The elite door's reward one strength further, as far as strength goes: how the game lets a run "
+      + "that is behind make up ground.",
     not_for: "A player on a full bar who has been clearing quickly and has lost little over the last rooms.",
   },
 };
 
 export const NORMAL_GRADE_SPEC: Readonly<Record<string, OptionSpec>> = {
   ordinary: {
-    what: "The ordinary rewards, at the grade this run has been dealing all along.",
+    what: "The rewards at the strength this point of the run deals, which rises on its own as the run goes on.",
     not_for: "A player who has ground to make up before the boss and only a few rooms left to make it in.",
   },
   raised: {
-    what: "Every door's reward is graded up one step for the rooms left before the stop.",
+    what: "The rewards one strength past the run's own, a catch-up for a run that is behind.",
     not_for: "A player on a full bar who has been clearing quickly and has lost little over the last rooms.",
   },
 };

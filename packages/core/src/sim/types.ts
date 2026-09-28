@@ -787,6 +787,8 @@ export interface Shockwave {
    * are one attack — the first to catch the player spends all of them.
    */
   wake?: WakeGroup;
+  /** Which stretch of its wake this is, counted from where the run began: what a renderer stripes by. */
+  wakeIndex?: number;
   /**
    * A wake the **player** laid (the Dash Slash, `layWake`): it cuts the
    * bodies it crosses rather than the player, once each across the whole
@@ -818,6 +820,16 @@ export interface PlayerWakeCut {
   knock: number;
   /** Heavy enough, it staggers what it cuts (`spellStagger`). */
   weight: number;
+  /** `momentum`: px the run goes on for each body its cut goes through, and how many more times it may. */
+  momentumPx: number;
+  momentumLeft: number;
+  /** `undertow`: the wake draws bodies in to the line at this share of its shove, and the run only nudges. 0 for none. */
+  pull: number;
+  /** `finale`: the run's end throws its cut on ahead at this share of the cut, this far; 0 for none. */
+  finaleShare: number;
+  finaleReach: number;
+  /** The run's own cut, which a `finale` throws a share of. */
+  runDamage: number;
 }
 
 /**

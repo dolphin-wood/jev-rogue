@@ -77,6 +77,9 @@ export const PLAYER_TEXT: Readonly<Record<string, string>> = {
   blight: "This spell deals poison: its hits build up poison that slows and wears enemies down.",
   haste: "Killing with this spell brings it back sooner.",
   resonance: "Every few sword hits, casts this spell at the enemy you struck at no mana cost.",
+  momentum: "Each enemy your dash cuts through carries the dash further, up to three times.",
+  undertow: "The sword energy on both sides of your dash pulls enemies in toward its path instead of knocking them away.",
+  finale: "When your dash ends, it throws a crescent of sword energy forward that hits every enemy in its reach.",
 
   /* --------------------------------- stats ------------------------------- */
   fleet: "Move faster.",

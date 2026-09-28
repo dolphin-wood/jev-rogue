@@ -270,8 +270,8 @@ describe("the Director's portals (doc 003)", () => {
       usage: { input_tokens: null },
     });
     const d = createDirector("jev", { evaluate: declining });
-    // Late in the run, where a normal door's grade is asked beside the need.
-    const plan = await d.planPortals(ctx(12), portalChoices(run(12), new RngSource("f").stream("c"), 3));
+    // Mid-run, where a normal door's catch-up is asked beside the need (strength II, one left to give).
+    const plan = await d.planPortals(ctx(8), portalChoices(run(8), new RngSource("f").stream("c"), 3));
     const by = Object.fromEntries(plan.decisions.map((x) => [x.question, x]));
     expect(by["normal_grade"]).toMatchObject({ source: "rule", fallback_path: "declined" });
     expect(by["portal_need"]?.source).toBe("jev");

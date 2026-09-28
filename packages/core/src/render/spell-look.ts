@@ -85,7 +85,7 @@ export const SPELL_LOOK: Readonly<Record<string, SpellLook>> = {
   counter_stance: { core: 0xf0fffb, glow: 0x9ff0e0, shape: "blade" },
   blink_strike: { core: 0xf0fffb, glow: 0x8fe8d8, shape: "dart" },
   // The run's wake is drawn as standing edges in this light (`drawShockwaves`).
-  dash_slash: { core: 0xf4fbff, glow: 0x9fd8f0, shape: "blade" },
+  dash_slash: { core: 0xffffff, glow: 0xc3d2ee, shape: "blade" },
 };
 
 /** A shot with no spell of its own takes its element's shape. */
@@ -99,6 +99,48 @@ export function spellLookOf(base: string | null, element: Element): SpellLook {
   if (named) return named;
   const t = ELEMENT_TINT[element] ?? ELEMENT_TINT.none;
   return { core: t.core, glow: t.glow, shape: ELEMENT_SHAPE[element] ?? "dart" };
+}
+
+/**
+ * **Sword energy takes its element's colour** (Crescent Edge's waves, Dash
+ * Slash's blade and wake). A spell's own look wins over its element for a
+ * shot, because a shot's shape already says which spell it is; a wave of
+ * sword energy is the same crescent or the same edge whatever carries it, so
+ * the colour is the one thing that can say it burns, freezes or poisons.
+ * Plain, it keeps the spell's own light.
+ */
+export const ENERGY_TINT: Readonly<Record<Exclude<Element, "none">, { core: number; glow: number }>> = {
+  fire: { core: 0xfff0c0, glow: 0xff7a2a },
+  ice: { core: 0xf0fcff, glow: 0x4fc3ff },
+  poison: { core: 0xecffd8, glow: 0x5fd64a },
+};
+
+/**
+ * **Every element sword energy carries, in turn** — fire, ice, poison, the
+ * ones with any power — or `["none"]` for plain. Several are shown by taking
+ * turns, one colour to a wave or a stretch of a wake, all equally: a blend
+ * of two lights is a third that is neither (fire and ice made grey), and one
+ * wave in two colours read as neither. Equal turns rather than by strength,
+ * because what each is worth is the hit's to say, not the colour's.
+ */
+export function energyElements(powers: Readonly<Partial<Record<"fire" | "ice" | "poison", number>>> | null | undefined, fallback: Element | string = "none"): string[] {
+  const out = (["fire", "ice", "poison"] as const).filter((el) => (powers?.[el] ?? 0) > 0);
+  if (out.length > 0) return out;
+  return [fallback === "fire" || fallback === "ice" || fallback === "poison" ? fallback : "none"];
+}
+
+/** The element whose turn it is, for the `turn`th wave or stripe. */
+export function energyTurn(elements: readonly string[], turn: number): string {
+  return elements[((Math.floor(turn) % elements.length) + elements.length) % elements.length] ?? "none";
+}
+
+/** How many of a wake's stretches wear one colour before the next takes its turn. */
+export const WAKE_STRIPE = 3;
+
+export function swordEnergyLook(base: string | null, element: Element | string): SpellLook {
+  const own = spellLookOf(base, "none");
+  const t = element === "fire" || element === "ice" || element === "poison" ? ENERGY_TINT[element] : null;
+  return t ? { ...own, core: t.core, glow: t.glow } : own;
 }
 
 /** The shape a shot of this spell is drawn as. */

@@ -9,7 +9,7 @@ import {
   MAX_HEARTS, RngSource, bucketClearSpeed, bucketGold, bucketHealth, SMITH_PRICE, MERCHANT_PRICE, fountainDrink, fountainWouldHeal, fountainWanted,
   bucketMovementPressure, bucketRecentDamage, bucketRunProgress, createWorld,
   plainInstance, heldDominantTags, STYLE_START, step, worldCleared, ITEMS, STEP_MS,
-  RUN_BOSS_ROOM, stageFor, isAudienceRoom, audienceGrade, makeKing, applyStat, cardPool, cardsFor, cardNeedsFor, portalChoices, heldSpell, CARDS_PER_OFFER, equipItem, attachAffix, withLevel,
+  RUN_BOSS_ROOM, stageFor, isAudienceRoom, audienceGrade, makeKing, applyStat, cardPool, cardsFor, cardNeedsFor, holdToStrength, baseStrength, portalChoices, heldSpell, CARDS_PER_OFFER, equipItem, attachAffix, withLevel,
   noMods, AFFIX_SLOTS, generateRoom, toRoomPlan, BOSS_ARCHETYPES,
   buildShapeFor, expectedClearMsFor, goldRoomCoins, COIN_VALUE, COIN_BOOST_MAX, affixFitsHeld, fixedExit,
   levelAt, withLevels,
@@ -446,7 +446,9 @@ export async function playRun(
     const plan = await director.planOffer(ctx, { portals: choices, cards });
     return (plan.portals?.doors ?? []).map((d) => {
       if (d.npc || d.reward === "gold") return d;
-      const ids = plan.cards[kinds.indexOf(d.reward as (typeof kinds)[number])]?.ids ?? [];
+      const k = kinds.indexOf(d.reward as (typeof kinds)[number]);
+      // Held to the strength the door was given (`holdToStrength`).
+      const ids = holdToStrength(d.reward, plan.cards[k]?.ids ?? [], d.grade ?? 1, cards[k]?.pool);
       return ids.length ? { ...d, ...cardTypesOf(d.reward, ids), cards: ids } : d;
     });
   }
@@ -517,7 +519,8 @@ export async function playRun(
     else if (stage === "shop")
       for (const k of ["stat", "affix", "spell"] as const)
         cardReqs.push({
-          room_index: index, pool: cardPool(ITEMS, ownedFor(k), k, held, {}, needs), count: 1,
+          // As the scene's shelf: what this point of the run is strong enough for (`baseStrength`).
+          room_index: index, pool: cardPool(ITEMS, ownedFor(k), k, held, { grade: baseStrength(index, false) }, needs), count: 1,
           pity: false, temptation: false, salt: `shop_${k}`,
         });
     const offerReq: OfferRequest = { cards: cardReqs };

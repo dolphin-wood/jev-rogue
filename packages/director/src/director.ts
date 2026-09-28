@@ -165,8 +165,8 @@ interface Answered {
 interface PortalDraft {
   readonly kinds: readonly RewardCardKind[];
   readonly eliteKind: RewardCardKind | null;
-  readonly eliteGrade: 2 | 3;
-  readonly normalGrade: 1 | 2;
+  readonly eliteGrade: 1 | 2 | 3;
+  readonly normalGrade: 1 | 2 | 3;
   readonly npc: NpcKind | null;
   /** Carried between the rounds so the whole plan draws from one stream. */
   readonly rng: Rng;
@@ -807,38 +807,46 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
        * fifth of the mass on the escape option, and the answer never moved.
        * The ids are now words, and each says its one condition.
        */
-      questions.elite_grade = choiceQuestion({
-        labels, style,
-        instructions:
-          "Choose how far the elite portal's reward is graded up, one step or two. The second step is how " +
-          "the game lets a run that is behind make up ground; answer from health, recent damage and clear " +
-          "speed.",
-        options: [
-          { ...opt("raised", grounded(
-            "Raised one grade, the grade every elite door carries at the least.",
-            ["clear_speed", "fast", "normal"], ["health", "ok", "full"], ["recent_damage", "none", "some"],
-          )), spec: ELITE_GRADE_SPEC.raised! },
-          { ...opt("best", grounded(
-            "Raised two grades, as far as a grade goes.",
-            ["clear_speed", "slow"], ["health", "low", "critical"], ["recent_damage", "heavy"],
-          )), spec: ELITE_GRADE_SPEC.best! },
-        ],
-      });
+      /*
+       * **A catch-up, not the grade.** A door's strength is set by how far the
+       * run has come (`baseStrength`): later rooms deal better spells, bigger
+       * stats and the strongest affixes. What is asked is only whether a run
+       * that is behind gets one more on top, so the question is not asked
+       * where there is no more to give.
+       */
+      if ((choices.strength?.elite ?? 2) < 3)
+        questions.elite_grade = choiceQuestion({
+          labels, style,
+          instructions:
+            "The elite portal's reward already comes one strength above this point of the run. Choose whether " +
+            "it goes one strength further, as a catch-up for a run that is behind; answer from health, recent " +
+            "damage and clear speed.",
+          options: [
+            { ...opt("raised", grounded(
+              "The elite door's own strength for this point of the run.",
+              ["clear_speed", "fast", "normal"], ["health", "ok", "full"], ["recent_damage", "none", "some"],
+            )), spec: ELITE_GRADE_SPEC.raised! },
+            { ...opt("best", grounded(
+              "One strength further, as far as strength goes.",
+              ["clear_speed", "slow"], ["health", "low", "critical"], ["recent_damage", "heavy"],
+            )), spec: ELITE_GRADE_SPEC.best! },
+          ],
+        });
     }
     if (choices.lateGrade)
       questions.normal_grade = choiceQuestion({
         labels, style,
         instructions:
-          "Choose whether the normal portals' rewards are graded up for the rooms left before the stop. " +
-          "Grading up is how the game lets a run that is behind make up ground before the boss; answer from " +
-          "health, recent damage and clear speed.",
+          "The normal portals' rewards come at the strength this point of the run deals; later rooms deal " +
+          "stronger ones on their own. Choose whether they go one strength further, as a catch-up for a run " +
+          "that is behind; answer from health, recent damage and clear speed.",
         options: [
           { ...opt("ordinary", grounded(
-            "Ordinary rewards, at the grade the run has been dealing all along.",
+            "The run's own strength for this point.",
             ["clear_speed", "fast", "normal"], ["health", "ok", "full"], ["recent_damage", "none", "some"],
           )), spec: NORMAL_GRADE_SPEC.ordinary! },
           { ...opt("raised", grounded(
-            "Raised one grade for the rooms left before the stop.",
+            "One strength past the run's own, for a run that is behind.",
             ["clear_speed", "slow"], ["health", "low", "critical"], ["recent_damage", "heavy"],
           )), spec: NORMAL_GRADE_SPEC.raised! },
         ],
@@ -957,7 +965,9 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
         });
 
         let eliteKind: RewardCardKind | null = null;
-        let eliteGrade: 2 | 3 = 2;
+        // The run's own strength for this point (`baseStrength`); the answers are a catch-up on top.
+        const strength = choices.strength ?? { normal: 1, elite: 2 };
+        let eliteGrade: 1 | 2 | 3 = strength.elite;
         if (choices.elite && take("elite_portal") === "elite") {
           /*
            * **Which door is the hard one comes out of the same ranking.** It
@@ -974,9 +984,10 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
             question: "elite_kind (from the need ranking)",
           });
           eliteKind = pick as RewardCardKind;
-          eliteGrade = take("elite_grade") === "best" ? 3 : 2;
+          if (strength.elite < 3 && take("elite_grade") === "best") eliteGrade = (strength.elite + 1) as 2 | 3;
         }
-        const normalGrade = choices.lateGrade && take("normal_grade") === "raised" ? 2 : 1;
+        const normalGrade = (choices.lateGrade && strength.normal < 3 && take("normal_grade") === "raised"
+          ? strength.normal + 1 : strength.normal) as 1 | 2 | 3;
         return { kinds, eliteKind, eliteGrade, normalGrade, npc, rng, source, path, decisions };
       },
       /*

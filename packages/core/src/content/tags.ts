@@ -37,7 +37,18 @@ export interface ElementPowers {
   fire: number;
   poison: number;
   ice: number;
+  /**
+   * **Fire an affix lent a spell that is not fire** (`kindle` on a bolt).
+   * Its burn stacks to `BORROWED_BURN_SOURCES` at most, not the four a fire
+   * spell's does: a spell that hits often kept four sources lit on a body it
+   * was pinned against whatever its fire, which made `kindle` worth nearly
+   * what `repeat` is on one body. A fire spell's own burn is unchanged.
+   */
+  borrowedFire?: boolean;
 }
+
+/** The most burn sources fire an affix lent a spell may keep lit (`ElementPowers.borrowedFire`). */
+export const BORROWED_BURN_SOURCES = 2;
 
 export function noPowers(): ElementPowers {
   return { fire: 0, poison: 0, ice: 0 };
@@ -58,12 +69,15 @@ export function copyPowers(to: ElementPowers, from: ElementPowers): void {
   to.fire = from.fire;
   to.poison = from.poison;
   to.ice = from.ice;
+  if (from.borrowedFire) to.borrowedFire = true;
+  else delete to.borrowedFire;
 }
 
 export function clearPowers(to: ElementPowers): void {
   to.fire = 0;
   to.poison = 0;
   to.ice = 0;
+  delete to.borrowedFire;
 }
 
 export function anyPower(p: ElementPowers): boolean {

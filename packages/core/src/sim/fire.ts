@@ -11,7 +11,7 @@
  * an encounter to pressure a build as long as it never nullifies it, and this
  * is the tool that pressures a player who has to close.
  */
-import { clearPowers, noPowers } from "../content/tags.ts";
+import { clearPowers, copyPowers, noPowers } from "../content/tags.ts";
 import type { ElementPowers } from "../types.ts";
 import type { Fire, Scorch, World } from "./types.ts";
 import { circlesOverlap } from "./collide.ts";
@@ -203,9 +203,7 @@ function fillPatch(slot: Fire, x: number, y: number, owner: "player" | "enemy", 
    */
   clearPowers(slot.powers);
   if (shape.powers) {
-    slot.powers.fire = shape.powers.fire;
-    slot.powers.poison = shape.powers.poison;
-    slot.powers.ice = shape.powers.ice;
+    copyPowers(slot.powers, shape.powers);
   }
   slot.owner = owner;
   return slot;

@@ -75,9 +75,12 @@ function hash(a: number, b: number, c: number): number {
 /** Which band a texel is in: 0 none, 1 lip, 2 aura, 3 mid, 4 core. */
 function bandAt(o: CrescentWave, px: number, py: number, half: number, thick: number, flick: number): number {
   const dx = px - o.x, dy = py - o.y;
-  const d = Math.hypot(dx, dy);
+  const d = Math.sqrt(dx * dx + dy * dy);
   let off = Math.atan2(dy, dx) - o.facing;
-  off = Math.atan2(Math.sin(off), Math.cos(off));
+  if (off > Math.PI) off -= Math.PI * 2;
+  else if (off < -Math.PI) off += Math.PI * 2;
+  if (off > Math.PI) off -= Math.PI * 2;
+  else if (off < -Math.PI) off += Math.PI * 2;
   const u = off / half;
   if (Math.abs(u) >= 1) return 0;
   // Fat in the middle, drawn to a point at each tip.
@@ -128,18 +131,43 @@ export function drawCrescentWave(pen: Pen, o: CrescentWave, alpha = 1): void {
   // Each texel's band once, then each band's runs a row at a time.
   const cols = Math.round((gx1 - gx0) / P) + 1, rows = Math.round((gy1 - gy0) / P) + 1;
   const grid = new Uint8Array(cols * rows);
-  for (let j = 0; j < rows; j++)
-    for (let i = 0; i < cols; i++) grid[j * cols + i] = bandAt(o, gx0 + i * P + P / 2, gy0 + j * P + P / 2, half, thick, flick);
-  for (let band = 1; band <= 4; band++) {
-    pen.fillStyle(colours[band]!, alpha);
-    for (let j = 0; j < rows; j++) {
-      let from = -1;
-      for (let i = 0; i <= cols; i++) {
-        const on = i < cols && grid[j * cols + i] === band;
-        if (on && from < 0) from = i;
-        else if (!on && from >= 0) { pen.fillRect(gx0 + from * P, gy0 + j * P, (i - from) * P, P); from = -1; }
-      }
+  /*
+   * **Only the ring is read.** Nothing outside radius − thick .. radius +
+   * lip can be lit, and the box round a wide crescent is mostly the inside
+   * of the curve: reading every texel in it was thousands of `bandAt`s a
+   * wave, a frame, several waves at once. Each row reads only the one or
+   * two spans of it that fall inside the ring.
+   */
+  const rIn = Math.max(0, o.radius - thick - P), rOut = o.radius + TELE_PIX * 1.5 + P;
+  for (let j = 0; j < rows; j++) {
+    const py = gy0 + j * P + P / 2;
+    const dy = py - o.y;
+    if (Math.abs(dy) > rOut) continue;
+    const outer = Math.sqrt(rOut * rOut - dy * dy);
+    const inner = Math.abs(dy) < rIn ? Math.sqrt(rIn * rIn - dy * dy) : 0;
+    for (const [lo, hi] of [[o.x - outer, o.x - inner], [o.x + inner, o.x + outer]] as const) {
+      const i0 = Math.max(0, Math.floor((lo - gx0) / P)), i1 = Math.min(cols - 1, Math.ceil((hi - gx0) / P));
+      for (let i = i0; i <= i1; i++) grid[j * cols + i] = bandAt(o, gx0 + i * P + P / 2, py, half, thick, flick);
     }
+  }
+  // One pass over the grid for every band's runs (x, y, width, flattened), then each band in one colour.
+  const runs: number[][] = [[], [], [], [], []];
+  for (let j = 0; j < rows; j++) {
+    const row = j * cols;
+    let from = 0, band = grid[row]!;
+    for (let i = 1; i <= cols; i++) {
+      const next = i < cols ? grid[row + i]! : 0;
+      if (next === band) continue;
+      if (band > 0) runs[band]!.push(gx0 + from * P, gy0 + j * P, (i - from) * P);
+      from = i;
+      band = next;
+    }
+  }
+  for (let band = 1; band <= 4; band++) {
+    const r = runs[band]!;
+    if (r.length === 0) continue;
+    pen.fillStyle(colours[band]!, alpha);
+    for (let k = 0; k < r.length; k += 3) pen.fillRect(r[k]!, r[k + 1]!, r[k + 2]!, P);
   }
 }
 
@@ -296,6 +324,8 @@ export interface WakeStretch {
   readonly thick: number;
   readonly width: number;
   readonly life: number;
+  /** Which stretch of the wake it is, from where the run began (`Shockwave.wakeIndex`); what `paletteOf` reads. */
+  readonly index?: number;
 }
 
 export interface WakeRibbon {
@@ -309,95 +339,87 @@ export interface WakeRibbon {
   readonly tick: number;
   readonly seed: number;
   readonly palette: WavePalette;
+  /**
+   * A stretch's own light, by its index, when the wake's elements take turns
+   * (`energyTurn`): each quad wears the palette of the stretch it starts at.
+   */
+  readonly paletteOf?: (index: number) => WavePalette;
 }
 
 /** The trail's steps of light, from faintest to the edge's own. */
 const WAKE_TRAIL_LEVELS = 4;
 
+/**
+ * Drawn as **polygons between neighbouring stretches**, not cell by cell. A
+ * wake is a hundred and fifty px of run with a sheet and a trail on each
+ * side, and scan-converting that at the telegraph's half-pixel grid was
+ * hundreds of thousands of cells a frame — Dash Slash dropped frames. Each
+ * side is a dozen stretches, so it is a dozen quads a layer; the corners are
+ * snapped to the texel grid so the edges still sit on the game's pixels.
+ */
 export function drawWakeRibbon(pen: Pen, o: WakeRibbon, alpha = 1): void {
   if (o.stretches.length === 0 || alpha <= 0) return;
   const P = TELE_PIX;
+  const snap = (v: number): number => Math.round(v / P) * P;
   const ox = Math.cos(o.facing), oy = Math.sin(o.facing);
   // Along the run: square to the outward direction.
   const ax = -oy, ay = ox;
   const x0 = o.stretches[0]!.x, y0 = o.stretches[0]!.y;
-  const along = (s: WakeStretch): number => (s.x - x0) * ax + (s.y - y0) * ay;
-  const pts = [...o.stretches].map((s) => ({ s, t: along(s) })).sort((a, b) => a.t - b.t);
+  const pts = o.stretches.map((s) => ({ s, t: (s.x - x0) * ax + (s.y - y0) * ay })).sort((a, b) => a.t - b.t);
+  // The ends of the edge are the outer halves of the end stretches.
   const first = pts[0]!, last = pts[pts.length - 1]!;
-  const start = first.t - first.s.width / 2, end = last.t + last.s.width / 2;
-  const cells = new Map<number, number>();
-  const put = (x: number, y: number, band: number): void => {
-    const i = Math.floor(x / P), j = Math.floor(y / P);
-    const k = j * 100000 + i;
-    if ((cells.get(k) ?? 0) < band) cells.set(k, band);
+  const verts = [{ ...first, t: first.t - first.s.width / 2 }, ...pts, { ...last, t: last.t + last.s.width / 2 }];
+  const at = (t: number, d: number, up = 0): [number, number] =>
+    [snap(x0 + ax * t + ox * d), snap(y0 + ay * t + oy * d - up)];
+  const quad = (colour: number, a: number, p0: [number, number], p1: [number, number], p2: [number, number], p3: [number, number]): void => {
+    if (a <= 0.01) return;
+    pen.fillStyle(colour, Math.min(1, a) * alpha);
+    pen.beginPath();
+    pen.moveTo(p0[0], p0[1]);
+    pen.lineTo(p1[0], p1[1]);
+    pen.lineTo(p2[0], p2[1]);
+    pen.lineTo(p3[0], p3[1]);
+    pen.fillPath();
   };
-  const flick = (o.tick >> 1) + o.seed * 31;
-  // The trail each stretch leaves behind its edge as it rolls: its own cells, in steps of light.
-  const trail = new Map<number, number>();
-  const trailPut = (x: number, y: number, level: number): void => {
-    const i = Math.floor(x / P), j = Math.floor(y / P);
-    const key = j * 100000 + i;
-    if ((trail.get(key) ?? 0) < level) trail.set(key, level);
-  };
-  let k = 0;
-  for (let t = start; t <= end; t += P / 2) {
-    // The two stretches either side of this step, and how far between them.
-    while (k < pts.length - 2 && pts[k + 1]!.t < t) k++;
-    const a = pts[k]!, b = pts[Math.min(pts.length - 1, k + 1)]!;
-    const u = b.t > a.t ? Math.max(0, Math.min(1, (t - a.t) / (b.t - a.t))) : 0;
-    const inner = a.s.inner + (b.s.inner - a.s.inner) * u;
-    const thick = a.s.thick + (b.s.thick - a.s.thick) * u;
-    const life = Math.max(0, Math.min(1, a.s.life + (b.s.life - a.s.life) * u));
+  const flick = hash(o.tick >> 2, o.seed, 5) < 0.25 ? P : 0;
+  for (let i = 0; i + 1 < verts.length; i++) {
+    const A = verts[i]!, B = verts[i + 1]!;
+    if (B.t - A.t < 0.01) continue;
+    const la = Math.max(0, Math.min(1, A.s.life)), lb = Math.max(0, Math.min(1, B.s.life));
+    const life = (la + lb) / 2;
     if (life <= 0) continue;
-    // The line of the run at this step, and the band out from it.
-    const lx = x0 + ax * t, ly = y0 + ay * t;
-    const depth = thick * (0.6 + 0.4 * life);
+    const pal = o.paletteOf && A.s.index !== undefined ? o.paletteOf(A.s.index) : o.palette;
+    const depA = A.s.thick * (0.6 + 0.4 * la), depB = B.s.thick * (0.6 + 0.4 * lb);
+    const inA = A.s.inner, inB = B.s.inner;
     /*
-     * **The trail**: the ground the edge has just crossed, lit behind it and
-     * fading back toward the run — brightest against the edge, gone a trail's
-     * length back — and fainter as the stretch itself dies.
+     * **The trail**: the ground the edge has just crossed, lit behind it in
+     * steps that fade back toward the run, fainter as the stretch dies.
      */
-    const from = Math.max(2, inner - o.trail);
-    for (let d = from; d < inner; d += P / 2) {
-      const u = (d - from) / Math.max(1, inner - from);
-      const level = Math.round(u * life * WAKE_TRAIL_LEVELS);
-      if (level > 0) trailPut(lx + ox * d, ly + oy * d, level);
+    const fromA = Math.max(2, inA - o.trail), fromB = Math.max(2, inB - o.trail);
+    for (let k = 0; k < WAKE_TRAIL_LEVELS; k++) {
+      const u0 = k / WAKE_TRAIL_LEVELS, u1 = (k + 1) / WAKE_TRAIL_LEVELS;
+      const dA0 = fromA + (inA - fromA) * u0, dA1 = fromA + (inA - fromA) * u1;
+      const dB0 = fromB + (inB - fromB) * u0, dB1 = fromB + (inB - fromB) * u1;
+      quad(k === WAKE_TRAIL_LEVELS - 1 ? pal.mid : pal.aura, 0.4 * u1 * life,
+        at(A.t, dA0), at(B.t, dB0), at(B.t, dB1), at(A.t, dA1));
     }
-    // As a stretch dies its edge loses its hot core first, then its light.
-    const cap = life > 0.5 ? 5 : life > 0.25 ? 3 : 2;
-    for (let d = 0; d <= depth; d += P / 2) {
-      const gx = lx + ox * (inner + d), gy = ly + oy * (inner + d);
-      put(gx, gy, Math.min(cap, d > depth - P ? 4 : d < P ? 1 : 2));
-    }
-    // The standing sheet on the band's leading edge: one continuous wall, lower as it fades.
-    const fx = lx + ox * (inner + depth), fy = ly + oy * (inner + depth);
-    const h = o.rise * (0.35 + 0.65 * life);
-    const top = h - (hash(Math.floor(t / P), flick, 7) < 0.25 ? P : 0);
-    for (let z = 0; z <= top; z += P / 2) {
-      const v = z / Math.max(P, top);
-      put(fx, fy - z, Math.min(cap, top - z < P ? 5 : v > 0.7 ? 4 : v > 0.35 ? 3 : 2));
-      // Thick at its foot, drawn to an edge at its top, leaning back toward the run.
-      const lean = depth * (1 - v) * 0.6;
-      for (let d = P / 2; d <= lean; d += P / 2) put(fx - ox * d, fy - oy * d - z, Math.min(cap, 3));
-    }
-  }
-  for (let level = 1; level <= WAKE_TRAIL_LEVELS; level++) {
-    pen.fillStyle(level === WAKE_TRAIL_LEVELS ? o.palette.mid : o.palette.aura, alpha * 0.4 * (level / WAKE_TRAIL_LEVELS));
-    for (const [key, v] of trail) {
-      if (v !== level || cells.has(key)) continue;
-      const j = Math.floor(key / 100000), i = key - j * 100000;
-      pen.fillRect(i * P, j * P, P, P);
-    }
-  }
-  const look: readonly (readonly [number, number])[] = [
-    [0, 0], [o.palette.lip, 0.55], [o.palette.aura, 0.3], [o.palette.aura, 0.6], [o.palette.mid, 0.9], [o.palette.core, 1],
-  ];
-  for (let band = 1; band <= 5; band++) {
-    pen.fillStyle(look[band]![0], alpha * look[band]![1]);
-    for (const [key, v] of cells) {
-      if (v !== band) continue;
-      const j = Math.floor(key / 100000), i = key - j * 100000;
-      pen.fillRect(i * P, j * P, P, P);
-    }
+    // The band on the floor that hits: dark-lipped, lit, its leading edge bright.
+    quad(pal.lip, 0.55, at(A.t, inA), at(B.t, inB), at(B.t, inB + depB), at(A.t, inA + depA));
+    quad(pal.aura, 0.6 * life, at(A.t, inA + P), at(B.t, inB + P), at(B.t, inB + depB - P), at(A.t, inA + depA - P));
+    quad(pal.mid, 0.9 * life, at(A.t, inA + depA - 2 * P), at(B.t, inB + depB - 2 * P), at(B.t, inB + depB), at(A.t, inA + depA));
+    /*
+     * The standing sheet on the band's leading edge, one continuous wall up
+     * the screen: lower as a stretch fades, and its hot top edge the first
+     * thing it loses.
+     */
+    const hA = o.rise * (0.35 + 0.65 * la), hB = o.rise * (0.35 + 0.65 * lb);
+    const fA = inA + depA, fB = inB + depB;
+    const tier = (u0: number, u1: number, colour: number, a: number): void =>
+      quad(colour, a, at(A.t, fA, hA * u0), at(B.t, fB, hB * u0), at(B.t, fB, hB * u1), at(A.t, fA, hA * u1));
+    tier(0, 0.35, pal.aura, 0.45 * life);
+    tier(0.35, 0.8, life > 0.25 ? pal.mid : pal.aura, 0.8 * life);
+    const rim = Math.max(0.8, 1 - (2 * P + flick) / Math.max(P, (hA + hB) / 2));
+    tier(0.8, rim, life > 0.25 ? pal.mid : pal.aura, 0.85 * life);
+    tier(rim, 1, life > 0.5 ? pal.core : pal.mid, life);
   }
 }

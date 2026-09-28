@@ -16,10 +16,10 @@ import { createWorld, step, STANCE_GUARD_MS } from "./world.ts";
 import { NO_INPUT, STEP_MS } from "./types.ts";
 import type { Enemy, Input, World } from "./types.ts";
 import { makeEnemy } from "./enemy.ts";
-import { lastingMs, slotCooldownMs, slotCost } from "./spells.ts";
+import { attachAffix, lastingMs, slotCooldownMs, slotCost } from "./spells.ts";
 import { fireUnit } from "./cast.ts";
 import { freeCastScope } from "./spells.ts";
-import { fullReach, SWING_ACTIVE_MS, SWING_DAMAGE } from "./melee.ts";
+import { fullReach, SWING_ACTIVE_MS, SWING_DAMAGE, SWING_DAMAGE as SWORD_DAMAGE } from "./melee.ts";
 import { waveCentre, waveRadius } from "./shapes.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
 import { ITEMS, plainInstance } from "../spells/index.ts";
@@ -499,6 +499,105 @@ describe("Dash Slash's shove", () => {
     for (let i = 0; i < 60; i++) run(w, at(PX + 300, PY), 1, [ahead], false);
     expect(hurt(e)).toBeGreaterThan(0);
     expect((PY - 38) - e.y).toBeGreaterThan(30);
+  });
+});
+
+describe("sword energy is the sword's damage", () => {
+  it("cuts twice as hard when the sword does, and the base figure is the same swings at a plain sword", () => {
+    const cut = (swordDamage: number): number => {
+      const w = arena("dash_slash");
+      w.player.mods = { ...w.player.mods, swordDamage };
+      const e = body(w, 90, 0);
+      press(w, at(PX + 300, PY), [e]);
+      run(w, at(PX + 300, PY), 40, [e], false);
+      return hurt(e);
+    };
+    expect(cut(2) / cut(1)).toBeCloseTo(2, 1);
+    for (const id of ["dash_slash", "crescent_edge"]) {
+      const p = ITEMS.get(id)!.params;
+      expect(Number(p["damage"]) * SPELL_DAMAGE_SCALE, id).toBeCloseTo(Number(p["sword"]) * SWORD_DAMAGE, 1);
+    }
+  });
+
+  it("puts the sword's damage into Crescent Edge's waves", () => {
+    const w = arena("crescent_edge");
+    press(w, at(PX + 300, PY));
+    const plain = w.player.enchant!.damage;
+    const v = arena("crescent_edge");
+    v.player.mods = { ...v.player.mods, swordDamage: 1.5 };
+    press(v, at(PX + 300, PY));
+    expect(v.player.enchant!.damage / plain).toBeCloseTo(1.5, 2);
+  });
+});
+
+describe("the run's own affixes (Dash Slash)", () => {
+  const withAffix = (id: string): World => {
+    const w = arena("dash_slash", `run-${id}`);
+    let slot = w.spells[0]!;
+    for (let t = 0; t < 3; t++) slot = attachAffix(slot, id) ?? slot;
+    w.spells[0] = slot;
+    return w;
+  };
+
+  it("momentum: each body the run cuts carries it further", () => {
+    const ran = (w: World): number => {
+      for (const [dx, dy] of [[40, 0], [70, 4], [100, -4]] as const) body(w, dx, dy);
+      press(w, at(PX + 400, PY));
+      for (let i = 0; i < 60; i++) step(w, at(PX + 400, PY));
+      return w.player.x - PX;
+    };
+    expect(ran(withAffix("momentum"))).toBeGreaterThan(ran(arena("dash_slash", "run-bare")) + 60);
+  });
+
+  it("undertow: the wake leaves a body beside the run nearer its line, not further off", () => {
+    const off = (w: World): number => {
+      const ahead = body(w, 110, 0);
+      const e = body(w, 70, 40);
+      press(w, at(PX + 300, PY), [ahead]);
+      for (let i = 0; i < 60; i++) run(w, at(PX + 300, PY), 1, [ahead], false);
+      expect(hurt(e)).toBeGreaterThan(0);
+      return Math.abs(e.y - PY);
+    };
+    expect(off(withAffix("undertow"))).toBeLessThan(40);
+    expect(off(arena("dash_slash", "under-bare"))).toBeGreaterThan(40);
+  });
+
+  it("finale: the run's end throws its cut on ahead, into a body past where it stopped", () => {
+    const w = withAffix("finale");
+    const far = body(w, 230, 0);
+    press(w, at(PX + 230, PY), [far]);
+    for (let i = 0; i < 80; i++) run(w, at(PX + 230, PY), 1, [far], false);
+    expect(w.player.x).toBeLessThan(far.x - 60);
+    expect(hurt(far)).toBeGreaterThan(0);
+    const bare = arena("dash_slash", "fin-bare");
+    const f2 = body(bare, 230, 0);
+    press(bare, at(PX + 230, PY), [f2]);
+    for (let i = 0; i < 80; i++) run(bare, at(PX + 230, PY), 1, [f2], false);
+    expect(hurt(f2)).toBe(0);
+  });
+});
+
+describe("fire an affix lends (kindle on a spell that is not fire)", () => {
+  const burnOn = (spell: string, affix?: string): number => {
+    const w = arena(spell, `burn-${spell}-${affix ?? "bare"}`);
+    if (affix) {
+      let slot = w.spells[0]!;
+      for (let t = 0; t < 3; t++) slot = attachAffix(slot, affix) ?? slot;
+      w.spells[0] = slot;
+    }
+    const e = body(w, 90, 0);
+    let most = 0;
+    for (let i = 0; i < 600; i++) {
+      run(w, at(e.x, e.y, { spell: 0 }), 1, [e]);
+      w.player.mana = w.staff.mana_max;
+      most = Math.max(most, e.burnSources);
+    }
+    return most;
+  };
+
+  it("keeps two sources lit at most, where a fire spell's own burn stacks to four", () => {
+    expect(burnOn("magic_bolt", "kindle")).toBe(2);
+    expect(burnOn("ember_dart")).toBeGreaterThan(2);
   });
 });
 

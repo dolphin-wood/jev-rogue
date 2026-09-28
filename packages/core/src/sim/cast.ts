@@ -9,18 +9,20 @@
 import type { ItemRegistry } from "../spells/items.ts";
 import { num, str } from "../spells/items.ts";
 import type { Element, ElementPowers, ItemInstance } from "../types.ts";
-import type { Bullet, Enemy, Landing, World } from "./types.ts";
+import type { Bullet, Enemy, Landing, PlayerWakeCut, World } from "./types.ts";
 import { DASH_SPEED, PLAYER_RADIUS } from "./types.ts";
 import { ORB_OFFSET_PX } from "./shapes.ts";
 import { acquire } from "./bullets.ts";
 import { hasLineOfSight, normalise, tileAt } from "./collide.ts";
 import { GRID_H, GRID_W, TILE_PX, Tile } from "../types.ts";
 import { assistAim, screenTargets, seekTargets } from "./aim.ts";
-import { arcJumps } from "./affix-hooks.ts";
+import { arcJumps, effectOf } from "./affix-hooks.ts";
+import type { AttachedAffix } from "./affix-hooks.ts";
 import { lightFire } from "./fire.ts";
 import { addPower, addPowers, copyPowers, dominantElement, noPowers } from "../content/tags.ts";
 import { raisePillar } from "./props.ts";
 import { startWake } from "./attacks.ts";
+import { SWING_DAMAGE } from "./melee.ts";
 
 /**
  * What one cast carries onto everything it fires: the key's multipliers, the
@@ -237,7 +239,14 @@ export function fireUnit(
   const charged = num(base.params, "charge", 0) > 0;
   const share = Math.max(0, Math.min(1, mods.charge));
   const chargeMult = charged ? chargeScale(share) : 1;
-  const damage = num(base.params, "damage") * mods.damageMult * SPELL_DAMAGE_SCALE * chargeMult;
+  /*
+   * A sword-energy spell (`sword`, `swordShare` in items.ts) hits for that
+   * many swings of the sword **as the build has it**, so `keen_edge` sharpens
+   * its waves as it does the blade; every other spell for its own figure.
+   */
+  const swordK = num(base.params, "sword", 0);
+  const damage = (swordK > 0 ? swordK * SWING_DAMAGE * (world.player.mods?.swordDamage ?? 1)
+    : num(base.params, "damage") * SPELL_DAMAGE_SCALE) * mods.damageMult * chargeMult;
   /*
    * **What the build is worth, as a multiplier**: the spell's level and every
    * affix that multiplies its damage, without the pool-wide scale or
@@ -263,6 +272,8 @@ export function fireUnit(
   const powers = noPowers();
   addPower(powers, str(base.params, "element", "none") as Element, num(base.params, "element_power", 1));
   addPowers(powers, mods.elements);
+  // Fire only an affix brought: its burn stacks lower (`ElementPowers.borrowedFire`).
+  if (powers.fire > 0 && str(base.params, "element", "none") !== "fire") powers.borrowedFire = true;
   const speed = num(base.params, "speed") * mods.speedMult;
   const radius = num(base.params, "radius") * mods.radiusMult
     * (charged ? CHARGE_TAP_SIZE + (1 - CHARGE_TAP_SIZE) * share : 1);
@@ -675,7 +686,8 @@ export function fireUnit(
       thick: num(base.params, "wake_thick", 12), speed: num(base.params, "wake_speed", 240), damage: 0,
     }, {
       damage: damage * num(base.params, "wake_share", 0.5), element, powers: clonePowers(powers), proc, statusMult,
-      spellIndex: mods.spellIndex, hits: [], knock: num(base.params, "knock", 0), weight,
+      spellIndex: mods.spellIndex, hits: [], knock: num(base.params, "knock", 0), weight, runDamage: damage,
+      ...runAffixes(mods.affixes),
     }) : null;
     p.facing = Math.atan2(dir.y, dir.x);
     shots.push({ x: from.x, y: from.y, family: base.id });
@@ -1037,6 +1049,23 @@ export function groundOf(params: Readonly<Record<string, number | string>>): "fi
 export const DOOM_RADIUS = 40;
 /** How far a `contagion` poison jumps from the body that died, where the spell does not say. */
 export const CONTAGION_REACH = 96;
+/**
+ * **The run's own affixes** (`momentum`, `undertow`, `finale`), read once at
+ * the cast into the wake's figures: how far each cut carries the run on,
+ * whether the wake draws in, and what the run throws when it stops.
+ */
+function runAffixes(affixes: readonly AttachedAffix[]): Pick<PlayerWakeCut,
+  "momentumPx" | "momentumLeft" | "pull" | "finaleShare" | "finaleReach"> {
+  const out = { momentumPx: 0, momentumLeft: 0, pull: 0, finaleShare: 0, finaleReach: 0 };
+  for (const a of affixes) {
+    const e = effectOf(a);
+    if (e?.kind === "momentum") { out.momentumPx = e.px; out.momentumLeft = e.times; }
+    if (e?.kind === "undertow") out.pull = e.pull;
+    if (e?.kind === "finale") { out.finaleShare = e.share; out.finaleReach = e.reachPx; }
+  }
+  return out;
+}
+
 /**
  * The shortest leap: a body standing against the caster is still a leap, not
  * a ring cast on the spot, so the untouchable air time is never nothing.

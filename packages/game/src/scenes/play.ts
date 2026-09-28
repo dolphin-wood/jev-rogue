@@ -18,7 +18,7 @@ import {
   portalInReach, pendingPortalNear, pendingDoors, resolvePortals, cardTypesOf, answerOffer, PORTAL_RISE_MS, bucketHealth, bucketRecentDamage,
   rewardInReach, REWARD_RISE_MS, NO_INPUT, tetherEnds, TOLL_PULSE_MS, ALERT_MS, MINE_BLAST, MINE_PRIME_MS, MINE_BURST_MS,
   MUSKET_RANGE, MUSKET_SPREAD_DEG, MUSKET_WINDUP_MS, FLAME_ROLL_MS, FLAME_LIFE_MS, flameRays, muzzleOf,
-  ELEMENT_TINT, spellLookOf,
+  ELEMENT_TINT, spellLookOf, swordEnergyLook, energyElements, energyTurn, WAKE_STRIPE,
   levelAt, withLevels, levelBonus, LEVEL_HP, swordAt,
   HIT_FLASH_MS, BOSS_ROAR_MS, spellReady, castTiming, hasLineOfSight,
 } from "@jr/core";
@@ -49,7 +49,7 @@ import type { BaseItem, CardNeeds, DoorOffer, NpcKind, OfferPromise, RoomStage, 
 import {
   BOSS_LEAP_RISE_MS, BOSS_LEAP_LOCK_MS, BOSS_METEOR_GATHER_MS, BOSS_METEOR_UP_MS, BOSS_METEOR_RAIN_MS, BOSS_SLAM_IMPACT_PX, BOSS_LEAP_RADIUS, BOSS_QUAKE_MS, SLAM_SHOCK_RADIUS,
   BOSS_POWER,
-  withLevel, levelDamageMult, dismantleValue, spellDetail, offerStatParts, slotStatParts, statusForecast, SPELL_DAMAGE_SCALE, rarityOf, STAT_UPGRADES, statById, SPELL_LEVEL_MAX, SCHOOL_COLOUR, schoolOf, spellSound, shapeEventSound, offerCards,
+  withLevel, levelDamageMult, dismantleValue, holdToStrength, baseStrength, spellDetail, offerStatParts, slotStatParts, statusForecast, SPELL_DAMAGE_SCALE, rarityOf, STAT_UPGRADES, statById, SPELL_LEVEL_MAX, SCHOOL_COLOUR, schoolOf, spellSound, shapeEventSound, offerCards,
   slotCooldownMs, DASH_COOLDOWN_MS, DASH_MS,
   chargeShare, chargesOf, bankOf, chargeIntervalMs, chargeMsOf, DASH_SPEED, acquire,
 } from "@jr/core";
@@ -1825,7 +1825,9 @@ export class PlayScene extends Phaser.Scene {
    * Each enchant wave in flight (`drawWaves`): its flicker's seed. Keyed by
    * where it was thrown from as well, because the pool recycles slots.
    */
-  private readonly waveEdges = new Map<Bullet, { ox: number; oy: number; seed: number }>();
+  private readonly waveEdges = new Map<Bullet, { ox: number; oy: number; seed: number; turn: number }>();
+  /** Waves of sword energy seen so far: each new one takes the next element's turn (`energyTurn`). */
+  private waveTurns = 0;
   private readonly ringCasts = new Map<number, { x: number; y: number; rings: Set<number> }>();
   private readonly firedCells = new Map<object, number>();
   /** A leap in the air: where it left, where it will come down, how long it flies, and how wide its ring is. */
@@ -2540,7 +2542,8 @@ export class PlayScene extends Phaser.Scene {
     if (!fight && (stage === "shop" || this.npcRoom === "merchant"))
       for (const k of SHELF_KINDS)
         cards.push({
-          room_index: run.roomIndex, pool: cardPool(ITEMS, this.ownedFor(k), k, held, {}, needs),
+          // The shelf deals what this point of the run is strong enough for (`baseStrength`), at tier one.
+          room_index: run.roomIndex, pool: cardPool(ITEMS, this.ownedFor(k), k, held, { grade: baseStrength(run.roomIndex, false) }, needs),
           count: 1, pity: false, temptation: false, salt: `shop_${k}`,
         });
     /*
@@ -3305,14 +3308,14 @@ export class PlayScene extends Phaser.Scene {
         this.eliteMarks.push({ portal, mark });
       }
       /*
-       * **The grade, as stars on the arch's top-right corner**: one for each
-       * step above the first, on an elite door and on a normal door raised
-       * late in the run alike. It was a star in the row of schools, which read
-       * as one more of them. Kept with the elite marks, which show and fade
-       * as the door does.
+       * **The door's strength, as stars on the arch's top-right corner**: one
+       * for each strength, I to III, the number the cards behind it say
+       * (`card.strength*`). A door's strength rises with the run
+       * (`baseStrength`), so every door shows at least one. Kept with the
+       * elite marks, which show and fade as the door does.
        */
-      for (let k = 1; k < (portal.grade ?? 1); k++) {
-        const star = this.add.star(portal.x + 10, portal.y - 9 + (k - 1) * 8.5, 5, 1.9, 4.2, 0xffd45e)
+      for (let k = 0; k < (portal.onward || portal.npc ? 0 : portal.grade ?? 1); k++) {
+        const star = this.add.star(portal.x + 10, portal.y - 9 + k * 8.5, 5, 1.9, 4.2, 0xffd45e)
           .setStrokeStyle(0.8, 0x0d0b1f).setDepth(8.7).setVisible(false);
         this.eliteMarks.push({ portal, mark: star });
       }
@@ -7192,7 +7195,9 @@ export class PlayScene extends Phaser.Scene {
         this.shed({ x: p.x + (Math.random() - 0.5) * 8, y: p.y + 3, vx: (Math.random() - 0.5) * 18, vy: -20 - Math.random() * 25, ms: 0, life: 280 + Math.random() * 200, size: 0.9 + Math.random() * 0.5, colour: Math.random() < 0.5 ? 0xffc85a : 0xff8a3a, gravity: -30 });
     }
     if (p.enchant) {
-      const look = spellLookOf(w.spells[p.enchant.spellIndex]?.item.base ?? "crescent_edge", "none");
+      // The enchant's motes take the elements' turns slowly, as its waves do one a swing.
+      const look = swordEnergyLook(w.spells[p.enchant.spellIndex]?.item.base ?? "crescent_edge",
+        energyTurn(energyElements(p.enchant.powers, p.enchant.element), w.tick / 40));
       const at = this.frameCrystal ?? this.handAt;
       if (at && swingPhase(p) === "none") {
         const k = ending(p.enchant.ms, 1000) ? 0.35 : 1;
@@ -7868,7 +7873,9 @@ export class PlayScene extends Phaser.Scene {
        * the ground's (`drawShockwaves`).
        */
       const slot = p.strikeWake.byPlayer ? w.spells[p.strikeWake.byPlayer.spellIndex] : null;
-      const look = spellLookOf(slot?.item.base ?? "dash_slash", "none");
+      // The blade wears the colour of the stretch being laid (`WAKE_STRIPE`).
+      const look = swordEnergyLook(slot?.item.base ?? "dash_slash",
+        energyTurn(energyElements(p.strikeWake.byPlayer?.powers, p.strikeElement), p.strikeWake.laid / WAKE_STRIPE));
       const ux = p.dashX, uy = p.dashY, nx = -uy, ny = ux;
       const bx = p.x + ux * 4, by = p.y - BODY_LIFT + uy * 4;
       const reach = 30;
@@ -9556,7 +9563,7 @@ export class PlayScene extends Phaser.Scene {
      * answers in. `term` is the one place they become words, and the request
      * that goes to Jev is untouched by it (doc 002).
      */
-    const grade = (n: number) => (n > 1 ? `  ${t("plan.grade", { n })}` : "");
+    const grade = (n: number) => `  ${t("plan.grade", { n: ROMAN[n] ?? String(n) })}`;
     const types = doorTypes(promise);
     const reward = types
       ? t("plan.rewardPromise", { kind: term(this.roomReward, "reward_kind"), promise: types }) + grade(promise.grade)
@@ -10786,7 +10793,7 @@ export class PlayScene extends Phaser.Scene {
     const kinds: readonly RewardCardKind[] = this.shopping ? SHELF_KINDS : [this.roomReward];
     const requests = kinds.flatMap((kind): CardRequest[] => {
       const shown = current.filter((card) => card.kind === kind).map((card) => card.itemId ?? "");
-      const promise: OfferPromise = this.shopping ? {} : { grade: this.roomPromise.grade, style: this.intent.preset };
+      const promise: OfferPromise = this.shopping ? { grade: baseStrength(index, false) } : { grade: this.roomPromise.grade, style: this.intent.preset };
       const base = cardPool(ITEMS, this.ownedFor(kind), kind, held, promise, needs);
       const pool = freshRerollPool(base, shown, this.shopping ? 1 : CARDS_PER_OFFER);
       return pool ? [{
@@ -11667,7 +11674,9 @@ export class PlayScene extends Phaser.Scene {
         });
       doors = (plan.portals?.doors ?? ruleDoors(run, src.stream("offer"), this.portalCount)).map((d) => {
         if (d.npc || d.reward === "gold") return d;
-        const ids = plan.cards[kinds.indexOf(d.reward as (typeof kinds)[number])]?.ids ?? [];
+        const k = kinds.indexOf(d.reward as (typeof kinds)[number]);
+        // Held to the strength the door was given (`holdToStrength`).
+        const ids = holdToStrength(d.reward, plan.cards[k]?.ids ?? [], d.grade ?? 1, requests[k]?.pool);
         return ids.length ? { ...d, ...cardTypesOf(d.reward, ids), cards: ids } : d;
       });
       nextCardPlans = new Map(kinds.flatMap((kind, i) => {
@@ -11972,7 +11981,7 @@ export class PlayScene extends Phaser.Scene {
           : near.families?.length ? t("prompt.familyStat", { family: doorTypes(near)! })
             : term(near.reward ?? "", "reward_kind");
       const mark = near.onward || !near.elite ? "" : `${t("roomType.elite")} `;
-      const pips = near.onward || (near.grade ?? 1) <= 1 ? "" : ` ${"★".repeat((near.grade ?? 1) - 1)}`;
+      const pips = near.onward || near.npc ? "" : ` ${"★".repeat(near.grade ?? 1)}`;
       this.prompt.setText(t("prompt.portal", { what: `${mark}${what}${pips}` }));
       /*
        * Above the door's own badges — the reward or vendor icon, and the
@@ -12956,7 +12965,7 @@ export class PlayScene extends Phaser.Scene {
   private drawFocus(x: number, y: number, angle: number, depth: number, charged: boolean): void {
     const g = this.focusGfx;
     g.clear().setDepth(depth);
-    const px = new Map<string, number>();
+    const px = new Map<number, number>();
     const dx = Math.cos(angle), dy = Math.sin(angle), nx = -dy, ny = dx;
     const ax = x * ART_SCALE, ay = y * ART_SCALE;
     // Lengths and widths in pixels at the tuned scale.
@@ -12966,7 +12975,7 @@ export class PlayScene extends Phaser.Scene {
         const u = (t - from) / Math.max(1, to - from);
         const wd = width(u) * TUNED;
         for (let s = -wd / 2; s <= wd / 2; s += 0.35)
-          px.set(`${Math.round(ax + dx * t + nx * s)},${Math.round(ay + dy * t + ny * s)}`, colour(s / Math.max(0.5, wd / 2), u));
+          px.set(pixKey(Math.round(ax + dx * t + nx * s), Math.round(ay + dy * t + ny * s)), colour(s / Math.max(0.5, wd / 2), u));
       }
     };
     if (FOCUS === "staff") {
@@ -12978,24 +12987,21 @@ export class PlayScene extends Phaser.Scene {
       stroke(3.5, 12, (u) => 2.6 - u * 1.6, (s, u) => (u > 0.85 || s < 0 ? 0xeef2ff : 0x7d849e));
       stroke(4.5, 5.5, () => 1, () => 0x08acd1);
     }
-    const ink = new Set<string>();
-    for (const k of px.keys()) {
-      const [kx, ky] = k.split(",").map(Number) as [number, number];
+    const ink = new Set<number>();
+    for (const k of px.keys())
       for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
-        const n = `${kx + ox},${ky + oy}`;
+        const n = k + oy * PIX_ROW + ox;
         if (!px.has(n)) ink.add(n);
       }
-    }
     const cell = 1 / ART_SCALE;
     const flash = charged && (this.world.tick >> 1) & 1;
     const p = this.world.player;
     g.setAlpha(dashInvulnerable(p) ? 0.55 : p.invulnMs > 0 && (this.world.tick >> 2) & 1 ? 0.35 : 1);
     g.fillStyle(0x040407, 1);
-    for (const k of ink) { const [kx, ky] = k.split(",").map(Number) as [number, number]; g.fillRect(kx * cell - cell / 2, ky * cell - cell / 2, cell, cell); }
+    for (const k of ink) g.fillRect(pixX(k) * cell - cell / 2, pixY(k) * cell - cell / 2, cell, cell);
     for (const [k, c] of px) {
-      const [kx, ky] = k.split(",").map(Number) as [number, number];
       g.fillStyle(flash ? 0xffffff : c, 1);
-      g.fillRect(kx * cell - cell / 2, ky * cell - cell / 2, cell, cell);
+      g.fillRect(pixX(k) * cell - cell / 2, pixY(k) * cell - cell / 2, cell, cell);
     }
   }
 
@@ -13009,7 +13015,7 @@ export class PlayScene extends Phaser.Scene {
    */
   private drawConjured(bx: number, by: number, dx: number, dy: number, len: number, alpha: number, lead: number, white: boolean): void {
     const g = this.conjureGfx;
-    const px = new Map<string, number>();
+    const px = new Map<number, number>();
     const nx = -dy * lead, ny = dx * lead;
     const L = len * ART_SCALE;
     const ax = bx * ART_SCALE, ay = by * ART_SCALE;
@@ -13028,21 +13034,21 @@ export class PlayScene extends Phaser.Scene {
       for (let sAc = -h; sAc <= h; sAc += 0.35) {
         const k = sAc / h;
         const c = t < 1.6 * TUNED ? 0xcfeeff : k > 0.45 ? 0xffffff : k < -0.6 ? 0x6fb8ff : Math.abs(k) < 0.25 ? 0xf2fdff : 0xa9e2ff;
-        px.set(`${Math.round(ax + dx * t + nx * sAc)},${Math.round(ay + dy * t + ny * sAc)}`, c);
+        px.set(pixKey(Math.round(ax + dx * t + nx * sAc), Math.round(ay + dy * t + ny * sAc)), c);
       }
     }
     const cell = 1 / ART_SCALE;
-    const rim = new Set<string>();
-    for (const key of px.keys()) {
-      const [kx, ky] = key.split(",").map(Number) as [number, number];
-      for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) if (!px.has(`${kx + ox},${ky + oy}`)) rim.add(`${kx + ox},${ky + oy}`);
-    }
+    const rim = new Set<number>();
+    for (const key of px.keys())
+      for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+        const n = key + oy * PIX_ROW + ox;
+        if (!px.has(n)) rim.add(n);
+      }
     g.fillStyle(0x16266a, alpha);
-    for (const key of rim) { const [kx, ky] = key.split(",").map(Number) as [number, number]; g.fillRect(kx * cell - cell / 2, ky * cell - cell / 2, cell, cell); }
+    for (const key of rim) g.fillRect(pixX(key) * cell - cell / 2, pixY(key) * cell - cell / 2, cell, cell);
     for (const [key, c] of px) {
-      const [kx, ky] = key.split(",").map(Number) as [number, number];
       g.fillStyle(white ? 0xffffff : c, alpha);
-      g.fillRect(kx * cell - cell / 2, ky * cell - cell / 2, cell, cell);
+      g.fillRect(pixX(key) * cell - cell / 2, pixY(key) * cell - cell / 2, cell, cell);
     }
   }
 
@@ -13197,10 +13203,10 @@ export class PlayScene extends Phaser.Scene {
   }
 
   /** The renderer's memory of one enchant wave, made the first time it is seen (`waveEdges`). */
-  private waveMemo(b: Bullet): { ox: number; oy: number; seed: number } {
+  private waveMemo(b: Bullet): { ox: number; oy: number; seed: number; turn: number } {
     let m = this.waveEdges.get(b);
     if (!m || m.ox !== b.originX || m.oy !== b.originY) {
-      m = { ox: b.originX, oy: b.originY, seed: (this.world.tick * 7 + Math.round(b.originX)) % 97 };
+      m = { ox: b.originX, oy: b.originY, seed: (this.world.tick * 7 + Math.round(b.originX)) % 97, turn: this.waveTurns++ };
       this.waveEdges.set(b, m);
     }
     return m;
@@ -13233,7 +13239,9 @@ export class PlayScene extends Phaser.Scene {
       const m = this.waveMemo(b);
       const c = waveCentre(b);
       const life = this.waveLife(b);
-      const look = lookOf(b, w.spells);
+      // In its element's colour when the enchant carries one; several take turns, a wave each (`energyTurn`).
+      const look = swordEnergyLook(b.spellIndex >= 0 ? w.spells[b.spellIndex]?.item.base ?? null : null,
+        energyTurn(energyElements(b.powers, b.element), m.turn));
       const wave = {
         x: c.x, y: c.y, radius: waveRadius(b), facing: Math.atan2(b.vy, b.vx), half: waveHalfSpan(),
         thick: WAVE_BODY_PX, life, flash: b.outPx - b.outLeftPx < WAVE_FLASH_PX, tick: w.tick, seed: m.seed,
@@ -14116,16 +14124,20 @@ export class PlayScene extends Phaser.Scene {
         continue;
       }
       if (!s.alive || s.facing === undefined || s.half === undefined) continue;
+      // A `finale`'s crescent is the player's own sword energy, in its spell's light or its element's.
+      const own = s.byPlayer ? swordEnergyLook(w.spells[s.byPlayer.spellIndex]?.item.base ?? "dash_slash",
+        energyTurn(energyElements(s.byPlayer.powers, s.byPlayer.element), (s.wakeIndex ?? 0) / WAKE_STRIPE)) : null;
+      const palette = own ? wavePalette(own.glow, own.core) : KING_WAVE;
       const wave = {
         x: s.x, y: s.y, radius: s.inner + s.thickness, facing: s.facing, half: s.half,
-        thick: s.thickness, life: Math.max(0, Math.min(1, (s.maxRadius - s.inner) / (TILE_PX * 3))),
-        flash: false, tick: w.tick, seed: Math.round(s.x + s.y) % 97, palette: KING_WAVE,
+        thick: s.thickness, life: Math.max(0, Math.min(1, (s.maxRadius - s.inner) / (own ? TILE_PX : TILE_PX * 3))),
+        flash: false, tick: w.tick, seed: Math.round(s.x + s.y) % 97, palette,
       };
       // On the floor layer, which is cleared with the rings — the blade layer is cleared after this draws.
       drawCrescentWave(this.soilGfx, wave, Math.min(1, 0.25 + wave.life));
       const back = { x: -Math.cos(s.facing), y: -Math.sin(s.facing) };
       for (const q of waveTrailPoints(wave, Math.random() < 0.7 ? 2 : 1))
-        this.shed({ x: q.x, y: q.y, vx: back.x * (20 + Math.random() * 30) + (Math.random() - 0.5) * 24, vy: back.y * (20 + Math.random() * 30) + (Math.random() - 0.5) * 24 - 8, ms: 0, life: 200 + Math.random() * 160, size: 1, colour: Math.random() < 0.5 ? KING_WAVE.mid : KING_WAVE.aura, gravity: -10 });
+        this.shed({ x: q.x, y: q.y, vx: back.x * (20 + Math.random() * 30) + (Math.random() - 0.5) * 24, vy: back.y * (20 + Math.random() * 30) + (Math.random() - 0.5) * 24 - 8, ms: 0, life: 200 + Math.random() * 160, size: 1, colour: Math.random() < 0.5 ? palette.mid : palette.aura, gravity: -10 });
     }
     /*
      * **A run's wake** (`layWake`): its stretches are one attack laid a piece
@@ -14135,22 +14147,29 @@ export class PlayScene extends Phaser.Scene {
      * the danger palette. Each stretch fades over its last tile of roll.
      */
     // One ribbon per wake and side: the two sides of a run roll out on opposite facings.
-    const wakes = new Map<string, { facing: number; player: number; stretches: WakeStretch[] }>();
+    const wakes = new Map<string, { facing: number; player: number; elements: string[]; stretches: WakeStretch[] }>();
     const wakeIds = new Map<object, number>();
     for (const s of w.shockwaves) {
       if (!s.alive || !s.wake || s.facing === undefined || s.width === undefined) continue;
       if (!wakeIds.has(s.wake)) wakeIds.set(s.wake, wakeIds.size);
       const key = `${wakeIds.get(s.wake)}:${Math.round(s.facing * 100)}`;
       let entry = wakes.get(key);
-      if (!entry) wakes.set(key, entry = { facing: s.facing, player: s.byPlayer ? s.byPlayer.spellIndex : -2, stretches: [] });
+      if (!entry) wakes.set(key, entry = {
+        facing: s.facing, player: s.byPlayer ? s.byPlayer.spellIndex : -2,
+        elements: energyElements(s.byPlayer?.powers, s.byPlayer?.element), stretches: [],
+      });
       entry.stretches.push({
         x: s.x, y: s.y, inner: s.inner, thick: s.thickness, width: s.width,
-        life: Math.max(0, Math.min(1, (s.maxRadius - s.inner) / TILE_PX)),
+        life: Math.max(0, Math.min(1, (s.maxRadius - s.inner) / TILE_PX)), index: s.wakeIndex,
       });
     }
     for (const v of wakes.values()) {
-      const look = v.player > -2 ? spellLookOf(w.spells[v.player]?.item.base ?? "dash_slash", "none") : null;
+      const base = v.player > -2 ? w.spells[v.player]?.item.base ?? "dash_slash" : null;
+      const look = base ? swordEnergyLook(base, v.elements[0]!) : null;
+      // Several elements stripe the wake, a few stretches each, in turn (`WAKE_STRIPE`).
+      const striped = base && v.elements.length > 1 ? v.elements.map((el) => { const l = swordEnergyLook(base, el); return wavePalette(l.glow, l.core); }) : null;
       drawWakeRibbon(this.soilGfx, {
+        ...(striped ? { paletteOf: (i: number) => striped[Math.floor(i / WAKE_STRIPE) % striped.length]! } : {}),
         stretches: v.stretches, facing: v.facing, rise: look ? 12 : 18, trail: look ? 26 : 34, tick: w.tick,
         seed: Math.round(v.stretches[0]!.x + v.stretches[0]!.y) % 97,
         palette: look ? wavePalette(look.glow, look.core) : KING_WAVE,
@@ -18707,6 +18726,25 @@ function sentenceOf(str: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/*
+ * **An art pixel as one number**, for the blades and the focus drawn a pixel
+ * at a time. They were keyed by "x,y" strings — built for every pixel set,
+ * split again for every pixel drawn and for each of its eight neighbours —
+ * which was most of what a swing's blade cost. Coordinates are art pixels
+ * (world × ART_SCALE), inside ±2^15 for any room; a neighbour is ±1 and ±ROW.
+ */
+const PIX_OFF = 1 << 15;
+const PIX_ROW = 1 << 16;
+function pixKey(x: number, y: number): number {
+  return (y + PIX_OFF) * PIX_ROW + (x + PIX_OFF);
+}
+function pixX(k: number): number {
+  return (k % PIX_ROW) - PIX_OFF;
+}
+function pixY(k: number): number {
+  return Math.floor(k / PIX_ROW) - PIX_OFF;
+}
+
 /** `?spells=a,b+affix,c`: a development loadout (`debugSpells`). Empty when not asked for. */
 function DEBUG_SPELLS(): string[] {
   const asked = new URLSearchParams(globalThis.location?.search ?? "").get("spells");
@@ -18764,13 +18802,21 @@ function drawCardDeco(
   }
 }
 
-/** A card's look by rarity: its label, frame, ground and corner decoration. */
+/** A strength as the cards and doors write it. */
+const ROMAN: Readonly<Record<number, string>> = { 1: "I", 2: "II", 3: "III" };
+
+/**
+ * A card's look by its **strength** (the grade: I, II, III): its label, frame,
+ * ground and corner decoration. It was called rarity, and a card that was
+ * "legendary" behind a door that deals the strongest affixes read as two
+ * different things; it is one, and the label says which.
+ */
 const RARITY_STYLE: Readonly<Record<"common" | "rare" | "legendary", {
   label: StringKey; text: string; stroke: number; strokeOn: number; fill: number; fillOn: number; corner: number;
 }>> = {
-  common: { label: "card.common", text: "#c9cfe8", stroke: 0x5a628f, strokeOn: 0xe8e3d8, fill: 0x161334, fillOn: 0x221d46, corner: 0x8792b5 },
-  rare: { label: "card.rare", text: "#6fb4ff", stroke: 0x3f7fe0, strokeOn: 0x9fd0ff, fill: 0x13203f, fillOn: 0x1b2c58, corner: 0x5a9ef0 },
-  legendary: { label: "card.legendary", text: "#ffb040", stroke: 0xd08a30, strokeOn: 0xffd080, fill: 0x2a1d18, fillOn: 0x3a2818, corner: 0xe8a040 },
+  common: { label: "card.strength1", text: "#c9cfe8", stroke: 0x5a628f, strokeOn: 0xe8e3d8, fill: 0x161334, fillOn: 0x221d46, corner: 0x8792b5 },
+  rare: { label: "card.strength2", text: "#6fb4ff", stroke: 0x3f7fe0, strokeOn: 0x9fd0ff, fill: 0x13203f, fillOn: 0x1b2c58, corner: 0x5a9ef0 },
+  legendary: { label: "card.strength3", text: "#ffb040", stroke: 0xd08a30, strokeOn: 0xffd080, fill: 0x2a1d18, fillOn: 0x3a2818, corner: 0xe8a040 },
 };
 
 /** The colour of each kind of figure on a numbers line; see `statRow`. */

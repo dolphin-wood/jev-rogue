@@ -76,6 +76,9 @@ export const ZH_CONTENT: ContentTable = {
   blight: { name: "枯萎", description: "命中时额外叠加中毒，不影响法术原有的元素；中毒会使敌人减速并持续受到伤害。同时带有两种元素状态的敌人会受到更多伤害。" },
   haste: { name: "急速", description: "用此法术击杀敌人时，冷却恢复更快。" },
   resonance: { name: "共鸣", description: "挥剑每命中数次，就会对被击中的敌人施放一次此法术，不消耗法力。" },
+  momentum: { name: "乘势", description: "冲刺每斩过一个敌人，就会继续向前多冲一段，最多三次。" },
+  undertow: { name: "回流", description: "冲刺两侧的剑气不再击退敌人，而是把敌人吸向冲刺路线；冲刺本身只会把敌人向前推一点。" },
+  finale: { name: "收势", description: "冲刺结束时，向前甩出一道新月剑气，贯穿范围内的每个敌人。" },
 
   /* --------------------------------- stats ------------------------------- */
   fleet: { name: "轻盈", description: "移动更快。" },
