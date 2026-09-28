@@ -115,6 +115,28 @@ export const ENERGY_TINT: Readonly<Record<Exclude<Element, "none">, { core: numb
   poison: { core: 0xecffd8, glow: 0x5fd64a },
 };
 
+/**
+ * **Every element sword energy carries, in turn** — fire, ice, poison, the
+ * ones with any power — or `["none"]` for plain. Several are shown by taking
+ * turns, one colour to a wave or a stretch of a wake, all equally: a blend
+ * of two lights is a third that is neither (fire and ice made grey), and one
+ * wave in two colours read as neither. Equal turns rather than by strength,
+ * because what each is worth is the hit's to say, not the colour's.
+ */
+export function energyElements(powers: Readonly<Partial<Record<"fire" | "ice" | "poison", number>>> | null | undefined, fallback: Element | string = "none"): string[] {
+  const out = (["fire", "ice", "poison"] as const).filter((el) => (powers?.[el] ?? 0) > 0);
+  if (out.length > 0) return out;
+  return [fallback === "fire" || fallback === "ice" || fallback === "poison" ? fallback : "none"];
+}
+
+/** The element whose turn it is, for the `turn`th wave or stripe. */
+export function energyTurn(elements: readonly string[], turn: number): string {
+  return elements[((Math.floor(turn) % elements.length) + elements.length) % elements.length] ?? "none";
+}
+
+/** How many of a wake's stretches wear one colour before the next takes its turn. */
+export const WAKE_STRIPE = 3;
+
 export function swordEnergyLook(base: string | null, element: Element | string): SpellLook {
   const own = spellLookOf(base, "none");
   const t = element === "fire" || element === "ice" || element === "poison" ? ENERGY_TINT[element] : null;

@@ -787,6 +787,8 @@ export interface Shockwave {
    * are one attack — the first to catch the player spends all of them.
    */
   wake?: WakeGroup;
+  /** Which stretch of its wake this is, counted from where the run began: what a renderer stripes by. */
+  wakeIndex?: number;
   /**
    * A wake the **player** laid (the Dash Slash, `layWake`): it cuts the
    * bodies it crosses rather than the player, once each across the whole

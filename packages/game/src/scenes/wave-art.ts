@@ -324,6 +324,8 @@ export interface WakeStretch {
   readonly thick: number;
   readonly width: number;
   readonly life: number;
+  /** Which stretch of the wake it is, from where the run began (`Shockwave.wakeIndex`); what `paletteOf` reads. */
+  readonly index?: number;
 }
 
 export interface WakeRibbon {
@@ -337,6 +339,11 @@ export interface WakeRibbon {
   readonly tick: number;
   readonly seed: number;
   readonly palette: WavePalette;
+  /**
+   * A stretch's own light, by its index, when the wake's elements take turns
+   * (`energyTurn`): each quad wears the palette of the stretch it starts at.
+   */
+  readonly paletteOf?: (index: number) => WavePalette;
 }
 
 /** The trail's steps of light, from faintest to the edge's own. */
@@ -381,6 +388,7 @@ export function drawWakeRibbon(pen: Pen, o: WakeRibbon, alpha = 1): void {
     const la = Math.max(0, Math.min(1, A.s.life)), lb = Math.max(0, Math.min(1, B.s.life));
     const life = (la + lb) / 2;
     if (life <= 0) continue;
+    const pal = o.paletteOf && A.s.index !== undefined ? o.paletteOf(A.s.index) : o.palette;
     const depA = A.s.thick * (0.6 + 0.4 * la), depB = B.s.thick * (0.6 + 0.4 * lb);
     const inA = A.s.inner, inB = B.s.inner;
     /*
@@ -392,13 +400,13 @@ export function drawWakeRibbon(pen: Pen, o: WakeRibbon, alpha = 1): void {
       const u0 = k / WAKE_TRAIL_LEVELS, u1 = (k + 1) / WAKE_TRAIL_LEVELS;
       const dA0 = fromA + (inA - fromA) * u0, dA1 = fromA + (inA - fromA) * u1;
       const dB0 = fromB + (inB - fromB) * u0, dB1 = fromB + (inB - fromB) * u1;
-      quad(k === WAKE_TRAIL_LEVELS - 1 ? o.palette.mid : o.palette.aura, 0.4 * u1 * life,
+      quad(k === WAKE_TRAIL_LEVELS - 1 ? pal.mid : pal.aura, 0.4 * u1 * life,
         at(A.t, dA0), at(B.t, dB0), at(B.t, dB1), at(A.t, dA1));
     }
     // The band on the floor that hits: dark-lipped, lit, its leading edge bright.
-    quad(o.palette.lip, 0.55, at(A.t, inA), at(B.t, inB), at(B.t, inB + depB), at(A.t, inA + depA));
-    quad(o.palette.aura, 0.6 * life, at(A.t, inA + P), at(B.t, inB + P), at(B.t, inB + depB - P), at(A.t, inA + depA - P));
-    quad(o.palette.mid, 0.9 * life, at(A.t, inA + depA - 2 * P), at(B.t, inB + depB - 2 * P), at(B.t, inB + depB), at(A.t, inA + depA));
+    quad(pal.lip, 0.55, at(A.t, inA), at(B.t, inB), at(B.t, inB + depB), at(A.t, inA + depA));
+    quad(pal.aura, 0.6 * life, at(A.t, inA + P), at(B.t, inB + P), at(B.t, inB + depB - P), at(A.t, inA + depA - P));
+    quad(pal.mid, 0.9 * life, at(A.t, inA + depA - 2 * P), at(B.t, inB + depB - 2 * P), at(B.t, inB + depB), at(A.t, inA + depA));
     /*
      * The standing sheet on the band's leading edge, one continuous wall up
      * the screen: lower as a stretch fades, and its hot top edge the first
@@ -408,10 +416,10 @@ export function drawWakeRibbon(pen: Pen, o: WakeRibbon, alpha = 1): void {
     const fA = inA + depA, fB = inB + depB;
     const tier = (u0: number, u1: number, colour: number, a: number): void =>
       quad(colour, a, at(A.t, fA, hA * u0), at(B.t, fB, hB * u0), at(B.t, fB, hB * u1), at(A.t, fA, hA * u1));
-    tier(0, 0.35, o.palette.aura, 0.45 * life);
-    tier(0.35, 0.8, life > 0.25 ? o.palette.mid : o.palette.aura, 0.8 * life);
+    tier(0, 0.35, pal.aura, 0.45 * life);
+    tier(0.35, 0.8, life > 0.25 ? pal.mid : pal.aura, 0.8 * life);
     const rim = Math.max(0.8, 1 - (2 * P + flick) / Math.max(P, (hA + hB) / 2));
-    tier(0.8, rim, life > 0.25 ? o.palette.mid : o.palette.aura, 0.85 * life);
-    tier(rim, 1, life > 0.5 ? o.palette.core : o.palette.mid, life);
+    tier(0.8, rim, life > 0.25 ? pal.mid : pal.aura, 0.85 * life);
+    tier(rim, 1, life > 0.5 ? pal.core : pal.mid, life);
   }
 }

@@ -18,7 +18,7 @@ import {
   portalInReach, pendingPortalNear, pendingDoors, resolvePortals, cardTypesOf, answerOffer, PORTAL_RISE_MS, bucketHealth, bucketRecentDamage,
   rewardInReach, REWARD_RISE_MS, NO_INPUT, tetherEnds, TOLL_PULSE_MS, ALERT_MS, MINE_BLAST, MINE_PRIME_MS, MINE_BURST_MS,
   MUSKET_RANGE, MUSKET_SPREAD_DEG, MUSKET_WINDUP_MS, FLAME_ROLL_MS, FLAME_LIFE_MS, flameRays, muzzleOf,
-  ELEMENT_TINT, spellLookOf, swordEnergyLook,
+  ELEMENT_TINT, spellLookOf, swordEnergyLook, energyElements, energyTurn, WAKE_STRIPE,
   levelAt, withLevels, levelBonus, LEVEL_HP, swordAt,
   HIT_FLASH_MS, BOSS_ROAR_MS, spellReady, castTiming, hasLineOfSight,
 } from "@jr/core";
@@ -1825,7 +1825,9 @@ export class PlayScene extends Phaser.Scene {
    * Each enchant wave in flight (`drawWaves`): its flicker's seed. Keyed by
    * where it was thrown from as well, because the pool recycles slots.
    */
-  private readonly waveEdges = new Map<Bullet, { ox: number; oy: number; seed: number }>();
+  private readonly waveEdges = new Map<Bullet, { ox: number; oy: number; seed: number; turn: number }>();
+  /** Waves of sword energy seen so far: each new one takes the next element's turn (`energyTurn`). */
+  private waveTurns = 0;
   private readonly ringCasts = new Map<number, { x: number; y: number; rings: Set<number> }>();
   private readonly firedCells = new Map<object, number>();
   /** A leap in the air: where it left, where it will come down, how long it flies, and how wide its ring is. */
@@ -7192,7 +7194,9 @@ export class PlayScene extends Phaser.Scene {
         this.shed({ x: p.x + (Math.random() - 0.5) * 8, y: p.y + 3, vx: (Math.random() - 0.5) * 18, vy: -20 - Math.random() * 25, ms: 0, life: 280 + Math.random() * 200, size: 0.9 + Math.random() * 0.5, colour: Math.random() < 0.5 ? 0xffc85a : 0xff8a3a, gravity: -30 });
     }
     if (p.enchant) {
-      const look = swordEnergyLook(w.spells[p.enchant.spellIndex]?.item.base ?? "crescent_edge", p.enchant.element);
+      // The enchant's motes take the elements' turns slowly, as its waves do one a swing.
+      const look = swordEnergyLook(w.spells[p.enchant.spellIndex]?.item.base ?? "crescent_edge",
+        energyTurn(energyElements(p.enchant.powers, p.enchant.element), w.tick / 40));
       const at = this.frameCrystal ?? this.handAt;
       if (at && swingPhase(p) === "none") {
         const k = ending(p.enchant.ms, 1000) ? 0.35 : 1;
@@ -7868,7 +7872,9 @@ export class PlayScene extends Phaser.Scene {
        * the ground's (`drawShockwaves`).
        */
       const slot = p.strikeWake.byPlayer ? w.spells[p.strikeWake.byPlayer.spellIndex] : null;
-      const look = swordEnergyLook(slot?.item.base ?? "dash_slash", p.strikeElement);
+      // The blade wears the colour of the stretch being laid (`WAKE_STRIPE`).
+      const look = swordEnergyLook(slot?.item.base ?? "dash_slash",
+        energyTurn(energyElements(p.strikeWake.byPlayer?.powers, p.strikeElement), p.strikeWake.laid / WAKE_STRIPE));
       const ux = p.dashX, uy = p.dashY, nx = -uy, ny = ux;
       const bx = p.x + ux * 4, by = p.y - BODY_LIFT + uy * 4;
       const reach = 30;
@@ -13194,10 +13200,10 @@ export class PlayScene extends Phaser.Scene {
   }
 
   /** The renderer's memory of one enchant wave, made the first time it is seen (`waveEdges`). */
-  private waveMemo(b: Bullet): { ox: number; oy: number; seed: number } {
+  private waveMemo(b: Bullet): { ox: number; oy: number; seed: number; turn: number } {
     let m = this.waveEdges.get(b);
     if (!m || m.ox !== b.originX || m.oy !== b.originY) {
-      m = { ox: b.originX, oy: b.originY, seed: (this.world.tick * 7 + Math.round(b.originX)) % 97 };
+      m = { ox: b.originX, oy: b.originY, seed: (this.world.tick * 7 + Math.round(b.originX)) % 97, turn: this.waveTurns++ };
       this.waveEdges.set(b, m);
     }
     return m;
@@ -13230,8 +13236,9 @@ export class PlayScene extends Phaser.Scene {
       const m = this.waveMemo(b);
       const c = waveCentre(b);
       const life = this.waveLife(b);
-      // In its element's colour when the enchant carries one (`swordEnergyLook`).
-      const look = swordEnergyLook(b.spellIndex >= 0 ? w.spells[b.spellIndex]?.item.base ?? null : null, b.element);
+      // In its element's colour when the enchant carries one; several take turns, a wave each (`energyTurn`).
+      const look = swordEnergyLook(b.spellIndex >= 0 ? w.spells[b.spellIndex]?.item.base ?? null : null,
+        energyTurn(energyElements(b.powers, b.element), m.turn));
       const wave = {
         x: c.x, y: c.y, radius: waveRadius(b), facing: Math.atan2(b.vy, b.vx), half: waveHalfSpan(),
         thick: WAVE_BODY_PX, life, flash: b.outPx - b.outLeftPx < WAVE_FLASH_PX, tick: w.tick, seed: m.seed,
@@ -14115,7 +14122,8 @@ export class PlayScene extends Phaser.Scene {
       }
       if (!s.alive || s.facing === undefined || s.half === undefined) continue;
       // A `finale`'s crescent is the player's own sword energy, in its spell's light or its element's.
-      const own = s.byPlayer ? swordEnergyLook(w.spells[s.byPlayer.spellIndex]?.item.base ?? "dash_slash", s.byPlayer.element) : null;
+      const own = s.byPlayer ? swordEnergyLook(w.spells[s.byPlayer.spellIndex]?.item.base ?? "dash_slash",
+        energyTurn(energyElements(s.byPlayer.powers, s.byPlayer.element), (s.wakeIndex ?? 0) / WAKE_STRIPE)) : null;
       const palette = own ? wavePalette(own.glow, own.core) : KING_WAVE;
       const wave = {
         x: s.x, y: s.y, radius: s.inner + s.thickness, facing: s.facing, half: s.half,
@@ -14136,22 +14144,29 @@ export class PlayScene extends Phaser.Scene {
      * the danger palette. Each stretch fades over its last tile of roll.
      */
     // One ribbon per wake and side: the two sides of a run roll out on opposite facings.
-    const wakes = new Map<string, { facing: number; player: number; element: string; stretches: WakeStretch[] }>();
+    const wakes = new Map<string, { facing: number; player: number; elements: string[]; stretches: WakeStretch[] }>();
     const wakeIds = new Map<object, number>();
     for (const s of w.shockwaves) {
       if (!s.alive || !s.wake || s.facing === undefined || s.width === undefined) continue;
       if (!wakeIds.has(s.wake)) wakeIds.set(s.wake, wakeIds.size);
       const key = `${wakeIds.get(s.wake)}:${Math.round(s.facing * 100)}`;
       let entry = wakes.get(key);
-      if (!entry) wakes.set(key, entry = { facing: s.facing, player: s.byPlayer ? s.byPlayer.spellIndex : -2, element: s.byPlayer?.element ?? "none", stretches: [] });
+      if (!entry) wakes.set(key, entry = {
+        facing: s.facing, player: s.byPlayer ? s.byPlayer.spellIndex : -2,
+        elements: energyElements(s.byPlayer?.powers, s.byPlayer?.element), stretches: [],
+      });
       entry.stretches.push({
         x: s.x, y: s.y, inner: s.inner, thick: s.thickness, width: s.width,
-        life: Math.max(0, Math.min(1, (s.maxRadius - s.inner) / TILE_PX)),
+        life: Math.max(0, Math.min(1, (s.maxRadius - s.inner) / TILE_PX)), index: s.wakeIndex,
       });
     }
     for (const v of wakes.values()) {
-      const look = v.player > -2 ? swordEnergyLook(w.spells[v.player]?.item.base ?? "dash_slash", v.element) : null;
+      const base = v.player > -2 ? w.spells[v.player]?.item.base ?? "dash_slash" : null;
+      const look = base ? swordEnergyLook(base, v.elements[0]!) : null;
+      // Several elements stripe the wake, a few stretches each, in turn (`WAKE_STRIPE`).
+      const striped = base && v.elements.length > 1 ? v.elements.map((el) => { const l = swordEnergyLook(base, el); return wavePalette(l.glow, l.core); }) : null;
       drawWakeRibbon(this.soilGfx, {
+        ...(striped ? { paletteOf: (i: number) => striped[Math.floor(i / WAKE_STRIPE) % striped.length]! } : {}),
         stretches: v.stretches, facing: v.facing, rise: look ? 12 : 18, trail: look ? 26 : 34, tick: w.tick,
         seed: Math.round(v.stretches[0]!.x + v.stretches[0]!.y) % 97,
         palette: look ? wavePalette(look.glow, look.core) : KING_WAVE,
