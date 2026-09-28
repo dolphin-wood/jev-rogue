@@ -34,7 +34,7 @@ import type {
 import { buildReadout, CATEGORIES, categoryOf, DOOR_IN, DOORS_OUT, groupRequest, requestKey } from "../director-readout.ts";
 import type { NoteKey } from "../director-readout.ts";
 import { bakeFxTextures, FX_TEXTURE } from "../fx/textures.ts";
-import { LAVA_FRAMES } from "../fx/sheets.ts";
+import { HEARTFIRE_HEAD_TX, LAVA_FRAMES } from "../fx/sheets.ts";
 import { SubspeciesVisuals, markFrame, type SubspeciesSwap } from "../fx/subspecies-visuals.ts";
 import type { FxSheetInfo } from "../fx/textures.ts";
 import type { OfferRecord, PlanRecord, ReadoutRequest } from "../director-readout.ts";
@@ -86,7 +86,7 @@ import {
   drawQuakeTell, drawRiftBurst, drawRiftCircle, drawRingTell, drawSectorTell,
   drawSlamTell, drawStrikeMark, TELE_ROCK,
 } from "./telegraph.ts";
-import { BAR_MS, BEAT_MS, BOSS_PHASES, BOSS_SLAM_STOMP_PX, BOSS_METEOR_LAND_PX, BOSS_METEOR_LAND_TELL_MS, MELEE_ATTACKS, RUN_BOSS_ROOM, bossMusicPhase, bossSlamNext, bossTempo, forceBossBlade, propState, queueBossMove } from "@jr/core";
+import { BAR_MS, BEAT_MS, BOSS_PALM_PX, BOSS_PHASES, BOSS_SLAM_STOMP_PX, BOSS_METEOR_LAND_PX, BOSS_METEOR_LAND_TELL_MS, MELEE_ATTACKS, RUN_BOSS_ROOM, bossMusicPhase, bossSlamNext, bossTempo, forceBossBlade, propState, queueBossMove } from "@jr/core";
 import type { BossMove } from "@jr/core";
 import type { BossHold, BossLabFrame } from "../boss-lab.ts";
 import { SpellLab, spellLabAsked } from "../spell-lab.ts";
@@ -1007,6 +1007,13 @@ export class PlayScene extends Phaser.Scene {
   private readonly taught = new Set<string>();
   /** A blunderbuss firing: its flame, then its smoke, by age. See `drawMuzzles`. */
   private muzzleFx: { x: number; y: number; a: number; ms: number }[] = [];
+  /** The king's fire (`drawHeartfire`): embers shed by his shots, and the bursts where they leave him. */
+  private heartEmbers: { x: number; y: number; vx: number; vy: number; ms: number; life: number; phase: number }[] = [];
+  private heartBursts: { x: number; y: number; ms: number; ring: boolean; phase: number }[] = [];
+  /** `time.now` of the king's last shot, so his palm gathers its fire again after each. */
+  private kingShotAt = -1e9;
+  /** His phase as last seen, for shots still flying after he is gone. */
+  private heartPhase = 1;
   /** The code-drawn effect sheets (`fx/sheets.ts`), baked at boot. */
   private fxSheets: ReadonlyMap<string, FxSheetInfo> = new Map();
   /** Each live blast's wall-cut shape, as the mask its frames are drawn through. */
@@ -6060,6 +6067,110 @@ export class PlayScene extends Phaser.Scene {
    * streak behind it, thrown tongues of flame under them, a flash at the
    * muzzle and then smoke. Nothing lands on the floor.
    */
+  /**
+   * **One of the king's shots** (`heartfire_p1`..`_p3` in `fx/sheets.ts`):
+   * the fire his palm is lit with, in his phase's colours, rather than the
+   * roster's magenta orb blown up. The head is drawn at the shot's own radius
+   * (what is seen is what hits); a light round it and the head swell on his
+   * theme's beat, and it sheds embers along its way.
+   */
+  private drawHeartfire(b: Bullet, n: number, beat: number): void {
+    const sheet = `heartfire_p${this.heartPhase}`;
+    const info = this.fxSheets.get(sheet);
+    if (!info) return;
+    const w = this.world;
+    const glow = HEART_GLOW[this.heartPhase - 1]!;
+    this.sprites.circle(b.x, b.y, b.radius * (1.7 + 0.6 * beat), glow, 0.16 + 0.22 * beat)
+      .setBlendMode(Phaser.BlendModes.ADD).setDepth(6.9);
+    const i = ((w.tick >> 2) + n) % info.origins.length;
+    const o = info.origins[i]!;
+    this.sprites.image(b.x, b.y, FX_TEXTURE, `${sheet}_${i}`)
+      .setOrigin(o[0], o[1]).setRotation(Math.atan2(b.vy, b.vx))
+      .setScale((b.radius / HEARTFIRE_HEAD_TX) * (1 + 0.1 * beat)).setDepth(7);
+    // Embers off the back of it, drifting up as they cool.
+    if (Math.random() < this.game.loop.delta / HEART_EMBER_EVERY_MS) {
+      const sp = Math.hypot(b.vx, b.vy) || 1;
+      const ux = b.vx / sp, uy = b.vy / sp;
+      this.heartEmbers.push({
+        x: b.x - ux * b.radius * 0.9 + (Math.random() - 0.5) * b.radius,
+        y: b.y - uy * b.radius * 0.9 + (Math.random() - 0.5) * b.radius,
+        vx: -ux * 18 + (Math.random() - 0.5) * 16,
+        vy: -uy * 18 + (Math.random() - 0.5) * 16 - 10,
+        ms: 0, life: 240 + Math.random() * 220, phase: this.heartPhase,
+      });
+    }
+  }
+
+  /**
+   * The rest of the king's fire: his palm gathering it through the volley,
+   * the burst each shot leaves it with, and the embers his shots have shed.
+   *
+   * The palm (`BOSS_PALM_PX`) swells from a spark to a coal between shots,
+   * with motes drawn in to it, so the next shot is seen coming; a shot
+   * flashes it white and throws a ring off it, and a ring volley throws a
+   * wide one, read as one blast rather than a dozen bullets appearing.
+   */
+  private drawHeartFx(king: Enemy | undefined, beat: number): void {
+    const dt = this.game.loop.delta;
+    const now = this.time.now;
+    if (king && king.bossVolleyMs > 0 && king.staggerMs <= 0 && king.armourBreakMs <= 0 && king.bossSummonMs <= 0) {
+      const glow = HEART_GLOW[this.heartPhase - 1]!;
+      const ember = HEART_EMBER[this.heartPhase - 1]!;
+      const px = king.x + BOSS_PALM_PX.x, py = king.y + BOSS_PALM_PX.y;
+      const k = Math.min(1, (now - this.kingShotAt) / HEART_GATHER_MS);
+      const depth = bodyDepth(king.y + king.radius, king.id) + 1e-3;
+      this.sprites.circle(px, py, 3 + 6 * k + 1.5 * beat, glow, 0.2 + 0.3 * k)
+        .setBlendMode(Phaser.BlendModes.ADD).setDepth(depth);
+      this.sprites.circle(px, py, 1.2 + 2.6 * k, ember[0], 0.95).setDepth(depth + 1e-4);
+      for (let m = 0; m < 5; m++) {
+        const u = (now / 520 + m / 5) % 1;
+        const a = m * 1.2566 + now / 300;
+        const r = 18 * (1 - u);
+        this.sprites.rectangle(px + Math.cos(a) * r - 0.5, py + Math.sin(a) * r - 0.5, 1, 1, ember[u > 0.6 ? 0 : 1], u).setOrigin(0)
+          .setBlendMode(Phaser.BlendModes.ADD).setDepth(depth);
+      }
+    }
+    for (const f of this.heartBursts) {
+      f.ms += dt;
+      const glow = HEART_GLOW[f.phase - 1]!;
+      const ember = HEART_EMBER[f.phase - 1]!;
+      if (f.ms < 110) this.sprites.circle(f.x, f.y, 9 * (1 - f.ms / 110), ember[0], 0.9)
+        .setBlendMode(Phaser.BlendModes.ADD).setDepth(9.6);
+      if (f.ms < 200) {
+        const k = f.ms / 200;
+        this.sprites.circle(f.x, f.y, 5 + 14 * k).setStrokeStyle(2.2 * (1 - k) + 0.4, glow, 0.9 * (1 - k))
+          .setBlendMode(Phaser.BlendModes.ADD).setDepth(9.6);
+      }
+      if (f.ring && f.ms < 360) {
+        const k = f.ms / 360;
+        const e = 1 - (1 - k) * (1 - k);
+        this.sprites.circle(f.x, f.y, 8 + 46 * e).setStrokeStyle(3 * (1 - k) + 0.5, glow, 0.7 * (1 - k))
+          .setBlendMode(Phaser.BlendModes.ADD).setDepth(6.9);
+      }
+    }
+    this.heartBursts = this.heartBursts.filter((f) => f.ms < 360);
+    for (const e of this.heartEmbers) {
+      e.ms += dt;
+      e.x += (e.vx * dt) / 1000;
+      e.y += (e.vy * dt) / 1000;
+      const k = e.ms / e.life;
+      const c = HEART_EMBER[e.phase - 1]![k < 0.3 ? 0 : k < 0.65 ? 1 : 2]!;
+      this.sprites.rectangle(e.x - 0.5, e.y - 0.5, 1, 1, c, 1 - k * 0.7).setOrigin(0)
+        .setBlendMode(Phaser.BlendModes.ADD).setDepth(6.95);
+    }
+    this.heartEmbers = this.heartEmbers.filter((e) => e.ms < e.life);
+    if (this.heartEmbers.length > HEART_EMBER_CAP) this.heartEmbers.splice(0, this.heartEmbers.length - HEART_EMBER_CAP);
+  }
+
+  /** One of the king's shots ending: a small burst of its fire, and a few embers thrown off it. */
+  private heartPop(x: number, y: number): void {
+    this.playFx(`heartburst_p${this.heartPhase}`, x, y, Math.random() * Math.PI * 2, 55, 8.8);
+    for (let n = 0; n < 6; n++) {
+      const a = Math.random() * Math.PI * 2, v = 20 + Math.random() * 30;
+      this.heartEmbers.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 14, ms: 0, life: 260 + Math.random() * 200, phase: this.heartPhase });
+    }
+  }
+
   private drawMuzzles(): void {
     const w = this.world;
     const g = this.threatGfx;
@@ -8977,18 +9088,23 @@ export class PlayScene extends Phaser.Scene {
            * no muzzle to speak of, so it gets a puff at the body instead.
            */
           const def = ENEMIES[ev.what as EnemyId];
-          if ((ev.amount ?? 1) >= 8) this.playFx("smoke", ev.x, ev.y - 4, 0, 60, 6.3);
+          // The king's leaves his palm as a burst of its fire, not a gun's flash (`drawHeartFx`).
+          if (ev.what === "boss") {
+            this.kingShotAt = this.time.now;
+            this.heartBursts.push({ x: ev.x, y: ev.y, ms: 0, ring: (ev.amount ?? 1) >= HEART_RING_SHOTS, phase: this.heartPhase });
+          } else if ((ev.amount ?? 1) >= 8) this.playFx("smoke", ev.x, ev.y - 4, 0, 60, 6.3);
           else if (def) {
             const size = MUZZLE_WEIGHT[ev.what] ?? "s";
-            // The king's shot is already at his raised palm (`BOSS_PALM_PX`): flash it there, not a body's edge out.
-            const palm = ev.what === "boss";
-            const r = palm ? 0 : def.radius + 2;
-            this.playFx(`muzzle_${size}`, ev.x + Math.cos(ev.facing) * r, ev.y - (palm ? 0 : 3) + Math.sin(ev.facing) * r, ev.facing, 40, 8.9);
+            const r = def.radius + 2;
+            this.playFx(`muzzle_${size}`, ev.x + Math.cos(ev.facing) * r, ev.y - 3 + Math.sin(ev.facing) * r, ev.facing, 40, 8.9);
           }
         }
         if (ev.kind === "shot" && ev.what === "musket") {
           // The blunderbuss: the flame out of the muzzle, then smoke.
           this.muzzleFx.push({ x: ev.x, y: ev.y, a: ev.facing ?? 0, ms: 0 });
+        } else if ((ev.kind === "bullet_wall" || ev.kind === "bullet_spent") && ev.what === "boss") {
+          // The king's fire goes up where it ends, small (`heartburst_p*`).
+          this.heartPop(ev.x, ev.y);
         } else if (ev.kind === "bullet_wall") {
           // Shot meeting stone: sparks thrown back off the face, then grit.
           this.playFx("hit_wall", ev.x, ev.y, (ev.facing ?? 0) + Math.PI, 45, 8.8);
@@ -9044,6 +9160,7 @@ export class PlayScene extends Phaser.Scene {
             this.burst(ev.x, ev.y, 0xffffff, 6, 320, undefined, Math.PI * 2, 0.7);
           }
         }
+        if (ev.kind === "player_hit" && ev.what === "bullet:boss") this.heartPop(ev.x, ev.y);
         if (ev.kind === "player_hit" && ev.amount !== 0) {
           this.impacts.push({ x: ev.x, y: ev.y, ms: IMPACT_MS, scale: 0.9 });
           if (!ev.what?.startsWith("dot:")) this.playFx("hit_player", this.world.player.x, this.world.player.y - BODY_LIFT, 0, 45, 9.6);
@@ -15643,8 +15760,14 @@ export class PlayScene extends Phaser.Scene {
       if (this.atlas.has(frame)) this.sprites.image(x, y - BOSS_DRAW_RISE_PX, this.textureKey, frame)
         .setOrigin(0.5).setScale(1 / ART_SCALE).setDepth(bodyDepth(y + BOSS_FOOT_PX, 0));
     }
+    const king = w.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
+    if (king) this.heartPhase = Math.min(3, Math.max(1, king.phase));
+    // His theme's beat, sharp on the downstroke and dying away: what his fire breathes to.
+    const heartBeat = king ? Math.pow(1 - ((king.bossFightMs / BEAT_MS) % 1), 3) : 0;
+    let heartN = 0;
     for (const b of w.enemyBullets) {
       if (!b.alive) continue;
+      if (b.from === "boss") { this.drawHeartfire(b, heartN++, heartBeat); continue; }
       /*
        * A lancer's flying spike is drawn as **the spike**: a short gold shaft
        * with a dark edge, pointed the way it travels. It broke off the body a
@@ -15685,6 +15808,7 @@ export class PlayScene extends Phaser.Scene {
         .setOrigin(0.5).setScale(bulletScale(b.radius) * 0.8).setAlpha(0.3).setDepth(6.95);
       put(b.x, b.y, bulletFrame(b, w.tick, true), 7, bulletScale(b.radius));
     }
+    this.drawHeartFx(king, heartBeat);
 
     const spinning = w.player.swingStretch > 1 && swingPhase(w.player) === "active";
     const playerFacing = this.autoMeleeAim && w.player.swingMs > 0 && w.player.swingStretch === 1
@@ -18167,6 +18291,20 @@ function readSetting(key: string, fallback: number): number {
 
 /** Enemy shots at least this fast (px/s) are drawn as tracers. */
 const TRACER_SPEED = 190;
+/** The king's fire, by phase (`drawHeartfire`): the light round a shot and his palm, and an ember cooling, hot to dark. */
+const HEART_GLOW = [0xff9a30, 0xe0783a, 0xffd8a0] as const;
+const HEART_EMBER: readonly (readonly [number, number, number])[] = [
+  [0xfff0b0, 0xffb040, 0xc04818],
+  [0xffe0a0, 0xe08a30, 0x8a3a8a],
+  [0xffffff, 0xf8d8a8, 0xa87850],
+];
+/** How long his palm takes to gather its fire back after a shot, ms. */
+const HEART_GATHER_MS = 450;
+/** A shot sheds an ember about this often, ms; and no more than this many are in the air. */
+const HEART_EMBER_EVERY_MS = 26;
+const HEART_EMBER_CAP = 260;
+/** A volley of at least this many shots at once is a ring, and leaves his palm with a wide one. */
+const HEART_RING_SHOTS = 6;
 
 /** Muzzle flash size by the weapon's weight. */
 const MUZZLE_WEIGHT: Readonly<Record<string, "s" | "m" | "l">> = {
