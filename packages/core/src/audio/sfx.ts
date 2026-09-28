@@ -382,6 +382,26 @@ const DEFS = {
   },
 
   /**
+   * The king's goblet on the floor of his hall: glass, not wood. A bright
+   * crack, the wine going out wet under it, and shards ringing apart after —
+   * `prop_break` is a crate, and heard under a thrown goblet it read as
+   * something else landing somewhere else.
+   */
+  goblet_smash: {
+    category: "combat", variants: 2, gain: 0.5, retriggerMs: 200,
+    render: (r, j) => {
+      const out = buffer(0.55);
+      mixInto(out, click(r, 7200 * j, 0.012, 1), 0);
+      mixInto(out, bell(2300 * j, 0.22, 6.3, 4.2, 0.55, 2.6), 0);
+      mixInto(out, thump(230 * j, 110, 0.08, 0.3), 0);
+      mixInto(out, lowpass(noiseBurst(0.18, r, 0.5, { attack: 0.004, curve: 3 }), 1300), 0.008);
+      for (let k = 0; k < 8; k++)
+        mixInto(out, bell(3000 * j * (0.7 + r() * 1.1), 0.06 + r() * 0.05, 5.1 + r(), 2, 0.1 + r() * 0.08), 0.03 + r() * 0.3);
+      return finish(tail(out, 0.02, 0.4, 0.2, 7600), "combat", 1.2);
+    },
+  },
+
+  /**
    * Losing a heart. The one sound in the set allowed to be unpleasant, and
    * the only one with a rising bite in it: it has to arrive over a full room
    * of fighting, so it is louder, it holds a dissonant pair, and its transient

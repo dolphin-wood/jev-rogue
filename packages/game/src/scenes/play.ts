@@ -538,23 +538,46 @@ const BIOME_PATCH_VARIANTS = 3;
 /** A broken column keeps the bottom of its drawing, in art px: the plinth and a short stub of shaft. */
 const COLUMN_STUMP_PX = 84;
 /*
- * The entrance's timings, ms, and where things happen, in cells: the player
- * is walked in from the door and stands; a moment later he notices them,
- * looks for a beat, throws, and stands; the goblet flies over the
- * candelabrum and breaks on the floor past it; he stands up just in front of the throne.
+ * The entrance's timings, ms, and where things happen, in cells. He is
+ * drinking before the door opens: the cup at his helm, then lowered, then
+ * raised again while the player is walked in and stands. Only then does he
+ * notice them — the cup stops, the eyes come up — and in anger he flings the
+ * goblet down and stands; it flies over the candelabrum and breaks on the
+ * floor past it; he stands up just in front of the throne.
  */
 const KING_WALK_IN_PX = TILE_PX * 3;
 /** The longest the walk-in may take, should anything be in the way. */
 const KING_WALK_MAX_MS = 2500;
-const KING_PAUSE_MS = 700;
-/** His wine while he waits (`boss_throne_sip`, when drawn): the goblet held this long, then at his visor this long. */
-const KING_HOLD_MS = 950;
-const KING_SIP_MS = 550;
+/** After the player stops, the beat before he looks up. */
+const KING_PAUSE_MS = 350;
+/**
+ * His wine while they come in: the cup at his helm from the room's first
+ * frame (`boss_throne_notice`, the nearest the delivered drawings bring it) —
+ * he was drinking before they came through the door — then lowered to the
+ * armrest (`boss_throne_goblet`), then back at his helm, where it is when he
+ * sees them. He does not look up before the second draught is this far in.
+ */
+const KING_SIP_MS = 900;
+const KING_LOWER_MS = 1000;
+const KING_SECOND_SIP_MS = 650;
+const KING_DRINK_MS = KING_SIP_MS + KING_LOWER_MS + KING_SECOND_SIP_MS;
+/**
+ * `goblet` and `notice` are two separate drawings of the whole figure (art
+ * order B10): snapped between, the loop shook everything but the throne, so
+ * while he drinks the one dissolves into the other over this long and the
+ * swap reads as his arm moving. His anger is not eased — notice to throw
+ * still snaps.
+ */
+const KING_DISSOLVE_MS = 200;
+/** Where his eyes are in `boss_throne_notice`, art px from the frame's top left: they flare when he sees them. */
+const KING_EYES_ART: readonly (readonly [number, number])[] = [[124, 78], [131.5, 77.5]];
+/** The last part of the look, where he shakes with it before the throw. */
+const KING_SEETHE_MS = 300;
 /** Down the steps of his dais, from the throne to where he stands: long enough to be seen walking. */
 const KING_DESCEND_MS = 600;
 /** Where his boots rest in the throne's drawings, art px from the frame's top (`boss_throne_rise`). */
 const KING_THRONE_FEET_ART = 210;
-const KING_LOOK_MS = 600;
+const KING_LOOK_MS = 750;
 const KING_THROW_MS = 350;
 const KING_RISE_MS = 700;
 /**
@@ -1730,6 +1753,8 @@ export class PlayScene extends Phaser.Scene {
    */
   private bossCine: { toY: number; bars: boolean; k: number; release: boolean } | null = null;
   private kingGoblet: { x0: number; y0: number; x1: number; y1: number; ms: number } | null = null;
+  /** The drawing the throne is dissolving from while he drinks (`KING_DISSOLVE_MS`). */
+  private throneFade: { from: string; ms: number } | null = null;
   private throneImg: Phaser.GameObjects.Image | null = null;
   /** Set by "Return to title": the title goes up once the new run's first room is built. */
   private pendingTitle = false;
@@ -2156,6 +2181,7 @@ export class PlayScene extends Phaser.Scene {
     this.shopping = false;
     this.kingIntro = null;
     this.kingGoblet = null;
+    this.throneFade = null;
     this.camFocus = null;
     this.offer = null;
     // Through a local: `room-index.test.ts` reads the scene's first `this.world = createWorld`, which is `enterRoom`'s.
@@ -2459,6 +2485,7 @@ export class PlayScene extends Phaser.Scene {
 
     this.kingIntro = null;
     this.kingGoblet = null;
+    this.throneFade = null;
     this.bossCine = null;
     bossEntrance.clear();
     if (stage === "boss") {
@@ -2942,17 +2969,18 @@ export class PlayScene extends Phaser.Scene {
 
   /**
    * The throne's drawing for each beat of the entrance, where it has been
-   * drawn (art order B10): the goblet held while the player walks in and
-   * stands, then each key held for its beat. While he waits he drinks —
-   * `goblet` and `throne_sip` in a slow loop (`KING_HOLD_MS`) — once the sip
-   * is drawn over `goblet` itself (art order B10); the delivered `notice` is
-   * a separate drawing of the whole figure, and looped with `goblet` it shook
-   * everything but the throne.
+   * drawn (art order B10). While the player walks in and stands he drinks
+   * (`KING_DRINK_MS`): cup at his helm, lowered, at his helm again — and he
+   * holds it there as he notices them, which is `notice` itself; then the
+   * throw and the rise, each held for its beat.
    */
   private throneFrame(phase: NonNullable<PlayScene["kingIntro"]>["phase"], total = 0): string {
-    if ((phase === "walk" || phase === "pause") && this.atlas.has("boss_throne_sip")
-      && total % (KING_HOLD_MS + KING_SIP_MS) >= KING_HOLD_MS) return "boss_throne_sip";
-    const want = { walk: "boss_throne_goblet", pause: "boss_throne_goblet", notice: "boss_throne_notice", throw: "boss_throne_throw", rise: "boss_throne_rise" }[phase];
+    let want = { walk: "boss_throne_notice", pause: "boss_throne_notice", notice: "boss_throne_notice", throw: "boss_throne_throw", rise: "boss_throne_rise" }[phase];
+    const drinking = phase === "walk" || phase === "pause";
+    if (drinking && total >= KING_SIP_MS && total < KING_SIP_MS + KING_LOWER_MS) want = "boss_throne_goblet";
+    // The sip drawn over `goblet` itself, once it is (art order B10): the draught without his eyes coming up.
+    else if (drinking && this.atlas.has("boss_throne_sip")) want = "boss_throne_sip";
+    if (want === "boss_throne_notice" && !this.atlas.has(want)) want = "boss_throne_goblet";
     return this.atlas.has(want) ? want : "boss_throne_seated";
   }
 
@@ -2980,7 +3008,8 @@ export class PlayScene extends Phaser.Scene {
         next("pause");
       }
     } else if (intro.phase === "pause") {
-      if (intro.ms >= KING_PAUSE_MS) {
+      // Not in the middle of his drink: the second draught is under way before he looks up.
+      if (intro.ms >= KING_PAUSE_MS && intro.total >= KING_DRINK_MS) {
         next("notice");
         // The cup stops at his helm and the eyes come up: he has seen them.
         this.sfx.play("enemy_wake", 0.6);
@@ -2994,7 +3023,8 @@ export class PlayScene extends Phaser.Scene {
         const hx = (tx + 0.5) * TILE_PX + (art ? (KING_THROW_HAND_ART[0] - art.w / 2) / ART_SCALE : 14);
         const hy = (ty + 1) * TILE_PX + (art ? (KING_THROW_HAND_ART[1] - 0.86 * art.h) / ART_SCALE : -19);
         this.kingGoblet = { x0: hx, y0: hy, x1: hx + KING_GOBLET_OUT_PX, y1: (ty + KING_GOBLET_ROW) * TILE_PX, ms: 0 };
-        this.sfx.play("swing_light", 1.5);
+        // The arm flung out, heard as it snaps to the throw; the glass is heard where it lands (`drawKingGoblet`).
+        this.sfx.play("swing_heavy", 0.85);
       }
     } else if (intro.phase === "throw") {
       if (intro.ms >= KING_THROW_MS) next("rise");
@@ -3017,7 +3047,17 @@ export class PlayScene extends Phaser.Scene {
     // Seated from the first frame, whichever of the room's drawing and the entrance came first; empty once he stands.
     if (this.kingIntro) {
       const seated = this.throneFrame(intro.phase, intro.total);
-      if (this.throneImg && this.throneImg.frame.name !== seated) this.throneImg.setFrame(seated);
+      const was = this.throneImg?.frame.name;
+      if (this.throneImg && was !== seated) {
+        this.throneImg.setFrame(seated);
+        // His drink dissolves from one drawing to the other; the throw does not (`KING_DISSOLVE_MS`).
+        const drinking = intro.phase === "walk" || intro.phase === "pause";
+        this.throneFade = drinking && was ? { from: was, ms: 0 } : null;
+      }
+    } else this.throneFade = null;
+    if (this.throneFade) {
+      this.throneFade.ms += delta;
+      if (this.throneFade.ms >= KING_DISSOLVE_MS) this.throneFade = null;
     }
     // Silent until the goblet leaves his hand.
     const hushed = this.kingIntro !== null && this.kingIntro.phase !== "throw" && this.kingIntro.phase !== "rise";
@@ -3060,8 +3100,37 @@ export class PlayScene extends Phaser.Scene {
     this.hintStrip?.setAlpha(this.hintStrip.alpha * keep);
   }
 
+  /**
+   * The king on his throne, over its drawing: the last drawing dissolving
+   * away while he drinks, then, once he has seen them, his eyes flaring in the
+   * visor and the whole of him shaking with it just before the throw.
+   */
+  private drawKingThrone(): void {
+    const img = this.throneImg;
+    if (!img) return;
+    const x0 = (THRONE_CELLS[1]![0] + 0.5) * TILE_PX;
+    const intro = this.kingIntro;
+    const seething = intro?.phase === "notice" && intro.ms >= KING_LOOK_MS - KING_SEETHE_MS;
+    img.x = seething ? x0 + ((Math.floor(intro.ms / 45) & 1) ? 0.5 : -0.5) : x0;
+    const fade = this.throneFade;
+    if (fade && this.atlas.has(fade.from))
+      this.sprites.image(x0, img.y, this.textureKey, fade.from).setOrigin(0.5, 0.86).setScale(1 / ART_SCALE)
+        .setAlpha(1 - fade.ms / KING_DISSOLVE_MS).setDepth(img.depth + 0.001);
+    if (intro?.phase !== "notice" || img.frame.name !== "boss_throne_notice") return;
+    // Up hard as he sees them, then held until the throw.
+    const k = Math.min(1, intro.ms / 90) * (1 - 0.35 * Math.min(1, intro.ms / 400));
+    const art = this.atlas.frame("boss_throne_notice");
+    for (const [ax, ay] of KING_EYES_ART) {
+      const ex = img.x + (ax - art.w / 2) / ART_SCALE;
+      const ey = img.y + (ay - 0.86 * art.h) / ART_SCALE;
+      this.sprites.circle(ex, ey, 2.4, 0x7fe0ff, 0.35 * k).setBlendMode(Phaser.BlendModes.ADD).setDepth(img.depth + 0.002);
+      this.sprites.circle(ex, ey, 0.8, 0xe8fbff, k).setBlendMode(Phaser.BlendModes.ADD).setDepth(img.depth + 0.002);
+    }
+  }
+
   /** The goblet in flight, and where it breaks. Drawn each frame with the bodies. */
   private drawKingGoblet(delta: number): void {
+    this.drawKingThrone();
     const g = this.kingGoblet;
     if (!g) return;
     g.ms += delta;
@@ -3079,7 +3148,7 @@ export class PlayScene extends Phaser.Scene {
     }
     // It breaks: glass off the floor, and the wine left on it. Hard enough to feel.
     this.kingGoblet = null;
-    this.sfx.play("prop_break", 1.6);
+    this.sfx.play("goblet_smash");
     this.world.trauma = Math.min(1, this.world.trauma + 0.2);
     this.burst(g.x1, g.y1, 0xd8e4ec, 10, 150, -Math.PI / 2, Math.PI, 0.6, 260);
     this.burst(g.x1, g.y1, 0x6e1022, 8, 90, undefined, Math.PI * 2, 0.9, 200);
