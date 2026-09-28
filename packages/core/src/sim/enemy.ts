@@ -3289,8 +3289,7 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
         impactShake(world, e);
         /*
          * **The Drowned Warden's plate breaks on the wall** (doc 024): a head-on
-         * slam is the fight's opening, and from phase II it throws a ring of
-         * broken floor as it lands.
+         * slam is the fight's opening, until its next call puts the plate back.
          */
         if (e.guardian) {
           if (e.armour > 0) {
@@ -3298,7 +3297,6 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
             e.armourBreakMs = ARMOUR_BREAK_MS;
             world.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `armour_break:${e.archetype}` });
           }
-          if (e.phase >= 2) shockRing(world, e);
         }
       }
     }

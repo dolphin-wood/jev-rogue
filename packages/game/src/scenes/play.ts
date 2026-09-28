@@ -9,7 +9,7 @@ import {
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
   moodTransform, tintRGBA, dashInvulnerable, MELEE, ARMOUR_BREAK_MS, brakeFraction, ENEMIES,
-  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_PHASES, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
+  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_CALL_MS, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, audienceRoomFor, RUN_GUARDIAN_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTierKey, affixFitsSpell, itemShape,
@@ -2473,15 +2473,24 @@ export class PlayScene extends Phaser.Scene {
     this.camFocus = null;
     this.audienceK = 0;
     this.audienceDoneAt = -1;
-    // A room with an objective says so as it opens (doc 025).
+    /*
+     * **A room that asks something else says what** as it opens: a room
+     * objective (doc 025) and the guardian (doc 024), each a short title and
+     * one line of what to do. Not the king's great name: these are rooms, and
+     * the first audience says nothing, since it is meant to come unannounced.
+     */
     const objective = this.world.objective?.kind;
-    if (objective) this.time.delayedCall(500, () => {
+    if (objective) this.time.delayedCall(400, () => {
       if (this.world.objective && !this.world.objective.done)
-        this.showKingName(t(objective === "hold" ? "hud.objectiveHold" : "hud.objectiveDestroy"));
+        this.showRoomBrief(
+          t(objective === "hold" ? "hud.objectiveHold" : "hud.objectiveDestroy"),
+          objective === "hold" ? t("hud.briefHold", { s: holdLeftS(this.world) }) : t("hud.briefDestroy", { n: DESTROY_TARGETS }),
+        );
     });
-    // The guardian's name comes up as its room opens (doc 024); the view is the close one, as in any room.
     if (this.world.guardianRoom)
-      this.time.delayedCall(700, () => { if (this.world.guardianRoom && !this.world.cleared) this.showKingName(t("hud.guardianTitle")); });
+      this.time.delayedCall(400, () => {
+        if (this.world.guardianRoom && !this.world.cleared) this.showRoomBrief(t("hud.guardianTitle"), t("hud.briefGuardian"));
+      });
 
     this.kingIntro = null;
     this.kingGoblet = null;
@@ -3192,6 +3201,22 @@ export class PlayScene extends Phaser.Scene {
       targets: rules, alpha: 1, scaleX: 1, duration: 420, ease: "Cubic.easeOut", yoyo: true, hold: hold - 100,
       onComplete: () => { for (const r of rules) r.destroy(); if (this.bossCine) this.bossCine.release = true; },
     });
+  }
+
+  /**
+   * **A room's brief**: a short title and one line under it, high on the
+   * screen, clear of the fight, for a few seconds. Smaller than the king's
+   * name by design: it tells the player what the room asks, it does not stage
+   * anyone.
+   */
+  private showRoomBrief(title: string, line: string): void {
+    const y = Math.round(UI_H * 0.2);
+    const head = this.uiText(UI_W / 2, y, title, 14, "#ffe9a8", { stroke: "#0d0b1f", strokeThickness: 3 * ZOOM })
+      .setOrigin(0.5).setDepth(CINE_NAME_DEPTH + 5).setAlpha(0);
+    const body = this.uiText(UI_W / 2, y + head.displayHeight / 2 + 6, line, 8, "#e8e0d0",
+      { align: "center", stroke: "#0d0b1f", strokeThickness: 2 * ZOOM, wordWrap: { width: Math.min(360, UI_W - 40) * ZOOM } })
+      .setOrigin(0.5, 0).setDepth(CINE_NAME_DEPTH + 5).setAlpha(0);
+    this.tweens.add({ targets: [head, body], alpha: 1, duration: 260, yoyo: true, hold: 3200, onComplete: () => { head.destroy(); body.destroy(); } });
   }
 
   /**
@@ -8186,6 +8211,8 @@ export class PlayScene extends Phaser.Scene {
           break;
         }
         case "telegraph": {
+          // The Drowned Warden's arm going up: the call heard before the dead answer (doc 024).
+          if (ev.what === "guardian_call") sfx.play("cast_void", 0.6);
           if (ev.what?.startsWith("boss_phase:")) {
             const next = Number(ev.what.slice("boss_phase:".length));
             const king = this.world.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
@@ -16477,6 +16504,8 @@ function specialPose(w: World, e: Enemy): string | null {
       // The drawn aim: raised to load, levelled to fire, and held level
       // through the start of the reload while the smoke clears.
       if (e.pose === "musket_windup") return "windup";
+      // The Drowned Warden's call (doc 024): the arm up, as the gun is raised to load.
+      if (e.pose === "guardian_call") return "windup";
       if (e.pose === "musket_fire" || e.pose === "musket_second") return "lunge";
       if (e.pose === "musket_reload" && e.poseMs > 800) return "lunge";
       // The shield bash: the plate comes up, then goes through. It borrows the
@@ -16927,6 +16956,22 @@ function drawEnemy(
       const wy = e.y + e.radius * 0.3 - k * e.radius * 3.2;
       group.circle(wx, wy, 1.6 + 1.6 * (1 - k), 0x7a4cc8, 0.55 * (1 - k)).setDepth(bodyDepth(e.y, 0) + (i % 2 ? 0.01 : -0.01));
     }
+    /*
+     * **The call** (doc 024): while its arm is up the pool flares, and where
+     * each body will rise a violet mark opens on the floor and closes to a
+     * point as the call runs out: the clock for the squad, read on the floor.
+     */
+    const g = e.guardian;
+    if (g?.calling && e.pose === "guardian_call") {
+      const k = Math.max(0, Math.min(1, 1 - e.poseMs / GUARDIAN_CALL_MS));
+      group.ellipse(e.x, e.y + e.radius * 0.35, e.radius * (3.6 + 1.2 * k), e.radius * (1.5 + 0.5 * k), 0x9b6cff, 0.12 + 0.18 * k).setDepth(2.95);
+      for (const sp of g.spots) {
+        const r = TILE_PX * (0.9 - 0.5 * k);
+        group.ellipse(sp.x, sp.y + 4, r * 2, r, 0x2a0f45, 0.45).setDepth(2.9);
+        group.ellipse(sp.x, sp.y + 4, r * 2, r, 0, 0).setStrokeStyle(1.5, 0xb48cff, 0.5 + 0.5 * k).setDepth(2.95);
+        group.circle(sp.x, sp.y + 4 - 10 * k, 1.5 + 1.5 * k, 0xd8c0ff, 0.4 + 0.5 * k).setDepth(bodyDepth(sp.y, 0));
+      }
+    }
   }
   const shadowName = `shadow_${ENEMY_FRAME[e.archetype].replace("enemy_", "")}`;
   if (atlas.has(shadowName)) {
@@ -17174,16 +17219,15 @@ function drawEnemy(
 
   /*
    * **The Drowned Warden's bar is over its head** (doc 024), not the boss's
-   * across the bottom: its name, its health and the marks where its phases
-   * turn, above the armour bar. The bottom bar is the king's alone.
+   * across the bottom: its name and its health, above the armour bar, with no
+   * marks, since it has no phases. The bottom bar is the king's alone.
    */
   if (e.guardian && e.hp > 0 && e.spawnFadeMs <= 0) {
     const W = 64;
     const y = e.y + bob - overheadPx(e) - 6;
     group.rectangle(e.x - W / 2 - 1, y, W + 2, 5, 0x0d0b1f, 0.9).setOrigin(0, 0.5).setDepth(9);
-    group.rectangle(e.x - W / 2, y, W * Math.max(0, e.hp / Math.max(1, e.maxHp)), 3, e.phase >= 3 ? 0xff5a3a : 0xd83a3a, 1)
+    group.rectangle(e.x - W / 2, y, W * Math.max(0, e.hp / Math.max(1, e.maxHp)), 3, 0xd83a3a, 1)
       .setOrigin(0, 0.5).setDepth(10);
-    for (const at of GUARDIAN_PHASES) group.rectangle(e.x - W / 2 + W * at, y, 1, 5, 0xffe9a8, 0.8).setOrigin(0.5).setDepth(10.5);
     label?.(`guardian:name:${e.id}`, e.x, y - 7, t("hud.guardianTitle"), {
       fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(6, ZOOM) * ZOOM)}px`, color: "#e8c8ff",
       stroke: "#0d0b1f", strokeThickness: 2 * ZOOM,

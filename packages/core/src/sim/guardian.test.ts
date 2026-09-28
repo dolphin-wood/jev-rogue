@@ -8,7 +8,9 @@ import { meleeSpec } from "./enemy.ts";
 import { NO_INPUT } from "./types.ts";
 import type { Enemy, World } from "./types.ts";
 import { WORLD_H, WORLD_W } from "./collide.ts";
-import { GUARDIAN_ARMOUR, GUARDIAN_HP, GUARDIAN_SCALE, GUARDIAN_SQUAD, GUARDIAN_XP, guardianPhaseAt, makeGuardian } from "./guardian.ts";
+import {
+  GUARDIAN_ARMOUR, GUARDIAN_CALL_EVERY_MS, GUARDIAN_CALL_MS, GUARDIAN_ENTRANCE_MS, GUARDIAN_HP, GUARDIAN_SCALE, GUARDIAN_SQUAD, GUARDIAN_XP, makeGuardian,
+} from "./guardian.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
 import { plainInstance } from "../spells/index.ts";
 import { RngSource } from "../rng.ts";
@@ -49,11 +51,12 @@ describe("the Drowned Warden: the body", () => {
     expect(meleeSpec(g)?.kind).toBe("bash");
   });
 
-  it("changes phase at 60% and 30%", () => {
-    expect(guardianPhaseAt(1)).toBe(1);
-    expect(guardianPhaseAt(0.61)).toBe(1);
-    expect(guardianPhaseAt(0.6)).toBe(2);
-    expect(guardianPhaseAt(0.3)).toBe(3);
+  it("has no phases: low on its bar it is the body it was at the top", () => {
+    const w = guardianWorld("nophase");
+    const g = guardianOf(w);
+    g.hp = Math.floor(GUARDIAN_HP * 0.1);
+    for (let i = 0; i < 60; i++) step(w, NO_INPUT);
+    expect(g.phase).toBe(1);
   });
 });
 
@@ -67,22 +70,44 @@ describe("the Drowned Warden: the room", () => {
     expect(worldCleared(w)).toBe(false);
   });
 
-  it("grows its armour back and calls a squad at phase II", () => {
-    const w = guardianWorld("p2");
+  it("opens alone and makes its entrance by calling: arm up, the marks on the floor, then the squad", () => {
+    const w = guardianWorld("entrance");
     const g = guardianOf(w);
+    expect(w.enemies.filter((e) => e !== g)).toHaveLength(0);
+    expect(w.pendingWaves).toHaveLength(0);
+    const steps = (ms: number) => Math.ceil(ms / (1000 / 60));
+    for (let i = 0; i < steps(GUARDIAN_ENTRANCE_MS) + 2; i++) step(w, NO_INPUT);
+    expect(g.pose).toBe("guardian_call");
+    expect(g.guardian!.spots.length).toBeGreaterThan(0);
+    expect(w.enemies.filter((e) => e !== g)).toHaveLength(0);
+    for (let i = 0; i < steps(GUARDIAN_CALL_MS) + 2; i++) step(w, NO_INPUT);
+    expect(g.pose).not.toBe("guardian_call");
+    expect(w.enemies.filter((e) => e !== g && e.hp > 0).length).toBeGreaterThan(0);
+  });
+
+  it("calls again when its squad is down and the call has come round, and the call puts its plate back", () => {
+    const w = guardianWorld("recall");
+    const g = guardianOf(w);
+    const steps = (ms: number) => Math.ceil(ms / (1000 / 60));
+    for (let i = 0; i < steps(GUARDIAN_ENTRANCE_MS + GUARDIAN_CALL_MS) + 4; i++) step(w, NO_INPUT);
+    for (const e of w.enemies) if (e !== g) e.hp = 0;
     g.armour = 0;
-    g.hp = Math.floor(GUARDIAN_HP * 0.6);
-    step(w, NO_INPUT);
-    expect(g.phase).toBe(2);
+    g.guardian!.callMs = 0;
+    let called = false;
+    for (let i = 0; i < steps(4000) && !called; i++) {
+      step(w, NO_INPUT);
+      called = w.enemies.filter((e) => e !== g && e.hp > 0).length === GUARDIAN_SQUAD.length;
+    }
+    expect(called).toBe(true);
     expect(g.armour).toBe(GUARDIAN_ARMOUR);
-    expect(w.enemies.filter((e) => e !== g)).toHaveLength(GUARDIAN_SQUAD.length);
+    expect(g.guardian!.callMs).toBeGreaterThan(GUARDIAN_CALL_EVERY_MS - 4000);
   });
 
   it("takes its squad with it, and pays a room's experience", () => {
     const w = guardianWorld("death");
     const g = guardianOf(w);
-    g.hp = Math.floor(GUARDIAN_HP * 0.5);
-    step(w, NO_INPUT);
+    for (let i = 0; i < 120; i++) step(w, NO_INPUT);
+    expect(w.enemies.length).toBeGreaterThan(1);
     const xp0 = w.xp;
     g.hp = 0;
     for (let i = 0; i < 30; i++) step(w, NO_INPUT);

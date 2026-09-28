@@ -459,7 +459,7 @@ export function throwLob(
 /** Poses a body holds still through: the move is the whole of what it is doing. */
 export const PLANTED_POSES: ReadonlySet<string> = new Set([
   "musket_windup", "musket_fire", "musket_second", "musket_reload", "cast", "field", "burst", "peal_windup", "windup_hook", "anchor_cast", "lash_windup",
-  "flare_windup", "bloom_cast", "telegraph", "telegraph_walk", "lob_windup", "cinder_windup",
+  "flare_windup", "bloom_cast", "telegraph", "telegraph_walk", "lob_windup", "cinder_windup", "guardian_call",
 ]);
 
 /** Whether the body is posed in a move that holds it still. */
@@ -724,8 +724,7 @@ function finishPose(w: World, e: Enemy, seen: { x: number; y: number }): void {
     case "musket_windup":
       fireMusket(w, e);
       // The elite's second barrel: a beat later, from where it stands.
-      // And the Drowned Warden's in its last phase (doc 024).
-      pose(e, (e.archetype === "fusilier" || (e.guardian && e.phase >= 3)) && e.casts % 2 === 1 ? "musket_second" : "musket_fire", MUSKET_FIRE_MS);
+      pose(e, e.archetype === "fusilier" && e.casts % 2 === 1 ? "musket_second" : "musket_fire", MUSKET_FIRE_MS);
       break;
     case "musket_second":
       pose(e, "musket_windup", MUSKET_SECOND_MS);

@@ -1038,8 +1038,8 @@ function aheadLines(n: BriefingNow): string[] {
     // Room 10's guardian (doc 024), stated as the run's shape.
     ...(n.roomIndex <= RUN_GUARDIAN_ROOM ? [
       `- ${n.roomIndex === RUN_GUARDIAN_ROOM ? "This room" : `Room ${RUN_GUARDIAN_ROOM}`} is a guardian fight: one large `
-        + "armoured body that rams and fires a spray, with a squad of ordinary bodies; a ram into a wall knocks it "
-        + "out and breaks its armour. It pays its door's reward one grade higher, and a room's experience on the kill.",
+        + "armoured body that rams and fires a spray, and calls squads of ordinary bodies to its side, its armour "
+        + "back with each call; a ram into a wall knocks it out and breaks its armour. It pays its door's reward one grade higher, and a room's experience on the kill.",
     ] : []),
     `- ${n.roomIndex === RUN_BOSS_ROOM ? "This room" : `Room ${RUN_BOSS_ROOM}`} is the boss: one long fight `
       + "in an open hall against a single body with far more health than anything else in the run. It is "

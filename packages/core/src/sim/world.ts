@@ -436,7 +436,8 @@ export function createWorld(input: CreateWorldOptions): World {
 
 /**
  * **The Drowned Warden takes its ground** (doc 024): across the room from the
- * door, awake, with the room's own squad already arriving. The farthest floor
+ * door, awake, alone. The room's own wave is its entrance: a beat after the
+ * room opens it raises its arm and they rise round it. The farthest floor
  * cell from the entry with floor round it for its body.
  */
 function placeGuardian(w: World): void {
@@ -454,7 +455,12 @@ function placeGuardian(w: World): void {
       if (!best || d > best.d) best = { x, y, d };
     }
   const at = best ?? { x: (ext.w / 2) * TILE_PX, y: (ext.h / 2) * TILE_PX };
-  const g = makeGuardian(w.nextEnemyId++, at.x, at.y, w.roomIndex);
+  // The room's own wave does not walk in: it is what the guardian's entrance call raises.
+  // Only bodies that walk: an emplacement does not rise from the floor at a call.
+  const entrance = w.pendingWaves.flatMap((wave) => wave.spawns.flatMap((sp) => Array<EnemyId>(sp.count).fill(sp.archetype)))
+    .filter((id) => ENEMIES[id].behaviour !== "stationary");
+  w.pendingWaves = [];
+  const g = makeGuardian(w.nextEnemyId++, at.x, at.y, w.roomIndex, entrance.length > 0 ? entrance : undefined);
   g.spawnFadeMs = 0;
   w.enemies.push(g);
   w.cleared = false;
@@ -842,7 +848,7 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   // The king lives on his own clock (`bossTempo`): everything he does runs faster in phase III, with the music.
   for (const e of w.enemies) stepEnemy(w, e, dtMs * bossTempo(e));
   for (const e of w.enemies) if (e.archetype === "boss" && e.hp > 0) stepBoss(w, e, dtMs * bossTempo(e));
-  for (const e of w.enemies) if (e.guardian) stepGuardian(w, e);
+  for (const e of w.enemies) if (e.guardian) stepGuardian(w, e, dtMs);
   resolveBodies(w);
   w.enemies = w.enemies.filter((e) => {
     // Gone up out of the room (doc 022): off the floor, and nothing a death pays.
