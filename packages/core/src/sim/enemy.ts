@@ -15,6 +15,7 @@ import type { Enemy, World } from "./types.ts";
 import {
   ENEMY_BULLET_CAP, SUMMONER_INTERVAL_S, SUMMONER_MINION_CAP, MAX_CONCURRENT_ENEMIES, BOSS_PHASES, bossPhaseAt, kingHp, KING_RETREAT_AT } from "../encounters/enemies.ts";
 import type { BossScript } from "../encounters/enemies.ts";
+import { GUARDIAN_SHOT_EVERY } from "./guardian.ts";
 
 const SUMMONER_INTERVAL_MS = SUMMONER_INTERVAL_S * 1000;
 /**
@@ -689,21 +690,32 @@ const ENGAGE_DELAY_MS = 420;
 export const ALERT_MS = 320;
 
 /**
- * How much armour each archetype starts with, taken out of its health rather
- * than added to it: the tank is still 42 points to kill, but the first 18 of
- * them buy the right to interrupt it.
+ * **Poise by archetype** (`Enemy.poise`): the damage a burst of hits has to
+ * deal before one interrupts it. Only the heavy bodies have any; everything
+ * else is interrupted by any hit, as it always was. A sword hit is about 9 at
+ * the start of a run, so a tank takes three in a row and a warden two. Not the
+ * boss: nothing interrupts him (`canStagger`), and his weight is his health
+ * and the turns he takes (`chooseBossAct`).
  */
+// The breaker is the tank's subspecies and the fusilier the warden's: their bodies, their poise.
+const POISE: Partial<Record<EnemyId, number>> = { tank: 24, breaker: 24, warden: 16, fusilier: 16 };
+/** A body's poise: its own, doubled by an `armored` affix, or the affix's flat poise on a body with none. */
+function poiseOf(archetype: EnemyId, affixPoise: number): number {
+  const own = POISE[archetype] ?? 0;
+  if (affixPoise <= 0) return own;
+  return own > 0 ? own * 2 : affixPoise;
+}
+/** Unhit this long, a body's poise is whole again: a heavy body is broken by pressure, not by hits spread across a fight. */
+export const POISE_RECOVER_MS = 1500;
+/** The stagger a break knocks it into: longer than a hit's, the opening the burst was for. */
+export const POISE_BREAK_STAGGER_MS = 700;
 /**
- * Armour by archetype. Not the boss: nothing interrupts him (`canStagger`),
- * so a shield that only bought the right to interrupt bought nothing, and a
- * bar for it over his head was a second health bar that meant nothing. His
- * weight is his health and the turns he takes (`chooseBossAct`).
+ * After a break, how long before it can be broken again, counted from the
+ * end of the break's stagger: without it the next burst would break it again
+ * the moment it stood, and a heavy body could be held down to its death.
  */
-// The breaker is the tank's subspecies, its body and its health, and says it
-// is armoured; it had been left out, so it flinched where the tank did not.
-const ARMOUR: Partial<Record<EnemyId, number>> = { tank: 24, breaker: 24 };
+export const POISE_GUARD_MS = 1500;
 
-/** Whether hit stun applies. Armour is immunity, and armour can be broken. */
 /**
  * Whether this body is currently trying to back away from the player.
  *
@@ -721,13 +733,17 @@ export function midAttack(e: Enemy): boolean {
   return e.attack === "windup" || e.attack === "lunge" || e.telegraphMs > 0 || e.pending.length > 0;
 }
 
+/**
+ * Whether an ordinary hit interrupts it. A body with poise is interrupted
+ * only by the hit that breaks it (`hurtEnemy`, `stagger(…, force)`).
+ */
 export function canStagger(e: Enemy): boolean {
   // The king is never interrupted: every move he starts, he finishes, and the opening is the rest after it.
-  return e.archetype !== "boss" && e.armour <= 0;
+  return e.archetype !== "boss" && e.maxPoise <= 0;
 }
 
 /** How long the break flash runs. */
-export const ARMOUR_BREAK_MS = 260;
+export const POISE_BREAK_MS = 260;
 
 /**
  * A charge slamming into a wall should be felt, not merely seen. The world
@@ -782,8 +798,9 @@ function takeToken(world: World, e: Enemy): boolean {
  * Armoured bodies are exempt, which is the same rule Hades uses to stop a
  * heavy enemy being trivialised by mashing. See `canStagger`.
  */
-export function stagger(world: World, e: Enemy, ms = STAGGER_MS): void {
-  if (!canStagger(e)) return;
+export function stagger(world: World, e: Enemy, ms = STAGGER_MS, force = false): void {
+  if (!force && !canStagger(e)) return;
+  if (e.archetype === "boss") return;
   e.staggerMs = Math.max(e.staggerMs, ms);
   e.attack = "approach";
   e.attackMs = 0;
@@ -968,9 +985,11 @@ export function makeEnemy(
     staggerImmuneMs: 0,
     threatMs: 0,
     postX: x, postY: y, postMs: (id * 331) % 1200, relocateMs: 0,
-    armour: (ARMOUR[archetype] ?? 0) + stats.armour,
-    maxArmour: (ARMOUR[archetype] ?? 0) + stats.armour,
-    armourBreakMs: 0,
+    poise: poiseOf(archetype, stats.poise),
+    maxPoise: poiseOf(archetype, stats.poise),
+    poiseIdleMs: 0,
+    poiseGuardMs: 0,
+    poiseBreakMs: 0,
     brakeMs: 0,
     alertMs: 0,
     velX: 0,
@@ -1033,7 +1052,7 @@ export function makeEnemy(
     // Offset per body, so two of a kind do not use their second move together.
     moveMs: 2400 + ((id * 613) % 1800),
     casts: 0,
-    wardArmour: 0,
+    wardHeal: 0,
     delve: "surface",
     delveMs: 2500,
     delveX: 0,
@@ -2049,6 +2068,8 @@ function chooseMelee(e: Enemy): MeleeKind | null {
    * the way in for a slam, and the walk is the tell.
    */
   if (baseArchetype(e.archetype) === "tank") return e.closeIn ? "cleave" : e.casts % 3 === 0 ? "charge" : "slam";
+  // The Frontier Veteran (doc 024): the tank's ram from range, its own shield shove on top of it.
+  if (e.guardian) return e.closeIn ? "bash" : "charge";
   // The boss: by phase, and by distance within the phase.
   if (e.archetype === "boss") {
     // Inside a string: the next blow is already decided (`BossPhase.strings`).
@@ -2373,7 +2394,7 @@ function stepBossPhase(world: World, e: Enemy): void {
     e.swing.active = false;
     e.swing.trackingMs = 0;
     e.staggerMs = 0;
-    e.armourBreakMs = 0;
+    e.poiseBreakMs = 0;
     e.bossHooked = false;
     e.bossPlanMs = 0;
     e.velX = 0;
@@ -2883,7 +2904,13 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
     || e.telegraphMs > 0 || e.jukeMs > 0 ? 0 : e.threatMs + dtMs;
   if (e.postMs > 0) e.postMs -= dtMs;
   if (e.relocateMs > 0) e.relocateMs -= dtMs;
-  if (e.armourBreakMs > 0) e.armourBreakMs -= dtMs;
+  if (e.poiseBreakMs > 0) e.poiseBreakMs -= dtMs;
+  if (e.poiseGuardMs > 0) e.poiseGuardMs -= dtMs;
+  // Poise fills again once the body has gone a while unhit (`POISE_RECOVER_MS`).
+  if (e.maxPoise > 0 && e.poise < e.maxPoise) {
+    e.poiseIdleMs += dtMs;
+    if (e.poiseIdleMs >= POISE_RECOVER_MS) e.poise = e.maxPoise;
+  }
   /*
    * Braking: the velocity is shed gradually rather than being cut or coasting.
    * 0.94 per frame carries it about 52 px — a tile and a half — with the last
@@ -3318,6 +3345,14 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
         // second half of a combination: the slam is the player's window.
         e.comboLeft = 0;
         impactShake(world, e);
+        /*
+         * **The Frontier Veteran knocked out on the wall** (doc 024): the stun
+         * is the fight's opening, and it lands with a break's flash and sound.
+         */
+        if (e.guardian) {
+          e.poiseBreakMs = POISE_BREAK_MS;
+          world.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_break:${e.archetype}` });
+        }
       }
     }
     // Still a last resort, for the case the field cannot help with: two
@@ -3537,7 +3572,14 @@ function fire(world: World, e: Enemy, dtMs: number): void {
   }
   // Well past the view it holds its fire and drops what it was aiming; nearer
   // the edge, its clock runs slower in proportion (`firePresence`).
-  const presence = firePresence(world, e);
+  /*
+   * **A destroy room's targets fire across the whole room** (doc 025): off
+   * the screen as well as on it. What they throw is read where it lands — a
+   * strike's mark at the player's feet, a lane, a line drawn to them — so
+   * none of it arrives from the dark, and the room is a clock the player
+   * cannot hide from.
+   */
+  const presence = e.objectiveTarget ? 1 : firePresence(world, e);
   if (presence <= 0) {
     if (e.telegraphMs > 0 || e.pending.length > 0) { e.pending = []; e.telegraphMs = 0; e.plantMs = 0; dropFireToken(world, e); }
     return;
@@ -3665,7 +3707,8 @@ function fire(world: World, e: Enemy, dtMs: number): void {
    * affixes that speed up a volley speed these up identically.
    */
   if (def.ranged) {
-    const period = def.ranged.interval_s * 1000;
+    // The Frontier Veteran fires less often than a warden: its ram is the other half of its turns (doc 024).
+    const period = def.ranged.interval_s * 1000 * (e.guardian ? GUARDIAN_SHOT_EVERY : 1);
     const before = e.patternMs;
     e.patternMs += scaled;
     if (Math.floor(before / period) === Math.floor(e.patternMs / period)) return;
@@ -3791,9 +3834,10 @@ const RANGED_TURN_MS = 950;
  */
 function takeFireToken(world: World, e: Enemy): boolean {
   if (e.hasFireToken) return true;
-  if (world.fireTokens <= 0) return false;
+  // A destroy room's targets fire on their own clocks, outside the room's budget (doc 025).
+  if (world.fireTokens <= 0 && !e.objectiveTarget) return false;
   if (liveCount(world.enemyBullets) >= world.flightBudget) return false;
-  world.fireTokens--;
+  if (!e.objectiveTarget) world.fireTokens--;
   e.hasFireToken = true;
   return true;
 }
@@ -3802,7 +3846,7 @@ export function dropFireToken(world: World, e: Enemy): void {
   e.fireTokenMs = 0;
   if (!e.hasFireToken) return;
   e.hasFireToken = false;
-  world.fireTokens++;
+  if (!e.objectiveTarget) world.fireTokens++;
 }
 
 /**

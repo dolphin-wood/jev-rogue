@@ -38,6 +38,7 @@
     "spell-check": "node --experimental-strip-types packages/harness/src/cli/spell-check.ts",
     "spell-bench": "node --experimental-strip-types packages/harness/src/cli/spell-bench.ts",
     "boss-bench": "node --experimental-strip-types packages/harness/src/cli/boss-bench.ts",
+    "guardian-bench": "node --experimental-strip-types packages/harness/src/cli/guardian-bench.ts",
     "fx:preview": "node --experimental-strip-types --no-warnings packages/harness/src/cli/fx-preview.ts",
     "ground:preview": "node --experimental-strip-types --no-warnings packages/harness/src/cli/ground-preview.ts",
     "telegraph:preview": "node --experimental-strip-types --no-warnings packages/harness/src/cli/telegraph-preview.ts",

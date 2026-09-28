@@ -440,7 +440,7 @@ const BELLRINGER: EnemyDef = {
   speed: 62,
   radius: 9,
   tags: ["ranged_heavy", "ranged_pressure", "long"],
-  description: "Armours an ally down a tether. Its toll refills every shield it holds at once and hurries nearby bodies; it does no damage, and a hit during the windup stops it. Cut the line, or interrupt. The elite peals.",
+  description: "Heals an ally down a tether. Its toll heals every ally it holds at once and hurries nearby bodies; it does no damage, and a hit during the windup stops it. Cut the line, or interrupt. The elite peals.",
   summon: null,
 };
 
@@ -636,12 +636,11 @@ const TANK: EnemyDef = {
    * should mean.
    */
   /*
-   * 24 health behind 18 armour, so it is still the 42 points it was — the
-   * armour is carved out of the health rather than added to it. What changed
-   * is what the first 18 of them buy: the right to interrupt it. See
-   * `Enemy.armour`.
+   * 58: the 34 it had and the 24 armour it carried in front of them, now that
+   * armour is gone (`Enemy.poise`). Poise takes no health, so the damage it
+   * takes to kill a tank is what it was.
    */
-  hp: 34,
+  hp: 58,
   /*
    * 34, down from 52. Its sprite is the bulkiest in the roster and it was
    * moving at two thirds the speed of a jellyfish, which is the mismatch
@@ -674,7 +673,7 @@ const TANK: EnemyDef = {
    */
   melee: "charge",
   tags: ["melee_heavy", "movement_pressure", "short"],
-  description: "Slow, armoured and unstoppable once it commits; charges you down, and knocks itself out on a wall.",
+  description: "Slow, heavy and unstoppable once it commits; one hit will not interrupt it. Charges you down, and knocks itself out on a wall.",
   summon: null,
 };
 

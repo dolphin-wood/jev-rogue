@@ -3,7 +3,7 @@ id: 022
 title: The King's First Audience
 status: proposed
 date: 2026-09-27
-summary: The Crypt King is met twice, unnamed the first time. In room 5, the last fight of the ossuary, the roof comes down on an ordinary fight, a stone on each body and none on the player, and he lands on the far side of the arena. The bodies spill enough hearts to fill the player's bar and three more that stay on the floor. That first audience is phase I alone. At 60% of its bar the armour breaks and he goes back up out of the room, and the room pays its door's reward a grade higher and an ordinary room's experience. The final fight in the throne hall opens with a short phase I in the armour the throne shows, then phases II and III take the rest of a larger bar. It takes the place of the guardian that seam would have held, not a room of its own, so the run is no longer and the count of fights is unchanged. Placed at room 5 rather than 10 because real players die before room 8: the meeting comes to every run, and its peak buys room 6 as the trough at the ramp's steepest step. Code decides all of it. The one Jev question the room keeps is its door's reward.
+summary: The Crypt King is met twice, unnamed the first time. In room 4, 5 or 6, drawn per run, the last fight of the ossuary, the roof comes down on an ordinary fight, a stone on each body and none on the player, and he lands on the far side of the arena. The bodies spill enough hearts to fill the player's bar and three more that stay on the floor. That first audience is phase I alone. At 60% of its bar the armour breaks and he goes back up out of the room, and the room pays its door's reward a grade higher and an ordinary room's experience. The final fight in the throne hall opens with a short phase I in the armour the throne shows, then phases II and III take the rest of a larger bar. It takes the place of the guardian that seam would have held, not a room of its own, so the run is no longer and the count of fights is unchanged. Placed at room 5 rather than 10 because real players die before room 8: the meeting comes to every run, and its peak buys room 6 as the trough at the ramp's steepest step. Code decides all of it. The one Jev question the room keeps is its door's reward.
 depends_on: [003, 005, 014, 019, 020]
 ---
 
@@ -264,6 +264,22 @@ the roof gives**, and holds the fixed view for the rest of the fight.
   that is not a whole number, so room 5 adds nothing new there. The ease
   itself moves through fractional zooms, which is why it runs under the shake
   and the dust and not on a still frame.
+
+## Which room: drawn from 4 to 6 (2026-09-28)
+
+**The first audience falls in room 4, 5 or 6, drawn per run from the run's
+seed** (`AUDIENCE_ROOMS`, `audienceRoomFor`). At a fixed room 5 the drop-in was
+only a surprise once: a player who has seen it counts the rooms to it, and a
+drop-in that is counted to is not a drop-in. Everything above that says "room
+5" means the drawn room. The doors out of the room before it are narrowed, the
+arena, view and pay are the same, and the room after it is the trough.
+
+Drawn to room 6 it falls in the first room of the flooded depth, on the
+ramp's steep step, and it does not close the ossuary. Measured, that costs
+nothing (`pnpm play rule 30`): the `average` profile reaches the boss in 12 of
+30 runs with the draw, against 10 with the audience fixed at room 5.
+`RUN_AUDIENCE_ROOM` (5) stays as the room the bench, the lab and the tests use
+when no run is named.
 
 ## The arena
 

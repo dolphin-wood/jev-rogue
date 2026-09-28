@@ -206,6 +206,13 @@ export const JA: Table = {
   "card.strength3": "強度 III",
   "hud.bossTitle": "地下墓所の王",
   "hud.bossUnknown": "???",
+  "hud.guardianTitle": "辺境の老将",
+  "hud.objectiveHold": "耐え抜け",
+  "hud.objectiveDestroy": "砲台を壊せ",
+  "hud.holdLeft": "残り {s} 秒",
+  "hud.targetsLeft": "砲台 {n}/{total}",
+  "hud.briefHold": "{s} 秒生き延びろ。時間まで敵は湧き続ける。",
+  "hud.briefDestroy": "印のついた砲台 {n} 基を壊せ。壊すまで敵は湧き続ける。",
   "hud.bossPhase": "第 {n} 段階",
   "prompt.cutTheLink": "鎖の上に立って断ち切る",
   "card.upgradeLv": "強化 Lv {from} → {to}",
@@ -263,6 +270,8 @@ export const JA: Table = {
 
   /* ------------------------------- prompts ------------------------------ */
   "prompt.open": "[E] 開ける",
+  "prompt.openChest": "[E] 宝箱を開ける",
+  "chest.heading": "宝箱",
   "prompt.merchant": "[E] 商人",
   "prompt.soldOut": "売り切れ",
   "prompt.blacksmith": "[E] 鍛冶屋：呪文を強化",

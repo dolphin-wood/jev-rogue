@@ -158,12 +158,12 @@ describe("what an elite is (doc 019)", () => {
     for (const id of ELITE_AFFIX_IDS) expect(AFFIXES[id].speed_mult, id).toBe(1);
   });
 
-  it("lengthens the bar once: `armored` is armour, not more health", () => {
+  it("lengthens the bar once: `armored` is poise, not more health", () => {
     expect(AFFIXES.armored.hp_mult).toBe(1);
     const armoured = makeEnemy(1, "shooter", 0, 0, ["armored"]);
     const plain = makeEnemy(2, "shooter", 0, 0, ["volatile"]);
     expect(armoured.maxHp).toBeCloseTo(plain.maxHp, 5);
-    expect(armoured.maxArmour).toBeGreaterThan(plain.maxArmour);
+    expect(armoured.maxPoise).toBeGreaterThan(plain.maxPoise);
   });
 
   it("never raises a commit speed: a ram is the ram the player learned", () => {
@@ -283,7 +283,7 @@ describe("no telegraph is ever shortened (doc 019)", () => {
   it("exposes no multiplier that a tell could read", () => {
     const stats = affixStats(["swift"]);
     expect(Object.keys(stats).sort())
-      .toEqual(["armour", "damage_mult", "hp_mult", "rest_mult", "speed_mult"]);
+      .toEqual(["damage_mult", "hp_mult", "poise", "rest_mult", "speed_mult"]);
   });
 
   it("is what `affixStats` says it is, so the two cannot drift apart", () => {

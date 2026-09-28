@@ -206,3 +206,16 @@ describe("the doors onto the king's first audience (doc 022)", () => {
     expect(legalDifficulties(after)).toContain("elite");
   });
 });
+
+describe("the doors onto a first audience drawn from rooms 4 to 6 (doc 022)", () => {
+  it("narrow the doors out of the room before the drawn one, and only those", async () => {
+    const { leadsToFixedFight } = await import("./doors.ts");
+    for (const at of [4, 5, 6]) {
+      for (let i = 2; i <= 8; i++) {
+        const shape = run({ roomIndex: i, audienceRoom: at, hurt: true, fightsSinceElite: 5, elitesSoFar: 0 });
+        expect(leadsToFixedFight(i, at), `${i}->${at}`).toBe(i + 1 === at || i + 1 === 10);
+        if (i + 1 === at) expect(legalDifficulties(shape)).toEqual(["normal"]);
+      }
+    }
+  });
+});

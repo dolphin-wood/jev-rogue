@@ -47,9 +47,9 @@ async function densities(lastTwo: readonly ("sparse" | "normal")[], n = 60): Pro
   const prev = lastTwo.map((density) => ({ density, anchor: "none" }) as unknown as EncounterProfile);
   for (let i = 0; i < n; i++) {
     // Hurt and recently hit hard: the state that asked for sparse room after room.
-    const base = ctx({ seed: `sparse-${lastTwo.join("-")}-${i}`, hearts: 2, damage: 4, index: 10 });
-    const c: RunContext = { ...base, room_index: 10, history: { ...base.history, profiles: prev } };
-    const plan = await director.planRoom(c, { room_index: 10, door_slot: 0, room_type: "combat" }, "release");
+    const base = ctx({ seed: `sparse-${lastTwo.join("-")}-${i}`, hearts: 2, damage: 4, index: 9 });
+    const c: RunContext = { ...base, room_index: 9, history: { ...base.history, profiles: prev } };
+    const plan = await director.planRoom(c, { room_index: 9, door_slot: 0, room_type: "combat" }, "release");
     if (plan.profile) out.push(plan.profile.density);
   }
   return out;

@@ -210,6 +210,13 @@ export const EN = {
   "card.strength3": "STRENGTH III",
   "hud.bossTitle": "THE CRYPT KING",
   "hud.bossUnknown": "???",
+  "hud.guardianTitle": "THE FRONTIER VETERAN",
+  "hud.objectiveHold": "HOLD OUT",
+  "hud.objectiveDestroy": "DESTROY THE TURRETS",
+  "hud.holdLeft": "Hold out {s}s",
+  "hud.targetsLeft": "Turrets {n}/{total}",
+  "hud.briefHold": "Survive {s} seconds. They will keep coming until the time is up.",
+  "hud.briefDestroy": "Destroy the {n} marked turrets. Until then, more keep coming.",
   "hud.bossPhase": "phase {n}",
   "prompt.cutTheLink": "Stand on the chain to break it",
   "card.upgradeLv": "upgrade Lv {from} → {to}",
@@ -268,6 +275,8 @@ export const EN = {
 
   /* ------------------------------- prompts ------------------------------ */
   "prompt.open": "[E] Open",
+  "prompt.openChest": "[E] Open the chest",
+  "chest.heading": "Chest",
   "prompt.merchant": "[E] Merchant",
   "prompt.soldOut": "Sold out",
   "prompt.blacksmith": "[E] Blacksmith: upgrade a spell",

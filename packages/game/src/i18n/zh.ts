@@ -207,6 +207,13 @@ export const ZH: Table = {
   "card.strength3": "强度 III",
   "hud.bossTitle": "地穴之王",
   "hud.bossUnknown": "???",
+  "hud.guardianTitle": "边陲老将",
+  "hud.objectiveHold": "坚守",
+  "hud.objectiveDestroy": "摧毁炮台",
+  "hud.holdLeft": "坚守 {s} 秒",
+  "hud.targetsLeft": "炮台 {n}/{total}",
+  "hud.briefHold": "坚持 {s} 秒。时间到之前敌人会源源不断。",
+  "hud.briefDestroy": "摧毁 {n} 座标记的炮台。摧毁之前敌人会源源不断。",
   "hud.bossPhase": "第 {n} 阶段",
   "prompt.cutTheLink": "站到锁链上将其斩断",
   "card.upgradeLv": "升级 Lv {from} → {to}",
@@ -264,6 +271,8 @@ export const ZH: Table = {
 
   /* ------------------------------- prompts ------------------------------ */
   "prompt.open": "[E] 打开",
+  "prompt.openChest": "[E] 打开宝箱",
+  "chest.heading": "宝箱",
   "prompt.merchant": "[E] 商人",
   "prompt.soldOut": "已售罄",
   "prompt.blacksmith": "[E] 铁匠：升级法术",

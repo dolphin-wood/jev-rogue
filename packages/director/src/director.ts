@@ -17,7 +17,7 @@ import {
   assemblePortals, SCHOOL_OF,
   rampDensities, rampAnchors, rampSubspecies, rampElitePresence, rampFor, rampRoster,
   keysLean, UNMEASURED, PORTAL_NEED_TEMPERATURE, PORTAL_TAIL_TEMPERATURE, NPC_MIN_NEED,
-  buildFacts, NO_BUILD, enemy, isAudienceRoom, audienceZones, biomeFor, BIOME_TEMPERATURE,
+  buildFacts, NO_BUILD, enemy, isFixedFightRoom, audienceRoomFor, objectiveFor, isGuardianRoom, baseArchetype, audienceZones, biomeFor, BIOME_TEMPERATURE,
 } from "@jr/core";
 import type {
   CounterScore, Distribution, EncounterProfile, RoomPlan,
@@ -496,7 +496,15 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
       ? assembleEncounterDetailed(profile, base, band, rng, { source: "rule", room_index: ctx.room_index })
       : null;
     // The first wave only: the roof gives before a second would be called, and a second is never queued.
-    const encounter = assembled ? { ...assembled.plan, waves: assembled.plan.waves.slice(0, 1), elite_affixes: [] } : null;
+    let encounter = assembled ? { ...assembled.plan, waves: assembled.plan.waves.slice(0, 1), elite_affixes: [] } : null;
+    // Beside the Frontier Veteran no plain warden: two of the same body is one to misread (doc 024).
+    if (encounter && isGuardianRoom(ctx.room_index))
+      encounter = {
+        ...encounter,
+        waves: encounter.waves.map((wave) => ({
+          ...wave, spawns: wave.spawns.map((sp) => (baseArchetype(sp.archetype) === "warden" ? { ...sp, archetype: "shooter" } : sp)),
+        })),
+      };
     let offer: OfferPlan | undefined;
     if (alongside) {
       const q = offerAsk(ctx, alongside);
@@ -522,7 +530,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
       trimmed: false,
       decisions: [{
         choice: "audience_arena", probabilities: { audience_arena: 1 }, confidence: null, source: "rule",
-        question: "space (the king's first audience, doc 022)",
+        question: "space (a fixed fight: the king's first audience, doc 022, or the guardian, doc 024)",
       }],
       ...(offer ? { offer } : {}),
     };
@@ -1412,7 +1420,8 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
 
     async planRoom(ctx, door, suggested, alongside) {
       // The king's first audience is the run's shape, not a question (doc 022).
-      if (isAudienceRoom(ctx.room_index) && (door.room_type === "combat" || door.room_type === "elite"))
+      // And room 10's guardian, in the same arena (doc 024).
+      if (isFixedFightRoom(ctx.room_index, audienceRoomFor(ctx.seed)) && (door.room_type === "combat" || door.room_type === "elite"))
         return planAudience(ctx, door, alongside);
       const pacing = pacingLabels({
         room_index: ctx.room_index, history: ctx.history,
@@ -1452,8 +1461,15 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
        * answer there and is not asked (doc 002).
        */
       const depthTemperature = BIOME_TEMPERATURE[biomeFor(door.room_index)];
+      /*
+       * **A destroy room is open floor** (doc 025): its turrets are what the
+       * room is about, and a wall to stand behind would answer them without a
+       * fight. So its space is the bare arena, and the space is not asked.
+       */
+      const objective = door.objective ?? objectiveFor(ctx.seed, ctx.room_index, door.room_type);
       const askQ1 = Object.fromEntries(Object.entries(q1).filter(([n]) =>
-        !firstLook.includes(n) && !(depthTemperature && n === "mood_temperature")));
+        !firstLook.includes(n) && !(depthTemperature && n === "mood_temperature")
+        && !(objective === "destroy" && n === "space")));
       const r1 = await ask(
         offerQ ? mergeQuestions([askQ1, offerQ.questions]) : askQ1,
         offerQ ? { ...flatState(ctx, offerQ.state), ...state1 } : state1 as unknown as Record<string, unknown>,
@@ -1486,7 +1502,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
       const tension: Tension = tensions.length > 1
         ? pick("next_tension", TEMPERATURE.next_tension) as Tension
         : (tensions[0] ?? suggested);
-      const space = pick("space", ROOM_TEMPERATURES.space ?? 0.8) as SpaceArchetypeId;
+      const space = objective === "destroy" ? "audience_arena" : pick("space", ROOM_TEMPERATURES.space ?? 0.8) as SpaceArchetypeId;
       /*
        * **The look alternates in code** (`LOOK_REPEAT_PENALTY`).
        *
@@ -1642,10 +1658,12 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
         }
       }
 
+      // Another way to end the fight (doc 025), drawn by code from the run's seed, never asked.
       const plan: RoomPlan = {
         ...base,
         zones: dedupeResources(zones),
         encounter,
+        ...(objective ? { objective } : {}),
         source: { ...base.source, params: r1.source, encounter: encounter ? r2.source : "none" },
       };
 

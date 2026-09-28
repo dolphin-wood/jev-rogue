@@ -30,3 +30,5 @@ export * from "./encounters/index.ts";
 // Audio: the synthesis kit, the effect catalogue and the score. Exported from
 // core because the client and the offline generator must run the same code.
 export * from "./audio/index.ts";
+export * from "./run/objectives.ts";
+export * from "./run/chest.ts";

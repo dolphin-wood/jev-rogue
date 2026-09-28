@@ -420,6 +420,9 @@ export interface DebugActions {
    * hall's final from its entrance.
    */
   readonly toAudience: () => void;
+  readonly toGuardian: () => void;
+  /** This room again with a room objective forced on it (doc 025). */
+  readonly toObjective: (kind: "hold" | "destroy") => void;
   readonly toFinal: () => void;
   /** The BOSS tab: the boss on a lead (`boss-lab.ts`). */
   readonly bossLab: BossLabActions;
@@ -619,8 +622,12 @@ export class DebugPanel {
       + `<div style="margin-top:4px"><button data-skip-room style="${BTN};margin-left:0">skip to the next room</button></div>`
       + `<div style="color:#5a5f7a">leaves this room uncleared; was the N key</div>`
       + `<div style="margin-top:4px"><button data-to-audience style="${BTN};margin-left:0">king: first audience</button>`
+      + `<button data-to-guardian style="${BTN}">guardian</button>`
       + `<button data-to-final style="${BTN}">king: final</button></div>`
-      + `<div style="color:#5a5f7a">room 5 from its opening, or the throne hall from its entrance, with the build held now</div></div>`;
+      + `<div style="color:#5a5f7a">the first audience's room from its opening, room 10's guardian, or the throne hall from its entrance, with the build held now</div>`
+      + `<div style="margin-top:4px"><button data-objective="hold" style="${BTN};margin-left:0">objective: hold</button>`
+      + `<button data-objective="destroy" style="${BTN}">objective: destroy</button></div>`
+      + `<div style="color:#5a5f7a">this room again, with the objective forced on it</div></div>`;
     this.toolBox.appendChild(cheats);
 
     /*
@@ -680,6 +687,10 @@ export class DebugPanel {
       ?.addEventListener("click", () => this.actions.skipRoom());
     cheats.querySelector<HTMLButtonElement>("button[data-to-audience]")
       ?.addEventListener("click", () => this.actions.toAudience());
+    cheats.querySelector<HTMLButtonElement>("button[data-to-guardian]")
+      ?.addEventListener("click", () => this.actions.toGuardian());
+    for (const b of Array.from(cheats.querySelectorAll<HTMLButtonElement>("button[data-objective]")))
+      b.addEventListener("click", () => this.actions.toObjective(b.dataset.objective as "hold" | "destroy"));
     cheats.querySelector<HTMLButtonElement>("button[data-to-final]")
       ?.addEventListener("click", () => this.actions.toFinal());
   }

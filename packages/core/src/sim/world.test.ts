@@ -1,7 +1,7 @@
 import { featureCells } from "../rooms/features.ts";
-import { ENTRY_GRACE_MS, canStagger } from "./enemy.ts";
+import { ENTRY_GRACE_MS, canStagger, POISE_BREAK_STAGGER_MS, POISE_RECOVER_MS } from "./enemy.ts";
 import { describe, it, expect } from "vitest";
-import { createWorld, step, worldCleared, ELITE_HEAL_FRACTION, GRASS_CATCH_MS } from "./world.ts";
+import { createWorld, hurtEnemy, step, worldCleared, ELITE_HEAL_FRACTION, GRASS_CATCH_MS } from "./world.ts";
 import {
   PLAYER_RADIUS, PLAYER_SPEED, NO_INPUT, ENEMY_BULLET_CAP, INVULN_MS, MAX_HEARTS,
 } from "./types.ts";
@@ -200,7 +200,7 @@ describe("casting and damage", () => {
      * spell-check saw it fire and hit and called it working.
      */
     const w = world({ slots: [plainInstance("shock_arc"), null, null, null, null, null] });
-    // Rushers, not tanks: a tank's armour shrugs off a six-damage spark.
+    // Rushers, not tanks: a tank's poise shrugs off a six-damage spark.
     // Upward, not downward: the player starts near the bottom wall and a body
     // placed thirty px below it stands inside the wall, where an arc dies.
     const first = makeEnemy(1, "rusher", w.player.x + 90, w.player.y, []);
@@ -1157,7 +1157,7 @@ describe("enemy behaviour", () => {
     b.spawnFadeMs = 0;
     b.awake = true;
     b.alertMs = 0;
-    b.armour = 0;
+    b.poise = b.maxPoise = 0;
     w.enemies.push(b);
     step(w, NO_INPUT);
     expect(b.phase).toBe(1);
@@ -1492,7 +1492,7 @@ describe("enemy behaviour", () => {
     e.spawnFadeMs = 0;
     e.awake = true;
     e.alertMs = 0;
-    e.armour = 0;
+    e.poise = e.maxPoise = 0;
     e.hp = 10_000;
     // Between attacks: it has nothing started for a blow to leave alone.
     e.attackCooldownMs = 1e9;
@@ -1547,72 +1547,72 @@ describe("enemy behaviour", () => {
     expect(e.hasToken).toBe(false);
   });
 
-  it("does not stagger a body while its armour holds", () => {
-    // Hades' rule: armoured enemies are immune to stun, which is what stops a
-    // heavy enemy being trivialised by out-clicking it. Damage goes into the
-    // armour, so its health is untouched until the armour is gone.
+  it("does not stagger a heavy body on a single hit: the hit lands and rings off its poise", () => {
+    // Hades' rule: heavy enemies are not stunned by every blow, which is what
+    // stops one being trivialised by out-clicking it. All the damage is health.
     const w = world();
     const e = makeEnemy(1, "tank", w.player.x + 44, w.player.y, []);
     e.spawnFadeMs = 0;
     e.awake = true;
     e.alertMs = 0;
-    expect(e.armour).toBeGreaterThan(0);
+    expect(e.poise).toBeGreaterThan(0);
     beginWindup(w, e, w.player);
     w.enemies.push(e);
 
     w.player.facing = 0;
     step(w, input({ swing: true }));
-    for (let i = 0; i < 12; i++) step(w, NO_INPUT);
+    let held = false;
+    for (let i = 0; i < 12; i++) {
+      step(w, NO_INPUT);
+      if (w.events.some((ev) => ev.what?.startsWith("poise_hold:"))) held = true;
+    }
     expect(e.staggerMs).toBe(0);
-    expect(e.armour).toBeLessThan(e.maxArmour);
-    expect(e.hp).toBe(e.maxHp);
+    expect(e.hp).toBeLessThan(e.maxHp);
+    expect(e.poise).toBeLessThan(e.maxPoise);
+    expect(held).toBe(true);
   });
 
-  it("armours the breaker as it does the tank, its base", () => {
+  it("gives the breaker the tank's poise, its base", () => {
     for (const id of ["tank", "breaker"] as const) {
       const e = makeEnemy(1, id, 0, 0, []);
-      expect(e.armour, id).toBe(24);
+      expect(e.maxPoise, id).toBe(24);
       expect(canStagger(e), id).toBe(false);
     }
   });
 
-  it("lets the player earn the flinch by breaking the armour", () => {
-    /*
-     * The whole reason armour is a pool rather than permanent immunity. An
-     * enemy whose state the player cannot touch is an obstacle, not an
-     * opponent: they could pick when the tank committed and nothing about how
-     * it ended. Two hits in, that changes.
-     */
+  it("breaks a heavy body's poise with a burst, and will not break it again straight after", () => {
     const w = world();
-    const e = makeEnemy(1, "tank", w.player.x + 44, w.player.y, []);
-    e.spawnFadeMs = 0;
-    e.awake = true;
-    e.alertMs = 0;
+    const e = makeEnemy(1, "tank", 300, 200, []);
+    e.spawnFadeMs = 0; e.awake = true; e.alertMs = 0;
+    // Enough health to be hit through two breaks.
+    e.hp = e.maxHp = 500;
     w.enemies.push(e);
-    w.player.facing = 0;
+    // Two hits it holds through.
+    expect(hurtEnemy(w, e, 10).broke).toBe(false);
+    expect(hurtEnemy(w, e, 10).broke).toBe(false);
+    expect(e.staggerMs).toBe(0);
+    // The third breaks it: a long stagger, and whole again.
+    expect(hurtEnemy(w, e, 10).broke).toBe(true);
+    expect(e.staggerMs).toBeGreaterThanOrEqual(POISE_BREAK_STAGGER_MS);
+    expect(e.poise).toBe(e.maxPoise);
+    // Straight after, however hard it is hit, it is not broken again.
+    for (let i = 0; i < 6; i++) expect(hurtEnemy(w, e, 10).broke).toBe(false);
+    expect(e.poise).toBe(e.maxPoise);
+    // Once the guard is out, it can be.
+    e.poiseGuardMs = 0;
+    hurtEnemy(w, e, 10); hurtEnemy(w, e, 10);
+    expect(hurtEnemy(w, e, 10).broke).toBe(true);
+  });
 
-    // Swing until the armour is gone.
-    for (let i = 0; i < 200 && e.armour > 0; i++)
-      step(w, input({ swing: i % 20 === 0 }));
-    expect(e.armour).toBe(0);
-    expect(e.hp).toBeGreaterThan(0);
-    // The breaking hit staggers too, which is the payoff moment — so it has
-    // to be waited out before the next phase is measured.
-    expect(e.staggerMs).toBeGreaterThan(0);
-    run(w, 20);
-    expect(e.staggerMs).toBeLessThanOrEqual(0);
-
-    // Past its flinch window, a hit lands as a hit on a body between attacks.
-    run(w, 60);
-    // Back in reach: the run's last cut throws a body further than the others.
-    e.x = w.player.x + 44;
-    e.y = w.player.y;
-    e.attack = "approach";
-    e.attackCooldownMs = 1e9;
-    e.staggerImmuneMs = 0;
-    for (let i = 0; i < 40 && e.staggerMs <= 0; i++)
-      step(w, input({ swing: i % 20 === 0 }));
-    expect(e.staggerMs, "a broken-armour body should stagger").toBeGreaterThan(0);
+  it("fills a heavy body's poise again once it has gone a while unhit", () => {
+    const w = world();
+    const e = makeEnemy(1, "tank", 300, 200, []);
+    e.spawnFadeMs = 0; e.awake = true; e.alertMs = 0; e.attackCooldownMs = 1e9;
+    w.enemies.push(e);
+    hurtEnemy(w, e, 10);
+    expect(e.poise).toBeLessThan(e.maxPoise);
+    for (let i = 0; i < Math.ceil(POISE_RECOVER_MS / (1000 / 60)) + 5; i++) step(w, NO_INPUT);
+    expect(e.poise).toBe(e.maxPoise);
   });
 
   it("caps how many enemies attack at once, and scales the cap with the room", () => {

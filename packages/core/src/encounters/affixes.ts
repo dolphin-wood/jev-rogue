@@ -18,8 +18,8 @@ import { bandError, buildFromRoster, maxCountFor } from "./assemble.ts";
 export interface AffixDef {
   readonly id: EliteAffix;
   readonly hp_mult: number;
-  /** Flat armour granted: the right to interrupt has to be bought first. */
-  readonly armour: number;
+  /** Poise granted to a body that has none (`Enemy.poise`); a body that has some has it doubled instead. */
+  readonly poise: number;
   readonly speed_mult: number;
   /**
    * Multiplier on the **rest between turns**; below 1 comes round sooner.
@@ -67,34 +67,34 @@ export const ELITE_DAMAGE = 1.3;
 export const ELITE_SPEED = 1.15;
 export const ELITE_REST = 0.85;
 
-/** Armour an `armored` elite carries: a tank's, which is the right to interrupt. */
-export const ARMORED_ARMOUR = 18;
+/** Poise an `armored` elite carries when its body has none: two sword hits in a row before one interrupts it. */
+export const ARMORED_POISE = 18;
 
 export const AFFIXES: Readonly<Record<EliteAffix, AffixDef>> = {
   armored: {
     id: "armored",
     /*
-     * **Armour, not health** (doc 019).
+     * **Poise, not health** (doc 019).
      *
      * At ×2 health an `armored` elite was 3.2 tanks, which is a body the
-     * player hits until something else kills them. Armour is the more
-     * interesting rule anyway: it is the right to interrupt, which the player
-     * buys with their first hits (doc 013), so the affix changes a verb rather
-     * than a bar — and the elite's own ×2 stays the only thing that lengthens
-     * the bar.
+     * player hits until something else kills them. Poise is the more
+     * interesting rule anyway: a single hit no longer interrupts it, so the
+     * affix changes a verb rather than a bar — and the elite's own ×2 stays
+     * the only thing that lengthens the bar. A body with poise of its own has
+     * it doubled (`makeEnemy`).
      */
     hp_mult: 1,
-    armour: ARMORED_ARMOUR,
+    poise: ARMORED_POISE,
     speed_mult: 1,
     rest_mult: 1,
     pressure_mult: 1.3,
     max_enemies: null,
-    description: "Armoured: it has to be broken before it can be interrupted.",
+    description: "Armoured: it takes a burst of hits, not one, to interrupt it.",
   },
   swift: {
     id: "swift",
     hp_mult: 1,
-    armour: 0,
+    poise: 0,
     /*
      * **No extra speed.** The enrage already gives every elite ×1.15, and doc
      * 019 caps an elite there so nothing can outrun a retreat; +35% on top was
@@ -113,7 +113,7 @@ export const AFFIXES: Readonly<Record<EliteAffix, AffixDef>> = {
   burning: {
     id: "burning",
     hp_mult: 1,
-    armour: 0,
+    poise: 0,
     speed_mult: 1,
     rest_mult: 1,
     pressure_mult: 1.15,
@@ -123,7 +123,7 @@ export const AFFIXES: Readonly<Record<EliteAffix, AffixDef>> = {
   splitting: {
     id: "splitting",
     hp_mult: 1,
-    armour: 0,
+    poise: 0,
     speed_mult: 1,
     rest_mult: 1,
     pressure_mult: 1.15,
@@ -133,7 +133,7 @@ export const AFFIXES: Readonly<Record<EliteAffix, AffixDef>> = {
   shielded: {
     id: "shielded",
     hp_mult: 1,
-    armour: 0,
+    poise: 0,
     speed_mult: 1,
     rest_mult: 1,
     pressure_mult: 1.15,
@@ -144,7 +144,7 @@ export const AFFIXES: Readonly<Record<EliteAffix, AffixDef>> = {
   volatile: {
     id: "volatile",
     hp_mult: 1,
-    armour: 0,
+    poise: 0,
     speed_mult: 1,
     rest_mult: 1,
     pressure_mult: 1.15,
@@ -263,8 +263,8 @@ export interface AffixedStats {
   readonly speed_mult: number;
   /** On the rest between turns only. Never on a tell (doc 019). */
   readonly rest_mult: number;
-  /** Flat armour the set grants, added to whatever the archetype carries. */
-  readonly armour: number;
+  /** Flat poise the set grants a body with none of its own. */
+  readonly poise: number;
   /** What a hit costs the player, as a multiple: an elite's is `ELITE_DAMAGE`. */
   readonly damage_mult: number;
 }
@@ -279,22 +279,22 @@ export interface AffixedStats {
  */
 export function affixStats(set: readonly EliteAffix[]): AffixedStats {
   if (set.length === 0) {
-    return { hp_mult: 1, speed_mult: 1, rest_mult: 1, armour: 0, damage_mult: 1 };
+    return { hp_mult: 1, speed_mult: 1, rest_mult: 1, poise: 0, damage_mult: 1 };
   }
   let hp = ELITE_HP;
   let speed = ELITE_SPEED;
   let rest = ELITE_REST;
-  let armour = 0;
+  let poise = 0;
   for (const id of set) {
     const def = AFFIXES[id];
     hp *= def.hp_mult;
     speed *= def.speed_mult;
     rest *= def.rest_mult;
-    armour += def.armour;
+    poise += def.poise;
   }
   return {
     hp_mult: round3(hp), speed_mult: round3(speed), rest_mult: round3(rest),
-    armour, damage_mult: ELITE_DAMAGE,
+    poise, damage_mult: ELITE_DAMAGE,
   };
 }
 

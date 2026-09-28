@@ -50,8 +50,11 @@ import {
   breakable, clearPropCell, expiredProps, placeFixtures, placeProps, placeStanding, propHit, stepProps,
   PROP_MANA_FRACTION,
 } from "./props.ts";
-import { COIN_VALUE, MANA_ORB, drop, makePickupPool, stepPickups } from "./pickups.ts";
+import { COIN_VALUE, MANA_ORB, burstCoins, drop, makePickupPool, stepPickups } from "./pickups.ts";
+import { CHEST_GOLD } from "../run/chest.ts";
 import { audienceKill, makeAudience, stepAudience } from "./audience.ts";
+import { GUARDIAN_HEARTS, GUARDIAN_XP, makeGuardian, stepGuardian } from "./guardian.ts";
+import { makeObjective, placeTargets, stepObjective } from "./objective.ts";
 import {
   enteredPortal, makePortal, placeRewardNear, portalsBefore, raisePortals, stepPortals, stepReward,
 } from "./exits.ts";
@@ -60,12 +63,12 @@ import type { Destructible } from "./props.ts";
 import type { SpellSlot } from "./spells.ts";
 import type { BulletEmission } from "../encounters/patterns.ts";
 import { turnToward } from "./aim.ts";
-import { ARM_TELE_MS, castArm, castRift, castRanged, castShockwave, dragStep, interruptToll, layWake, lineToWall, onExpansionDeath, shockwaveHits, spendWard, stepAttacks } from "./attacks.ts";
+import { ARM_TELE_MS, castArm, castRift, castRanged, castShockwave, dragStep, interruptToll, layWake, lineToWall, onExpansionDeath, shockwaveHits, stepAttacks } from "./attacks.ts";
 import type { AttackHooks } from "./attacks.ts";
 import { computeFlowField, tileOf } from "./flow.ts";
 import {
   anchored, bossStringHearts, hatchMinion, isActive, livingSummoners, makeEnemy, makeKing, kingFloorHp, stepEnemy, stagger, canStagger, midAttack, wake, dropToken,
-  dropFireToken, ARMOUR_BREAK_MS, SPAWN_FADE_MS, SPAWN_TELEGRAPH_MS, ENEMY_FREEZE_MS, STAGGER_MS,
+  dropFireToken, POISE_BREAK_MS, POISE_BREAK_STAGGER_MS, POISE_GUARD_MS, SPAWN_FADE_MS, SPAWN_TELEGRAPH_MS, ENEMY_FREEZE_MS, STAGGER_MS,
   ENEMY_BURN_MS, ENEMY_POISON_MS, ENEMY_BURN_SOURCES, ENEMY_POISON_STACKS, SHATTER_MULT,
   STATUS_BREADTH_MULT, statusBreadth,
   meleeSpec,
@@ -327,6 +330,10 @@ export interface CreateWorldOptions {
    * until he has come and gone.
    */
   readonly audience?: boolean;
+  /** Room 10's guardian fight (doc 024): the Frontier Veteran stands in the room with its squad. */
+  readonly guardian?: boolean;
+  /** A special room's chest (doc 026): it stands beside the reward once the room clears. */
+  readonly chest?: boolean;
 }
 
 /**
@@ -419,6 +426,62 @@ export function equipItem(
 }
 
 export function createWorld(input: CreateWorldOptions): World {
+  const w = buildWorld(input);
+  if (input.guardian) placeGuardian(w);
+  // The room's objective (doc 025), with its own waves kept to send again.
+  const objective = input.room.objective;
+  if (objective) {
+    w.objective = makeObjective(objective, w.pendingWaves);
+    if (objective === "destroy") placeTargets(w);
+  }
+  return w;
+}
+
+/**
+ * **The Frontier Veteran takes its ground** (doc 024): as far from the door as
+ * the opening view allows, awake, alone, and **in sight**, its bar and name
+ * over it included. The room's own wave is its entrance: a beat after the
+ * room opens it raises its arm and they rise round it, so the player has to
+ * be able to see it do so. The view is the camera's at the door: centred on
+ * the player, held inside the room (`viewHalf`).
+ */
+function placeGuardian(w: World): void {
+  const ext = w.room.extent, grid = w.room.grid, p = w.player;
+  const roomW = ext.w * TILE_PX, roomH = ext.h * TILE_PX;
+  const half = w.viewHalf;
+  const cx = roomW <= half.x * 2 ? roomW / 2 : Math.max(half.x, Math.min(roomW - half.x, p.x));
+  const cy = roomH <= half.y * 2 ? roomH / 2 : Math.max(half.y, Math.min(roomH - half.y, p.y));
+  // Room for its body at the sides and below, and for its body, bar and name above.
+  const side = TILE_PX * 2, above = TILE_PX * 4, below = TILE_PX * 2;
+  const inView = (x: number, y: number): boolean =>
+    Math.abs(x - cx) <= half.x - side && y - cy >= -(half.y - above) && y - cy <= half.y - below;
+  let best: { x: number; y: number; d: number } | null = null;
+  for (let gy = 3; gy < ext.h - 3; gy++)
+    for (let gx = 3; gx < ext.w - 3; gx++) {
+      let open = true;
+      for (let dy = -1; dy <= 1 && open; dy++) for (let dx = -1; dx <= 1 && open; dx++)
+        open = grid[(gy + dy) * GRID_W + gx + dx] === Tile.Floor;
+      if (!open) continue;
+      const x = (gx + 0.5) * TILE_PX, y = (gy + 0.5) * TILE_PX;
+      if (w.props.some((q) => q.hp > 0 && Math.hypot(q.x - x, q.y - y) < TILE_PX * 2)) continue;
+      // Out of sight is only ever a fallback: any cell in view beats every cell out of it.
+      const d = Math.hypot(x - p.x, y - p.y) - Math.abs(x - (ext.w / 2) * TILE_PX) * 0.5 + (inView(x, y) ? 1e6 : 0);
+      if (!best || d > best.d) best = { x, y, d };
+    }
+  const at = best ?? { x: (ext.w / 2) * TILE_PX, y: (ext.h / 2) * TILE_PX };
+  // The room's own wave does not walk in: it is what the guardian's entrance call raises.
+  // Only bodies that walk: an emplacement does not rise from the floor at a call.
+  const entrance = w.pendingWaves.flatMap((wave) => wave.spawns.flatMap((sp) => Array<EnemyId>(sp.count).fill(sp.archetype)))
+    .filter((id) => ENEMIES[id].behaviour !== "stationary");
+  w.pendingWaves = [];
+  const g = makeGuardian(w.nextEnemyId++, at.x, at.y, w.roomIndex, entrance.length > 0 ? entrance : undefined);
+  g.spawnFadeMs = 0;
+  w.enemies.push(g);
+  w.cleared = false;
+  w.events.push({ kind: "telegraph", x: at.x, y: at.y, what: "guardian_arrives" });
+}
+
+function buildWorld(input: CreateWorldOptions): World {
   /*
    * **The level is folded in here, once, for every caller.**
    *
@@ -579,6 +642,8 @@ export function createWorld(input: CreateWorldOptions): World {
      */
     roomIndex: o.roomIndex ?? 99,
     ...(o.audience ? { audience: makeAudience(), awaitingBoss: true } : {}),
+    ...(o.chest ? { chestDue: true } : {}),
+    ...(o.guardian ? { guardianRoom: true } : {}),
     coinBoost: Math.max(1, Math.min(COIN_BOOST_MAX, o.coinBoost ?? 1)),
     attackTokens: ATTACK_TOKENS,
     fireTokens: o.fireTokens ?? FIRE_TOKENS,
@@ -675,7 +740,8 @@ export function worldCleared(w: World): boolean {
   // A burst still hanging is part of the fight: the room clears once it has flown.
   // And a room whose king is still to come — the throne before he stands, room 5
   // before the roof gives (doc 022) — is empty, not clear.
-  return !w.awaitingBoss && w.enemies.length === 0 && w.pendingWaves.length === 0 && livingSummoners(w) === 0
+  // Nor a room whose objective is still to meet (doc 025): a hold's clock, a destroy room's turrets.
+  return !w.awaitingBoss && !(w.objective && !w.objective.done) && w.enemies.length === 0 && w.pendingWaves.length === 0 && livingSummoners(w) === 0
     && w.deathBursts.length === 0;
 }
 
@@ -725,6 +791,8 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   stepTrail(w, dtMs);
   stepEnchant(w, dtMs);
   refreshFlow(w);
+  // A room objective (doc 025): its clock, its targets, and the waves it sends again.
+  stepObjective(w, dtMs);
   releaseWaves(w);
 
   resolveSwing(w, dtMs);
@@ -795,6 +863,7 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   // The king lives on his own clock (`bossTempo`): everything he does runs faster in phase III, with the music.
   for (const e of w.enemies) stepEnemy(w, e, dtMs * bossTempo(e));
   for (const e of w.enemies) if (e.archetype === "boss" && e.hp > 0) stepBoss(w, e, dtMs * bossTempo(e));
+  for (const e of w.enemies) if (e.guardian) stepGuardian(w, e, dtMs);
   resolveBodies(w);
   w.enemies = w.enemies.filter((e) => {
     // Gone up out of the room (doc 022): off the floor, and nothing a death pays.
@@ -869,7 +938,8 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
         kind: "reward_shown", x: w.rewardDrop.x, y: w.rewardDrop.y,
         what: w.rewardDrop.kind,
       });
-    } else if (w.offer) {
+    }
+    if (w.chestDue) placeChest(w); else if (w.offer) {
       /*
        * **A gold room scatters coins and opens.**
        *
@@ -913,6 +983,59 @@ function stepExits(w: World, dtMs: number, interact: boolean): void {
       });
     }
   }
+}
+
+/**
+ * **The chest takes its ground** (doc 026): beside the reward, on the next
+ * free cell but one so the two are told apart, never on a hazard; beside the
+ * player when the room has no reward to stand by.
+ */
+function placeChest(w: World): void {
+  w.chestDue = false;
+  const avoid = new Set(hazardCells(w));
+  const r = w.rewardDrop;
+  if (r) {
+    const rx = Math.floor(r.x / TILE_PX), ry = Math.floor(r.y / TILE_PX);
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) avoid.add((ry + dy) * GRID_W + rx + dx);
+  }
+  const at = r ? placeChestBy(w.room.grid, r, avoid) : placeRewardNear(w.room.grid, "stat", w.player, avoid);
+  w.chest = { x: at.x, y: at.y, open: false };
+  w.events.push({ kind: "telegraph", x: at.x, y: at.y, what: "chest_shown" });
+}
+
+/** The cell two tiles to one side of the reward, left or right, or the nearest free one to it. */
+function placeChestBy(grid: Uint8Array, r: { x: number; y: number }, avoid: Set<number>): { x: number; y: number } {
+  const rx = Math.floor(r.x / TILE_PX), ry = Math.floor(r.y / TILE_PX);
+  for (const [dx, dy] of [[2, 0], [-2, 0], [2, 1], [-2, 1], [2, -1], [-2, -1], [0, 2], [0, -2]] as const) {
+    const x = rx + dx, y = ry + dy;
+    if (x < 1 || y < 1 || x >= GRID_W - 1 || y >= GRID_H - 1) continue;
+    if (grid[y * GRID_W + x] !== Tile.Floor || avoid.has(y * GRID_W + x)) continue;
+    return { x: (x + 0.5) * TILE_PX, y: (y + 0.5) * TILE_PX };
+  }
+  return placeRewardNear(grid, "stat", r, avoid);
+}
+
+/** How close the player stands for the chest's prompt, and for the interact key to open it: the reward's reach. */
+export const CHEST_REACH = TILE_PX * 1.4;
+
+/** Whether the player stands close enough to open the chest. */
+export function chestInReach(w: World): boolean {
+  const c = w.chest;
+  return !!c && !c.open && Math.hypot(w.player.x - c.x, w.player.y - c.y) <= CHEST_REACH;
+}
+
+/**
+ * **The chest opens** (doc 026), when the player has taken what the card
+ * shows: its gold bursts out and flies home. Its stat is the caller's to
+ * hand over, since the run's modifiers are not the world's.
+ */
+export function openChest(w: World): void {
+  const c = w.chest;
+  if (!c || c.open) return;
+  c.open = true;
+  burstCoins(w.pickups, c.x, c.y, CHEST_GOLD, w.rng);
+  for (const p of w.pickups) if (p.alive && p.kind === "coin") p.homing = true;
+  w.events.push({ kind: "telegraph", x: c.x, y: c.y, what: "chest_opened" });
 }
 
 /** Floor tiles a point can see, sampled on the tile grid. */
@@ -1285,8 +1408,8 @@ function resolveSwing(w: World, dtMs: number): void {
     // Being hit is the loudest way to be noticed, and it flinches a body that
     // is not already attacking (`swordStagger`).
     wake(w, e);
-    // Breaking its armour is the one blow that cancels what it had started.
-    if (broke) { stagger(w, e); e.staggerImmuneMs = SWORD_STAGGER_IMMUNE_MS; } else swordStagger(w, e);
+    // Breaking its poise is the one blow that cancels what it had started; the break staggered it already (`hurtEnemy`).
+    if (broke) e.staggerImmuneMs = SWORD_STAGGER_IMMUNE_MS; else swordStagger(w, e);
     impact(w, box.finisher ? HITSTOP_FINISH : HITSTOP_HIT, TRAUMA_HIT);
 
     // The loop the whole design turns on: the sword pays for the spells, so
@@ -1327,16 +1450,16 @@ function breakProps(w: World): void {
 const PROP_HIT_ID_BASE = -2;
 
 /**
- * Damage to an enemy, armour first.
+ * Damage to an enemy, and to its poise.
  *
- * Centralised because armour has to be honoured wherever damage comes from,
+ * Centralised because poise has to be honoured wherever damage comes from,
  * and it arrives from five places: the sword, player bullets, burning ground,
  * a lightning strike and the burn tick. Applying it at one of them and not the
  * others is how a rule becomes a suggestion.
  *
- * Returns whether the armour broke on this hit, which is its own moment: the
- * player has just earned the right to interrupt this body, and that has to be
- * announced rather than inferred from the body suddenly flinching.
+ * Returns whether the hit broke its poise (`Enemy.poise`), which is its own
+ * moment: the burst has knocked the body into a long stagger, and that has to
+ * be announced rather than inferred from the body suddenly flinching.
  */
 /**
  * `tag` says what dealt it, for the damage number's colour: an element
@@ -1390,27 +1513,35 @@ export function hurtEnemy(
    */
   if (amount > 0) interruptToll(w, e);
   if (amount > 0)
-    w.events.push({ kind: "damage", x: e.x, y: e.y - e.radius, what: `${e.armour > 0 ? "armour" : "hp"}${tag ? `:${tag}` : ""}`, amount });
-  if (e.armour > 0) {
-    e.armour -= amount;
-    // A ward's share of the armour is spent first, so a ringer still holding
-    // the line has to put it back (doc 005, the bellringer).
-    spendWard(e, amount);
-    if (e.armour > 0) return { broke: false };
-    // Overkill carries into health, so armour never converts a big hit into a
-    // small one by absorbing all of it.
-    const spill = -e.armour;
-    e.armour = 0;
-    e.hp -= spill;
-    e.armourBreakMs = ARMOUR_BREAK_MS;
-    // A break is worth more than the hit that caused it: the fight changes.
-    impact(w, HITSTOP_KILL, TRAUMA_KILL);
-    w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `armour_break:${e.archetype}` });
-    emit(w, e.x, e.y, "kill", 8);
-    return { broke: true };
-  }
+    w.events.push({ kind: "damage", x: e.x, y: e.y - e.radius, what: `hp${tag ? `:${tag}` : ""}`, amount });
   e.hp -= amount;
-  return { broke: false };
+  /*
+   * **Poise** (`Enemy.poise`): all of the damage is health, and the same
+   * damage wears the poise. A hit it holds through rings off it, so a player
+   * can see that the body took it and did not flinch; the hit that wears it
+   * through knocks it into a long stagger and cancels what it had started.
+   * After a break it cannot be broken again for a while (`POISE_GUARD_MS`).
+   */
+  if (amount <= 0 || e.maxPoise <= 0 || e.hp <= 0 || e.archetype === "boss") return { broke: false };
+  e.poiseIdleMs = 0;
+  if (e.poiseGuardMs > 0) {
+    w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_hold:${e.archetype}` });
+    return { broke: false };
+  }
+  e.poise -= amount;
+  if (e.poise > 0) {
+    w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_hold:${e.archetype}` });
+    return { broke: false };
+  }
+  e.poise = e.maxPoise;
+  e.poiseGuardMs = POISE_BREAK_STAGGER_MS + POISE_GUARD_MS;
+  e.poiseBreakMs = POISE_BREAK_MS;
+  stagger(w, e, POISE_BREAK_STAGGER_MS, true);
+  // A break is worth more than the hit that caused it: the fight changes.
+  impact(w, HITSTOP_KILL, TRAUMA_KILL);
+  w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_break:${e.archetype}` });
+  emit(w, e.x, e.y, "kill", 8);
+  return { broke: true };
 }
 
 function damageProp(w: World, p: Destructible, amount: number, bySword = false): void {
@@ -2449,9 +2580,18 @@ function onEnemyKilled(w: World, e: Enemy): void {
   if (e.archetype === "lancer" && e.affixes.length > 0) deathBurst(w, e, "lance");
   else if (e.affixes.includes("volatile")) deathBurst(w, e, "volatile");
   // The boss's adds go with it: the fight is the boss, and a run that ended
-  // on a rusher still standing would not have ended.
-  if (e.archetype === "boss")
-    for (const other of w.enemies) if (other !== e && other.hp > 0) other.hp = 0;
+  // on a rusher still standing would not have ended. The Frontier Veteran's
+  // squad goes with it the same way, and its death pays a room (doc 024).
+  if (e.archetype === "boss" || e.guardian)
+    for (const other of w.enemies) if (other !== e && other.hp > 0) { other.summoned = true; other.hp = 0; }
+  if (e.guardian) {
+    payXp(w, GUARDIAN_XP, e.x, e.y);
+    for (let i = 0; i < GUARDIAN_HEARTS; i++) {
+      const h = drop(w.pickups, "heart", e.x, e.y, w.rng);
+      h.value = 0;
+      h.homing = true;
+    }
+  }
 }
 
 /*
@@ -2903,7 +3043,7 @@ function bossAddsFor(w: World, phase: number): EnemyId[] {
 }
 
 /** Where the call's adds rise: a ring about him, each on its own floor cell, none on the player. */
-function bossSummonSpots(w: World, e: Enemy, n: number): { x: number; y: number }[] {
+export function bossSummonSpots(w: World, e: Enemy, n: number): { x: number; y: number }[] {
   const spots: { x: number; y: number }[] = [];
   const turn = w.rng.next() * Math.PI * 2;
   for (let i = 0; i < n; i++) {
@@ -4655,7 +4795,7 @@ function smashProps(w: World, dtMs: number): void {
   }
   for (const e of w.enemies) {
     if (e.hp <= 0 || !isActive(e)) continue;
-    const charging = e.attack === "lunge" && ENEMIES[e.archetype].melee === "charge";
+    const charging = e.attack === "lunge" && (e.meleeKind ?? ENEMIES[e.archetype].melee) === "charge";
 
     for (const p of w.props) {
       if (p.hp <= 0 || hallProp(p)) continue;
@@ -4734,7 +4874,7 @@ function resolveBodies(w: World): void {
        * point of a ram is that it does not stop for you.
        */
       // A charge, a body bolted to the floor, and the king all hold their ground.
-      const charging = (e.attack === "lunge" && e.armour > 0) || anchored(e) || e.archetype === "boss";
+      const charging = (e.attack === "lunge" && e.maxPoise > 0) || anchored(e) || e.archetype === "boss";
       const overlap = min - d;
       const nx = dx / d;
       const ny = dy / d;
@@ -4821,7 +4961,7 @@ function turnBackFromBump(w: World, e: Enemy, nx: number, ny: number): void {
 
 /** A committed charge is immovable: it does not stop for anything. */
 function plowing(e: Enemy): boolean {
-  return e.attack === "lunge" && ENEMIES[e.archetype].melee === "charge";
+  return e.attack === "lunge" && (e.meleeKind ?? ENEMIES[e.archetype].melee) === "charge";
 }
 
 /**

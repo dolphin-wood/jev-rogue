@@ -129,6 +129,11 @@ export interface RoomPlan {
    * zone stands.
    */
   readonly standing?: readonly { readonly kind: "column" | "candelabrum"; readonly gx: number; readonly gy: number }[];
+  /**
+   * **Another way to end the fight** (doc 025, `run/objectives.ts`): hold out,
+   * or bring down the marked turrets. Absent for an ordinary fight.
+   */
+  readonly objective?: "hold" | "destroy";
   readonly source: {
     params: "jev" | "rule" | "random";
     layout: "generated" | "authored";

@@ -4,7 +4,7 @@ import { createWorld, step } from "./world.ts";
 import { NO_INPUT } from "./types.ts";
 import type { Enemy, Input, World } from "./types.ts";
 import { makeEnemy, wake } from "./enemy.ts";
-import { castRift, castShockwave, flameRays, plantMine, FLAME_ROLL_MS, MINE_INERT_MS, MINE_PRIME_MS, MUSKET_RANGE, RIFT_TELE_MS, SHOCK_THICKNESS, WARD_ARMOUR } from "./attacks.ts";
+import { castRift, castShockwave, flameRays, plantMine, FLAME_ROLL_MS, MINE_INERT_MS, MINE_PRIME_MS, MUSKET_RANGE, RIFT_TELE_MS, SHOCK_THICKNESS, WARD_HEAL, WARD_TOLL_HEAL } from "./attacks.ts";
 import { lightFire } from "./fire.ts";
 import { DEATH_BURST_MS, hurtEnemy } from "./world.ts";
 import { liveCount } from "./bullets.ts";
@@ -224,7 +224,7 @@ describe("the warden's fire-shot", () => {
 });
 
 describe("the bellringer's ward", () => {
-  it("armours its ally, is cut by standing in it, and goes with the ringer", () => {
+  it("heals its ally, is cut by standing in it, and goes with the ringer", () => {
     const w = world();
     const ally = body(w, "shooter", 0, -120);
     const ringer = body(w, "bellringer", 0, 120);
@@ -232,20 +232,18 @@ describe("the bellringer's ward", () => {
     ringer.y = w.player.y;
     ally.x = w.player.x - 150;
     ally.y = w.player.y;
-    const armour0 = ally.armour;
     // Hold the player off the line until the ward lands.
     w.player.y += 60;
-    for (let i = 0; i < 300 && ally.wardArmour <= 0; i++) step(w, idle);
-    expect(ally.wardArmour).toBe(WARD_ARMOUR);
-    expect(ally.armour).toBeGreaterThanOrEqual(armour0 + WARD_ARMOUR);
+    for (let i = 0; i < 300 && ally.wardHeal <= 0; i++) step(w, idle);
+    expect(ally.wardHeal).toBe(WARD_HEAL);
 
-    // Stand on the line — both ends move, so keep to it — and it cuts, and the armour goes.
+    // Stand on the line — both ends move, so keep to it — and it cuts, and the healing goes.
     for (let i = 0; i < 40; i++) {
       w.player.x = (ally.x + ringer.x) / 2;
       w.player.y = (ally.y + ringer.y) / 2;
       step(w, idle);
     }
-    expect(ally.wardArmour).toBe(0);
+    expect(ally.wardHeal).toBe(0);
     expect(w.tethers.filter((t) => t.kind === "ward")).toHaveLength(0);
   });
 
@@ -264,31 +262,30 @@ describe("the bellringer's ward", () => {
     ringer.speed = 0;
     ally.speed = 0;
     w.player.y += 90;
-    for (let i = 0; i < 400 && ally.wardArmour <= 0; i++) step(w, idle);
+    for (let i = 0; i < 400 && ally.wardHeal <= 0; i++) step(w, idle);
     return { ringer, ally };
   }
 
-  it("does not trickle the shield back: only a toll puts it on", () => {
+  it("heals a warded ally a share of its health a second while the line holds", () => {
     const w = world();
     const { ringer, ally } = ringed(w);
-    expect(ally.wardArmour).toBe(WARD_ARMOUR);
-    // Cut half of it out, as a sword would, and keep the ringer from ringing.
-    ally.armour -= WARD_ARMOUR / 2;
-    ally.wardArmour -= WARD_ARMOUR / 2;
-    // No bell in this window: any windup already running is called off.
+    expect(ally.wardHeal).toBe(WARD_HEAL);
+    ally.hp = ally.maxHp / 2;
+    const hp0 = ally.hp;
+    // No bell in this window: only the line's own healing.
     ringer.pose = "";
     ringer.poseMs = 0;
-    for (let i = 0; i < 120; i++) { ringer.moveMs = 9000; step(w, idle); }
-    expect(ally.wardArmour).toBeCloseTo(WARD_ARMOUR / 2, 1);
+    for (let i = 0; i < 60; i++) { ringer.moveMs = 9000; step(w, idle); }
+    expect(ally.hp - hp0).toBeCloseTo(ally.maxHp * WARD_HEAL, 0);
+    expect(ally.hp).toBeLessThanOrEqual(ally.maxHp);
   });
 
-  it("tolls: the circle does no damage, and every tethered ally is refilled at once", () => {
+  it("tolls: the circle does no damage, and every tethered ally is healed at once", () => {
     const w = world();
     const { ringer, ally } = ringed(w);
-    expect(ally.wardArmour).toBe(WARD_ARMOUR);
-    // Break most of the shield, then let the bell ring.
-    ally.armour -= WARD_ARMOUR * 0.8;
-    ally.wardArmour -= WARD_ARMOUR * 0.8;
+    expect(ally.wardHeal).toBe(WARD_HEAL);
+    // Wound it, then let the bell ring.
+    ally.hp = ally.maxHp * 0.2;
     for (let i = 0; i < 900 && ringer.pose !== "field"; i++) { ringer.moveMs = 0; step(w, idle); }
     expect(ringer.pose).toBe("field");
     // The telegraph is a circle on the ringer's own ground, and it is harmless.
@@ -302,8 +299,8 @@ describe("the bellringer's ward", () => {
     w.events.length = 0;
     for (let i = 0; i < 120 && w.hasteFields.length === 0; i++) step(w, idle);
     expect(w.events.some((e) => e.kind === "player_hit" && e.what === "burst")).toBe(false);
-    // The clap: the shield is whole again, and the pulse is running down the line.
-    expect(ally.wardArmour).toBeCloseTo(WARD_ARMOUR, 1);
+    // The clap: a share of its health back at once, and the pulse running down the line.
+    expect(ally.hp).toBeGreaterThanOrEqual(ally.maxHp * (0.2 + WARD_TOLL_HEAL) - 0.01);
     expect(w.tethers.some((t) => t.kind === "ward" && t.pulseMs > 0)).toBe(true);
     // The ringing it leaves hurries the allies standing in it, and does
     // nothing at all to the player.
@@ -319,16 +316,13 @@ describe("the bellringer's ward", () => {
     const { ringer, ally } = ringed(w);
     for (let i = 0; i < 900 && ringer.pose !== "field"; i++) { ringer.moveMs = 0; step(w, idle); }
     expect(ringer.pose).toBe("field");
-    ally.armour -= WARD_ARMOUR * 0.8;
-    ally.wardArmour -= WARD_ARMOUR * 0.8;
     // A hit on the ringer, mid-windup: the pose drops and the circle goes.
     hurt(w, ringer, 5);
     expect(ringer.pose).toBe("");
     expect(w.rifts.filter((r) => r.alive && r.length === 0 && Math.hypot(r.x - ringer.x, r.y - ringer.y) < 4))
       .toHaveLength(0);
-    // And nothing is refilled: no clap, no field.
+    // And no clap: no field.
     run(w, 1500);
-    expect(ally.wardArmour).toBeCloseTo(WARD_ARMOUR * 0.2, 1);
     expect(w.hasteFields).toHaveLength(0);
   });
 });

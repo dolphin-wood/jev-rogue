@@ -8,10 +8,10 @@ import {
   GRID_W, GRID_H, TILE_PX, Tile, STEP_MS, MAX_HEARTS, HP_PER_HEART, ITEMS, SPELL_SLOTS, slotCost, runStaff, PLAYER_SPEED,
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
-  moodTransform, tintRGBA, dashInvulnerable, MELEE, ARMOUR_BREAK_MS, brakeFraction, ENEMIES,
-  BOSS_ARCHETYPES, makeEnemy, makeKing, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
+  moodTransform, tintRGBA, dashInvulnerable, MELEE, POISE_BREAK_MS, brakeFraction, ENEMIES,
+  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_CALL_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
-  BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, audienceGrade, RUN_AUDIENCE_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
+  BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, audienceRoomFor, RUN_GUARDIAN_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTierKey, affixFitsSpell, itemShape,
   spikesOut, featureCells, fillSubspecies,
   heldDominantTags, STYLE_START, bucketClearSpeed, bucketGold, bucketMovementPressure, bucketRunProgress,
@@ -803,6 +803,16 @@ const CLOSE_DEAD_X = 34;
  * its one cell of wall, and the HUD lies over the room as it does everywhere.
  */
 const BOSS_VIEW_SPARE = 1;
+/**
+ * The Frontier Veteran's colour (doc 024): a deep violet multiply over the
+ * warden's own shading. The first cut's blue-green sank into the flooded
+ * floor it stands on; violet is in no body's palette and no telegraph's.
+ */
+const GUARDIAN_TINT = 0xb48cff;
+/** Its tint while staggered: its violet warmed toward the stagger's cast, so it is still itself. */
+const GUARDIAN_STAGGER_TINT = 0xe0a0e0;
+/** The Frontier Veteran's overhead bars, health and plate, px wide. */
+const GUARDIAN_BAR_W = 64;
 /** The level a depth's own sound sits at everywhere in it (`ambienceLevels`): under a brazier or a grate beside the player. */
 const DEPTH_AMBIENCE = 0.3;
 /**
@@ -1210,6 +1220,11 @@ export class PlayScene extends Phaser.Scene {
   /** Card plans made when this room's doors opened, carried to the chosen door's room. */
   private doorCardPlans = new Map<RewardCardKind, CardPlan>();
   private roomCardPlan: CardPlan | null = null;
+  /** Whether this room leaves a chest (doc 026), and the stat the Director put in it. */
+  private chestDue = false;
+  private chestStat: string | null = null;
+  /** The chest on the floor, once the room has cleared. */
+  private chestGfx: { body: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Image } | null = null;
   /** A room with no fight met mid-run: which of them stands in it, or null for a fight. */
   private npcRoom: NpcKind | null = null;
   private npcRooms = 0;
@@ -1469,6 +1484,8 @@ export class PlayScene extends Phaser.Scene {
     tag: Phaser.GameObjects.Container | null;
   }[] = [];
   /** The offer screen. Null whenever there is nothing to choose. */
+  /** The chest's card (doc 026): what it holds, shown before it is taken. */
+  private chestUi: { objects: Phaser.GameObjects.GameObject[] } | null = null;
   private offerUi: {
     dim: Phaser.GameObjects.Rectangle;
     heading: Phaser.GameObjects.Text;
@@ -2018,7 +2035,14 @@ export class PlayScene extends Phaser.Scene {
       },
       skipRoom: () => { if (!this.entering) void this.enterRoom(this.roomIndex + 1); },
       // The king's two meetings (doc 022), on the build held now; the title is put away if it is up.
-      toAudience: () => { if (!this.entering) { this.hideTitle(); void this.enterRoom(RUN_AUDIENCE_ROOM); } },
+      toAudience: () => { if (!this.entering) { this.hideTitle(); void this.enterRoom(this.audienceRoom); } },
+      toGuardian: () => { if (!this.entering) { this.hideTitle(); void this.enterRoom(RUN_GUARDIAN_ROOM); } },
+      toObjective: (kind) => {
+        if (this.entering) return;
+        this.hideTitle();
+        this.forceObjective = kind;
+        void this.enterRoom(Math.max(3, this.roomIndex === this.audienceRoom || this.roomIndex === RUN_GUARDIAN_ROOM ? 7 : this.roomIndex));
+      },
       toFinal: () => { if (!this.entering) { this.hideTitle(); void this.enterRoom(RUN_BOSS_ROOM); } },
       bossLab: {
         enter: () => this.enterBossLab(),
@@ -2133,7 +2157,7 @@ export class PlayScene extends Phaser.Scene {
       void this.enterRoom(1).then(() => { this.debug.showBossLab(); this.enterBossLab(); });
     // `?lab=audience`: straight into room 5, the king's first audience (doc 022), to watch the roof give.
     else if (new URLSearchParams(location.search).get("lab") === "audience")
-      void this.enterRoom(1).then(() => { this.hideTitle(); void this.enterRoom(RUN_AUDIENCE_ROOM); });
+      void this.enterRoom(1).then(() => { this.hideTitle(); void this.enterRoom(this.audienceRoom); });
     // `?lab=spells`: straight into the spell lab's arena, likewise.
     else if (this.spellLab) void this.enterRoom(1).then(() => { this.debug.showSpellLab(); this.spellLab?.start(); });
     else void this.enterRoom(1).then(() => {
@@ -2291,7 +2315,7 @@ export class PlayScene extends Phaser.Scene {
       ...(through?.schools ? { schools: through.schools } : {}),
       ...(through?.families ? { families: through.families } : {}),
       // The first audience pays its door a grade higher (doc 022).
-      grade: isAudienceRoom(index) ? audienceGrade(through?.grade ?? 1) : through?.grade ?? 1,
+      grade: isFixedFightRoom(index, this.audienceRoom) ? audienceGrade(through?.grade ?? 1) : through?.grade ?? 1,
     };
     const roomCards = through?.cards ?? null;
     this.roomCards = roomCards;
@@ -2378,6 +2402,7 @@ export class PlayScene extends Phaser.Scene {
     const run: RunShape = {
       style: this.intent.preset,
       roomIndex: index,
+      audienceRoom: this.audienceRoom,
       /*
        * **This room's own difficulty**, not the one before it. These portals
        * decide the *next* room, so "no elite after an elite" is a statement
@@ -2410,16 +2435,22 @@ export class PlayScene extends Phaser.Scene {
      * requests of their own (doc 002).
      */
     const planned = fight
-      ? await this.director.planRoom(ctx, { room_index: index, door_slot: 0, room_type: roomType }, this.tension, ask.request)
+      ? await this.director.planRoom(ctx, {
+        room_index: index, door_slot: 0, room_type: roomType, ...(this.forceObjective ? { objective: this.forceObjective } : {}),
+      }, this.tension, ask.request)
       : null;
     this.planned = planned;
     // The first audience is a peak whatever the doors said, so the room after it is the trough (doc 022).
-    if (planned && isAudienceRoom(index)) this.tension = planned.tension;
+    if (planned && isFixedFightRoom(index, this.audienceRoom)) this.tension = planned.tension;
     if (planned) {
       this.planRecords.set("room", { decisions: planned.decisions });
       playtestLog.decide(index, "room", planned.decisions);
     }
-    const room: RoomPlan = planned ? planned.plan : fixedRoom(stage === "boss" ? "boss" : "shop", src.stream("room"));
+    const plannedRoom: RoomPlan = planned ? planned.plan : fixedRoom(stage === "boss" ? "boss" : "shop", src.stream("room"));
+    // The debug panel's objective entrances (doc 025): this fight, with the objective forced.
+    const forced = this.forceObjective;
+    this.forceObjective = null;
+    const room: RoomPlan = forced && fight ? { ...plannedRoom, objective: forced } : plannedRoom;
     const encounter = planned?.plan.encounter ?? null;
     const mood: Mood = room.params.mood;
     const { offer, stock } = await this.planOffer(ctx, src, run, stage, fight, held, ask, planned?.offer);
@@ -2456,7 +2487,11 @@ export class PlayScene extends Phaser.Scene {
       rng: src.stream("gameplay"),
       offer: worldOffer,
       // The king's first audience: the roof gives on this fight (doc 022).
-      audience: fight && isAudienceRoom(index),
+      audience: fight && isAudienceRoom(index, this.audienceRoom),
+      // Room 10's guardian stands in its room from the first frame (doc 024).
+      guardian: fight && isGuardianRoom(index),
+      // A special room leaves a chest beside its reward (doc 026).
+      chest: fight && this.chestDue && this.chestStat !== null,
       dealtMult: this.dealtMult,
       takenMult: this.takenMult,
       invincible: this.invincible,
@@ -2489,6 +2524,20 @@ export class PlayScene extends Phaser.Scene {
     this.camFocus = null;
     this.audienceK = 0;
     this.audienceDoneAt = -1;
+    /*
+     * **A room objective says what it asks** as it opens (doc 025): a short
+     * title and one line of what to do. Not the king's great name. The
+     * guardian says nothing here: its name is the small line over its bar
+     * (doc 024), and the first audience is meant to come unannounced.
+     */
+    const objective = this.world.objective?.kind;
+    if (objective) this.time.delayedCall(400, () => {
+      if (this.world.objective && !this.world.objective.done)
+        this.showRoomBrief(
+          t(objective === "hold" ? "hud.objectiveHold" : "hud.objectiveDestroy"),
+          objective === "hold" ? t("hud.briefHold", { s: holdLeftS(this.world) }) : t("hud.briefDestroy", { n: DESTROY_TARGETS }),
+        );
+    });
 
     this.kingIntro = null;
     this.kingGoblet = null;
@@ -2572,6 +2621,16 @@ export class PlayScene extends Phaser.Scene {
         room_index: run.roomIndex, pool: cardPool(ITEMS, this.ownedFor(kind), kind, held, promise, needs),
         count: CARDS_PER_OFFER, pity: this.needMisses >= 3, temptation: this.offersMade % 4 === 3,
       });
+    /*
+     * **The special room's chest** (doc 026): one stat card, asked of the
+     * Director in the same request, from the stat door's own pool.
+     */
+    this.chestDue = fight && hasChest(this.runSeed, run.roomIndex, this.elite ? "elite" : "combat", this.forceObjective !== null);
+    if (this.chestDue)
+      cards.push({
+        room_index: run.roomIndex, pool: cardPool(ITEMS, this.ownedFor("stat"), "stat", held, {}, needs),
+        count: 1, pity: false, temptation: false, salt: CHEST_SALT,
+      });
     // The merchant's shelf: one card of each kind gold buys.
     if (!fight && (stage === "shop" || this.npcRoom === "merchant"))
       for (const k of SHELF_KINDS)
@@ -2602,6 +2661,7 @@ export class PlayScene extends Phaser.Scene {
   ): Promise<{ offer: Offer; stock: OfferCard[] }> {
     this.portalPlan = null;
     this.cardPlan = null;
+    this.chestStat = null;
     const { kind, promise } = ask;
     if (stage === "boss") return { offer: { cards: [], doors: [], coins: 0 }, stock: [] };
     try {
@@ -2632,6 +2692,15 @@ export class PlayScene extends Phaser.Scene {
       let stock: OfferCard[] = [];
       const reqs = ask.request.cards ?? [];
       const cardPlan = plan.cards[0];
+      const chestAt = reqs.findIndex((r) => r.salt === CHEST_SALT);
+      const chestPlan = chestAt >= 0 ? plan.cards[chestAt] : undefined;
+      if (chestPlan) {
+        const prefix = `${CHEST_SALT}__`;
+        record(chestPlan.decisions.map((d) => ({ ...d, question: `${prefix}${d.question ?? ""}` })),
+          { prefix, label: "chest", blended: chestPlan.blended, ids: chestPlan.ids });
+        this.chestStat = chestPlan.ids[0] ?? null;
+      }
+      if (this.chestDue && !this.chestStat) this.chestStat = offerCards(ITEMS, src.stream("chest"), this.owned, "stat", held)[0]?.itemId ?? null;
       if (fight && kind !== "gold" && this.roomCards) {
         // Decided with the door the player came through, against the build they carried through it.
         this.cardPlan = this.roomCardPlan;
@@ -2666,6 +2735,7 @@ export class PlayScene extends Phaser.Scene {
       };
     } catch (err) {
       console.warn("[director] offer fell back to the rules:", err);
+      if (this.chestDue) this.chestStat = offerCards(ITEMS, src.stream("chest"), this.owned, "stat", held)[0]?.itemId ?? null;
       const fallbackOffer = ruleOffer(ITEMS, src.stream("offer"), this.owned, run,
         stage === "shop" ? shopKind(src.stream("shop")) : kind, held, promise, this.portalCount);
       const fixed = fixedExit(run.roomIndex);
@@ -3246,6 +3316,22 @@ export class PlayScene extends Phaser.Scene {
   }
 
   /**
+   * **A room's brief**: a short title and one line under it, high on the
+   * screen, clear of the fight, for a few seconds. Smaller than the king's
+   * name by design: it tells the player what the room asks, it does not stage
+   * anyone.
+   */
+  private showRoomBrief(title: string, line: string): void {
+    const y = Math.round(UI_H * 0.2);
+    const head = this.uiText(UI_W / 2, y, title, 14, "#ffe9a8", { stroke: "#0d0b1f", strokeThickness: 3 * ZOOM })
+      .setOrigin(0.5).setDepth(CINE_NAME_DEPTH + 5).setAlpha(0);
+    const body = this.uiText(UI_W / 2, y + head.displayHeight / 2 + 6, line, 8, "#e8e0d0",
+      { align: "center", stroke: "#0d0b1f", strokeThickness: 2 * ZOOM, wordWrap: { width: Math.min(360, UI_W - 40) * ZOOM } })
+      .setOrigin(0.5, 0).setDepth(CINE_NAME_DEPTH + 5).setAlpha(0);
+    this.tweens.add({ targets: [head, body], alpha: 1, duration: 260, yoyo: true, hold: 3200, onComplete: () => { head.destroy(); body.destroy(); } });
+  }
+
+  /**
    * Builds the portal and reward sprites for the room.
    *
    * Persistent objects rather than per-frame draws, because a portal is a
@@ -3304,6 +3390,7 @@ export class PlayScene extends Phaser.Scene {
     this.eliteMarks = [];
     this.hideRewards();
     this.destroyRewardDrop();
+    this.destroyChest();
 
     this.buildPortalGfx();
   }
@@ -5008,7 +5095,7 @@ export class PlayScene extends Phaser.Scene {
 
   /** Whether any screen that stops the fight is up. */
   private get modalOpen(): boolean {
-    return !!(this.titleUi || this.intentUi || this.transitionUi || this.offerUi
+    return !!(this.titleUi || this.intentUi || this.transitionUi || this.offerUi || this.chestUi
       || this.pauseUi || this.staffUi || this.gameOverUi || this.victoryUi || this.hintsUi
       || this.inviteUi || this.soundUi);
   }
@@ -6186,7 +6273,7 @@ export class PlayScene extends Phaser.Scene {
   private drawHeartFx(king: Enemy | undefined, beat: number): void {
     const dt = this.game.loop.delta;
     const now = this.time.now;
-    if (king && king.bossVolleyMs > 0 && king.staggerMs <= 0 && king.armourBreakMs <= 0 && king.bossSummonMs <= 0) {
+    if (king && king.bossVolleyMs > 0 && king.staggerMs <= 0 && king.poiseBreakMs <= 0 && king.bossSummonMs <= 0) {
       const glow = HEART_GLOW[this.heartPhase - 1]!;
       const ember = HEART_EMBER[this.heartPhase - 1]!;
       const px = king.x + BOSS_PALM_PX.x, py = king.y + BOSS_PALM_PX.y;
@@ -6386,6 +6473,11 @@ export class PlayScene extends Phaser.Scene {
   private drawLessons(dtMs: number): void {
     for (const [key, at] of this.teachAt) {
       if (this.taught.has(key) && at.ms > 400) at.ms = 400;
+      // The chain gone however it went — cut, its ringer or its ally dead — and its lesson goes with it, untaught.
+      if (key === "ward" && !this.world.tethers.some((t) => t.alive && t.kind === "ward")) {
+        this.teachAt.delete(key);
+        continue;
+      }
       at.ms -= dtMs;
       if (at.ms <= 0) { this.teachAt.delete(key); this.taught.add(key); continue; }
       const a = Math.min(1, at.ms / 400, (TEACH_MS - at.ms) / 200 + 0.001);
@@ -8320,14 +8412,15 @@ export class PlayScene extends Phaser.Scene {
           // A body braking into a wall, and a shot stopped by a ward, are not
           // blows landed: they get the world's chip rather than the sword's.
           if (what.startsWith("brake:") || what.startsWith("wall:") || what === "ward") { sfx.play("wall_hit"); break; }
-          if (what.startsWith("armour_break:")) { sfx.play("armour_break"); break; }
+          // Poise (`Enemy.poise`): the break is heard as the plate giving; a blow it held through rings off it.
+          if (what.startsWith("poise_break:")) { sfx.play("armour_break"); break; }
+          if (what.startsWith("poise_hold:")) { sfx.play("hit_armour", 1); break; }
           if (what.startsWith("prop:")) { sfx.play("hit_light", 0.9); break; }
           if (what === "tether_cut") { sfx.play("hit_light", 1.35); break; }
           if (what === "boss_immune") { sfx.play("hit_armour", 1.2); break; }
           const target = w.enemies.find((e) => Math.hypot(e.x - ev.x, e.y - ev.y) < e.radius + 8);
-          // Armour first: steel eating a blow is its own answer, and the
-          // player needs to hear that the damage did not land where they aimed.
-          if (target && target.armour > 0) { sfx.play("hit_armour", 1, target.id); break; }
+          // A blow the body held through is heard as the ring off it (above), not as a wound as well.
+          if (w.events.some((o) => o.kind === "enemy_hit" && o.what?.startsWith("poise_hold:") && Math.hypot(o.x - ev.x, o.y - ev.y) < 1)) break;
           sfx.play(this.hitWeight(ev.amount ?? 0), 1, target?.id);
           // A spell's landing is the weight hit plus its own tail, so what
           // was cast is heard on the body it hits rather than only as it
@@ -8375,6 +8468,9 @@ export class PlayScene extends Phaser.Scene {
           break;
         }
         case "telegraph": {
+          // The Frontier Veteran's arm going up: the call heard before the dead answer (doc 024).
+          if (ev.what === "guardian_call") sfx.play("cast_void", 0.6);
+          if (ev.what === "guardian_stakes" || ev.what === "guardian_palisade") sfx.play("hit_heavy", 0.7);
           if (ev.what?.startsWith("boss_phase:")) {
             const next = Number(ev.what.slice("boss_phase:".length));
             const king = this.world.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
@@ -8889,16 +8985,17 @@ export class PlayScene extends Phaser.Scene {
     // and the game's is switched off; nothing here may read a key behind it.
     if (this.inviteUi) { /* see `showInvite` */ }
     else if (this.soundUi) this.readSoundKeys();
+    else if (this.chestUi) this.readChestKeys();
     else if (this.transitionUi?.phase === "ready") this.readTransitionKeys();
     else if (this.intentUi) { this.readIntentKeys(); this.drawIntentDemo(); }
     else if (this.titleUi) this.readTitleKeys();
     else if (this.pauseUi) this.readPauseKeys();
     else if (this.gameOverUi || this.victoryUi) { /* the cards' own key listeners answer; see showGameOver, showVictory */ }
-    else if (!this.staffUi && !this.offerUi && !this.transitionUi && this.keys.ESC && Phaser.Input.Keyboard.JustDown(this.keys.ESC)) this.showPause();
+    else if (!this.staffUi && !this.offerUi && !this.chestUi && !this.transitionUi && this.keys.ESC && Phaser.Input.Keyboard.JustDown(this.keys.ESC)) this.showPause();
     // Tab: the character screen, directly.
     // Not over a card that has ended the run: the run is over, and the
     // character screen is a thing to read while there is still a run.
-    if (!this.titleUi && !this.intentUi && !this.pauseUi && !this.offerUi && !this.gameOverUi && !this.victoryUi
+    if (!this.titleUi && !this.intentUi && !this.pauseUi && !this.offerUi && !this.chestUi && !this.gameOverUi && !this.victoryUi
       && this.keys.TAB && Phaser.Input.Keyboard.JustDown(this.keys.TAB)) {
       if (this.staffUi) this.hideStaff();
       else this.showStaff("view", null);
@@ -9190,6 +9287,9 @@ export class PlayScene extends Phaser.Scene {
         } else if (ev.kind === "bullet_spent") {
           // Spent in the air: it pinches out rather than vanishing.
           this.playFx("fizzle", ev.x, ev.y, 0, 50, 7.1);
+        } else if (ev.kind === "hazard_tick" && ev.what === "ward_heal") {
+          // A ward's healing (the bellringer's line): green motes rising off the body it holds.
+          this.burst(ev.x, ev.y - 6, 0x8fe8a0, 5, 70, -Math.PI / 2, 0.9, 0.7);
         } else if (ev.kind === "hazard_tick" && ev.what === "boss_summon") {
           // An add of the king's called up: a violet flare where it rises, under its own spawn rings.
           this.burst(ev.x, ev.y, BOSS_CALL_GLOW, 12, 220, undefined, Math.PI * 2, 0.8);
@@ -9197,6 +9297,14 @@ export class PlayScene extends Phaser.Scene {
         } else if (ev.kind === "enemy_hit" && ev.what === "boss_immune") {
           // The blow ringing off the roaring king: pale sparks, no wound.
           this.burst(ev.x, ev.y - 20, 0xd8d0ff, 5, 160, undefined, Math.PI * 2, 0.5);
+        } else if (ev.kind === "enemy_hit" && ev.what?.startsWith("poise_hold:")) {
+          // A blow held through: steel sparks off it, and no wound (`Enemy.poise`).
+          this.burst(ev.x, ev.y - 6, 0xcfe4ff, 6, 190, undefined, Math.PI * 2, 0.45);
+          this.ring(ev.x, ev.y - 6, 2, 12, 0xcfe4ff, 160, 1.5);
+        } else if (ev.kind === "enemy_hit" && ev.what?.startsWith("poise_break:")) {
+          // The break: a hard flash and a spray, bigger than a hit, less than a kill.
+          this.ring(ev.x, ev.y, 3, 34, SHIELD_BLUE, 260, 2.5);
+          this.burst(ev.x, ev.y, 0xe8f6ff, 12, 260, undefined, Math.PI * 2, 0.9);
         } else if (ev.kind === "enemy_hit" && ev.what === "tether_cut") {
           // The cut: the line breaks into sparks along its length.
           this.burst(ev.x, ev.y, 0xd8f4ff, 14, 260, undefined, Math.PI * 2, 0.7);
@@ -9249,6 +9357,7 @@ export class PlayScene extends Phaser.Scene {
         if (ev.kind === "telegraph" && ev.what?.startsWith("blink"))
           this.puffs.push({ x: ev.x, y: ev.y, ms: PUFF_MS, element: "none", scale: 1.7 });
         if (ev.kind === "reward_shown") this.buildRewardDrop();
+        if (ev.kind === "telegraph" && ev.what === "chest_shown") this.buildChest(ev.x, ev.y);
       }
       if (this.world.stats.shotsFired > shotsBefore) this.castFlash();
       // Every sound of this step, in one place: see `playWorldSounds`.
@@ -10335,6 +10444,120 @@ export class PlayScene extends Phaser.Scene {
       tu.objects.push(this.add.rectangle(barX, top, 2, trackH, 0x2a2750, 1).setOrigin(0, 0).setDepth(241));
       tu.objects.push(this.add.rectangle(barX, thumbY, 2, thumbH, 0x6a7396, 1).setOrigin(0, 0).setDepth(241.1));
     }
+  }
+
+  /**
+   * A stat upgrade, `times` over, into the run's modifiers. Applied to the
+   * **run's** modifiers, not to the player, because the player is rebuilt
+   * every room and the upgrade is not; the heart bonus is granted at once.
+   */
+  private grantStat(id: string, times = 1): void {
+    for (let k = 0; k < times; k++) {
+      this.mods = applyStat(this.mods, id);
+      this.statsTaken.push(id);
+      if (id === "vigour") this.world.player.hearts += 1;
+    }
+    /*
+     * The cards **and** the level: `baseMods` is the card half the world
+     * rebuilds the body from on every level, so both have to move or the
+     * next level-up would throw this card away (`run/levels.ts`).
+     */
+    this.world.baseMods = { ...this.mods };
+    this.world.player.mods = this.liveMods();
+    // The run's new modifiers reach this room's live numbers too.
+    if (id === "deep_well") {
+      this.world.staff = { ...this.world.staff, mana_max: Math.round(this.world.staffManaBase * this.world.player.mods.manaMax) };
+    }
+  }
+
+  /** The special room's chest on the floor (doc 026), shut, with a faint glow so it is found. */
+  private buildChest(x: number, y: number): void {
+    this.destroyChest();
+    const glow = this.add.image(x, y, this.uiTextureKey, safeFrame(this.atlas, "prop_chest_0", "prop_shop_0"))
+      .setOrigin(0.5, 0.6).setScale(1 / ART_SCALE).setDepth(4.4).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.35);
+    const body = this.add.image(x, y, this.uiTextureKey, safeFrame(this.atlas, "prop_chest_0", "prop_shop_0"))
+      .setOrigin(0.5, 0.6).setScale(1 / ART_SCALE).setDepth(bodyDepth(y, 0));
+    this.tweens.add({ targets: glow, alpha: 0.1, duration: 700, yoyo: true, repeat: -1 });
+    this.chestGfx = { body, glow };
+    this.sfx.play("reward_reveal");
+  }
+
+  /**
+   * **The chest's card** (doc 026): the stat the Director put in it and the
+   * gold, on one card of the reward screen's look, taken with the interact
+   * key, Enter or a click. The fight is held while it is up, as the reward's
+   * screen holds it.
+   */
+  private showChestCard(): void {
+    const id = this.chestStat;
+    const card = id ? cardsFor(ITEMS, "stat", [id])[0] : undefined;
+    if (!id || !card) return;
+    const objects: Phaser.GameObjects.GameObject[] = [];
+    const cx = UI_W / 2, cy = UI_H / 2;
+    const W = 150, H = 170, PAD = 12;
+    objects.push(this.add.rectangle(cx, cy, UI_W, UI_H, 0x05040d, 0.6).setDepth(200).setInteractive());
+    objects.push(this.uiText(cx, cy - H / 2 - 20, t("chest.heading"), 16, "#ffe9a8").setOrigin(0.5).setDepth(202));
+    const panel = this.add.rectangle(cx, cy, W, H, 0x161334, 0.96).setStrokeStyle(1, 0xd8b060, 0.9).setDepth(200.5)
+      .setInteractive({ useHandCursor: true });
+    panel.on("pointerdown", () => this.takeChest());
+    objects.push(panel);
+    const top = cy - H / 2;
+    const iconFrame = [id === "vigour" ? "ui_heart_full" : "", `icon_stat_${id}`, id === "wrath" ? "icon_stat_keen_edge" : "", "prop_reward_stat_0", "prop_reward_affix_0"]
+      .find((n) => n && this.atlas.has(n)) ?? "prop_reward_affix_0";
+    const crisp = iconFrame.startsWith("icon_");
+    const icon = this.add.image(cx, top + PAD + 17, crisp ? this.crispTextureKey : this.uiTextureKey, iconFrame).setOrigin(0.5).setDepth(202);
+    if (crisp) icon.setScale(2 / TUNED); else icon.setDisplaySize(34, 34);
+    objects.push(icon);
+    const left = cx - W / 2 + PAD, wrap = (W - PAD * 2) * ZOOM;
+    const name = this.uiText(left, top + PAD + 40, contentName(id, card.label), 11, "#ffe9a8", { wordWrap: { width: wrap } }).setDepth(202);
+    objects.push(name);
+    const row = this.statRow(this.cardStatParts(card), wrap / ZOOM, 8, 202);
+    row.box.setPosition(left, name.y + name.displayHeight + 3);
+    objects.push(row.box);
+    const body = this.uiText(left, row.box.y + row.height + 6, contentDescription(id, card.description), 7, "#8792b5", { wordWrap: { width: wrap } })
+      .setDepth(202);
+    objects.push(body);
+    // The gold, as the merchant's price chip is drawn: a coin and a number, bottom right.
+    const gold = this.uiText(cx + W / 2 - PAD, top + H - 14, `+${CHEST_GOLD}`, 9, "#ffd45e").setOrigin(1, 0.5).setDepth(203);
+    objects.push(gold);
+    objects.push(this.add.image(gold.x - gold.displayWidth - 8, gold.y, this.uiTextureKey, "pickup_coin_0").setOrigin(0.5).setDisplaySize(10, 10).setDepth(203));
+    objects.push(this.keys_(cx, cy + H / 2 + 20, `[E] ${t("hint.take")}`, 9, "#e8e3d8", 202));
+    this.chestUi = { objects };
+    this.sfx.play("reward_reveal");
+  }
+
+  private readChestKeys(): void {
+    const k = this.keys;
+    const down = (key?: Phaser.Input.Keyboard.Key) => !!key && Phaser.Input.Keyboard.JustDown(key);
+    if (down(k.E) || down(k.ENTER) || down(k.SPACE)) this.takeChest();
+  }
+
+  /** Taken: the card goes, the lid comes up, the gold bursts out (the world's), and the stat goes into the run. */
+  private takeChest(): void {
+    if (!this.chestUi) return;
+    for (const o of this.chestUi.objects) o.destroy();
+    this.chestUi = null;
+    this.interactPressed = false;
+    const id = this.chestStat;
+    this.chestStat = null;
+    openChest(this.world);
+    const g = this.chestGfx;
+    if (g) {
+      g.body.setFrame(safeFrame(this.atlas, "prop_chest_1", "prop_chest_0"));
+      this.tweens.killTweensOf(g.glow);
+      g.glow.setFrame(safeFrame(this.atlas, "prop_chest_1", "prop_chest_0")).setAlpha(0.5);
+      this.tweens.add({ targets: g.glow, alpha: 0, duration: 900 });
+    }
+    this.sfx.play("clear");
+    if (id) this.grantStat(id);
+  }
+
+  private destroyChest(): void {
+    if (!this.chestGfx) return;
+    this.tweens.killTweensOf(this.chestGfx.glow);
+    this.chestGfx.body.destroy();
+    this.chestGfx.glow.destroy();
+    this.chestGfx = null;
   }
 
   /** A dismantled spell's gold, as coins bursting from where it was, flying to the player. */
@@ -11699,22 +11922,7 @@ export class PlayScene extends Phaser.Scene {
        * the player at their old total reads as having done nothing.
        */
       // An elite door's stat is applied twice.
-      for (let k = 0; k < Math.min(2, card.grade ?? 1); k++) {
-        this.mods = applyStat(this.mods, card.itemId);
-        this.statsTaken.push(card.itemId);
-        if (card.itemId === "vigour") this.world.player.hearts += 1;
-      }
-      /*
-       * The cards **and** the level: `baseMods` is the card half the world
-       * rebuilds the body from on every level, so both have to move or the
-       * next level-up would throw this card away (`run/levels.ts`).
-       */
-      this.world.baseMods = { ...this.mods };
-      this.world.player.mods = this.liveMods();
-      // The run's new modifiers reach this room's live numbers too.
-      if (card.itemId === "deep_well") {
-        this.world.staff = { ...this.world.staff, mana_max: Math.round(this.world.staffManaBase * this.world.player.mods.manaMax) };
-      }
+      this.grantStat(card.itemId, Math.min(2, card.grade ?? 1));
     } else if (card.itemId && this.heldIndex(card.itemId) >= 0) {
       // A copy of a held spell raises it; at the cap it is paid out instead.
       const at = this.heldIndex(card.itemId);
@@ -12142,7 +12350,15 @@ export class PlayScene extends Phaser.Scene {
       }
       return;
     }
-    if (drop && rewardInReach(drop, this.world.player)) {
+    if (this.chestStat && chestInReach(this.world) && this.world.chest) {
+      this.prompt.setVisible(true);
+      this.prompt.setText(t("prompt.openChest"));
+      this.promptAbove(this.world.chest.x, this.world.chest.y - TILE_PX * 1.6);
+      if (this.interactPressed && !this.offerUi && !this.chestUi) {
+        this.interactPressed = false;
+        this.showChestCard();
+      }
+    } else if (drop && rewardInReach(drop, this.world.player)) {
       this.prompt.setVisible(true);
       this.prompt.setText(t("prompt.open"));
       this.promptAbove(drop.x, this.topOf(this.rewardGfx?.badge ?? null, drop.y - TILE_PX * 2.1 + 10));
@@ -14719,7 +14935,7 @@ export class PlayScene extends Phaser.Scene {
           }
         }
       } else if (this.burrowTrail.has(e.id)) this.burrowTrail.delete(e.id);
-      if (e.wardArmour > 0)
+      if (e.wardHeal > 0)
         img(e.x, e.y - 2, `vfx_ward_aura_${(tick >> 3) % 3}`, 6.05)?.setDisplaySize(e.radius * 3.4, e.radius * 3.4).setAlpha(0.85);
       // Hurried by a bell: the cue goes on the body, never on the floor.
       if (e.hastedMs > 0) drawHasteCue(this.fxTopGfx, e, tick);
@@ -15093,6 +15309,14 @@ export class PlayScene extends Phaser.Scene {
     this.uiCam.setZoom(Math.min(cw / UI_W, ch / (UI_H + HUD_H))).centerOn(UI_W / 2, (UI_H + HUD_H) / 2);
     this.drawOffscreen(this.camFocus.x, this.camFocus.y, halfW, halfH);
     this.drawMinimap(this.camFocus.x, this.camFocus.y, halfW, halfH);
+  }
+
+  /** An objective the debug panel forces on the next fight (doc 025). */
+  private forceObjective: "hold" | "destroy" | null = null;
+
+  /** Which of rooms 4 to 6 the king drops into this run (doc 022): a function of the run's seed. */
+  private get audienceRoom(): number {
+    return audienceRoomFor(this.runSeed);
   }
 
   /** How far the first audience's view has pulled out, 0 to 1, eased (`holdCamera`). */
@@ -15618,7 +15842,7 @@ export class PlayScene extends Phaser.Scene {
      * room. The screen only ever opens in a cleared room, so nothing is lost
      * by holding the body still while it is up.
      */
-    if (this.offerUi) return NO_INPUT;
+    if (this.offerUi || this.chestUi) return NO_INPUT;
     // The walk into the throne hall is not theirs: in to the mark, facing him, and held there (`bossCine`).
     const cine = this.bossCine;
     if (cine && !cine.release) {
@@ -15844,6 +16068,17 @@ export class PlayScene extends Phaser.Scene {
       const unbind = `boss_unbind_${Math.min(2, Math.max(1, e.phase - 1))}`;
       drawEnemy(this, w, e, this.textureKey, this.atlas, this.sprites, label, this.subspecies,
         roaring ? (BOSS_ROAR_MS - e.bossRoarMs < BOSS_UNBIND_BURST_MS ? unbind : `${unbind}_bare`) : undefined);
+      /*
+       * **A destroy room's turret wears a mark** (doc 025): a gold diamond over
+       * it, bobbing, so the three the room is about are told from the fight
+       * round them at a glance.
+       */
+      if (e.objectiveTarget && e.hp > 0) {
+        const bob = Math.sin(this.time.now / 260 + e.id) * 2;
+        const y = e.y - e.radius - 22 + bob;
+        this.sprites.rectangle(e.x, y, 7, 7, 0xffd45e, 1).setRotation(Math.PI / 4)
+          .setStrokeStyle(1.5, 0x0d0b1f, 1).setDepth(9.5);
+      }
     }
     if (this.bossDeath) {
       const { x, y, startedAt } = this.bossDeath;
@@ -16402,6 +16637,7 @@ export class PlayScene extends Phaser.Scene {
      * king has none, since nothing interrupts him.
      */
     const bossFade = this.fadeMark();
+    // The king's bar, or the Frontier Veteran's (doc 024): the one other body that gets one.
     const boss = w.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
     if (boss) {
       const BW = 280;
@@ -16418,11 +16654,6 @@ export class PlayScene extends Phaser.Scene {
       const floorHp = kingFloorHp(boss);
       const frac = Math.max(0, (boss.hp - floorHp) / Math.max(1, boss.maxHp - floorHp));
       this.sprites.rectangle(BX, BY, BW * frac, 7, boss.phase >= 3 ? 0xff5a3a : 0xd83a3a, 1).setOrigin(0, 0.5).setDepth(101);
-      if (boss.maxArmour > 0) {
-        this.sprites.rectangle(BX, BY - 7, BW, 3, 0x0f1c3a, 0.9).setOrigin(0, 0.5).setDepth(100.8);
-        this.sprites.rectangle(BX, BY - 7, BW * Math.max(0, boss.armour / boss.maxArmour), 3, SHIELD_BLUE, boss.armour > 0 ? 1 : 0.15).setOrigin(0, 0.5).setDepth(101);
-        this.sprites.add(shieldMark(this, this.atlas, this.uiTextureKey, BX - 7, BY - 7, 8).setDepth(102));
-      }
       // The marks are the script's (doc 022): the final's phase III at the half; none on the first audience's.
       for (const mark of boss.bossScript === "audience" ? [] : kingMarks(boss.bossScript))
         this.sprites.rectangle(BX + BW * mark, BY, 1, 9, 0xffe9a8, 0.8).setOrigin(0.5).setDepth(102);
@@ -16435,6 +16666,21 @@ export class PlayScene extends Phaser.Scene {
           fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(7, ZOOM) * ZOOM)}px`, color: boss.phase >= 3 ? "#ff9a6a" : "#c9cfe8",
         }).setScale(1 / ZOOM).setOrigin(1, 0.5).setDepth(102);
       this.fadeIfCovering(bossFade, BX - 2, BY - 18, BW + 4, 26);
+    }
+
+    /*
+     * **The room's objective** (doc 025), where the boss's bar would be: a
+     * hold's seconds, or the turrets still standing. Gone once it is met.
+     */
+    const obj = w.objective;
+    if (obj && !obj.done) {
+      const text = obj.kind === "hold"
+        ? t("hud.holdLeft", { s: holdLeftS(w) })
+        : t("hud.targetsLeft", { n: targetsLeft(w), total: DESTROY_TARGETS });
+      this.ftext("objective", UI_W / 2, UI_H - 52, text, {
+        fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(9, ZOOM) * ZOOM)}px`, color: "#ffe9a8",
+        stroke: "#0d0b1f", strokeThickness: 3 * ZOOM,
+      }).setScale(1 / ZOOM).setOrigin(0.5).setDepth(102);
     }
 
     const topFade = this.fadeMark();
@@ -16711,6 +16957,10 @@ function specialPose(w: World, e: Enemy): string | null {
       // The drawn aim: raised to load, levelled to fire, and held level
       // through the start of the reload while the smoke clears.
       if (e.pose === "musket_windup") return "windup";
+      // The Frontier Veteran's call (doc 024): the arm up, as the gun is raised to load.
+      if (e.pose === "guardian_call") return "windup";
+      // The stakes (doc 024): the gun raised, then driven down as the ground erupts.
+      if (e.pose === "guardian_stakes") return e.poseMs > 450 + 250 ? "windup" : "lunge";
       if (e.pose === "musket_fire" || e.pose === "musket_second") return "lunge";
       if (e.pose === "musket_reload" && e.poseMs > 800) return "lunge";
       // The shield bash: the plate comes up, then goes through. It borrows the
@@ -16762,8 +17012,8 @@ function specialPose(w: World, e: Enemy): string | null {
     case "boss":
       // The call after the roar (`Enemy.bossSummonMs`): the storm's raise, the sword held up.
       if (e.bossSummonMs > 0) return "storm";
-      if (e.armourBreakMs > 0 || e.staggerMs > 0)
-        return e.armourBreakMs > 0 || e.staggerMs > STAGGER_MS * .5 ? "stagger1" : "stagger0";
+      if (e.poiseBreakMs > 0 || e.staggerMs > 0)
+        return e.poiseBreakMs > 0 || e.staggerMs > STAGGER_MS * .5 ? "stagger1" : "stagger0";
       /*
        * The Crypt King's poses (doc 020). A ground strike is the greatsword
        * raised through the telegraph and brought down on the commit — held
@@ -16879,24 +17129,47 @@ function bossFlip(w: World, e: Enemy): boolean {
  * coming back.
  */
 /**
- * How much larger to draw a king's frame so it is his idle's size. Several of
- * his action frames were delivered drawn smaller — a cut's windup at three
- * quarters, the cleave's raise and the dashcut at two thirds — so he shrank
- * into every attack and grew back out of it. The armour a frame shows
- * (`RecolourableAtlas.bodyArea`) is nearly the same in every pose, so its
- * root against the idle's is the drawing's scale. Only ever enlarged, not
- * for the few percent a pose hides behind an arm, and never past half again.
- * Art order B8 asks for the frames to be redrawn to one scale; this goes to
- * 1 by itself when they are.
+ * **How much to scale a king's frame so it is drawn at his phase's common
+ * size.** His frames were delivered at more than one scale: some cuts at two
+ * thirds (the cleave's raise, the dashcut), phase I's windup, commit and
+ * follow-through a tenth or more larger than the walk he came in on, and
+ * phase III's whole walk cycle a quarter larger than everything else it
+ * does, so he swelled and shrank from one move to the next. The armour a
+ * frame shows (`RecolourableAtlas.bodyArea`) is nearly the same in every
+ * pose, so its root against the phase's **median** frame is the drawing's
+ * scale: the size most of his frames already share, whichever frames are the
+ * odd ones out. It used to be the idle, enlarging only, which left every
+ * oversized frame as it was.
+ *
+ * Scaled both ways; not for the few percent a pose hides behind an arm
+ * (`BOSS_SCALE_DEADBAND`), and within `BOSS_SCALE_MIN`..`BOSS_SCALE_MAX`. Art
+ * order B8 asks for the frames to be redrawn to one scale; this goes to 1 by
+ * itself when they are.
  */
 function bossFrameScale(atlas: RecolourableAtlas, name: string): number {
-  const ref = /^boss_p\d/.exec(name)?.[0];
-  if (!ref || !atlas.has(`${ref}_idle0`) || !atlas.has(name)) return 1;
-  const s = Math.sqrt(atlas.bodyArea(`${ref}_idle0`) / Math.max(1, atlas.bodyArea(name)));
-  return s < BOSS_SCALE_DEADBAND ? 1 : Math.min(BOSS_SCALE_MAX, s);
+  const phase = /^boss_p\d/.exec(name)?.[0];
+  if (!phase || !atlas.has(name)) return 1;
+  const ref = bossCommonArea(atlas, phase);
+  if (ref <= 0) return 1;
+  const s = Math.sqrt(ref / Math.max(1, atlas.bodyArea(name)));
+  return Math.abs(s - 1) < BOSS_SCALE_DEADBAND ? 1 : Math.max(BOSS_SCALE_MIN, Math.min(BOSS_SCALE_MAX, s));
 }
-const BOSS_SCALE_DEADBAND = 1.12;
-const BOSS_SCALE_MAX = 1.45;
+const BOSS_SCALE_DEADBAND = 0.08;
+const BOSS_SCALE_MIN = 0.8;
+const BOSS_SCALE_MAX = 1.3;
+
+/** The median armour area of a phase's frames, cached per atlas: the size every frame of it is drawn to. */
+const bossCommonAreas = new WeakMap<RecolourableAtlas, Map<string, number>>();
+function bossCommonArea(atlas: RecolourableAtlas, phase: string): number {
+  let byPhase = bossCommonAreas.get(atlas);
+  if (!byPhase) bossCommonAreas.set(atlas, byPhase = new Map());
+  const hit = byPhase.get(phase);
+  if (hit !== undefined) return hit;
+  const areas = atlas.frameNames.filter((n) => n.startsWith(`${phase}_`)).map((n) => atlas.bodyArea(n)).sort((a, b) => a - b);
+  const area = areas.length > 0 ? areas[Math.floor(areas.length / 2)]! : 0;
+  byPhase.set(phase, area);
+  return area;
+}
 
 function bossBodyShift(atlas: RecolourableAtlas, name: string, flipX: boolean): number {
   if (!atlas.has(name)) return 0;
@@ -17142,12 +17415,48 @@ function drawEnemy(
   const airK = Math.min(1, Math.abs(lift) / 84);
   // Up out of the hall the shadow goes too, and comes back as he falls: the mark is what is read up there.
   const skyK = Math.max(0, Math.min(1, (lift - 84) / 160));
+  /*
+   * **The Frontier Veteran's presence** (doc 024): a dark violet pool breathing
+   * under it and wisps of it rising round the body, so the room reads as its
+   * before anything else in it does.
+   */
+  if (e.guardian && e.hp > 0) {
+    const now = scene.time.now;
+    const pulse = 0.5 + 0.5 * Math.sin(now / 420);
+    group.ellipse(e.x, e.y + e.radius * 0.35, e.radius * (3 + 0.35 * pulse), e.radius * (1.25 + 0.15 * pulse), 0x2a0f45, 0.35 + 0.15 * pulse)
+      .setDepth(2.9);
+    group.ellipse(e.x, e.y + e.radius * 0.35, e.radius * (3.4 + 0.5 * pulse), e.radius * (1.45 + 0.2 * pulse), 0, 0)
+      .setStrokeStyle(1.5, 0x9b6cff, 0.25 + 0.3 * pulse).setDepth(2.95);
+    for (let i = 0; i < 6; i++) {
+      const k = ((now / 1600 + i / 6) % 1);
+      const a = i * 1.7 + e.id;
+      const wx = e.x + Math.cos(a) * e.radius * (0.9 + 0.3 * Math.sin(now / 700 + i));
+      const wy = e.y + e.radius * 0.3 - k * e.radius * 3.2;
+      group.circle(wx, wy, 1.6 + 1.6 * (1 - k), 0x7a4cc8, 0.55 * (1 - k)).setDepth(bodyDepth(e.y, 0) + (i % 2 ? 0.01 : -0.01));
+    }
+    /*
+     * **The call** (doc 024): while its arm is up the pool flares, and where
+     * each body will rise a violet mark opens on the floor and closes to a
+     * point as the call runs out: the clock for the squad, read on the floor.
+     */
+    const g = e.guardian;
+    if (g?.calling && e.pose === "guardian_call") {
+      const k = Math.max(0, Math.min(1, 1 - e.poseMs / GUARDIAN_CALL_MS));
+      group.ellipse(e.x, e.y + e.radius * 0.35, e.radius * (3.6 + 1.2 * k), e.radius * (1.5 + 0.5 * k), 0x9b6cff, 0.12 + 0.18 * k).setDepth(2.95);
+      for (const sp of g.spots) {
+        const r = TILE_PX * (0.9 - 0.5 * k);
+        group.ellipse(sp.x, sp.y + 4, r * 2, r, 0x2a0f45, 0.45).setDepth(2.9);
+        group.ellipse(sp.x, sp.y + 4, r * 2, r, 0, 0).setStrokeStyle(1.5, 0xb48cff, 0.5 + 0.5 * k).setDepth(2.95);
+        group.circle(sp.x, sp.y + 4 - 10 * k, 1.5 + 1.5 * k, 0xd8c0ff, 0.4 + 0.5 * k).setDepth(bodyDepth(sp.y, 0));
+      }
+    }
+  }
   const shadowName = `shadow_${ENEMY_FRAME[e.archetype].replace("enemy_", "")}`;
   if (atlas.has(shadowName)) {
     const shadow = group.image(
       e.x, e.y + (e.archetype === "boss" ? bossShadowOffset(atlas, shadowName) + bossEntranceLift(e) : shadowOffset(atlas, name, shadowName)), textureKey, shadowName,
     ).setOrigin(0.5)
-      .setScale(shadowScale(atlas, name, shadowName) * (1 - 0.45 * airK), (1 - 0.45 * airK) / ART_SCALE)
+      .setScale(shadowScale(atlas, name, shadowName) * (1 - 0.45 * airK) * (e.guardian ? GUARDIAN_SCALE : 1), (1 - 0.45 * airK) * (e.guardian ? GUARDIAN_SCALE : 1) / ART_SCALE)
       .setDepth(3)
       .setAlpha((e.awake ? 0.5 : 0.34) * (1 - 0.25 * airK) * (1 - skyK));
   } else {
@@ -17231,12 +17540,14 @@ function drawEnemy(
    */
   if (isSubspecies(e.archetype) && e.hp > 0) subspecies?.apply(img, e.archetype);
   if (e.affixes.length > 0 && e.hp > 0) img.setTint(0xffa8b8);
+  // The Frontier Veteran in its own cold light (doc 024), so it reads as more than the wardens before it.
+  else if (e.guardian && e.hp > 0) img.setTint(GUARDIAN_TINT);
 
   // Fire and poison gauges, as the player has them: filling on hits, the
   // status's clock once it runs.
   if (e.hp > 0 && e.spawnFadeMs <= 0 && (e.burnBuild > 0 || e.poisonBuild > 0 || e.chillBuild > 0)) {
-    // Above the armour bar when there is one (it sits at `overheadPx`).
-    const gy = e.y - overheadPx(e) - (e.maxArmour > 0 && e.armour > 0 ? 5 : 0);
+    // Above the Frontier Veteran's bar when it is that body (its bar sits at `overheadPx`).
+    const gy = e.y - overheadPx(e) - (e.guardian ? 16 : 0);
     const bars: [number, number][] = [];
     if (e.burnBuild > 0) bars.push([e.burnBuild, e.burnMs > 0 ? 0xffb050 : 0xc0602a]);
     if (e.poisonBuild > 0) bars.push([e.poisonBuild, e.poisonMs > 0 ? 0x9ff07a : 0x4f9a40]);
@@ -17295,9 +17606,10 @@ function drawEnemy(
    * (`bossFrameScale`), from his feet: the body's middle and the foot line
    * stay where they were.
    */
-  const bossScale = e.archetype === "boss" ? bossFrameScale(atlas, name) : 1;
+  // The Frontier Veteran is the warden drawn larger, from its feet (doc 024; `GUARDIAN_SCALE` need not be whole).
+  const bossScale = e.archetype === "boss" ? bossFrameScale(atlas, name) : e.guardian ? GUARDIAN_SCALE : 1;
   if (bossScale !== 1) {
-    img.x += bossBodyShift(atlas, name, flipX) * (bossScale - 1);
+    if (e.archetype === "boss") img.x += bossBodyShift(atlas, name, flipX) * (bossScale - 1);
     img.y -= (atlas.contentBottom(name) - atlas.frame(name).h / 2) * (bossScale - 1) / ART_SCALE;
   }
   const base = (1 / ART_SCALE) * (e.affixes.length > 0 ? 1.1 : 1) * bossScale;
@@ -17351,36 +17663,34 @@ function drawEnemy(
   }
 
   /*
-   * Armour, as a bar over the head.
-   *
-   * It was a pulsing ring around the body, which stated *that something is
-   * different about this one* and nothing about how much was left or what it
-   * would take. A bar answers both, and it is the form every player already
-   * knows, so it needs no learning at all.
-   *
-   * It has to be visible before the player swings, because armour changes what
-   * swinging does: while it holds the body cannot be interrupted, and a player
-   * who does not know that reads an un-staggering enemy as a broken game.
+   * **A poise break** (`Enemy.poise`): a ring thrown off the body as the
+   * burst knocks it into its long stagger. There is no bar for poise; what a
+   * hit does is the whole of what the player is told, and a blow held through
+   * throws steel sparks instead (`poise_hold`, in the event effects).
    */
-  if (e.armour > 0 && e.spawnFadeMs <= 0) {
-    /*
-     * Blue, with a shield at its left end: a yellow bar over a head read as
-     * a second health bar, or as nothing. Shield blue is the one blue in the
-     * HUD vocabulary not already taken — ice is the pale cyan.
-     */
-    const W = Math.max(16, e.radius * 2.2);
-    const y = e.y + bob - overheadPx(e);
-    const back = group.rectangle(e.x - W / 2, y, W, 3, 0x0f1c3a, 0.9)
-      .setOrigin(0, 0.5).setDepth(9);
-    const fill = group.rectangle(
-      e.x - W / 2, y, W * (e.armour / Math.max(1, e.maxArmour)), 3, SHIELD_BLUE, 1,
-    ).setOrigin(0, 0.5).setDepth(10);
-    group.add(shieldMark(scene, atlas, textureKey, e.x - W / 2 - 4, y, 6));
-  } else if (e.armourBreakMs > 0) {
-    const t = e.armourBreakMs / ARMOUR_BREAK_MS;
+  if (e.poiseBreakMs > 0) {
+    const t = e.poiseBreakMs / POISE_BREAK_MS;
     const burst = group.circle(e.x, e.y + bob, e.radius + 3 + 18 * (1 - t), 0, 0);
     burst.setStrokeStyle(2, SHIELD_BLUE, t);
     burst.setDepth(8);
+  }
+
+  /*
+   * **The Frontier Veteran's bar is over its head** (doc 024), not the boss's
+   * across the bottom: its health, the armour bar over it, and its name over
+   * both, with no marks, since it has no phases. The name holds its place
+   * whether the plate is on or broken. The bottom bar is the king's alone.
+   */
+  if (e.guardian && e.hp > 0 && e.spawnFadeMs <= 0) {
+    const W = GUARDIAN_BAR_W;
+    const y = e.y + bob - overheadPx(e);
+    group.rectangle(e.x - W / 2 - 1, y, W + 2, 5, 0x0d0b1f, 0.9).setOrigin(0, 0.5).setDepth(9);
+    group.rectangle(e.x - W / 2, y, W * Math.max(0, e.hp / Math.max(1, e.maxHp)), 3, 0xd83a3a, 1)
+      .setOrigin(0, 0.5).setDepth(10);
+    label?.(`guardian:name:${e.id}`, e.x, y - 10, t("hud.guardianTitle"), {
+      fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(6, ZOOM) * ZOOM)}px`, color: "#e8c8ff",
+      stroke: "#0d0b1f", strokeThickness: 2 * ZOOM,
+    }).setScale(1 / ZOOM).setOrigin(0.5, 1).setDepth(10.5);
   }
 
   /*
@@ -17456,7 +17766,8 @@ function drawEnemy(
     // Jittered against its own clock rather than at random, so it reads as one
     // body being rattled instead of as the sprite flickering.
     img.x += Math.sin(e.staggerMs * 0.9) * 1.6;
-    img.setTint(0xffc0b0);
+    // The stagger's warm cast; the Frontier Veteran keeps its own light under it (doc 024).
+    img.setTint(e.guardian ? GUARDIAN_STAGGER_TINT : 0xffc0b0);
     /*
      * A long stagger is a knockdown, and it gets a mark of its own.
      *
@@ -19204,7 +19515,9 @@ function floorFrame(x: number, y: number, drains: ReadonlySet<number>): string {
  * drawings are about that size; the Crypt King stands far taller than the
  * circle he fights on, so his sit over his crown rather than on his chest.
  */
-function overheadPx(e: { archetype: string; radius: number }): number {
+function overheadPx(e: { archetype: string; radius: number; guardian?: unknown }): number {
+  // The Frontier Veteran is drawn at `GUARDIAN_SCALE` from its feet, so its head is that much higher.
+  if (e.guardian) return Math.round((e.radius / GUARDIAN_SCALE + 9) * GUARDIAN_SCALE) + 6;
   return e.archetype === "boss" ? 56 + BOSS_DRAW_RISE_PX : e.radius + 9;
 }
 

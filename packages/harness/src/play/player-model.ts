@@ -1311,7 +1311,8 @@ function nearestEnemy(w: World): Target | null {
 
   for (const e of w.enemies) {
     if (e.hp <= 0 || e.spawnFadeMs > 0) continue;
-    const d = (e.x - w.player.x) ** 2 + (e.y - w.player.y) ** 2;
+    // A destroy room's marked turrets are what a person goes for (doc 025): read as a third as far.
+    const d = ((e.x - w.player.x) ** 2 + (e.y - w.player.y) ** 2) / (e.objectiveTarget ? 9 : 1);
     if (d < anyD) { anyD = d; any = e; }
     if (hasLineOfSight(w.room.grid, w.player.x, w.player.y, e.x, e.y) && d < visibleD) {
       visibleD = d;
