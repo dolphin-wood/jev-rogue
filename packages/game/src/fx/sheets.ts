@@ -186,6 +186,112 @@ function tracer(name: string, len: number, thick: number): FxSheet {
   return { name, frames, origin: [len + 1, oy], frameOrigins: [[len + 1, oy], [len + 4, oy]] };
 }
 
+/**
+ * The Crypt King's shot, one sheet a phase (`heartfire_p1`..`_p3`): the fire
+ * his palm is lit with in `tele`, not a roster body's magenta orb. A round
+ * head with a white-hot core and a four-point glint, as the heart and the
+ * palm are drawn, and a flame licked back behind it along the flight; three
+ * frames of flicker. Pointing right, origin at the head's centre, whose
+ * radius is `HEARTFIRE_HEAD_TX` — the renderer scales that to the shot's
+ * hitbox, so what is seen is what hits. No rim: it is fire, not matter.
+ */
+export const HEARTFIRE_HEAD_TX = 16;
+const HEARTFIRE_RAMPS: readonly (readonly Rgb[])[] = [
+  // I: the gold of his armoured heart.
+  [0x5a1a14, 0xb8481c, 0xf08a2a, 0xffc848, 0xffeca0, 0xfffcec].map(hex),
+  // II: darker gold, its tail going to the violet of his cape.
+  [0x2a1438, 0x6a2a5a, 0xd06a2a, 0xf4b040, 0xffe290, 0xfff8e0].map(hex),
+  // III: the bare heart, burned pale as the bone round it.
+  [0x4a3424, 0x9a6a3a, 0xe8b070, 0xf8dcb0, 0xfff4e0, 0xffffff].map(hex),
+];
+
+function heartfire(name: string, ramp: readonly Rgb[], seed: number): FxSheet {
+  const R = rng(seed);
+  const head = HEARTFIRE_HEAD_TX;
+  const tail = head * 2.6;
+  const w = Math.ceil(head + tail) + 4;
+  const h = head * 2 + 10;
+  const cx = w - head - 2;
+  const cy = h / 2;
+  const frames: FxFrame[] = [];
+  for (let f = 0; f < 3; f++) {
+    const c = new Canvas(w, h);
+    // The flame behind: tapering, licking up and down along its length.
+    for (let x = Math.floor(cx - tail); x <= cx; x++) {
+      const t = (cx - x) / tail; // 0 at the head, 1 at the tip
+      const wave = Math.sin(t * 5.2 + f * 2.1) * 3.2 * t;
+      const half = head * Math.pow(1 - t, 0.75) * (0.9 + 0.1 * Math.sin(f * 1.7 + t * 9));
+      for (let y = 0; y < h; y++) {
+        const d = Math.abs(y - cy - wave) / Math.max(0.5, half);
+        if (d > 1) continue;
+        // Thin at its ends into dither rather than alpha.
+        if (d > 0.8 && t > 0.45 && (x + y + f) % 2 === 0) continue;
+        const heat = (1 - t) * (1 - d * 0.65);
+        c.put(x, y, 1 + Math.min(3, Math.floor(heat * 4)));
+      }
+    }
+    // Tongues torn off the flame, different each frame.
+    for (let n = 0; n < 7; n++) {
+      const t = 0.25 + R() * 0.75;
+      c.put(cx - t * tail, cy + (R() - 0.5) * head * 2 * (1 - t * 0.6), R() < 0.5 ? 2 : 1);
+    }
+    // The head, banded to a white-hot core just forward of its middle.
+    c.disc(cx, cy, head, 3, 2);
+    c.disc(cx + 1, cy, head * 0.7, 4, 1);
+    c.disc(cx + 2, cy, head * 0.38 + (f === 1 ? 1 : 0), 5, 1);
+    // The glint: the four-point star the heart and the palm are drawn with.
+    const g = head * (f === 2 ? 0.95 : 0.8);
+    c.line(cx + 2 - g, cy, cx + 2 + g, cy, 5);
+    c.line(cx + 2, cy - g, cx + 2, cy + g, 5);
+    frames.push(c.paint(ramp));
+  }
+  return { name, frames, origin: [cx, cy] };
+}
+
+/**
+ * Where one of the king's shots ends — on stone, on the player, or spent in
+ * the air — it goes up in a small burst of the same fire (`heartburst_p1`..
+ * `_p3`). Small on purpose: at most `HEARTBURST_R_TX` across the radius, a
+ * little over the shot's own head, so a volley breaking on a wall is a row of
+ * pops and never a curtain. It is a picture only; nothing in it hurts.
+ * Four frames: a white flash, the fireball, flames torn outward, embers.
+ */
+export const HEARTBURST_R_TX = 24;
+
+function heartburst(name: string, ramp: readonly Rgb[], seed: number): FxSheet {
+  const R = rng(seed);
+  const r = HEARTBURST_R_TX;
+  const size = r * 2 + 6;
+  const c0 = size / 2;
+  const tongues = Array.from({ length: 9 }, (_, i) => ({ a: (i / 9) * Math.PI * 2 + R() * 0.5, l: 0.7 + R() * 0.3 }));
+  const frames: FxFrame[] = [];
+  for (let f = 0; f < 4; f++) {
+    const c = new Canvas(size, size);
+    if (f === 0) {
+      c.disc(c0, c0, r * 0.45, 5, 2);
+      for (const t of tongues) c.line(c0, c0, c0 + Math.cos(t.a) * r * 0.6 * t.l, c0 + Math.sin(t.a) * r * 0.6 * t.l, 4);
+    } else if (f === 1) {
+      c.disc(c0, c0, r * 0.85, 4, 3, true);
+      c.disc(c0, c0, r * 0.4, 5, 1);
+      for (const t of tongues) c.line(c0, c0, c0 + Math.cos(t.a) * r * t.l, c0 + Math.sin(t.a) * r * t.l, 3, 2);
+    } else if (f === 2) {
+      // Hollowing out: flames at the edge, the middle burned through.
+      for (const t of tongues) {
+        c.disc(c0 + Math.cos(t.a) * r * t.l * 0.72, c0 + Math.sin(t.a) * r * t.l * 0.72, r * 0.17, 3, 2, true);
+        c.put(c0 + Math.cos(t.a) * r * t.l, c0 + Math.sin(t.a) * r * t.l, 1);
+      }
+      c.disc(c0, c0 - 1, r * 0.34, 2, 1, true);
+    } else {
+      for (const t of tongues) {
+        c.put(c0 + Math.cos(t.a) * r * t.l, c0 + Math.sin(t.a) * r * t.l - 2, R() < 0.5 ? 3 : 2);
+        if (R() < 0.6) c.put(c0 + Math.cos(t.a) * r * t.l * 0.7, c0 + Math.sin(t.a) * r * t.l * 0.7 - 3, 1);
+      }
+    }
+    frames.push(c.paint(ramp));
+  }
+  return { name, frames, origin: [c0, c0] };
+}
+
 /** Sparks and grit where a shot meets stone, facing right (back toward the shooter). */
 function wallHit(name: string, seed: number): FxSheet {
   const w = 26;
@@ -486,6 +592,8 @@ export function bakeSheets(opts: { blastLen: number; blastSpreadDeg: number }): 
     muzzle("muzzle_l", 12, 13),
     tracer("tracer_s", 14, 6),
     tracer("tracer_l", 22, 8),
+    ...HEARTFIRE_RAMPS.map((ramp, i) => heartfire(`heartfire_p${i + 1}`, ramp, 91 + i)),
+    ...HEARTFIRE_RAMPS.map((ramp, i) => heartburst(`heartburst_p${i + 1}`, ramp, 101 + i)),
     wallHit("hit_wall", 21),
     fizzle("fizzle"),
     hurtBurst("hit_player", 31),

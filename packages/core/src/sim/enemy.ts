@@ -2204,6 +2204,34 @@ export const BOSS_POWER = 1;
 const BOSS_SHOT_SCALE = 2.4;
 /** One shot of the heart volley, in hearts: chip, so the sword is what is feared. */
 export const BOSS_BULLET_DAMAGE = 0.2;
+/**
+ * Where the heart volley leaves from: the open left palm he raises for it
+ * (`tele`, `tele1`), world px from his body's centre. Every phase draws that
+ * hand at about art (170, 86) of its 256 px frame, on screen right, and the
+ * volley's frames are never mirrored (`bossFlip`), so one point serves all
+ * three. Fired from his centre, the shots came out of the floor between his
+ * feet, a hand's length below and beside the palm that was lit for them.
+ */
+export const BOSS_PALM_PX = { x: 21, y: -56 } as const;
+
+/** Where a held volley leaves: the king's raised palm (`BOSS_PALM_PX`), anyone else's body. */
+function volleyFrom(world: World, e: Enemy): { x: number; y: number } {
+  return e.archetype === "boss" ? bossPalmOf(world, e) : { x: e.x, y: e.y };
+}
+
+/**
+ * The king's palm, or as near it as the room allows: backed in towards his
+ * centre when it is in stone (as `muzzleOf`), since a shot born in a wall is
+ * gone before it is seen — before the throne, his raised hand is over its steps.
+ */
+export function bossPalmOf(world: World, e: Enemy): { x: number; y: number } {
+  for (const k of [1, 0.75, 0.5, 0.25]) {
+    const x = e.x + BOSS_PALM_PX.x * k;
+    const y = e.y + BOSS_PALM_PX.y * k;
+    if (!circleHitsWall(world.room.grid, x, y, 2) && hasLineOfSight(world.room.grid, e.x, e.y, x, y)) return { x, y };
+  }
+  return { x: e.x, y: e.y };
+}
 
 /**
  * The hearts blow `i` of an `n`-blow string costs (doc 020): a single blow is
@@ -3621,7 +3649,7 @@ function fire(world: World, e: Enemy, dtMs: number): void {
     if (e.pending.length > 0) {
       // Sight Beam: the elite sentinel's line is the shot, with no travel time.
       if (e.archetype === "watcher") sightBeam(world, e, seenPlayer(world, e));
-      else release(world, e, e.pending as readonly BulletEmission[]);
+      else release(world, e, e.pending as readonly BulletEmission[], 0, volleyFrom(world, e));
       e.pending = [];
     }
     dropFireToken(world, e);
@@ -3729,7 +3757,7 @@ function pulse(world: World, e: Enemy, dtMs: number): void {
     e.telegraphMs -= dtMs;
     if (e.telegraphMs > 0) return;
     world.events.push({ kind: "telegraph", x: e.x, y: e.y, what: e.archetype });
-    if (e.pending.length > 0) release(world, e, e.pending as readonly BulletEmission[]);
+    if (e.pending.length > 0) release(world, e, e.pending as readonly BulletEmission[], 0, volleyFrom(world, e));
     e.pending = [];
     dropFireToken(world, e);
     e.pulseCooldownMs = PULSE_COOLDOWN_MS;
@@ -3827,7 +3855,10 @@ export function spikeVolley(world: World, e: Enemy, speed: number, size: number,
 export const WISP_SEEK_DEG_PER_S = 150;
 export const WISP_SEEK_MS = 500;
 
-export function release(world: World, e: Enemy, emissions: readonly BulletEmission[], fromRadius = 0): void {
+export function release(
+  world: World, e: Enemy, emissions: readonly BulletEmission[], fromRadius = 0,
+  from: { x: number; y: number } = { x: e.x, y: e.y },
+): void {
   if (liveCount(world.enemyBullets) + emissions.length > ENEMY_BULLET_CAP) return;
 
   // Aimed where it last saw them, so strafing works at all, and off by the
@@ -3839,18 +3870,18 @@ export function release(world: World, e: Enemy, emissions: readonly BulletEmissi
     : 0;
   for (const em of emissions) {
     const aim = em.aim === "player"
-      ? Math.atan2(aimed.y - e.y, aimed.x - e.x) + miss
+      ? Math.atan2(aimed.y - from.y, aimed.x - from.x) + miss
       : (Number(String(em.aim).slice(6)) * Math.PI) / 180;
     const angle = aim + (em.angle_deg * Math.PI) / 180;
     const b = acquire(world.enemyBullets, false);
     if (!b) return;
     // `fromRadius` starts a shot away from the centre: the lancer's spikes
     // break off at their tips, not out of its middle.
-    b.x = e.x + Math.cos(angle) * fromRadius;
-    b.y = e.y + Math.sin(angle) * fromRadius;
+    b.x = from.x + Math.cos(angle) * fromRadius;
+    b.y = from.y + Math.sin(angle) * fromRadius;
     b.vx = Math.cos(angle) * em.speed * ramp.shotSpeed;
     b.vy = Math.sin(angle) * em.speed * ramp.shotSpeed;
-    // The king's are fireballs out of his heart, not a roster body's shot (`BOSS_SHOT_SCALE`).
+    // The king's are fireballs out of his palm, not a roster body's shot (`BOSS_SHOT_SCALE`).
     b.radius = ENEMY_BULLET_RADIUS * em.size * (e.archetype === "boss" ? BOSS_SHOT_SCALE : 1);
     b.damage = (e.archetype === "boss" ? BOSS_BULLET_DAMAGE : ENEMY_BULLET_DAMAGE) * e.damageMult;
     b.element = e.affixes.includes("burning") ? "fire" : "none";
@@ -3874,9 +3905,9 @@ export function release(world: World, e: Enemy, emissions: readonly BulletEmissi
   // Which way the volley left, for the muzzle flash: along its first shot.
   const first = emissions[0];
   const facing = first
-    ? (first.aim === "player" ? Math.atan2(aimed.y - e.y, aimed.x - e.x) : (Number(String(first.aim).slice(6)) * Math.PI) / 180) + (first.angle_deg * Math.PI) / 180
+    ? (first.aim === "player" ? Math.atan2(aimed.y - from.y, aimed.x - from.x) : (Number(String(first.aim).slice(6)) * Math.PI) / 180) + (first.angle_deg * Math.PI) / 180
     : e.facing;
-  world.events.push({ kind: "shot", x: e.x, y: e.y, what: e.archetype, facing, amount: emissions.length });
+  world.events.push({ kind: "shot", x: from.x, y: from.y, what: e.archetype, facing, amount: emissions.length });
 }
 
 /**
