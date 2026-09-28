@@ -911,7 +911,7 @@ function cardLines(
     if (pool.temptation)
       out.push("  - A temptation card is armed: one slot will go to a card outside the stated style");
     if (pool.guarantee?.length)
-      out.push(`  - One of each is guaranteed, across ${pool.guarantee.length} groups: the last slot the `
+      out.push(`  - One of each is guaranteed, across ${pool.guarantee.length} group${pool.guarantee.length === 1 ? "" : "s"}: the last slot the `
         + "Director draws will be given to a group with nothing in the offer yet, so the top picks stand "
         + `and only the tail moves. Groups: ${pool.guarantee.map(group).join("; ")}`);
   }

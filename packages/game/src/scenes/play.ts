@@ -49,7 +49,7 @@ import type { BaseItem, CardNeeds, DoorOffer, NpcKind, OfferPromise, RoomStage, 
 import {
   BOSS_LEAP_RISE_MS, BOSS_LEAP_LOCK_MS, BOSS_METEOR_GATHER_MS, BOSS_METEOR_UP_MS, BOSS_METEOR_RAIN_MS, BOSS_SLAM_IMPACT_PX, BOSS_LEAP_RADIUS, BOSS_QUAKE_MS, SLAM_SHOCK_RADIUS,
   BOSS_POWER,
-  withLevel, levelDamageMult, dismantleValue, holdToStrength, baseStrength, affixStrengthFloor, spellDetail, offerStatParts, slotStatParts, statusForecast, SPELL_DAMAGE_SCALE, rarityOf, STAT_UPGRADES, statById, SPELL_LEVEL_MAX, SCHOOL_COLOUR, schoolOf, spellSound, shapeEventSound, offerCards,
+  withLevel, levelDamageMult, dismantleValue, baseStrength, affixStrengthFloor, spellDetail, offerStatParts, slotStatParts, statusForecast, SPELL_DAMAGE_SCALE, rarityOf, STAT_UPGRADES, statById, SPELL_LEVEL_MAX, SCHOOL_COLOUR, schoolOf, spellSound, shapeEventSound, offerCards,
   slotCooldownMs, DASH_COOLDOWN_MS, DASH_MS,
   chargeShare, chargesOf, bankOf, chargeIntervalMs, chargeMsOf, DASH_SPEED, acquire,
 } from "@jr/core";
@@ -11637,10 +11637,18 @@ export class PlayScene extends Phaser.Scene {
       (x ? [heldSpell(ITEMS.get(x.base), (this.spellAffixes[i] ?? []).map((a) => a.id))] : []));
     const needs = this.cardNeeds(ctx);
     const kinds = ["spell", "affix", "stat"] as const;
-    const requests: CardRequest[] = kinds.map((k) => ({
-      room_index: index + 1, pool: cardPool(ITEMS, this.ownedFor(k), k, held, { style: this.intent.preset }, needs),
-      count: CARDS_PER_OFFER, pity: this.needMisses >= 3, temptation: this.offersMade % 4 === 3, salt: `door_${k}`,
-    }));
+    /*
+     * **Drawn at the strength the doors start from**: the run's own for the
+     * room behind them (`baseStrength`). A door that comes out stronger — the
+     * elite, or a catch-up — is an affix door's only reason to deal other
+     * cards, so that door alone asks again with its own pool below.
+     */
+    const base = baseStrength(index + 1, false);
+    const request = (k: RewardCardKind, grade: number, salt: string): CardRequest => ({
+      room_index: index + 1, pool: cardPool(ITEMS, this.ownedFor(k), k, held, { style: this.intent.preset, grade }, needs),
+      count: CARDS_PER_OFFER, pity: this.needMisses >= 3, temptation: this.offersMade % 4 === 3, salt,
+    });
+    const requests: CardRequest[] = kinds.map((k) => request(k, base, `door_${k}`));
     let doors: DoorOffer[];
     let nextCardPlans = new Map<RewardCardKind, CardPlan>();
     try {
@@ -11671,17 +11679,24 @@ export class PlayScene extends Phaser.Scene {
             prefix: `door_${kinds[i]}__`, label: `${kinds[i]} door`, blended: p.blended, ids: p.ids,
           })),
         });
-      doors = (plan.portals?.doors ?? ruleDoors(run, src.stream("offer"), this.portalCount)).map((d) => {
-        if (d.npc || d.reward === "gold") return d;
-        const k = kinds.indexOf(d.reward as (typeof kinds)[number]);
-        // Held to the strength the door was given (`holdToStrength`).
-        const ids = holdToStrength(d.reward, plan.cards[k]?.ids ?? [], d.grade ?? 1, requests[k]?.pool);
-        return ids.length ? { ...d, ...cardTypesOf(d.reward, ids), cards: ids } : d;
-      });
       nextCardPlans = new Map(kinds.flatMap((kind, i) => {
         const cardPlan = plan.cards[i];
         return cardPlan?.ids.length ? [[kind, cardPlan] as const] : [];
       }));
+      doors = [];
+      for (const d of plan.portals?.doors ?? ruleDoors(run, src.stream("offer"), this.portalCount)) {
+        if (d.npc || d.reward === "gold") { doors.push(d); continue; }
+        const k = kinds.indexOf(d.reward as (typeof kinds)[number]);
+        let ids = plan.cards[k]?.ids ?? [];
+        // A stronger affix door, asked again at its own strength.
+        if (d.reward === "affix" && (d.grade ?? 1) > base) {
+          const raised = await this.director.planCards(ctx, request("affix", d.grade ?? 1, `door_affix_${d.grade}`));
+          playtestLog.decide(index, "portals", raised.decisions.map((x) => ({ ...x, question: `door_affix__${x.question ?? ""}` })));
+          ids = raised.ids;
+          if (ids.length) nextCardPlans.set("affix", raised); else nextCardPlans.delete("affix");
+        }
+        doors.push(ids.length ? { ...d, ...cardTypesOf(d.reward, ids), cards: ids } : d);
+      }
     } catch {
       doors = ruleDoors(run, src.stream("offer"), this.portalCount);
     }

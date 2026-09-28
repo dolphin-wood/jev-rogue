@@ -599,14 +599,16 @@ const RUN_AFFIXES: ReadonlySet<string> = new Set(["momentum", "undertow", "final
 /*
  * **The strength each affix waits for.** Measured on the bench (`pnpm
  * spell-bench`, the affix loadouts on the bolt): `repeat` doubles what a key
- * does to one body for a fifth more mana and tops most spells' best build, so
- * it is a strength-III door's alone; the affixes that reach more bodies, turn
- * a kill or a hit into more, or change what a spell does wait for II; the
- * rest — defences, aim, elements — are dealt from the first room.
+ * does to one body for a fifth more mana and tops most spells' best build;
+ * `chain`, `brand` and `haste` are the next three down, each turning one hit
+ * or one cast into several. Those four are strength III, enough of them that
+ * a III door's offer is full of III cards rather than one and filler. The
+ * affixes that reach more bodies or change what a spell does wait for II;
+ * the rest — defences, aim, elements — are dealt from the first room.
  */
 const STRENGTH_FLOOR: Readonly<Record<string, 2 | 3>> = {
-  repeat: 3,
-  chain: 2, brand: 2, scatter: 2, haste: 2, resonance: 2, fork: 2,
+  repeat: 3, chain: 3, brand: 3, haste: 3,
+  scatter: 2, resonance: 2, fork: 2,
   momentum: 2, undertow: 2, finale: 2,
 };
 for (const a of BASE_AFFIXES) {

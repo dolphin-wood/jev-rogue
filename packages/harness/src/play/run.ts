@@ -9,7 +9,7 @@ import {
   MAX_HEARTS, RngSource, bucketClearSpeed, bucketGold, bucketHealth, SMITH_PRICE, MERCHANT_PRICE, fountainDrink, fountainWouldHeal, fountainWanted,
   bucketMovementPressure, bucketRecentDamage, bucketRunProgress, createWorld,
   plainInstance, heldDominantTags, STYLE_START, step, worldCleared, ITEMS, STEP_MS,
-  RUN_BOSS_ROOM, stageFor, isAudienceRoom, audienceGrade, makeKing, applyStat, cardPool, cardsFor, cardNeedsFor, holdToStrength, baseStrength, portalChoices, heldSpell, CARDS_PER_OFFER, equipItem, attachAffix, withLevel,
+  RUN_BOSS_ROOM, stageFor, isAudienceRoom, audienceGrade, makeKing, applyStat, cardPool, cardsFor, cardNeedsFor, baseStrength, portalChoices, heldSpell, CARDS_PER_OFFER, equipItem, attachAffix, withLevel,
   noMods, AFFIX_SLOTS, generateRoom, toRoomPlan, BOSS_ARCHETYPES,
   buildShapeFor, expectedClearMsFor, goldRoomCoins, COIN_VALUE, COIN_BOOST_MAX, affixFitsHeld, fixedExit,
   levelAt, withLevels,
@@ -439,18 +439,30 @@ export async function playRun(
       src.stream("portal-count", index),
     );
     const kinds = ["spell", "affix", "stat"] as const;
-    const cards: CardRequest[] = kinds.map((k) => ({
-      room_index: index + 1, pool: cardPool(ITEMS, ownedFor(k), k, held, { style: preset }, needs),
-      count: CARDS_PER_OFFER, pity: needMisses >= 3, temptation: offersMade % 4 === 3, salt: `door_${k}`,
-    }));
-    const plan = await director.planOffer(ctx, { portals: choices, cards });
-    return (plan.portals?.doors ?? []).map((d) => {
-      if (d.npc || d.reward === "gold") return d;
-      const k = kinds.indexOf(d.reward as (typeof kinds)[number]);
-      // Held to the strength the door was given (`holdToStrength`).
-      const ids = holdToStrength(d.reward, plan.cards[k]?.ids ?? [], d.grade ?? 1, cards[k]?.pool);
-      return ids.length ? { ...d, ...cardTypesOf(d.reward, ids), cards: ids } : d;
+    /*
+     * **Drawn at the strength the doors start from**: the run's own for the
+     * room behind them (`baseStrength`). A door that comes out stronger — the
+     * elite, or a catch-up — is an affix door's only reason to deal other
+     * cards, so that door alone asks again with its own pool below.
+     */
+    const base = baseStrength(index + 1, false);
+    const request = (k: RewardCardKind, grade: number, salt: string): CardRequest => ({
+      room_index: index + 1, pool: cardPool(ITEMS, ownedFor(k), k, held, { style: preset, grade }, needs),
+      count: CARDS_PER_OFFER, pity: needMisses >= 3, temptation: offersMade % 4 === 3, salt,
     });
+    const cards: CardRequest[] = kinds.map((k) => request(k, base, `door_${k}`));
+    const plan = await director.planOffer(ctx, { portals: choices, cards });
+    const doors: DoorOffer[] = [];
+    for (const d of plan.portals?.doors ?? []) {
+      if (d.npc || d.reward === "gold") { doors.push(d); continue; }
+      const k = kinds.indexOf(d.reward as (typeof kinds)[number]);
+      const grade = d.grade ?? 1;
+      const ids = d.reward === "affix" && grade > base
+        ? (await director.planCards(ctx, request("affix", grade, `door_affix_${grade}`))).ids
+        : plan.cards[k]?.ids ?? [];
+      doors.push(ids.length ? { ...d, ...cardTypesOf(d.reward, ids), cards: ids } : d);
+    }
+    return doors;
   }
 
   /*

@@ -5,7 +5,7 @@ import { makeSpell, slotCost } from "../sim/spells.ts";
 import { plainInstance } from "../spells/index.ts";
 
 const STAFF_FOR_COST = { slots: 6, mana_max: 120 };
-import { affixFitsHeld, cardPool, emptyHistory, fittingAffixes, heldSpell, holdToStrength, offerCards, offerDoors, offerStatParts, offerStats, ruleOffer } from "./offer.ts";
+import { affixFitsHeld, cardPool, emptyHistory, fittingAffixes, heldSpell, offerCards, offerDoors, strengthGroup, offerStatParts, offerStats, ruleOffer } from "./offer.ts";
 import { affixFits, affixFitsSpell, affixStrengthFloor, SPELL_AFFIXES, spellAffixById } from "../spells/affixes.ts";
 import { PLAYER_TEXT } from "../content/player-text.ts";
 import { STAT_UPGRADES } from "./stats.ts";
@@ -369,23 +369,37 @@ describe("door strength (a door's grade)", () => {
     expect(ids(1)).not.toContain("repeat");
     expect(ids(1)).not.toContain("chain");
     expect(ids(1)).toContain("kindle");
-    expect(ids(2)).toContain("chain");
+    expect(ids(2)).toContain("fork");
+    expect(ids(2)).not.toContain("chain");
     expect(ids(2)).not.toContain("repeat");
+    expect(ids(3)).toContain("chain");
     expect(ids(3)).toContain("repeat");
     // Already on the key, it is still a strength-III card to raise.
     const withRepeat = [heldSpell(ITEMS.get("magic_bolt"), ["repeat"])];
     expect(cardPool(ITEMS, [], "affix", withRepeat, { grade: 2 }).candidates.map((c) => c.id)).not.toContain("repeat");
   });
 
-  it("swaps a card its door turned out too weak for, from the same pool, and leaves a strong enough door alone", () => {
-    const pool = cardPool(ITEMS, [], "affix", [heldSpell(ITEMS.get("magic_bolt"))]);
-    const drawn = ["repeat", "kindle", "chain"];
-    const weak = holdToStrength("affix", drawn, 1, pool);
-    expect(weak).toHaveLength(3);
-    expect(weak).toContain("kindle");
-    for (const id of weak) expect(affixStrengthFloor(id), id).toBe(1);
-    expect(new Set(weak).size).toBe(3);
-    expect(holdToStrength("affix", drawn, 3, pool)).toEqual(drawn);
-    expect(holdToStrength("spell", ["meteor"], 1, pool)).toEqual(["meteor"]);
+  it("guarantees a strong affix door one card of its own strength, and a strength-I door nothing", () => {
+    const held = [heldSpell(ITEMS.get("magic_bolt"))];
+    const guarantee = (grade: number) => cardPool(ITEMS, [], "affix", held, { grade }).guarantee;
+    expect(guarantee(1)).toBeUndefined();
+    for (const grade of [2, 3]) {
+      const groups = guarantee(grade)!;
+      expect(groups).toHaveLength(1);
+      expect(groups[0]!.length).toBeGreaterThan(0);
+      for (const id of groups[0]!) expect(affixStrengthFloor(id), id).toBe(grade);
+    }
+    // Nothing of III fits: the next strength down stands in.
+    expect(strengthGroup(["kindle", "fork"], 3)).toEqual(["fork"]);
+    expect(strengthGroup(["kindle"], 3)).toEqual([]);
+  });
+
+  it("deals a rule affix door a card of its own strength every time", () => {
+    const held = [heldSpell(ITEMS.get("magic_bolt"))];
+    for (const grade of [2, 3]) for (let seed = 0; seed < 40; seed++) {
+      const cards = offerCards(ITEMS, rng(`g${seed}`), [], "affix", held, { grade });
+      expect(cards.some((c) => c.grade === grade), `grade ${grade} seed ${seed}`).toBe(true);
+      for (const c of cards) expect(c.grade ?? 1).toBeLessThanOrEqual(grade);
+    }
   });
 });

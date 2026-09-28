@@ -100,7 +100,7 @@ export function styleSchools(items: readonly BaseItem[]): Record<string, readonl
  * pushed — the level of its spell, the size of its stat, and which
  * affixes it may deal at all (`affixStrengthFloor`) — so the
  * run gets better the further it goes. How the player is doing is only a
- * correction on top (`STRENGTH_CATCH_UP`): one more for a run that is behind.
+ * correction on top of a normal door (`STRENGTH_CATCH_UP`): one more for a run that is behind.
  *
  * `roomIndex` is the room the door leads **to**.
  */
@@ -111,13 +111,17 @@ export function baseStrength(roomIndex: number, elite: boolean): 1 | 2 | 3 {
   return Math.min(3, normal + (elite ? 1 : 0)) as 1 | 2 | 3;
 }
 
-/** A rule door's catch-up: how often it is one stronger than the run's own, elite and normal. */
-const STRENGTH_CATCH_UP = { elite: 0.35, normal: 0.25 } as const;
+/**
+ * A rule door's catch-up: how often a normal door is one stronger than the
+ * run's own. An elite door takes none — it is always the run's own plus one,
+ * so its stars say where the run is and nothing else.
+ */
+const STRENGTH_CATCH_UP = 0.25;
 
 function gradeFor(elite: boolean, roomIndex: number, rng: Rng): number {
   const base = baseStrength(roomIndex, elite);
-  const raise = rng.next() < (elite ? STRENGTH_CATCH_UP.elite : STRENGTH_CATCH_UP.normal) ? 1 : 0;
-  return Math.min(3, base + raise);
+  if (elite) return base;
+  return Math.min(3, base + (rng.next() < STRENGTH_CATCH_UP ? 1 : 0));
 }
 
 /**
