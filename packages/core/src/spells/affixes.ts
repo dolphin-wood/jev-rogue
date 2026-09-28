@@ -531,12 +531,15 @@ BASE_AFFIXES.push({
    * **Every shape but the stance.** A stance forbids the swing for as long as
    * it holds (doc 006), so a sword hit that raised one would switch off the
    * very hits the affix counts: the sword stops, and the card is a way to
-   * lose the sword for a second rather than a guard.   *
-   * **Nor the enchant.** A sword hit that casts the sword's own enchant
-   * renews it: every few hits it was up again for nothing, so the waves ran
-   * for the whole fight free and the key was pressed once.
+   * lose the sword for a second rather than a guard.
+   *
+   * **The enchant, yes.** A sword hit that casts the sword's own enchant
+   * renews it, so the waves run for as long as the sword keeps landing and
+   * the key is pressed once. That was taken off as "free", and it is the
+   * point: a melee build should not have to stop cutting to keep its sword
+   * lit (the user's call). The affix's slot is its price.
    */
-  shapes: SPELL_SHAPES.filter((s) => s !== "stance" && s !== "enchant"),
+  shapes: SPELL_SHAPES.filter((s) => s !== "stance"),
   element: null,
   effect: { kind: "resonate", every: 5 },
   text: "every fifth sword hit casts it",

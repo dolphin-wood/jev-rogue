@@ -173,13 +173,15 @@ describe("a run with a wake is not cast behind", () => {
 });
 
 describe("no pairing that does nothing or reads wrong", () => {
-  it("keeps chain and bloom off sword energy and blade rings, and resonance off the enchant", async () => {
+  it("keeps chain and bloom off sword energy and blade rings, and lets resonance keep the enchant lit", async () => {
     const { affixFitsSpell, spellAffixById } = await import("./affixes.ts");
     const fits = (a: string, s: string): boolean => affixFitsSpell(spellAffixById(a)!, ITEMS.get(s), []);
     expect(fits("chain", "crescent_edge")).toBe(false);
     expect(fits("chain", "spirit_blades")).toBe(false);
     expect(fits("bloom", "crescent_edge")).toBe(false);
-    expect(fits("resonance", "crescent_edge")).toBe(false);
+    // The sword renews its own enchant: a melee build keeps it lit by cutting, not by pressing.
+    expect(fits("resonance", "crescent_edge")).toBe(true);
+    expect(fits("resonance", "counter_stance")).toBe(false);
     // What they are for is kept.
     expect(fits("chain", "magic_bolt")).toBe(true);
     expect(fits("chain", "returning_edge")).toBe(true);
