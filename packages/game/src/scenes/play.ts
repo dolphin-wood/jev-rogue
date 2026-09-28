@@ -8980,8 +8980,10 @@ export class PlayScene extends Phaser.Scene {
           if ((ev.amount ?? 1) >= 8) this.playFx("smoke", ev.x, ev.y - 4, 0, 60, 6.3);
           else if (def) {
             const size = MUZZLE_WEIGHT[ev.what] ?? "s";
-            const r = def.radius + 2;
-            this.playFx(`muzzle_${size}`, ev.x + Math.cos(ev.facing) * r, ev.y - 3 + Math.sin(ev.facing) * r, ev.facing, 40, 8.9);
+            // The king's shot is already at his raised palm (`BOSS_PALM_PX`): flash it there, not a body's edge out.
+            const palm = ev.what === "boss";
+            const r = palm ? 0 : def.radius + 2;
+            this.playFx(`muzzle_${size}`, ev.x + Math.cos(ev.facing) * r, ev.y - (palm ? 0 : 3) + Math.sin(ev.facing) * r, ev.facing, 40, 8.9);
           }
         }
         if (ev.kind === "shot" && ev.what === "musket") {

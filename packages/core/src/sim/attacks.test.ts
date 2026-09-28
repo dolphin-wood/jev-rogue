@@ -1,4 +1,4 @@
-import { ENTRY_GRACE_MS } from "./enemy.ts";
+import { BOSS_PALM_PX, ENTRY_GRACE_MS, bossPalmOf, release } from "./enemy.ts";
 import { describe, it, expect } from "vitest";
 import { createWorld, step } from "./world.ts";
 import { NO_INPUT } from "./types.ts";
@@ -644,3 +644,29 @@ describe("a death that bursts waits before it flies", () => {
 });
 
 
+
+describe("the king's heart volley leaves his raised palm", () => {
+  it("starts every shot at the palm, and aims from there", () => {
+    const w = world();
+    const king = body(w, "boss", 0, 140);
+    const palm = bossPalmOf(w, king);
+    expect(palm).toEqual({ x: king.x + BOSS_PALM_PX.x, y: king.y + BOSS_PALM_PX.y });
+    release(w, king, [
+      { at_ms: 0, aim: "fixed:0", angle_deg: 0, speed: 100, size: 1, from: "ring", path: [0, 0] },
+      { at_ms: 0, aim: "fixed:0", angle_deg: 180, speed: 100, size: 1, from: "ring", path: [0, 1] },
+    ], 0, palm);
+    for (const b of liveBullets(w)) expect([b.x, b.y]).toEqual([palm.x, palm.y]);
+  });
+
+  it("backs in towards his centre when the palm would be in stone", () => {
+    const w = world();
+    const king = body(w, "boss", 0, -140);
+    // A wall across where his palm is.
+    const gy = Math.floor((king.y + BOSS_PALM_PX.y) / TILE_PX);
+    for (let x = 0; x < GRID_W; x++) w.room.grid[gy * GRID_W + x] = Tile.Wall;
+    const at = bossPalmOf(w, king);
+    expect(at.y).toBeGreaterThan(king.y + BOSS_PALM_PX.y);
+    expect(at.y).toBeLessThanOrEqual(king.y);
+    expect(Math.floor(at.y / TILE_PX)).not.toBe(gy);
+  });
+});
