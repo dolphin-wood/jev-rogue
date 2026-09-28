@@ -182,8 +182,8 @@ export interface SpellLabActions {
   readonly pick: (spell: string) => void;
   readonly setKey: (key: number) => void;
   readonly setLevel: (level: number) => void;
-  /** An affix on the chosen key at this tier; 0 takes it off. */
-  readonly setAffix: (id: string, tier: 0 | 1 | 2 | 3) => void;
+  /** An affix on the chosen key, or off it. */
+  readonly setAffix: (id: string, on: boolean) => void;
   readonly setStage: (patch: Partial<LabStage>) => void;
   readonly setAuto: (on: boolean) => void;
   readonly setGallery: (on: boolean) => void;
@@ -225,7 +225,7 @@ function askedKeys(): (LabKey | null)[] {
     // `+` arrives from a URL as a space, so either joins an affix on.
     const [id, ...affixes] = entry.split(/[+\s]+/).filter(Boolean);
     if (!id || !ITEMS.get(id)) return;
-    keys[i] = { spell: id, level: 1, affixes: affixes.filter((a) => spellAffixById(a)).map((a) => ({ id: a, tier: 1 as const })) };
+    keys[i] = { spell: id, level: 1, affixes: affixes.filter((a) => spellAffixById(a)).map((a) => ({ id: a })) };
   });
   const demo = q.get("demo");
   if (!keys[0] && demo && ITEMS.get(demo)) keys[0] = { spell: demo, level: 1, affixes: [] };
@@ -294,14 +294,12 @@ export class SpellLab implements SpellLabActions {
     this.rebuild();
   };
 
-  readonly setAffix = (id: string, tier: 0 | 1 | 2 | 3): void => {
+  readonly setAffix = (id: string, on: boolean): void => {
     const k = this.keys[this.key];
     if (!k || !spellAffixById(id)) return;
     const others = k.affixes.filter((a) => a.id !== id);
-    if (tier > 0 && others.length >= AFFIX_SLOTS) return;
-    const affixes = tier === 0 ? others
-      : k.affixes.some((a) => a.id === id) ? k.affixes.map((a) => (a.id === id ? { id, tier } : a))
-      : [...k.affixes, { id, tier }];
+    if (on && others.length >= AFFIX_SLOTS) return;
+    const affixes = !on ? others : k.affixes.some((a) => a.id === id) ? k.affixes : [...k.affixes, { id }];
     this.keys[this.key] = { ...k, affixes };
     this.rebuild();
   };
@@ -663,7 +661,7 @@ export class SpellLab implements SpellLabActions {
     if (!k) return "";
     const item = ITEMS.get(k.spell);
     const styles = (item?.tags ?? []).filter((t) => (ARCHETYPES as readonly string[]).includes(t)).join("/");
-    const affixes = k.affixes.map((a) => `${contentName(a.id, spellAffixById(a.id)?.name ?? a.id)} ${"I".repeat(a.tier)}`).join(", ");
+    const affixes = k.affixes.map((a) => `${contentName(a.id, spellAffixById(a.id)?.name ?? a.id)}`).join(", ");
     const head = `${"UIO"[this.key]}  ${spellName(k.spell)}  L${k.level}${affixes ? `  + ${affixes}` : ""}`;
     const sub = `${styles} · ${itemShape(item)}${w.spells[this.key] ? "" : "  (not equipped)"}`;
     const g = this.gallery;
@@ -893,12 +891,12 @@ export class SpellLabPanel {
   }
 
   /**
-   * The affixes that fit the chosen key's spell (`affixFitsSpell`), each with
-   * its tier. Rebuilt when the spell or what is on it changes; a full key
-   * offers only the tiers of what it holds.
+   * The affixes that fit the chosen key's spell (`affixFitsSpell`), each on or
+   * off, with its strength. Rebuilt when the spell or what is on it changes; a
+   * full key can only take off what it holds.
    */
   private paintAffixes(k: LabKey | null | undefined): void {
-    const sig = k ? `${k.spell}|${k.affixes.map((a) => `${a.id}:${a.tier}`).join(",")}` : "";
+    const sig = k ? `${k.spell}|${k.affixes.map((a) => a.id).join(",")}` : "";
     if (sig === this.affixFor) return;
     this.affixFor = sig;
     const box = this.affixBox;
@@ -910,27 +908,25 @@ export class SpellLabPanel {
     const fitting = SPELL_AFFIXES.filter((a) => affixFitsSpell(a, item, heldIds.filter((h) => h !== a.id)));
     if (fitting.length === 0) { box.innerHTML = `<div style="${NOTE}">none fit this spell</div>`; return; }
     for (const a of fitting) {
-      const tier = k.affixes.find((x) => x.id === a.id)?.tier ?? 0;
+      const held = k.affixes.some((x) => x.id === a.id);
       const row = document.createElement("div");
       row.setAttribute("style", "display:flex;align-items:center;gap:2px;margin:1px 0");
       const name = document.createElement("span");
-      name.setAttribute("style", `flex:1 1 auto;color:${tier > 0 ? LIT : "#c9cfe8"}`);
-      name.textContent = contentName(a.id, a.name);
-      name.title = a.tiers[0]?.text ?? "";
+      name.setAttribute("style", `flex:1 1 auto;color:${held ? LIT : "#c9cfe8"}`);
+      // Its strength, as the cards and the doors write it.
+      name.textContent = `${contentName(a.id, a.name)} ${"I".repeat(a.minStrength ?? 1)}`;
+      name.title = a.text;
       row.appendChild(name);
-      ([0, 1, 2, 3] as const).forEach((t) => {
-        const b = document.createElement("button");
-        b.textContent = t === 0 ? "–" : "I".repeat(t);
-        b.setAttribute("style", `${BTN};margin:0;min-width:26px`);
-        const on = t === tier;
-        b.style.color = on ? LIT : "#c9cfe8";
-        b.style.borderColor = on ? LIT : DIM;
-        const blocked = full && tier === 0 && t > 0;
-        b.disabled = blocked;
-        if (blocked) b.style.opacity = "0.4";
-        b.addEventListener("click", () => this.actions.setAffix(a.id, t));
-        row.appendChild(b);
-      });
+      const b = document.createElement("button");
+      b.textContent = held ? "on" : "off";
+      b.setAttribute("style", `${BTN};margin:0;min-width:30px`);
+      b.style.color = held ? LIT : "#c9cfe8";
+      b.style.borderColor = held ? LIT : DIM;
+      const blocked = full && !held;
+      b.disabled = blocked;
+      if (blocked) b.style.opacity = "0.4";
+      b.addEventListener("click", () => this.actions.setAffix(a.id, !held));
+      row.appendChild(b);
       box.appendChild(row);
     }
     box.insertAdjacentHTML("beforeend", `<div style="${NOTE}">up to ${AFFIX_SLOTS} on a key; the list is what fits ${spellName(k.spell)}'s shape</div>`);

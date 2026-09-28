@@ -563,7 +563,7 @@ export async function playRun(
 
     if (stage === "boss" && !atBoss)
       atBoss = {
-        spells: slots.flatMap((x, i) => (x ? [{ id: x.base, level: spellLevels[i] ?? 1, affixes: (spellAffixes[i] ?? []).map((a) => `${a.id}${a.tier}`) }] : [])),
+        spells: slots.flatMap((x, i) => (x ? [{ id: x.base, level: spellLevels[i] ?? 1, affixes: (spellAffixes[i] ?? []).map((a) => a.id) }] : [])),
         stats: statsTaken, hearts, gold, level: levelAt(xp).level,
       };
     const world = createWorld({
@@ -587,7 +587,7 @@ export async function playRun(
       const slot = world.spells[i];
       if (!slot || !affixes) return;
       let next = slot;
-      for (const a of affixes) next = attachAffix(next, a.id, a.tier) ?? next;
+      for (const a of affixes) next = attachAffix(next, a.id) ?? next;
       world.spells[i] = next;
     });
     spellLevels.forEach((level, i) => {
@@ -698,7 +698,7 @@ export async function playRun(
             let at = world.spells.findIndex((x) => x?.affixes.some((a) => a.id === card.itemId));
             if (at < 0) at = world.spells.findIndex((x) => fits(x) && x!.affixes.length < AFFIX_SLOTS);
             const slot = at >= 0 ? world.spells[at] : null;
-            const next = slot ? attachAffix(slot, card.itemId, card.grade ?? 1) : null;
+            const next = slot ? attachAffix(slot, card.itemId) : null;
             if (next && at >= 0) {
               spellAffixes[at] = next.affixes;
               owned.push(card.itemId);
@@ -748,7 +748,7 @@ export async function playRun(
           return def && !held.some((key) => affixFitsHeld(def, key)) ? [c.itemId] : [];
         }),
         build: slots.flatMap((x, i) => (x
-          ? [`${x.base}@${spellLevels[i] ?? 1}${(spellAffixes[i] ?? []).length ? `[${(spellAffixes[i] ?? []).map((a) => `${a.id}${a.tier}`).join(",")}]` : ""}`]
+          ? [`${x.base}@${spellLevels[i] ?? 1}${(spellAffixes[i] ?? []).length ? `[${(spellAffixes[i] ?? []).map((a) => a.id).join(",")}]` : ""}`]
           : [])),
         labels: {
           build_shape: ctx.labels.build_shape ?? "forming",
@@ -1376,7 +1376,7 @@ function context(
     ...(power ? {
       power: {
         levels: slots.map((_, i) => power.levels[i] ?? 1),
-        affixes: slots.map((_, i) => (power.affixes[i] ?? []).map((a) => ({ id: a.id, tier: a.tier }))),
+        affixes: slots.map((_, i) => (power.affixes[i] ?? []).map((a) => ({ id: a.id }))),
         mana_max: staff.mana_max * power.mods.manaMax,
       },
     } : {}),

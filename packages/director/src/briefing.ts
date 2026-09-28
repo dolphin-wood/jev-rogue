@@ -242,7 +242,8 @@ export const THE_GAME: string = [
   `- Keys: the three spell slots; each holds one spell. A spell has a level (1 to ${SPELL_LEVEL_MAX}: more `
     + `damage, and about 10% more mana a cast per level) and up to ${AFFIX_SLOTS} affixes.`,
   "- Affix: a modifier attached to one spell that changes how it behaves (it bounces, chains, burns, "
-    + "repeats...). Tier 1 to 3; taking a duplicate raises the tier instead of adding a second copy.",
+    + "repeats...). Each has one fixed effect and a strength, 1 to 3: the least door strength that deals it. "
+    + "A key does not take an affix it already carries.",
   `- School: a spell's family. There are ${SPELL_SCHOOLS.length}: ${SPELL_SCHOOLS.join(", ")}. `
     + "Element: fire, ice or poison, which builds a status on what it hits. Most spells have no element.",
   `- Mana: one shared bar, full at the start of every room. It trickles back on its own at `
@@ -473,9 +474,8 @@ function buildLines(b: BriefingBuild): string[] {
     out.push(`  - Does: ${spellBehaviour(item, key.level)}`);
     for (const a of key.affixes) {
       const def = spellAffixById(a.id);
-      const tiers = def?.tiers.length ?? 3;
-      const text = def?.tiers[Math.max(0, Math.min(tiers, a.tier) - 1)]?.text;
-      out.push(`  - ${def?.name ?? nameOf(a.id)}, tier ${a.tier} of ${tiers}${text ? `: ${text}` : ""}`);
+      const strength = def?.minStrength ?? 1;
+      out.push(`  - ${def?.name ?? nameOf(a.id)}, strength ${strength} of 3${def?.text ? `: ${def.text}` : ""}`);
     }
   });
   const costs = b.keys.flatMap((k) => (k ? [keyCost(k, ITEMS)] : []));
@@ -951,7 +951,7 @@ const FACT_WORDS: Readonly<Record<string, string>> = {
   need: "a Ward or Retort affix or a survival stat, offered while health is low",
   eases: "tagged for what the last fights measured short: shots landing, the bar, the cast rate or the damage",
   synergy: "carries an element the keys carry",
-  upgrade: "a copy of something on the staff, which raises its level or tier and fills no key",
+  upgrade: "a copy of a spell on the staff, which raises its level and fills no key",
   promised: "the school or family the door's badge names",
 };
 const factWords = (f: string) => FACT_WORDS[f] ?? f;

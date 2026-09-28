@@ -726,7 +726,7 @@ export interface RunContext {
    */
   readonly power?: {
     readonly levels: readonly number[];
-    readonly affixes: readonly (readonly { readonly id: string; readonly tier: number }[])[];
+    readonly affixes: readonly (readonly { readonly id: string }[])[];
     readonly mana_max: number;
   };
 }

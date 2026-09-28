@@ -1123,7 +1123,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
           "element, what it costs and what is already attached to it — and against the player's own words " +
           "in intent free text, which is the one input they wrote themselves. Every card on the list can go " +
           "on the staff as it stands: a new spell fills the first empty key, a copy of a held spell raises " +
-          "that key's level and fills no key, and an affix the staff already carries raises its tier. " +
+          "that key's level and fills no key, and an affix goes on a key that does not carry it yet. " +
           INTENT_CLAUSE + namedSpellFit,
       }),
       for_style: choiceQuestion({

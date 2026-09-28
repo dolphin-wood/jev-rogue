@@ -59,7 +59,7 @@ export interface ScopeMods {
    * spell is casting* so the projectiles it produces can carry that back to
    * the world's hooks.
    */
-  affixes: readonly { readonly id: string; readonly tier: 1 | 2 | 3 }[];
+  affixes: readonly { readonly id: string }[];
   spellIndex: number;
   manaSpent: number;
   /**

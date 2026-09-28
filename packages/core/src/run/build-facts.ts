@@ -34,7 +34,7 @@ import { STAT_UPGRADES } from "./stats.ts";
 export interface HeldKey {
   readonly base: string;
   readonly level: number;
-  readonly affixes: readonly { readonly id: string; readonly tier: number }[];
+  readonly affixes: readonly { readonly id: string }[];
 }
 
 export interface BuildFactsInput {
@@ -98,7 +98,7 @@ export function costBand(mana: number, manaMax: number): "cheap" | "moderate" | 
 /** The mana one cast of a key costs, at its level and with its affixes. */
 export function keyCost(key: HeldKey, items: ItemRegistry): number {
   const base = items.get(key.base)?.mana ?? 7;
-  const affixes = key.affixes.reduce((m, a) => m * affixCostMult(a.id, a.tier), 1);
+  const affixes = key.affixes.reduce((m, a) => m * affixCostMult(a.id), 1);
   return spellCost(null, base) * levelManaMult(key.level) * affixes;
 }
 

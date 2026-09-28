@@ -10,7 +10,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
-  affixFitsPart, affixTierKey, ALL_ENEMY_IDS, ALL_TAGS, ARCHETYPES, BOSS_ARCHETYPES,
+  affixFitsPart, affixTextKey, ALL_ENEMY_IDS, ALL_TAGS, ARCHETYPES, BOSS_ARCHETYPES,
   affixStatParts, ELITE_AFFIX_IDS, emptyHistory, FEATURES, gradeTagPart, ITEMS, LABELS, offerStatParts,
   PLAYABLE_ARCHETYPES, portalChoices, REWARD_KINDS, RngSource, runStaff, SPELL_AFFIXES,
   SPELL_SCHOOLS, statLinePart, STAT_FAMILIES, STAT_UPGRADES,
@@ -121,8 +121,8 @@ const produced = (): { key: string; args?: Readonly<Record<string, string | numb
   // ones that multiply how often a press lands — what that adds to the bill.
   for (const a of SPELL_AFFIXES) {
     take(affixFitsPart(a));
-    a.tiers.forEach((_, i) => { out.push({ key: affixTierKey(a.id, i + 1) }); });
-    for (const tier of [1, 2, 3]) affixStatParts(a, tier).forEach(take);
+    out.push({ key: affixTextKey(a.id) });
+    affixStatParts(a).forEach(take);
   }
   // A graded card's tag.
   for (const kind of ["spell", "affix", "stat", "gold"] as RewardCardKind[])
@@ -366,12 +366,9 @@ describe("the lines core produces", () => {
       for (const a of SPELL_AFFIXES) {
         const p = affixFitsPart(a);
         expect(localizeStat(p), a.id).toBe(p.text);
-        a.tiers.forEach((tier, i) => {
-          expect(localizeStat({ text: tier.text, key: affixTierKey(a.id, i + 1) }), `${a.id} ${i}`)
-            .toBe(tier.text);
-          for (const part of affixStatParts(a, i + 1))
-            expect(localizeStat(part), `${a.id} ${i} ${part.key}`).toBe(part.text);
-        });
+        expect(localizeStat({ text: a.text, key: affixTextKey(a.id) }), a.id).toBe(a.text);
+        for (const part of affixStatParts(a))
+          expect(localizeStat(part), `${a.id} ${part.key}`).toBe(part.text);
       }
     } finally {
       setLang("en");

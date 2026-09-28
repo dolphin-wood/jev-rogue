@@ -159,7 +159,7 @@ function bossFight(tier: Tier, profileName: string, seed: string, meeting: Meeti
   tier.spells.forEach((s, i) => {
     let slot = world.spells[i];
     if (!slot) return;
-    for (const [id, t] of s.affixes) slot = attachAffix(slot, id, t) ?? slot;
+    for (const [id] of s.affixes) slot = attachAffix(slot, id) ?? slot;
     if (s.level > 1) slot = withLevel(slot, s.level);
     world.spells[i] = slot;
   });

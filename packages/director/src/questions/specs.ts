@@ -107,11 +107,11 @@ export const KIND_SPEC: Readonly<Record<string, OptionSpec>> = {
   },
   affix: {
     what: "An affix door. It attaches a modifier to a spell already held — it chains, it burns, it comes "
-      + "back off walls — in one of that key's affix slots; a duplicate raises the tier of the one "
-      + "attached. It fills no key. The build section says how many affix slots are still open across the "
-      + "staff, and which are on which key.",
-    not_for: "A staff with no affix slot left anywhere, where the card can only raise the tier of an "
-      + "affix already attached.",
+      + "back off walls — in one of that key's affix slots, or in place of one on a full key. It fills no "
+      + "key, and a key never takes an affix it already carries. The build section says how many affix "
+      + "slots are still open across the staff, and which are on which key.",
+    not_for: "A staff with no affix slot left anywhere, where every card means giving up an affix already "
+      + "attached.",
   },
   /*
    * **What each family raises, by name**, because a player asks for these in

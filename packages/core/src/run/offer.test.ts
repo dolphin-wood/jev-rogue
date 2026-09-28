@@ -252,16 +252,13 @@ describe("a kind-driven offer", () => {
     expect(candidates.get("repeat")?.compatibleHeldSpellIds).toEqual(["meteor", "shock_arc", "magic_bolt"]);
   });
 
-  it("stops offering an affix once every key it could go on is full", () => {
-    // Three slots used on the one key, and none of them the affix in question:
-    // there is nowhere left to put a new one, so it leaves the pool.
+  it("never offers an affix a key already holds, and still offers a full key new ones to swap in", () => {
     const spell = [...ITEMS.values()].find((i) => Number(i.params["count"] ?? 1) === 1)!;
     const full = heldSpell(spell, ["ward", "kindle", "resonance"]);
     const offered = fittingAffixes([full]).map((a) => a.id);
-    expect(offered).toContain("ward");
-    expect(offered).not.toContain("pierce");
-    // A key with a slot left still sees the whole fitting set.
-    expect(fittingAffixes([heldSpell(spell, ["ward"])]).map((a) => a.id)).toContain("pierce");
+    expect(offered).not.toContain("ward");
+    expect(offered).not.toContain("kindle");
+    expect(offered).toContain("pierce");
   });
 
   /*

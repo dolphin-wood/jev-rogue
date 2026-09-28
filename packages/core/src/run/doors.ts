@@ -97,8 +97,8 @@ export function styleSchools(items: readonly BaseItem[]): Record<string, readonl
  * **A door's strength by where the run is** (its grade, 1 to 3): I through
  * the opening rooms, II through the middle, III for the last fights, and an
  * elite door one higher. What a door deals grows with how far the player has
- * pushed — the level of its spell, the size of its stat, the tier of its
- * affix and which affixes it may deal at all (`affixStrengthFloor`) — so the
+ * pushed — the level of its spell, the size of its stat, and which
+ * affixes it may deal at all (`affixStrengthFloor`) — so the
  * run gets better the further it goes. How the player is doing is only a
  * correction on top (`STRENGTH_CATCH_UP`): one more for a run that is behind.
  *

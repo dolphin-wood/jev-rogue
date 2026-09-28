@@ -103,7 +103,7 @@ type Scenario = "press" | "kill" | "wall" | "far" | "hurt" | "dash" | "swing";
 
 function scenarioOf(a: SpellAffix): Scenario {
   // A shot that bends onto bodies shows it on a shot that was not aimed at one.
-  const e = a.tiers[2].effect;
+  const e = a.effect;
   if (e.kind === "shape" && e.homing) return "far";
   switch (a.hook) {
     case "kill": return "kill";
@@ -180,7 +180,7 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix): Seen {
   w.player.facing = 0;
   if (affix) {
     let slot = w.spells[0]!;
-    for (let t = 0; t < 3; t++) slot = attachAffix(slot, affix.id) ?? slot;
+    slot = attachAffix(slot, affix.id) ?? slot;
     w.spells[0] = slot;
   }
   const hp = scenario === "kill" ? 1 : 100_000;
@@ -299,7 +299,7 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix): Seen {
 
 /** Whether `withIt` shows what this affix does, against `bare`. */
 function observable(a: SpellAffix, bare: Seen, withIt: Seen): boolean {
-  const e = a.tiers[2].effect;
+  const e = a.effect;
   switch (e.kind) {
     case "split": return withIt.splits > bare.splits;
     case "arc": return withIt.arcs > bare.arcs;

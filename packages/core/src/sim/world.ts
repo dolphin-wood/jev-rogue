@@ -36,7 +36,7 @@ import { CLOUD_TICK_MS, FIRE_ENEMY_DAMAGE, FIRE_TICK_MS, GROUND_STATUS_POWER, li
 import { eruptRing, fireUnit, PROC_MIN } from "./cast.ts";
 import { stepBoomerangs, stepEnchant, stepOrbs, stepTrail, stepWaves, waveCentre, waveHits } from "./shapes.ts";
 import {
-  onDashThrough, onExpire, onHit, onHurt, onKill, stepWards,
+  effectOf, onDashThrough, onExpire, onHit, onHurt, onKill, stepWards,
   wallSplitCount, wardStops,
 } from "./affix-hooks.ts";
 import type { HookSim } from "./affix-hooks.ts";
@@ -5816,7 +5816,8 @@ function resonate(w: World, e: Enemy): void {
     if (!slot) return;
     const held = slot.affixes.find((a) => a.id === "resonance");
     if (!held) return;
-    const every = [5, 4, 3][held.tier - 1] ?? 5;
+    const e0 = effectOf(held);
+    const every = e0?.kind === "resonate" ? e0.every : 5;
     w.resonance[i] = (w.resonance[i] ?? 0) + 1;
     if (w.resonance[i]! < every) return;
     w.resonance[i] = 0;

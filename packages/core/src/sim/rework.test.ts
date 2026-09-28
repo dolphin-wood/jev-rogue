@@ -208,7 +208,7 @@ describe("ice freezes, and a frozen body shatters", () => {
   });
 });
 
-describe("spell levels and affix tiers", () => {
+describe("spell levels and affixes", () => {
   it("scales damage by level and dismantles for more at a higher level", () => {
     expect(levelDamageMult(1)).toBe(1);
     expect(levelDamageMult(5)).toBeCloseTo(1.8, 5);
@@ -217,13 +217,15 @@ describe("spell levels and affix tiers", () => {
     expect(slot.level).toBe(5);
   });
 
-  it("attaches at a drop's tier and replaces an affix on a full spell", () => {
+  it("attaches an affix once and replaces one on a full spell", () => {
     let slot = makeSpell(plainInstance("magic_bolt"));
-    slot = attachAffix(slot, "fork", 2)!;
-    expect(slot.affixes[0]).toEqual({ id: "fork", tier: 2 });
+    slot = attachAffix(slot, "fork")!;
+    expect(slot.affixes[0]).toEqual({ id: "fork" });
+    // No ladder: the same affix again leaves the key as it was.
+    expect(attachAffix(slot, "fork")!.affixes).toEqual([{ id: "fork" }]);
     slot = attachAffix(attachAffix(slot, "chain")!, "brand")!;
     expect(attachAffix(slot, "bloom")).toBeNull();
-    const swapped = attachAffix(slot, "bloom", 1, "chain")!;
+    const swapped = attachAffix(slot, "bloom", "chain")!;
     expect(swapped.affixes.map((a) => a.id)).toEqual(["fork", "bloom", "brand"]);
   });
 });

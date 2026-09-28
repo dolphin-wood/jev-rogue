@@ -68,7 +68,7 @@ function input(over: Partial<BriefingInput> = {}): BriefingInput {
     },
     build: {
       keys: [
-        { base: "magic_bolt", level: 2, affixes: [{ id: "repeat", tier: 1 }] },
+        { base: "magic_bolt", level: 2, affixes: [{ id: "repeat" }] },
         { base: "shock_arc", level: 1, affixes: [] },
         null,
       ],
@@ -848,7 +848,7 @@ const NEUTRAL_EXCEPTIONS: readonly RegExp[] = [
   // A measured bucket whose vocabulary is never / rarely / often.
   /^- Casts the bar refused for want of mana:/,
   // Content: an affix's own effect text, and the lane the typed words name.
-  /, tier \d+ of \d+/,
+  /, strength \d+ of \d+/,
   /^- That lane is:/,
   // The plain per-room lines finding 5a measured as inert.
   /^- Room \d+: /,
