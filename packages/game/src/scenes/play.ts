@@ -12486,7 +12486,8 @@ export class PlayScene extends Phaser.Scene {
     } else if (drop && rewardInReach(drop, this.world.player)) {
       this.prompt.setVisible(true);
       this.prompt.setText(t("prompt.open"));
-      this.promptAbove(drop.x, this.topOf(this.rewardGfx?.badge ?? null, drop.y - TILE_PX * 2.1 + 10));
+      // Just over the pedestal as it floats: a fixed two tiles left the prompt far above the reward.
+      this.promptAbove(drop.x, this.topOf(this.rewardGfx?.badge ?? this.rewardGfx?.body ?? null, drop.y - TILE_PX));
     } else if (near) {
       this.prompt.setVisible(true);
       // Names in Title Case, as they are everywhere else: `titleOfId` is the

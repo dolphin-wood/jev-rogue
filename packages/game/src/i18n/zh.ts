@@ -209,7 +209,6 @@ export const ZH: Table = {
   "hud.bossTitle": "地穴之王",
   "hud.bossUnknown": "???",
   "hud.guardianTitle": "边陲老将",
-  "hud.objectiveHold": "坚守",
   "hud.objectiveDestroy": "摧毁炮台",
   "hud.holdLeft": "坚守 {s} 秒",
   "hud.targetsLeft": "炮台 {n}/{total}",

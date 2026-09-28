@@ -1059,7 +1059,9 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
         what: w.rewardDrop.kind,
       });
     }
-    if (w.chestDue) placeChest(w); else if (w.offer) {
+    // The chest stands beside whatever the room pays; it never stands in for the reward's gate.
+    if (w.chestDue) placeChest(w);
+    if (w.offer && w.offer.cards.length === 0) {
       /*
        * **A gold room scatters coins and opens.**
        *

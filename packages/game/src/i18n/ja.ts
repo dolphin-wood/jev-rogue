@@ -208,7 +208,6 @@ export const JA: Table = {
   "hud.bossTitle": "地下墓所の王",
   "hud.bossUnknown": "???",
   "hud.guardianTitle": "辺境の老将",
-  "hud.objectiveHold": "耐え抜け",
   "hud.objectiveDestroy": "砲台を壊せ",
   "hud.holdLeft": "残り {s} 秒",
   "hud.targetsLeft": "砲台 {n}/{total}",
