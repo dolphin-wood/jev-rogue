@@ -9,7 +9,7 @@ import {
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
   moodTransform, tintRGBA, dashInvulnerable, MELEE, POISE_BREAK_MS, POISE_BREAK_STAGGER_MS, POISE_GUARD_MS, brakeFraction, ENEMIES,
-  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_MUSKET_SPREAD_MULT, GUARDIAN_CALL_MS, GUARDIAN_STANCE, GUARDIAN_BROKEN_MS, GUARDIAN_SINK_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, plated, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
+  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_MUSKET_SPREAD_MULT, GUARDIAN_CALL_MS, GUARDIAN_STANCE, GUARDIAN_BROKEN_MS, GUARDIAN_SINK_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, plated, showsPoise, breakStaggerMs, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, audienceRoomFor, RUN_GUARDIAN_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTextKey, affixFitsSpell, itemShape,
@@ -17992,13 +17992,13 @@ function drawEnemy(
   // of them was a room of flickering lines; whether it was stopped shows in
   // the body itself.
   if (!e.guardian && e.archetype !== "boss" && e.maxPoise > 0 && e.hp > 0 && e.spawnFadeMs <= 0
-    && (plated(e) || e.affixes.length > 0)
+    && showsPoise(e)
     && (e.poise < e.maxPoise - 0.01 || e.poiseGuardMs > 0)) {
     const W = Math.max(14, Math.round(e.radius * 1.8));
     const y = e.y + e.radius + 4;
     const guard = e.poiseGuardMs > 0;
     const k = guard
-      ? Math.min(1, e.poiseGuardMs / (POISE_BREAK_STAGGER_MS + POISE_GUARD_MS))
+      ? Math.min(1, e.poiseGuardMs / (breakStaggerMs(e) + POISE_GUARD_MS))
       : Math.min(1, 1 - e.poise / e.maxPoise);
     const hot = !guard && k > 0.75;
     const flash = hot ? 0.65 + 0.35 * Math.sin(scene.time.now / 90) : 1;

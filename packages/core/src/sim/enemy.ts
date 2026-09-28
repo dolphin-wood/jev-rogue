@@ -772,6 +772,23 @@ export const POISE_REGEN_PER_S = 0.4;
  */
 export const POISE_BREAK_STAGGER_MS = 350;
 /**
+ * **A body whose poise shows on a bar is stunned when it breaks** (doc 027):
+ * the plated and the elites. Their bar takes three or four blows, and a
+ * 0.35 s flinch at the end of it read as the same as a hit — the work had no
+ * payoff. So their break is a short stun, stars and all: long enough for two
+ * or three more cuts, shorter than a wall's (`WALL_SLAM_STUN_MS`), which is
+ * still the bigger opening. The rest break in two blows and flinch.
+ */
+export const BARRED_BREAK_STUN_MS = 800;
+/** Whether a body shows its poise on a bar: the plated and the elites (the Frontier Veteran shows its stance). */
+export function showsPoise(e: Pick<Enemy, "archetype" | "affixes">): boolean {
+  return plated(e) || e.affixes.length > 0;
+}
+/** How long a break holds this body: a stun for a body with a bar, a flinch for the rest. */
+export function breakStaggerMs(e: Pick<Enemy, "archetype" | "affixes">): number {
+  return showsPoise(e) ? BARRED_BREAK_STUN_MS : POISE_BREAK_STAGGER_MS;
+}
+/**
  * After a break, how long before it can be broken again, counted from the
  * end of the break's stagger: without it the next burst would break it again
  * the moment it stood, and a heavy body could be held down to its death.

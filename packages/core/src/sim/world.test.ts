@@ -1,5 +1,5 @@
 import { featureCells } from "../rooms/features.ts";
-import { ENTRY_GRACE_MS, canStagger, POISE_BREAK_STAGGER_MS, POISE_REGEN_DELAY_MS, POISE_REGEN_PER_S } from "./enemy.ts";
+import { ENTRY_GRACE_MS, canStagger, POISE_BREAK_STAGGER_MS, BARRED_BREAK_STUN_MS, POISE_REGEN_DELAY_MS, POISE_REGEN_PER_S } from "./enemy.ts";
 import { describe, it, expect } from "vitest";
 import { createWorld, hurtEnemy, step, worldCleared, ELITE_HEAL_FRACTION, GRASS_CATCH_MS, poiseOfWeight, SWORD_POISE } from "./world.ts";
 import {
@@ -1600,6 +1600,21 @@ describe("enemy behaviour", () => {
     e.poiseGuardMs = 0;
     hurtEnemy(w, e, 10, "", undefined, 10); hurtEnemy(w, e, 10, "", undefined, 10);
     expect(hurtEnemy(w, e, 10, "", undefined, 10).broke).toBe(true);
+  });
+
+  it("stuns a body with a bar when it breaks, and only flinches one without", () => {
+    const w = world();
+    const tank = makeEnemy(1, "tank", 300, 200, []);
+    const rusher = makeEnemy(2, "rusher", 360, 200, []);
+    for (const e of [tank, rusher]) { e.spawnFadeMs = 0; e.awake = true; e.alertMs = 0; e.hp = e.maxHp = 500; w.enemies.push(e); }
+    expect(hurtEnemy(w, tank, 1, "", undefined, tank.maxPoise + 1).broke).toBe(true);
+    expect(tank.stunMs).toBe(BARRED_BREAK_STUN_MS);
+    expect(tank.staggerMs).toBeGreaterThanOrEqual(BARRED_BREAK_STUN_MS);
+    // Its guard runs on past the stun, so it is not stunned again as it stands.
+    expect(tank.poiseGuardMs).toBeGreaterThan(BARRED_BREAK_STUN_MS);
+    expect(hurtEnemy(w, rusher, 1, "", undefined, rusher.maxPoise + 1).broke).toBe(true);
+    expect(rusher.stunMs).toBe(0);
+    expect(rusher.staggerMs).toBe(POISE_BREAK_STAGGER_MS);
   });
 
   it("weighs a blow by its mass: a spark barely wears poise, a heavy spell more than the sword", () => {

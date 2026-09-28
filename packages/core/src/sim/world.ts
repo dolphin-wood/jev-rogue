@@ -71,7 +71,7 @@ import {
   dropFireToken, POISE_BREAK_MS, POISE_BREAK_STAGGER_MS, POISE_GUARD_MS, SPAWN_FADE_MS, SPAWN_TELEGRAPH_MS, ENEMY_FREEZE_MS, STAGGER_MS,
   ENEMY_BURN_MS, ENEMY_POISON_MS, ENEMY_BURN_SOURCES, ENEMY_POISON_STACKS, SHATTER_MULT,
   STATUS_BREADTH_MULT, statusBreadth, ALERT_MS,
-  meleeSpec, plated,
+  meleeSpec, plated, showsPoise, breakStaggerMs,
   spikeVolley, SPIKE_SIZE, release, bossPhase, BOSS_POWER,
   beginWindup, bossBehind, bossLevel, BOSS_ROAR_MS, BOSS_LINK_RECOVER_MS, BOSS_DASH_SLIDE, bossDashWake, bossTempo,
 } from "./enemy.ts";
@@ -1724,9 +1724,12 @@ export function hurtEnemy(
     return { broke: false };
   }
   e.poise = e.maxPoise;
-  e.poiseGuardMs = POISE_BREAK_STAGGER_MS + POISE_GUARD_MS;
+  const held = breakStaggerMs(e);
+  e.poiseGuardMs = held + POISE_GUARD_MS;
   e.poiseBreakMs = POISE_BREAK_MS;
-  stagger(w, e, POISE_BREAK_STAGGER_MS, true);
+  stagger(w, e, held, true);
+  // A body with a bar is stunned by its break, with the stars that say so (`BARRED_BREAK_STUN_MS`).
+  if (showsPoise(e)) e.stunMs = Math.max(e.stunMs, held);
   // A break is worth more than the hit that caused it: the fight changes.
   impact(w, HITSTOP_KILL, TRAUMA_KILL);
   w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_break:${e.archetype}` });
