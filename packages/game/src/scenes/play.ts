@@ -22,6 +22,7 @@ import {
   levelAt, withLevels, levelBonus, LEVEL_HP, swordAt,
   HIT_FLASH_MS, BOSS_ROAR_MS, spellReady, castTiming, hasLineOfSight,
 } from "@jr/core";
+import { HOLD_MS } from "@jr/core";
 import type {
   Bullet, Enemy, EnemyId, Input, ItemInstance, Mood, Offer, OfferCard, Portal,
   PlayerMods, RewardCardKind, RoomPlan, RoomType, RunHistory, World, AttachedAffix,
@@ -1565,6 +1566,8 @@ export class PlayScene extends Phaser.Scene {
   } | null = null;
   /** The one key prompt, moved onto whatever is in reach. See `updateExits`. */
   private prompt!: KeyPrompt;
+  /** The hold-room instruction while it spends its short entrance fade. */
+  private holdBrief: Phaser.GameObjects.Text | null = null;
   /** What was just gained — a level, a dismantle's coins — for a moment above the action bar. */
   private toast!: KeyPrompt;
   /**
@@ -2539,12 +2542,13 @@ export class PlayScene extends Phaser.Scene {
      * (doc 024), and the first audience is meant to come unannounced.
      */
     const objective = this.world.objective?.kind;
-    if (objective) this.time.delayedCall(400, () => {
+    this.clearHoldBrief();
+    // A hold keeps its one-line explanation directly under the live clock;
+    // only destroy needs a separate room-opening brief.
+    if (objective === "hold") this.showHoldBrief(t("hud.briefHold", { s: HOLD_MS / 1000 }));
+    else if (objective === "destroy") this.time.delayedCall(400, () => {
       if (this.world.objective && !this.world.objective.done)
-        this.showRoomBrief(
-          t(objective === "hold" ? "hud.objectiveHold" : "hud.objectiveDestroy"),
-          objective === "hold" ? t("hud.briefHold", { s: holdLeftS(this.world) }) : t("hud.briefDestroy", { n: DESTROY_TARGETS }),
-        );
+        this.showRoomBrief(t("hud.objectiveDestroy"), t("hud.briefDestroy", { n: DESTROY_TARGETS }));
     });
 
     this.kingIntro = null;
@@ -3337,6 +3341,27 @@ export class PlayScene extends Phaser.Scene {
       { align: "center", stroke: "#0d0b1f", strokeThickness: 2 * ZOOM, wordWrap: { width: Math.min(360, UI_W - 40) * ZOOM } })
       .setOrigin(0.5, 0).setDepth(CINE_NAME_DEPTH + 5).setAlpha(0);
     this.tweens.add({ targets: [head, body], alpha: 1, duration: 260, yoyo: true, hold: 3200, onComplete: () => { head.destroy(); body.destroy(); } });
+  }
+
+  /** A hold's one-line instruction, briefly under its live top-centre clock. */
+  private showHoldBrief(line: string): void {
+    this.clearHoldBrief();
+    const body = this.uiText(UI_W / 2, HUD_TOP_Y + 26, line, 7, "#e8e0d0", {
+      align: "center", stroke: "#0d0b1f", strokeThickness: 2 * ZOOM,
+      wordWrap: { width: Math.min(420, UI_W - 40) * ZOOM },
+    }).setOrigin(0.5, 0).setDepth(102);
+    this.holdBrief = body;
+    this.tweens.add({
+      targets: body, alpha: 0, delay: 2800, duration: 500,
+      onComplete: () => { body.destroy(); if (this.holdBrief === body) this.holdBrief = null; },
+    });
+  }
+
+  private clearHoldBrief(): void {
+    if (!this.holdBrief) return;
+    this.tweens.killTweensOf(this.holdBrief);
+    this.holdBrief.destroy();
+    this.holdBrief = null;
   }
 
   /**
@@ -16137,15 +16162,21 @@ export class PlayScene extends Phaser.Scene {
       drawEnemy(this, w, e, this.textureKey, this.atlas, this.sprites, label, this.subspecies,
         roaring ? (BOSS_ROAR_MS - e.bossRoarMs < BOSS_UNBIND_BURST_MS ? unbind : `${unbind}_bare`) : undefined);
       /*
-       * **A destroy room's turret wears a mark** (doc 025): a gold diamond over
-       * it, bobbing, so the three the room is about are told from the fight
-       * round them at a glance.
+       * **A destroy room's turret wears a mark** (doc 025): a large, solid
+       * gold arrow over it, bobbing, so the five the room is about are told
+       * from the fight round them at a glance. Every layer is opaque: this is
+       * an objective marker, not ambient light.
        */
       if (e.objectiveTarget && e.hp > 0) {
         const bob = Math.sin(this.time.now / 260 + e.id) * 2;
         const y = e.y - e.radius - 22 + bob;
-        this.sprites.rectangle(e.x, y, 7, 7, 0xffd45e, 1).setRotation(Math.PI / 4)
-          .setStrokeStyle(1.5, 0x0d0b1f, 1).setDepth(9.5);
+        const mark = this.sprites.graphics().setDepth(9.5);
+        mark.fillStyle(0x0d0b1f, 1).beginPath();
+        mark.moveTo(e.x - 9, y - 7).lineTo(e.x + 9, y - 7).lineTo(e.x + 9, y - 2)
+          .lineTo(e.x, y + 8).lineTo(e.x - 9, y - 2).closePath().fillPath();
+        mark.fillStyle(0xffd45e, 1).beginPath();
+        mark.moveTo(e.x - 6, y - 5).lineTo(e.x + 6, y - 5).lineTo(e.x + 6, y - 2)
+          .lineTo(e.x, y + 5).lineTo(e.x - 6, y - 2).closePath().fillPath();
       }
     }
     if (this.bossDeath) {
@@ -16737,18 +16768,36 @@ export class PlayScene extends Phaser.Scene {
     }
 
     /*
-     * **The room's objective** (doc 025), where the boss's bar would be: a
-     * hold's seconds, or the turrets still standing. Gone once it is met.
+     * **The room's objective** (doc 025). A hold's clock stays at the top
+     * centre, where it remains in the player's sight line while they move.
+     * The thin bar beneath closes symmetrically from both ends, so its centre
+     * stays fixed while the remaining time can be read without the number.
+     * Its one-line instruction appears briefly below; there is no duplicate
+     * title in the middle of the room.
+     * The less urgent destroy count keeps the old boss-bar position below.
+     * Both disappear once the objective is met.
      */
     const obj = w.objective;
     if (obj && !obj.done) {
-      const text = obj.kind === "hold"
-        ? t("hud.holdLeft", { s: holdLeftS(w) })
-        : t("hud.targetsLeft", { n: targetsLeft(w), total: DESTROY_TARGETS });
-      this.ftext("objective", UI_W / 2, UI_H - 52, text, {
-        fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(9, ZOOM) * ZOOM)}px`, color: "#ffe9a8",
-        stroke: "#0d0b1f", strokeThickness: 3 * ZOOM,
-      }).setScale(1 / ZOOM).setOrigin(0.5).setDepth(102);
+      if (obj.kind === "hold") {
+        const left = holdLeftS(w);
+        const urgent = left <= 5;
+        const x = UI_W / 2, y = HUD_TOP_Y + 8;
+        const barW = 152;
+        const remaining = Math.max(0, HOLD_MS - obj.ms) / HOLD_MS;
+        this.ftext("objective", x, y - 2, t("hud.holdLeft", { s: left }), {
+          fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(14, ZOOM) * ZOOM)}px`,
+          color: urgent ? "#ff8877" : "#fff6d8", stroke: "#0d0b1f", strokeThickness: 4 * ZOOM,
+        }).setScale(1 / ZOOM).setOrigin(0.5).setDepth(102);
+        this.sprites.rectangle(x, y + 12, barW + 4, 6, 0x0d0b1f, 0.85).setDepth(100);
+        this.sprites.rectangle(x, y + 12, barW * remaining, 3, urgent ? 0xff6a5a : 0xffd45e, 1).setDepth(101);
+      } else {
+        this.ftext("objective", UI_W / 2, UI_H - 52,
+          t("hud.targetsLeft", { n: targetsLeft(w), total: DESTROY_TARGETS }), {
+            fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(9, ZOOM) * ZOOM)}px`, color: "#ffe9a8",
+            stroke: "#0d0b1f", strokeThickness: 3 * ZOOM,
+          }).setScale(1 / ZOOM).setOrigin(0.5).setDepth(102);
+      }
     }
 
     const topFade = this.fadeMark();

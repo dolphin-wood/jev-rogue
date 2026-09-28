@@ -33,6 +33,12 @@ function objectiveWorld(kind: "hold" | "destroy", seed: string): World {
 const run = (w: World, ms: number) => { for (let i = 0; i < Math.ceil(ms / (1000 / 60)); i++) step(w, NO_INPUT); };
 
 describe("a hold", () => {
+  it("starts with forty-two seconds on its clock", () => {
+    const w = objectiveWorld("hold", "h0");
+    expect(HOLD_MS).toBe(42_000);
+    expect(holdLeftS(w)).toBe(42);
+  });
+
   it("is not clear while its clock runs, however empty, and keeps sending bodies", () => {
     const w = objectiveWorld("hold", "h1");
     run(w, 300);

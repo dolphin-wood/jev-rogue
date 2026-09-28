@@ -11,8 +11,8 @@ import type { EnemyId } from "../types.ts";
 import { rampFor } from "../encounters/ramp.ts";
 import type { RoomObjective } from "../run/objectives.ts";
 
-/** How long a hold lasts: a room's length at the pacing doc 014 sizes a fight to. */
-export const HOLD_MS = 22_000;
+/** How long a hold lasts: long enough to make surviving, rather than clearing, the room's focus. */
+export const HOLD_MS = 42_000;
 /** How many emplacements a destroy room stands. */
 export const DESTROY_TARGETS = 5;
 /**
