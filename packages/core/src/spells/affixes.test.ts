@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  SPELL_AFFIXES, AFFIX_TIERS, SPELL_SHAPES, spellAffixById, spellAffixIcon, spellAffixMagnitude,
+  SPELL_AFFIXES, SPELL_SHAPES, spellAffixById, spellAffixIcon, affixStrengthFloor,
   affixFits, affixFitsLine, itemShape,
 } from "./affixes.ts";
 import { ITEMS } from "./items.ts";
@@ -12,24 +12,14 @@ describe("the affix pool", () => {
     expect(new Set(SPELL_AFFIXES.map((a) => a.name)).size).toBe(SPELL_AFFIXES.length);
   });
 
-  it("gives every affix exactly three tiers", () => {
-    // Doc 013: fine enough that a duplicate always means something, coarse
-    // enough that a low-tier duplicate of a high-tier affix is not wasted.
-    for (const a of SPELL_AFFIXES)
-      expect({ id: a.id, n: a.tiers.length }).toEqual({ id: a.id, n: AFFIX_TIERS });
-  });
-
-  it("climbs: every tier is strictly stronger than the one below", () => {
-    /*
-     * The one number a player has to track is the tier, so the tier has to
-     * mean something on its own. An affix whose tier 2 is sideways from its
-     * tier 1 turns a duplicate from a reward into a question.
-     */
+  it("gives every affix one fixed effect and a strength, I to III", () => {
+    // A strength tells affixes apart; it is not a ladder a duplicate climbs.
     for (const a of SPELL_AFFIXES) {
-      const m = a.tiers.map((t) => spellAffixMagnitude(t.effect));
-      expect({ id: a.id, m }).toEqual({ id: a.id, m: [...m].sort((x, y) => x - y) });
-      expect({ id: a.id, grows: m[2]! > m[0]! }).toEqual({ id: a.id, grows: true });
+      expect(a.effect, a.id).toBeDefined();
+      expect([1, 2, 3], a.id).toContain(affixStrengthFloor(a.id));
     }
+    expect(affixStrengthFloor("repeat")).toBe(3);
+    expect(affixStrengthFloor("kindle")).toBe(1);
   });
 
   it("hooks every affix onto a moment the simulation already has", () => {
@@ -72,20 +62,19 @@ describe("the affix pool", () => {
      * data too, so a future member cannot quietly reintroduce one.
      */
     const forbidden = /damage|mana|cooldown|crit|speed_mult|_mult/;
-    for (const a of SPELL_AFFIXES)
-      for (const t of a.tiers) {
-        const keys = Object.keys(t.effect).join(" ");
-        expect({ id: a.id, keys, clean: !forbidden.test(keys) })
-          .toEqual({ id: a.id, keys, clean: true });
-      }
+    for (const a of SPELL_AFFIXES) {
+      const keys = Object.keys(a.effect).join(" ");
+      expect({ id: a.id, keys, clean: !forbidden.test(keys) })
+        .toEqual({ id: a.id, keys, clean: true });
+    }
   });
 
-  it("says what it does in words, at every tier", () => {
+  it("says what it does in words", () => {
     // The card screen exists so an item can be read. An affix with no text is
     // an affix the player has to learn by dying.
     for (const a of SPELL_AFFIXES) {
       expect(a.description.length).toBeGreaterThan(40);
-      for (const t of a.tiers) expect(t.text.length).toBeGreaterThan(8);
+      expect(a.text.length).toBeGreaterThan(8);
     }
   });
 

@@ -115,7 +115,7 @@ function cast(affix?: string): Seen {
  * new claim needs a new measurement.
  */
 function observable(a: SpellAffix, bare: Seen, withIt: Seen): boolean | null {
-  const e = a.tiers[2].effect;
+  const e = a.effect;
   switch (e.kind) {
     case "repeat": return withIt.eruptions > bare.eruptions && withIt.damage > bare.damage;
     // The side casts are lines of ground in other directions: more cells go off.

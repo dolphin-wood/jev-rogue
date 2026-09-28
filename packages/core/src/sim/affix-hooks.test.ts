@@ -50,7 +50,7 @@ function onFloor(x: number, y: number): [number, number] {
 const [PX, PY] = onFloor(300, 208);
 
 /** A world with one attack on key 0 and, optionally, one affix on it. */
-function arena(affix?: { id: string; tier?: 1 | 2 | 3 }, base = "magic_bolt"): World {
+function arena(affix?: { id: string }, base = "magic_bolt"): World {
   const w = createWorld({
     room, encounter: null, props: 0,
     staff: { slots: 6, mana_max: 120 },
@@ -63,7 +63,7 @@ function arena(affix?: { id: string; tier?: 1 | 2 | 3 }, base = "magic_bolt"): W
   w.player.mana = w.staff.mana_max;
   if (affix) {
     let slot = w.spells[0]!;
-    for (let t = 0; t < (affix.tier ?? 1); t++) slot = attachAffix(slot, affix.id) ?? slot;
+    slot = attachAffix(slot, affix.id) ?? slot;
     w.spells[0] = slot;
   }
   return w;
@@ -124,9 +124,7 @@ describe("cast affixes", () => {
   it("repeat fires the spell again", () => {
     const bare = castAndRun(arena(), { x: PX + 150, y: PY }).spawned;
     const twice = castAndRun(arena({ id: "repeat" }), { x: PX + 150, y: PY }).spawned;
-    const thrice = castAndRun(arena({ id: "repeat", tier: 2 }), { x: PX + 150, y: PY }).spawned;
     expect(twice).toBe(bare * 2);
-    expect(thrice).toBe(bare * 3);
   });
 
   it("repeat's second cast comes a beat later, not in the same frame", () => {
@@ -147,9 +145,8 @@ describe("cast affixes", () => {
 
   it("scatter casts in the other directions too", () => {
     const bare = castAndRun(arena(), { x: PX + 150, y: PY }).spawned;
-    // Tier 1 adds one direction, behind; tier 2 adds three.
+    // One more direction: behind.
     expect(castAndRun(arena({ id: "scatter" }), { x: PX + 150, y: PY }).spawned).toBe(bare * 2);
-    expect(castAndRun(arena({ id: "scatter", tier: 2 }), { x: PX + 150, y: PY }).spawned).toBe(bare * 4);
   });
 
   it("ward leaves a rune that eats an enemy projectile", () => {
@@ -190,7 +187,7 @@ describe("hit affixes", () => {
    * from the one before it.
    */
   it.each(["frost_needle", "void_orb"])("fork's shards keep %s's slot, element and speed", (base) => {
-    const w = arena({ id: "fork", tier: 2 }, base);
+    const w = arena({ id: "fork" }, base);
     // The orb pierces two bodies and splits on the third.
     const first = dummy(w, 60, 0);
     dummy(w, 110, 0);
@@ -208,7 +205,8 @@ describe("hit affixes", () => {
       else if (live[0]) parent = { speed: Math.hypot(live[0].vx, live[0].vy), radius: live[0].radius, damage: live[0].damage, element: live[0].element };
     }
     expect(parent).not.toBeNull();
-    expect(shards.length).toBe(3);
+    // Fork splits in two.
+    expect(shards.length).toBe(2);
     for (const s of shards) {
       expect(s.slot).toBe(0);
       expect(s.element).toBe(parent!.element);
@@ -433,21 +431,19 @@ describe("a spell an affix casts for free is still that spell", () => {
 });
 
 describe("attaching", () => {
-  it("upgrades a duplicate instead of taking a second slot", () => {
+  it("takes an affix once: the same one again changes nothing and takes no slot", () => {
     const w = arena({ id: "fork" });
     const again = attachAffix(w.spells[0]!, "fork")!;
-    expect(again.affixes).toHaveLength(1);
-    expect(again.affixes[0]!.tier).toBe(2);
+    expect(again.affixes).toEqual([{ id: "fork" }]);
   });
 
-  it("caps at three tiers and three slots", () => {
+  it("holds three at most", () => {
     let slot = arena().spells[0]!;
-    for (let i = 0; i < 5; i++) slot = attachAffix(slot, "fork")!;
-    expect(slot.affixes[0]!.tier).toBe(3);
+    slot = attachAffix(slot, "fork")!;
     slot = attachAffix(slot, "chain")!;
     slot = attachAffix(slot, "brand")!;
     expect(attachAffix(slot, "harvest")).toBeNull();
-    // A duplicate still fits when the slots are full: it takes none.
-    expect(attachAffix(slot, "chain")).not.toBeNull();
+    // One already held is not a fourth: the key comes back as it was.
+    expect(attachAffix(slot, "chain")).toEqual(slot);
   });
 });

@@ -21,7 +21,7 @@ import { createWorld, step } from "../sim/world.ts";
 import { runStaff, slotCost } from "../sim/spells.ts";
 import { plainInstance, ITEMS } from "../spells/index.ts";
 import { attachAffix, withLevel } from "../sim/spells.ts";
-import { affixCostMult, COUNT_AFFIXES, SPELL_AFFIXES, affixFitsSpell, affixSurchargePct, SURCHARGE_PER_TIER } from "../spells/affixes.ts";
+import { affixCostMult, COUNT_AFFIXES, SPELL_AFFIXES, affixFitsSpell, affixSurchargePct, AFFIX_SURCHARGE } from "../spells/affixes.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
 import { RngSource } from "../rng.ts";
 import { GRID_H, GRID_W, Tile } from "../types.ts";
@@ -51,7 +51,7 @@ function cast(id: string, affixes: readonly [string, number][], level: number): 
     invincible: true,
   });
   let slot = w.spells[0]!;
-  for (const [a, tier] of affixes) slot = attachAffix(slot, a, tier) ?? slot;
+  for (const [a] of affixes) slot = attachAffix(slot, a) ?? slot;
   if (level > 1) slot = withLevel(slot, level);
   w.spells[0] = slot;
   const claimed = slotCost(slot, ITEMS, w.staff);
@@ -70,16 +70,15 @@ function cast(id: string, affixes: readonly [string, number][], level: number): 
 
 describe("the mana a panel prints (doc 013)", () => {
   /**
-   * A maxed shock arc with three tiers of fork and three of repeat, the two
-   * affixes that still pay (`chain` went free: see `COUNT_AFFIXES`). The
-   * surcharge is the whole point of the card, so it is
+   * A maxed shock arc with fork and repeat, the two affixes that still pay
+   * (`chain` went free: see `COUNT_AFFIXES`), each its one surcharge,
+   * multiplied. The surcharge is the whole point of the card, so it is
    * pinned as a number rather than left to drift.
    */
-  it("charges a stacked count build about twice the bare spell", () => {
+  it("charges a stacked count build each surcharge, multiplied", () => {
     const bare = cast("shock_arc", [], 5);
-    const stacked = cast("shock_arc", [["fork", 3], ["repeat", 3]], 5);
-    expect(stacked.claimed / bare.claimed).toBeGreaterThan(1.8);
-    expect(stacked.claimed / bare.claimed).toBeLessThan(2.4);
+    const stacked = cast("shock_arc", [["fork", 1], ["repeat", 1]], 5);
+    expect(stacked.claimed / bare.claimed).toBeCloseTo((1 + AFFIX_SURCHARGE) ** 2, 1);
   });
 
   it("prints what the bar loses, with affixes attached", () => {
@@ -109,18 +108,17 @@ describe("the mana a panel prints (doc 013)", () => {
    * worse.
    */
   it("charges the count affixes and nothing else", () => {
-    for (const a of SPELL_AFFIXES)
-      for (const tier of [1, 2, 3]) {
-        const mult = affixCostMult(a.id, tier);
-        if (COUNT_AFFIXES.includes(a.id)) {
-          expect(mult, `${a.id} ${tier}`).toBeCloseTo(1 + SURCHARGE_PER_TIER * tier, 10);
-          expect(affixSurchargePct(a.id, tier), a.id).toBe(Math.round(SURCHARGE_PER_TIER * tier * 100));
-        } else {
-          expect(mult, `${a.id} ${tier}`).toBe(1);
-          expect(affixSurchargePct(a.id, tier), a.id).toBeNull();
-        }
+    for (const a of SPELL_AFFIXES) {
+      const mult = affixCostMult(a.id);
+      if (COUNT_AFFIXES.includes(a.id)) {
+        expect(mult, a.id).toBeCloseTo(1 + AFFIX_SURCHARGE, 10);
+        expect(affixSurchargePct(a.id), a.id).toBe(Math.round(AFFIX_SURCHARGE * 100));
+      } else {
+        expect(mult, a.id).toBe(1);
+        expect(affixSurchargePct(a.id), a.id).toBeNull();
       }
-    expect(affixCostMult("seek", 3)).toBe(1);
+    }
+    expect(affixCostMult("seek")).toBe(1);
   });
 
   /** Every count affix has at least one spell it can actually go on. */

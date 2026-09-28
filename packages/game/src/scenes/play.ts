@@ -12,7 +12,7 @@ import {
   BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_CALL_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, audienceRoomFor, RUN_GUARDIAN_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
-  affixFits, affixFitsPart, affixTierKey, affixFitsSpell, itemShape,
+  affixFits, affixFitsPart, affixTextKey, affixFitsSpell, itemShape,
   spikesOut, featureCells, fillSubspecies,
   heldDominantTags, STYLE_START, bucketClearSpeed, bucketGold, bucketMovementPressure, bucketRunProgress,
   portalInReach, pendingPortalNear, pendingDoors, resolvePortals, cardTypesOf, answerOffer, PORTAL_RISE_MS, bucketHealth, bucketRecentDamage,
@@ -49,7 +49,7 @@ import type { BaseItem, CardNeeds, DoorOffer, NpcKind, OfferPromise, RoomStage, 
 import {
   BOSS_LEAP_RISE_MS, BOSS_LEAP_LOCK_MS, BOSS_METEOR_GATHER_MS, BOSS_METEOR_UP_MS, BOSS_METEOR_RAIN_MS, BOSS_SLAM_IMPACT_PX, BOSS_LEAP_RADIUS, BOSS_QUAKE_MS, SLAM_SHOCK_RADIUS,
   BOSS_POWER,
-  withLevel, levelDamageMult, dismantleValue, holdToStrength, baseStrength, spellDetail, offerStatParts, slotStatParts, statusForecast, SPELL_DAMAGE_SCALE, rarityOf, STAT_UPGRADES, statById, SPELL_LEVEL_MAX, SCHOOL_COLOUR, schoolOf, spellSound, shapeEventSound, offerCards,
+  withLevel, levelDamageMult, dismantleValue, baseStrength, affixStrengthFloor, spellDetail, offerStatParts, slotStatParts, statusForecast, SPELL_DAMAGE_SCALE, rarityOf, STAT_UPGRADES, statById, SPELL_LEVEL_MAX, SCHOOL_COLOUR, schoolOf, spellSound, shapeEventSound, offerCards,
   slotCooldownMs, DASH_COOLDOWN_MS, DASH_MS,
   chargeShare, chargesOf, bankOf, chargeIntervalMs, chargeMsOf, DASH_SPEED, acquire,
 } from "@jr/core";
@@ -2232,7 +2232,7 @@ export class PlayScene extends Phaser.Scene {
     this.world.spells.forEach((slot, i) => {
       if (!slot) return;
       let next = slot;
-      for (const a of this.spellAffixes[i] ?? []) next = attachAffix(next, a.id, a.tier) ?? next;
+      for (const a of this.spellAffixes[i] ?? []) next = attachAffix(next, a.id) ?? next;
       this.world.spells[i] = withLevel(next, this.spellLevels[i] ?? 1);
     });
     this.applyMood(room.params.mood);
@@ -2583,7 +2583,7 @@ export class PlayScene extends Phaser.Scene {
       const slot = this.world.spells[i];
       if (!slot || !affixes) return;
       let next = slot;
-      for (const a of affixes) next = attachAffix(next, a.id, a.tier) ?? next;
+      for (const a of affixes) next = attachAffix(next, a.id) ?? next;
       this.world.spells[i] = next;
     });
     this.spellLevels.forEach((level, i) => {
@@ -2832,7 +2832,7 @@ export class PlayScene extends Phaser.Scene {
        */
       power: {
         levels: this.slots.map((_, i) => this.spellLevels[i] ?? 1),
-        affixes: this.slots.map((_, i) => (this.spellAffixes[i] ?? []).map((a) => ({ id: a.id, tier: a.tier }))),
+        affixes: this.slots.map((_, i) => (this.spellAffixes[i] ?? []).map((a) => ({ id: a.id }))),
         // The live bar: the stat cards and the level both, as the HUD shows it.
         mana_max: this.world?.staff.mana_max ?? staff.mana_max * this.mods.manaMax,
       },
@@ -2929,7 +2929,7 @@ export class PlayScene extends Phaser.Scene {
         name: slot ? contentName(slot.item.base, titleOfId(slot.item.base)) : null,
         cost: slot ? slotCost(slot, ITEMS, w.staff) : null,
         cooldownMs: slot?.cooldownMs ?? 0,
-        affixes: slot ? slot.affixes.map((a) => `${a.id}${a.tier > 1 ? ` x${a.tier}` : ""}`) : [],
+        affixes: slot ? slot.affixes.map((a) => a.id) : [],
       })),
       enemies: { alive: w.enemies.filter((e) => e.hp > 0).length, pending: w.pendingWaves.length, byArchetype },
       history: {
@@ -6888,7 +6888,7 @@ export class PlayScene extends Phaser.Scene {
     wanted.forEach(([, ...affixes], i) => {
       let slot = this.world.spells[i];
       if (!slot) return;
-      for (const a of affixes) slot = attachAffix(slot, a, 1) ?? slot;
+      for (const a of affixes) slot = attachAffix(slot, a) ?? slot;
       this.world.spells[i] = slot;
       this.spellAffixes[i] = [...slot.affixes];
     });
@@ -6902,7 +6902,7 @@ export class PlayScene extends Phaser.Scene {
     this.slots = [...this.world.slots];
     let slot = this.world.spells[i];
     if (slot) {
-      for (const a of affixes) slot = attachAffix(slot, a.id, a.tier) ?? slot;
+      for (const a of affixes) slot = attachAffix(slot, a.id) ?? slot;
       this.world.spells[i] = withLevel(slot, level);
     }
     this.spellAffixes[i] = [...affixes];
@@ -11337,6 +11337,8 @@ export class PlayScene extends Phaser.Scene {
     // projectile to jump from, a shatter needs one that meets a wall. A full
     // spell can still take it, by giving one up.
     const def = spellAffixById(affixId);
+    // One fixed effect: a key that already has it has nothing more to take.
+    if (slot.affixes.some((a) => a.id === affixId)) return false;
     return !(def && !affixFitsSpell(def, ITEMS.get(slot.item.base), slot.affixes.map((a) => a.id)));
   }
 
@@ -11579,15 +11581,14 @@ export class PlayScene extends Phaser.Scene {
           .setStrokeStyle(swapping ? 2 : 1, swapping ? 0xff8877 : held ? 0x7a4fd6 : 0x2a2750, 1).setDepth(210.6));
         if (held) {
           const def2 = spellAffixById(held.id);
-          const tier = def2?.tiers[held.tier - 1];
           const icon = `icon_affix_${held.id}`;
           if (this.atlas.has(icon))
             add(this.add.image(slotIn + 8, y, this.crispTextureKey, icon).setOrigin(0.5).setScale(1 / TUNED).setDepth(211));
           // One line, centred in the row: the name, then what it does.
-          // Named in its rarity's colour, as its card was.
-          const nameT = text(slotIn + 22, y, contentName(held.id, def2?.name ?? held.id), 7, RARITY_STYLE[rarityOf(held.tier)].text).setOrigin(0, 0.5);
+          // Named in its strength's colour, as its card was.
+          const nameT = text(slotIn + 22, y, contentName(held.id, def2?.name ?? held.id), 7, RARITY_STYLE[rarityOf(affixStrengthFloor(held.id))].text).setOrigin(0, 0.5);
           text(nameT.x + nameT.width / ZOOM + 6, y,
-            tier ? localizeStat({ text: tier.text, key: affixTierKey(held.id, held.tier) }) : "", 6, "#8792b5").setOrigin(0, 0.5);
+            def2 ? localizeStat({ text: def2.text, key: affixTextKey(held.id) }) : "", 6, "#8792b5").setOrigin(0, 0.5);
         } else if (ui.mode === "attach" && affix && k === slot.affixes.length && !slot.affixes.some((a) => a.id === affix.id) && affixFitsSpell(affix, ITEMS.get(slot.item.base), slot.affixes.map((a) => a.id))) {
           {
             /*
@@ -11596,8 +11597,8 @@ export class PlayScene extends Phaser.Scene {
              * (`affixCostMult`), and the one place the player can see which
              * spell it is being charged on is here, next to the spell.
              */
-            const row = text(slotIn, y, `▸ ${contentName(affix.id, affix.name)}: ${localizeStat({ text: affix.tiers[0].text, key: affixTierKey(affix.id, 1) })}`, 7, "#ffe9a8").setOrigin(0, 0.5);
-            const withIt = attachAffix(slot, affix.id, 1);
+            const row = text(slotIn, y, `▸ ${contentName(affix.id, affix.name)}: ${localizeStat({ text: affix.text, key: affixTextKey(affix.id) })}`, 7, "#ffe9a8").setOrigin(0, 0.5);
+            const withIt = attachAffix(slot, affix.id);
             const after = withIt ? slotCost(withIt, ITEMS, this.world.staff) : cost;
             if (after > cost) {
               const n = Math.round(after * 10) / 10;
@@ -11682,7 +11683,7 @@ export class PlayScene extends Phaser.Scene {
         else if (!affixFitsSpell(affix, ITEMS.get(slot.item.base), slot.affixes.map((a) => a.id)))
           footer(t("char.doesNotFitSeek"), "#ff8877");
         else if (heldAlready)
-          footer(t("char.alreadyHeld", { tier: Math.min(3, heldAlready.tier + 1) }), "#ffe9a8");
+          footer(t("char.alreadyHeld"), "#ff8877");
         else if (slot.affixes.length >= AFFIX_SLOTS)
           footer(ui.swapAffix !== null && ui.swapAffix !== undefined
             ? t("char.chooseGiveUp")
@@ -11815,15 +11816,13 @@ export class PlayScene extends Phaser.Scene {
         // A full spell: first choose which affix goes (it is lost, not sold).
         if (full && (ui.swapAffix === null || ui.swapAffix === undefined)) { ui.swapAffix = 0; this.renderStaff(); return; }
         const next = full
-          ? attachAffix(slot, ui.card.itemId, ui.card.grade ?? 1, slot.affixes[ui.swapAffix ?? 0]?.id)
-          : attachAffix(slot, ui.card.itemId, ui.card.grade ?? 1);
+          ? attachAffix(slot, ui.card.itemId, slot.affixes[ui.swapAffix ?? 0]?.id)
+          : attachAffix(slot, ui.card.itemId);
         if (!next) return;
         this.world.spells[at] = next;
         this.spellAffixes[at] = next.affixes;
         this.owned.push(ui.card.itemId);
-        const tier = next.affixes.find((a) => a.id === ui.card!.itemId)?.tier ?? 1;
-        this.tookLabel = t("toast.affixOn", { affix: contentName(ui.card.itemId ?? "", ui.card.label), spell: contentName(next.item.base, titleOfId(next.item.base)) })
-          + (tier > 1 ? t("toast.atTier", { tier }) : "");
+        this.tookLabel = t("toast.affixOn", { affix: contentName(ui.card.itemId ?? "", ui.card.label), spell: contentName(next.item.base, titleOfId(next.item.base)) });
         this.tookMs = 1800;
         this.finishTake();
         return;
@@ -11845,7 +11844,7 @@ export class PlayScene extends Phaser.Scene {
     const old = this.world.spells[i] ?? null;
     const oldLevel = this.spellLevels[i] ?? 1;
     const oldAffixes = old ? [...old.affixes] : [];
-    const oldValue = old ? dismantleValue(oldLevel, oldAffixes.map((a) => a.tier)) : 0;
+    const oldValue = old ? dismantleValue(oldLevel, oldAffixes.map((a) => affixStrengthFloor(a.id))) : 0;
     // A floor spell keeps what it had; a card's spell starts bare, at the card's level.
     const floor = this.floorPending;
     const fitted = this.equipAt(i, card.itemId, floor ? floor.level : card.grade ?? 1, floor ? floor.affixes : []);
@@ -12037,10 +12036,18 @@ export class PlayScene extends Phaser.Scene {
       (x ? [heldSpell(ITEMS.get(x.base), (this.spellAffixes[i] ?? []).map((a) => a.id))] : []));
     const needs = this.cardNeeds(ctx);
     const kinds = ["spell", "affix", "stat"] as const;
-    const requests: CardRequest[] = kinds.map((k) => ({
-      room_index: index + 1, pool: cardPool(ITEMS, this.ownedFor(k), k, held, { style: this.intent.preset }, needs),
-      count: CARDS_PER_OFFER, pity: this.needMisses >= 3, temptation: this.offersMade % 4 === 3, salt: `door_${k}`,
-    }));
+    /*
+     * **Drawn at the strength the doors start from**: the run's own for the
+     * room behind them (`baseStrength`). A door that comes out stronger — the
+     * elite, or a catch-up — is an affix door's only reason to deal other
+     * cards, so that door alone asks again with its own pool below.
+     */
+    const base = baseStrength(index + 1, false);
+    const request = (k: RewardCardKind, grade: number, salt: string): CardRequest => ({
+      room_index: index + 1, pool: cardPool(ITEMS, this.ownedFor(k), k, held, { style: this.intent.preset, grade }, needs),
+      count: CARDS_PER_OFFER, pity: this.needMisses >= 3, temptation: this.offersMade % 4 === 3, salt,
+    });
+    const requests: CardRequest[] = kinds.map((k) => request(k, base, `door_${k}`));
     let doors: DoorOffer[];
     let nextCardPlans = new Map<RewardCardKind, CardPlan>();
     try {
@@ -12071,17 +12078,24 @@ export class PlayScene extends Phaser.Scene {
             prefix: `door_${kinds[i]}__`, label: `${kinds[i]} door`, blended: p.blended, ids: p.ids,
           })),
         });
-      doors = (plan.portals?.doors ?? ruleDoors(run, src.stream("offer"), this.portalCount)).map((d) => {
-        if (d.npc || d.reward === "gold") return d;
-        const k = kinds.indexOf(d.reward as (typeof kinds)[number]);
-        // Held to the strength the door was given (`holdToStrength`).
-        const ids = holdToStrength(d.reward, plan.cards[k]?.ids ?? [], d.grade ?? 1, requests[k]?.pool);
-        return ids.length ? { ...d, ...cardTypesOf(d.reward, ids), cards: ids } : d;
-      });
       nextCardPlans = new Map(kinds.flatMap((kind, i) => {
         const cardPlan = plan.cards[i];
         return cardPlan?.ids.length ? [[kind, cardPlan] as const] : [];
       }));
+      doors = [];
+      for (const d of plan.portals?.doors ?? ruleDoors(run, src.stream("offer"), this.portalCount)) {
+        if (d.npc || d.reward === "gold") { doors.push(d); continue; }
+        const k = kinds.indexOf(d.reward as (typeof kinds)[number]);
+        let ids = plan.cards[k]?.ids ?? [];
+        // A stronger affix door, asked again at its own strength.
+        if (d.reward === "affix" && (d.grade ?? 1) > base) {
+          const raised = await this.director.planCards(ctx, request("affix", d.grade ?? 1, `door_affix_${d.grade}`));
+          playtestLog.decide(index, "portals", raised.decisions.map((x) => ({ ...x, question: `door_affix__${x.question ?? ""}` })));
+          ids = raised.ids;
+          if (ids.length) nextCardPlans.set("affix", raised); else nextCardPlans.delete("affix");
+        }
+        doors.push(ids.length ? { ...d, ...cardTypesOf(d.reward, ids), cards: ids } : d);
+      }
     } catch {
       doors = ruleDoors(run, src.stream("offer"), this.portalCount);
     }

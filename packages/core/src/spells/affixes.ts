@@ -41,17 +41,18 @@
  * They are different and the names here are deliberate:
  *
  * - **`SPELL_AFFIXES`, this file.** Doc 013's affixes: three per spell, event
- *   changing, three tiers, duplicates upgrade. What a reward card offers.
+ *   changing, one fixed effect each. What a reward card offers.
  * - **`AFFIXES` in `encounters/affixes.ts`** — *elite affixes*, which modify
  *   an enemy. Unrelated.
  *
- * ### Three tiers, one ladder
+ * ### One effect each, and a strength
  *
- * Doc 013: a duplicate upgrades the affix rather than taking a second slot, a
- * drop's rarity is a head start on the same ladder, and there is exactly one
- * number the player has to track. Three tiers is "fine enough that a duplicate
- * always means something, coarse enough that a low-tier duplicate of a
- * high-tier affix is not a wasted draw".
+ * Doc 013 gave every affix three tiers that a duplicate climbed. They were
+ * taken out: an affix is one fixed effect — what was its first tier — and the
+ * only grade it has is its **strength** (`minStrength`, I to III), which says
+ * how strong a kind of affix it is and so which doors deal it. A strength is a
+ * difference between affixes, not a ladder inside one, so an affix already on
+ * a key is not dealt to that key again.
  */
 import type { BaseItem, Element } from "../types.ts";
 
@@ -149,12 +150,6 @@ export type AffixEffect =
   /** A run ends by throwing its cut on ahead: a crescent at `share` of the cut, out `reachPx`. */
   | { readonly kind: "finale"; readonly share: number; readonly reachPx: number };
 
-export interface AffixTier {
-  readonly effect: AffixEffect;
-  /** What the card says at this tier. One clause, no numbers the icon shows. */
-  readonly text: string;
-}
-
 export interface SpellAffix {
   readonly id: string;
   readonly name: string;
@@ -178,14 +173,16 @@ export interface SpellAffix {
    */
   readonly element: Element | null;
   /**
-   * **The least strength of door that deals it** (`affixStrengthFloor`), 1 to
-   * 3; absent is 1. A door's strength is the grade it carries — and the tier
-   * its affix card comes at — so an affix that multiplies what a press is
-   * worth waits for the doors late in the run, duplicates included.
+   * **Its strength** (`affixStrengthFloor`), I to III; absent is I. It is the
+   * affix's own grade — what its card says — and the least strength of door
+   * that deals it, so an affix that multiplies what a press is worth waits for
+   * the doors late in the run.
    */
   readonly minStrength?: 1 | 2 | 3;
-  /** Exactly three, weakest first. Enforced by the schema test. */
-  readonly tiers: readonly [AffixTier, AffixTier, AffixTier];
+  /** What it does: one fixed effect. */
+  readonly effect: AffixEffect;
+  /** What the card says it does. One clause, no numbers the icon shows. */
+  readonly text: string;
   /** One sentence, the kind a player reads once and remembers. */
   readonly description: string;
 }
@@ -199,11 +196,8 @@ const BASE_AFFIXES: SpellAffix[] = [
     hook: "hit",
     shapes: ["bolt"],
     element: null,
-    tiers: [
-      { effect: { kind: "split", count: 2 }, text: "splits in two on impact" },
-      { effect: { kind: "split", count: 3 }, text: "splits in three on impact" },
-      { effect: { kind: "split", count: 4 }, text: "splits in four on impact" },
-    ],
+    effect: { kind: "split", count: 2 },
+    text: "splits in two on impact",
     description:
       "Impact breaks the projectile into shards that carry on forward.",
   },
@@ -220,11 +214,8 @@ const BASE_AFFIXES: SpellAffix[] = [
      */
     shapes: ["bolt", "boomerang", "orb"],
     element: null,
-    tiers: [
-      { effect: { kind: "arc", jumps: 1, rangePx: 120 }, text: "releases a lesser copy of itself at one more body" },
-      { effect: { kind: "arc", jumps: 2, rangePx: 140 }, text: "releases a lesser copy of itself at two more bodies" },
-      { effect: { kind: "arc", jumps: 3, rangePx: 160 }, text: "releases a lesser copy of itself at three more bodies" },
-    ],
+    effect: { kind: "arc", jumps: 1, rangePx: 120 },
+    text: "releases a lesser copy of itself at one more body",
     /*
      * **A copy of the spell, not an arc.** The effect used to be one generic
      * white streak whatever it was attached to, so the affix read the same on
@@ -242,11 +233,8 @@ const BASE_AFFIXES: SpellAffix[] = [
     hook: "hit",
     shapes: [...HITTING],
     element: null,
-    tiers: [
-      { effect: { kind: "mark", radiusPx: 32 }, text: "a second hit detonates the mark" },
-      { effect: { kind: "mark", radiusPx: 44 }, text: "a second hit detonates the mark" },
-      { effect: { kind: "mark", radiusPx: 58 }, text: "a second hit detonates the mark wide" },
-    ],
+    effect: { kind: "mark", radiusPx: 32 },
+    text: "a second hit detonates the mark",
     description:
       "The first hit marks the body; the next hit on it sets the mark off in a "
       + "burst that hits the bodies round it.",
@@ -257,11 +245,8 @@ const BASE_AFFIXES: SpellAffix[] = [
     hook: "kill",
     shapes: [...HITTING],
     element: null,
-    tiers: [
-      { effect: { kind: "burst", radiusPx: 44 }, text: "kills burst" },
-      { effect: { kind: "burst", radiusPx: 62 }, text: "kills burst" },
-      { effect: { kind: "burst", radiusPx: 84 }, text: "kills burst wide" },
-    ],
+    effect: { kind: "burst", radiusPx: 44 },
+    text: "kills burst",
     description:
       "A body killed by this spell bursts where it falls, hitting the bodies "
       + "round it.",
@@ -278,11 +263,8 @@ const BASE_AFFIXES: SpellAffix[] = [
      */
     shapes: ["bolt", "orbit"],
     element: null,
-    tiers: [
-      { effect: { kind: "field", radiusPx: 36, durationMs: 1400 }, text: "leaves burning ground" },
-      { effect: { kind: "field", radiusPx: 46, durationMs: 2000 }, text: "leaves burning ground" },
-      { effect: { kind: "field", radiusPx: 58, durationMs: 2600 }, text: "leaves lasting burning ground" },
-    ],
+    effect: { kind: "field", radiusPx: 36, durationMs: 1400 },
+    text: "leaves burning ground",
     description:
       "Where the shot runs out, hit or miss, the ground catches fire for a "
       + "moment and burns what stands in it.",
@@ -293,11 +275,8 @@ const BASE_AFFIXES: SpellAffix[] = [
     hook: "wall",
     shapes: ["bolt"],
     element: null,
-    tiers: [
-      { effect: { kind: "split", count: 3 }, text: "breaks into three on a wall" },
-      { effect: { kind: "split", count: 5 }, text: "breaks into five on a wall" },
-      { effect: { kind: "split", count: 7 }, text: "breaks into seven on a wall" },
-    ],
+    effect: { kind: "split", count: 3 },
+    text: "breaks into three on a wall",
     description:
       "A projectile that stops on a wall or a prop breaks into shards there, "
       + "which fly on into the room.",
@@ -314,11 +293,8 @@ const BASE_AFFIXES: SpellAffix[] = [
      */
     shapes: ["bolt", "eruption", "boomerang"],
     element: null,
-    tiers: [
-      { effect: { kind: "repeat", extra: 1 }, text: "casts again a beat later" },
-      { effect: { kind: "repeat", extra: 2 }, text: "casts twice more, a beat apart" },
-      { effect: { kind: "repeat", extra: 3 }, text: "casts three times more, a beat apart" },
-    ],
+    effect: { kind: "repeat", extra: 1 },
+    text: "casts again a beat later",
     description:
       "The spell casts again a beat after the press, aimed where the caster is "
       + "facing by then.",
@@ -340,14 +316,10 @@ const BASE_AFFIXES: SpellAffix[] = [
      */
     shapes: ["bolt", "field", "pillar", "vortex", "dash", "eruption", "boomerang"],
     element: null,
-    tiers: [
-      { effect: { kind: "spread", dirs: 1 }, text: "also casts behind you" },
-      { effect: { kind: "spread", dirs: 3 }, text: "also casts to all sides" },
-      { effect: { kind: "spread", dirs: 5 }, text: "casts in six directions" },
-    ],
+    effect: { kind: "spread", dirs: 1 },
+    text: "also casts behind you",
     description:
-      "The cast also goes out behind the caster, and at higher tiers to the "
-      + "sides as well, beside the one sent forward.",
+      "The cast also goes out behind the caster, beside the one sent forward.",
   },
   {
     id: "ward",
@@ -355,11 +327,8 @@ const BASE_AFFIXES: SpellAffix[] = [
     hook: "cast",
     shapes: [...SPELL_SHAPES],
     element: null,
-    tiers: [
-      { effect: { kind: "ward", shots: 1 }, text: "leaves a rune that eats one shot" },
-      { effect: { kind: "ward", shots: 2 }, text: "leaves a rune that eats two shots" },
-      { effect: { kind: "ward", shots: 3 }, text: "leaves a rune that eats three shots" },
-    ],
+    effect: { kind: "ward", shots: 1 },
+    text: "leaves a rune that eats one shot",
     description:
       "Casting leaves a rune where the caster stood that stops enemy shots "
       + "reaching it, a few at most, for a short while.",
@@ -371,11 +340,8 @@ const BASE_AFFIXES: SpellAffix[] = [
     // Every shape: a free cast is the spell's own shape at the body (`fireUnit`).
     shapes: [...SPELL_SHAPES],
     element: null,
-    tiers: [
-      { effect: { kind: "riposte", targets: 1 }, text: "being hit fires back" },
-      { effect: { kind: "riposte", targets: 2 }, text: "being hit fires back at two" },
-      { effect: { kind: "riposte", targets: 3 }, text: "being hit fires back at three" },
-    ],
+    effect: { kind: "riposte", targets: 1 },
+    text: "being hit fires back",
     description:
       "Taking a hit casts this spell at whatever dealt it, free.",
   },
@@ -386,11 +352,8 @@ const BASE_AFFIXES: SpellAffix[] = [
     // Every shape: a free cast is the spell's own shape at the body (`fireUnit`).
     shapes: [...SPELL_SHAPES],
     element: null,
-    tiers: [
-      { effect: { kind: "riposte", targets: 1 }, text: "dashing through a body casts" },
-      { effect: { kind: "riposte", targets: 2 }, text: "dashing through two bodies casts" },
-      { effect: { kind: "riposte", targets: 3 }, text: "dashing through three bodies casts" },
-    ],
+    effect: { kind: "riposte", targets: 1 },
+    text: "dashing through a body casts",
     description:
       "Dashing through a body casts this spell at it, free.",
   },
@@ -414,90 +377,68 @@ const BREADTH = " A body carrying two different elements takes more from every h
 BASE_AFFIXES.push(
   {
     id: "pierce", name: "Pierce", hook: "cast", shapes: ["bolt"], element: null,
-    tiers: [
-      { effect: { kind: "shape", pierce: 1 }, text: "passes through one body" },
-      { effect: { kind: "shape", pierce: 2 }, text: "passes through two bodies" },
-      { effect: { kind: "shape", pierce: 3 }, text: "passes through three bodies" },
-    ],
+    effect: { kind: "shape", pierce: 1 },
+    text: "passes through one body",
     description: "The shot keeps going through the bodies it hits.",
   },
   {
     id: "seek", name: "Seek", hook: "cast", shapes: ["bolt"], element: null,
-    tiers: [
-      { effect: { kind: "shape", homing: 0.35 }, text: "bends toward bodies" },
-      { effect: { kind: "shape", homing: 0.55 }, text: "turns toward bodies" },
-      { effect: { kind: "shape", homing: 0.8 }, text: "hunts bodies down" },
-    ],
+    effect: { kind: "shape", homing: 0.8 },
+    text: "hunts bodies down",
     description: "The shot turns toward the nearest body as it flies.",
   },
   {
     id: "ricochet", name: "Ricochet", hook: "wall", shapes: ["bolt"], element: null,
-    tiers: [
-      { effect: { kind: "shape", bounce: 1 }, text: "bounces once off walls" },
-      { effect: { kind: "shape", bounce: 2 }, text: "bounces twice off walls" },
-      { effect: { kind: "shape", bounce: 3 }, text: "bounces three times" },
-    ],
+    effect: { kind: "shape", bounce: 1 },
+    text: "bounces once off walls",
     description: "The shot bounces off walls back into the room instead of stopping.",
   },
   {
     id: "kindle", name: "Kindle", hook: "cast", shapes: [...SPELL_SHAPES], element: "fire",
-    tiers: [
-      { effect: { kind: "shape", element: "fire", power: 0.6 }, text: "sets bodies alight" },
-      { effect: { kind: "shape", element: "fire", power: 0.9 }, text: "burns what it hits" },
-      { effect: { kind: "shape", element: "fire", power: 1.2 }, text: "burns hard" },
-    ],
+    effect: { kind: "shape", element: "fire", power: 0.9 },
+    text: "burns what it hits",
     description: "The spell's hits fill the burn gauge, on top of whatever element it already carries." + BREADTH,
   },
   {
     id: "rime", name: "Rime", hook: "cast", shapes: [...SPELL_SHAPES], element: "ice",
-    tiers: [
-      { effect: { kind: "shape", element: "ice", power: 0.6 }, text: "chills what it hits" },
-      { effect: { kind: "shape", element: "ice", power: 0.9 }, text: "chills hard" },
-      { effect: { kind: "shape", element: "ice", power: 1.2 }, text: "freezes fast" },
-    ],
+    effect: { kind: "shape", element: "ice", power: 0.9 },
+    text: "chills what it hits",
     description: "The spell's hits slow a body and fill its chill gauge toward a freeze, alongside any element it carries; a frozen body's next hit lands for triple." + BREADTH,
   },
   {
     id: "blight", name: "Blight", hook: "cast", shapes: [...SPELL_SHAPES], element: "poison",
-    tiers: [
-      { effect: { kind: "shape", element: "poison", power: 0.6 }, text: "poisons what it hits" },
-      { effect: { kind: "shape", element: "poison", power: 0.9 }, text: "poisons hard" },
-      { effect: { kind: "shape", element: "poison", power: 1.2 }, text: "poisons deep" },
-    ],
+    effect: { kind: "shape", element: "poison", power: 0.9 },
+    text: "poisons what it hits",
     description: "The spell's hits fill the poison gauge, alongside any element it already carries; a poisoned body loses health over time." + BREADTH,
   },
   {
     id: "haste", name: "Haste", hook: "kill", shapes: [...HITTING], element: null,
-    tiers: [
-      { effect: { kind: "haste", fraction: 0.5 }, text: "a kill halves the cooldown" },
-      { effect: { kind: "haste", fraction: 0.75 }, text: "a kill takes three quarters off the cooldown" },
-      { effect: { kind: "haste", fraction: 1 }, text: "a kill resets the cooldown" },
-    ],
-    description: "A kill with this spell takes part of its cooldown off, or all of it, by tier.",
+    effect: { kind: "haste", fraction: 0.5 },
+    text: "a kill halves the cooldown",
+    description: "A kill with this spell takes half of its cooldown off.",
   },
 );
 
 export const SPELL_AFFIXES: readonly SpellAffix[] = BASE_AFFIXES;
 
 /**
- * What an affix does to its spell's **mana cost**, per tier.
+ * What an affix does to its spell's **mana cost**.
  *
  * ### One rule: an affix that multiplies the hits pays for them
  *
  * `fork`, `chain`, `scatter`, `pierce` and `repeat` all answer one press with
  * more damage events than the press bought — a shard per body, a copy at the
  * next body, a cast to each side, a body further down the line, the whole cast
- * again. They pay `SURCHARGE_PER_TIER` a tier for it, multiplied together, so
- * stacking two of them costs like stacking two of them: three tiers of fork
- * and three of repeat on one spell cost about twice the bare cast, which is
- * the shape the user asked for: the build still happens, and the bar decides
- * how often.
+ * again. They pay `AFFIX_SURCHARGE` for it, multiplied together, so
+ * stacking two of them costs like stacking two of them: fork and repeat on
+ * one spell cost about a third more than the bare cast, which is the shape
+ * the user asked for: the build still happens, and the bar decides how often.
  *
  * `repeat` used to be the only one that paid, at 35% a tier, and it paid alone
  * because it was the only affix that added whole *casts*. That was the wrong
  * line: a fork at tier three turns one hit into four and a chain at tier three
  * reaches three more bodies, and neither cost anything. Folded into this rule,
- * `repeat` is charged the same 15% a tier as the rest.
+ * `repeat` is charged the same 15% as the rest (the one tier each has now).
  *
  * ### And an affix that only changes a shot's path pays nothing
  *
@@ -529,19 +470,19 @@ export const SPELL_AFFIXES: readonly SpellAffix[] = BASE_AFFIXES;
  * one press does to **one** body pay: `fork` (a shard per hit) and `repeat`
  * (the whole cast again). The sections above still describe why those two pay.
  */
-export const SURCHARGE_PER_TIER = 0.15;
+/** What an affix that multiplies the hits adds to its spell's mana: one tier's worth of the old ladder. */
+export const AFFIX_SURCHARGE = 0.15;
 
 /**
  * The affixes that multiply how many times one press lands, and so pay
- * `SURCHARGE_PER_TIER` a tier for the privilege. The card says so
+ * `AFFIX_SURCHARGE` for the privilege. The card says so
  * (`affixSurchargeText`), because a cost the player only meets at the mana bar
  * is a cost they were not offered.
  */
 export const COUNT_AFFIXES: readonly string[] = ["fork", "repeat"];
 
-export function affixCostMult(id: string, tier: number): number {
-  const t = Math.max(1, Math.min(3, tier));
-  return COUNT_AFFIXES.includes(id) ? 1 + SURCHARGE_PER_TIER * t : 1;
+export function affixCostMult(id: string): number {
+  return COUNT_AFFIXES.includes(id) ? 1 + AFFIX_SURCHARGE : 1;
 }
 
 /**
@@ -553,14 +494,14 @@ export function affixCostMult(id: string, tier: number): number {
  * `slotCost`, and a reward screen that knows which spell the card would go on
  * prints that figure too.
  */
-export function affixSurchargePct(id: string, tier: number): number | null {
-  const mult = affixCostMult(id, tier);
+export function affixSurchargePct(id: string): number | null {
+  const mult = affixCostMult(id);
   return mult === 1 ? null : Math.round((mult - 1) * 100);
 }
 
-/** The same, as the one clause a card appends to its tier line. */
-export function affixSurchargeText(id: string, tier: number): string | null {
-  const pct = affixSurchargePct(id, tier);
+/** The same, as the one clause a card appends to its line. */
+export function affixSurchargeText(id: string): string | null {
+  const pct = affixSurchargePct(id);
   return pct === null ? null : `+${pct}% mana cost`;
 }
 
@@ -597,11 +538,8 @@ BASE_AFFIXES.push({
    */
   shapes: SPELL_SHAPES.filter((s) => s !== "stance" && s !== "enchant"),
   element: null,
-  tiers: [
-    { effect: { kind: "resonate", every: 5 }, text: "every fifth sword hit casts it" },
-    { effect: { kind: "resonate", every: 4 }, text: "every fourth sword hit casts it" },
-    { effect: { kind: "resonate", every: 3 }, text: "every third sword hit casts it" },
-  ],
+  effect: { kind: "resonate", every: 5 },
+  text: "every fifth sword hit casts it",
   description:
     "The sword casts this spell: every few connecting hits, free, at the body "
     + "struck.",
@@ -623,11 +561,8 @@ BASE_AFFIXES.push(
     hook: "cast",
     shapes: ["dash"],
     element: null,
-    tiers: [
-      { effect: { kind: "momentum", px: 18, times: 3 }, text: "each body cut carries the run on" },
-      { effect: { kind: "momentum", px: 26, times: 3 }, text: "each body cut carries the run further" },
-      { effect: { kind: "momentum", px: 36, times: 3 }, text: "each body cut carries the run much further" },
-    ],
+    effect: { kind: "momentum", px: 18, times: 3 },
+    text: "each body cut carries the run on",
     description:
       "Every body the run cuts carries it on a little further, so a run into a pack goes deeper; up to three.",
   },
@@ -637,11 +572,8 @@ BASE_AFFIXES.push(
     hook: "cast",
     shapes: ["dash"],
     element: null,
-    tiers: [
-      { effect: { kind: "undertow", pull: 0.6 }, text: "the wake draws bodies in" },
-      { effect: { kind: "undertow", pull: 0.8 }, text: "the wake draws bodies in hard" },
-      { effect: { kind: "undertow", pull: 1 }, text: "the wake draws bodies onto the line" },
-    ],
+    effect: { kind: "undertow", pull: 0.6 },
+    text: "the wake draws bodies in",
     description:
       "The wake draws the bodies it cuts in toward the run's line instead of throwing them off, and the run only "
       + "nudges what it passes: the pack is left in a line.",
@@ -653,11 +585,8 @@ BASE_AFFIXES.push(
     hook: "cast",
     shapes: ["dash"],
     element: null,
-    tiers: [
-      { effect: { kind: "finale", share: 0.6, reachPx: 72 }, text: "the run ends in a thrown cut" },
-      { effect: { kind: "finale", share: 0.8, reachPx: 96 }, text: "the run ends in a longer thrown cut" },
-      { effect: { kind: "finale", share: 1, reachPx: 120 }, text: "the run ends in a full thrown cut" },
-    ],
+    effect: { kind: "finale", share: 0.6, reachPx: 72 },
+    text: "the run ends in a thrown cut",
     description:
       "Where the run stops, its cut is thrown on ahead as a crescent of sword energy that passes through each "
       + "body in its reach.",
@@ -670,14 +599,16 @@ const RUN_AFFIXES: ReadonlySet<string> = new Set(["momentum", "undertow", "final
 /*
  * **The strength each affix waits for.** Measured on the bench (`pnpm
  * spell-bench`, the affix loadouts on the bolt): `repeat` doubles what a key
- * does to one body for a fifth more mana and tops most spells' best build, so
- * it is a strength-III door's alone; the affixes that reach more bodies, turn
- * a kill or a hit into more, or change what a spell does wait for II; the
- * rest — defences, aim, elements — are dealt from the first room.
+ * does to one body for a fifth more mana and tops most spells' best build;
+ * `chain`, `brand` and `haste` are the next three down, each turning one hit
+ * or one cast into several. Those four are strength III, enough of them that
+ * a III door's offer is full of III cards rather than one and filler. The
+ * affixes that reach more bodies or change what a spell does wait for II;
+ * the rest — defences, aim, elements — are dealt from the first room.
  */
 const STRENGTH_FLOOR: Readonly<Record<string, 2 | 3>> = {
-  repeat: 3,
-  chain: 2, brand: 2, scatter: 2, haste: 2, resonance: 2, fork: 2,
+  repeat: 3, chain: 3, brand: 3, haste: 3,
+  scatter: 2, resonance: 2, fork: 2,
   momentum: 2, undertow: 2, finale: 2,
 };
 for (const a of BASE_AFFIXES) {
@@ -690,7 +621,6 @@ export function affixStrengthFloor(id: string): 1 | 2 | 3 {
   return spellAffixById(id)?.minStrength ?? 1;
 }
 
-export const AFFIX_TIERS = 3;
 
 export function spellAffixById(id: string): SpellAffix | null {
   return SPELL_AFFIXES.find((a) => a.id === id) ?? null;
@@ -787,14 +717,14 @@ export function affixFitsPart(affix: SpellAffix): {
 }
 
 /**
- * The identifier for what an affix's tier says on a card and in a slot.
+ * The identifier for what an affix says on a card and in a slot.
  *
- * The English lives on the tier itself (`tiers[n].text`), because that is what
- * the schema test and the Director read; this is the handle a renderer looks
- * the same sentence up by. Tiers are one-based, as the player counts them.
+ * The English lives on the affix itself (`text`), because that is what the
+ * schema test and the Director read; this is the handle a renderer looks the
+ * same sentence up by.
  */
-export function affixTierKey(affixId: string, tier: number): string {
-  return `affixtier.${affixId}.${Math.max(1, Math.min(AFFIX_TIERS, Math.round(tier)))}`;
+export function affixTextKey(affixId: string): string {
+  return `affixtier.${affixId}`;
 }
 
 /** The icon frame an affix's card and slot are drawn with. */
@@ -802,29 +732,3 @@ export function spellAffixIcon(a: SpellAffix): string {
   return `icon_affix_${a.id}`;
 }
 
-/**
- * The magnitude of a tier, used only to assert that the ladder climbs.
- *
- * Every effect carries exactly one number that means "more of this", and
- * returning it here is what lets a test prove tier 3 beats tier 1 without
- * knowing what any particular effect does.
- */
-export function spellAffixMagnitude(e: AffixEffect): number {
-  switch (e.kind) {
-    case "split": return e.count;
-    case "arc": return e.jumps;
-    case "field": return e.radiusPx * e.durationMs;
-    case "burst": return e.radiusPx;
-    case "mark": return e.radiusPx;
-    case "repeat": return e.extra;
-    case "spread": return e.dirs;
-    case "ward": return e.shots;
-    case "riposte": return e.targets;
-    case "resonate": return 1 / e.every;
-    case "shape": return (e.pierce ?? 0) + (e.homing ?? 0) + (e.bounce ?? 0) + (e.damage ?? 0) + (e.power ?? 0);
-    case "haste": return e.fraction;
-    case "momentum": return e.px * e.times;
-    case "undertow": return e.pull;
-    case "finale": return e.share * e.reachPx;
-  }
-}

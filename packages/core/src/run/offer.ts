@@ -22,7 +22,7 @@ import { SPELL_DAMAGE_SCALE } from "../sim/cast.ts";
 import { AFFIX_SLOTS, SPELL_SLOTS, levelDamageMult, levelManaMult, spellCost, statusForecast, statusPerHit } from "../sim/spells.ts";
 import { num } from "../spells/items.ts";
 import { STAT_UPGRADES, statLine, statLinePart } from "./stats.ts";
-import { AFFIX_SURCHARGE_KEY, SPELL_AFFIXES, affixFitsLine, affixStrengthFloor, affixFitsSpell, affixSurchargePct, affixSurchargeText, affixTierKey, itemShape } from "../spells/affixes.ts";
+import { AFFIX_SURCHARGE_KEY, SPELL_AFFIXES, affixFitsLine, affixStrengthFloor, affixFitsSpell, affixSurchargePct, affixSurchargeText, affixTextKey, itemShape } from "../spells/affixes.ts";
 import { schoolOf } from "../spells/schools.ts";
 import type { SpellAffix, SpellShape } from "../spells/affixes.ts";
 import { legalDoorSets } from "./pacing.ts";
@@ -98,7 +98,7 @@ export interface StatPart {
 }
 
 /**
- * The parts an **affix** card prints: what it does at tier one, and — for the
+ * The parts an **affix** card prints: what it does, and — for the
  * affixes that multiply how often a press lands — what it adds to the spell's
  * mana.
  *
@@ -109,12 +109,12 @@ export interface StatPart {
  * add nothing and so say nothing: "+0% mana" on nine cards out of twenty is
  * noise that hides the four that matter.
  */
-export function affixStatParts(a: Pick<SpellAffix, "id" | "tiers">, tier = 1): StatPart[] {
+export function affixStatParts(a: Pick<SpellAffix, "id" | "text">): StatPart[] {
   const parts: StatPart[] = [
-    { text: a.tiers[Math.max(0, Math.min(2, tier - 1))]!.text, tone: "mod", key: affixTierKey(a.id, tier) },
+    { text: a.text, tone: "mod", key: affixTextKey(a.id) },
   ];
-  const surcharge = affixSurchargeText(a.id, tier);
-  const pct = affixSurchargePct(a.id, tier);
+  const surcharge = affixSurchargeText(a.id);
+  const pct = affixSurchargePct(a.id);
   if (surcharge !== null && pct !== null)
     parts.push({ text: surcharge, tone: "mana", key: AFFIX_SURCHARGE_KEY, args: { pct } });
   return parts;
@@ -338,6 +338,8 @@ export function offerCards(
   const grade = Math.max(1, Math.min(3, promise.grade ?? 1));
   return offerCardsUngraded(items, rng, owned, kind, held, promise)
     .map((c) => {
+      // An affix card is the affix's own strength, whatever door dealt it (`affixStrengthFloor`).
+      if (c.kind === "affix") return { ...c, grade: affixStrengthFloor(c.itemId ?? "") };
       if (grade <= 1 || c.kind === "gold") return c;
       if (c.kind === "stat") {
         const u = STAT_UPGRADES.find((x) => x.id === c.itemId);
@@ -356,9 +358,9 @@ export function offerCards(
 
 /**
  * What a grade reads as in a card's numbers, where it changes a number: a
- * spell's level, a stat applied twice. An affix's grade is its **rarity**
- * (`rarityOf`), shown on the card's frame rather than as "tier III" in the
- * text, so it says nothing here.
+ * spell's level, a stat applied twice. An affix's grade is its own
+ * **strength** (`affixStrengthFloor`), shown on the card's frame, so it says
+ * nothing here.
  */
 export function gradeTag(kind: RewardCardKind, grade: number): string {
   return gradeTagPart(kind, grade)?.text ?? "";
@@ -462,8 +464,37 @@ function offerCardsUngraded(
        * dead draw dressed as a choice. `held` is the shapes on the staff; an
        * empty list means the caller does not know, and everything is dealt.
        */
-      return pick(fittingAffixes(held), rng, CARDS_PER_OFFER, owned).map(affixCard);
+      /*
+       * And only affixes the door is strong enough for, with one of its own
+       * strength among them where it has one (`strengthGroup`).
+       */
+      {
+        const pool = fittingAffixes(held)
+          .filter((a) => promise.grade === undefined || affixStrengthFloor(a.id) <= promise.grade);
+        const drawn = pick(pool, rng, CARDS_PER_OFFER, owned);
+        const top = strengthGroup(pool.map((a) => a.id), promise.grade);
+        if (top.length > 0 && drawn.length > 0 && !drawn.some((a) => top.includes(a.id))) {
+          const [lift] = pick(pool.filter((a) => top.includes(a.id)), rng, 1, owned);
+          if (lift) drawn[drawn.length - 1] = lift;
+        }
+        return drawn.map(affixCard);
+      }
   }
+}
+
+/**
+ * **The affixes a strong door owes one of**: those whose strength is the
+ * door's own, so a III door's offer holds a III card rather than three it
+ * could have dealt at I. Where none of the door's own strength fits the
+ * staff, the next strength down stands in, above I; a strength-I door owes
+ * nothing. In `ids`' order.
+ */
+export function strengthGroup(ids: readonly string[], grade: number | undefined): string[] {
+  for (let g = grade ?? 1; g >= 2; g--) {
+    const at = ids.filter((id) => affixStrengthFloor(id) === g);
+    if (at.length > 0) return at;
+  }
+  return [];
 }
 
 /* ------------------------- the Director's card question ------------------------- */
@@ -487,7 +518,7 @@ function offerCardsUngraded(
  *   casts, damage, a bar that would not pay — and this card eases.
  * - `synergy`: it works with what is held — an element the keys already
  *   carry, a spell of the same element.
- * - `upgrade`: it raises something held (a spell's level, an affix's tier),
+ * - `upgrade`: it raises something held (a spell's level),
  *   which is how a build matures rather than widens.
  * - `promised`: it is of the school or family the door named.
  *
@@ -876,7 +907,6 @@ export function cardPool(
         ...when(!!GAP_AFFIXES[neck]?.includes(a.id), "eases"),
         // An infusion for an element already held, or a gauge affix on a status build.
         ...when(elements.some((el) => INFUSION[el] === a.id), "synergy"),
-        ...when(!!needs.heldAffixes?.includes(a.id), "upgrade"),
       ],
     }));
   }
@@ -908,6 +938,17 @@ export function cardPool(
     if (upgrades.length > 0 && replacements.length > 0)
       guarantee = [upgrades.map((e) => e.id), replacements.map((e) => e.id)];
   }
+  /*
+   * **A strong affix door deals one card of its own strength.** The pool
+   * holds every affix the door is strong enough for, and those of lower
+   * strength outnumber the rest, so without this a III door could come out
+   * three I cards — the door's stars promising what its screen then does not
+   * show. One group, one card; the rest is the Director's.
+   */
+  if (kind === "affix") {
+    const top = strengthGroup(all.map((e) => e.id), promise.grade);
+    if (top.length > 0) guarantee = [top];
+  }
   if (all.length === 0) return { kind, candidates: [], forced: [] };
 
   const have = new Set(owned);
@@ -928,33 +969,9 @@ export function cardPool(
     .filter((group) => group.length > 0);
   return {
     kind, candidates, forced: [],
-    ...(kept.length > 1 ? { guarantee: kept } : {}),
+    // Both of a full staff's groups, or they are no choice; an affix door's one.
+    ...(kept.length > (kind === "affix" ? 0 : 1) ? { guarantee: kept } : {}),
   };
-}
-
-/**
- * **A door's cards, held to its strength.** The cards for every door are
- * drawn before the doors' strengths are decided — they come in one request —
- * so an affix the door turned out too weak for is swapped here for the next
- * candidate of the same pool it is strong enough for, in the pool's own
- * order, one not already on the door. A spell or a stat door, or a door
- * strong enough for all it drew, is left as it is.
- */
-export function holdToStrength(kind: RewardCardKind, ids: readonly string[], strength: number, pool: CardPool | undefined): string[] {
-  if (kind !== "affix") return [...ids];
-  const fits = (id: string) => affixStrengthFloor(id) <= strength;
-  if (ids.every(fits)) return [...ids];
-  const kept = ids.filter(fits);
-  const spare = (pool?.candidates ?? []).map((c) => c.id).filter((id) => fits(id) && !kept.includes(id));
-  const out: string[] = [];
-  for (const id of ids) {
-    if (fits(id)) out.push(id);
-    else {
-      const next = spare.shift();
-      if (next) out.push(next);
-    }
-  }
-  return out;
 }
 
 /** The cards for chosen ids, graded as the door promised. */
@@ -965,6 +982,8 @@ export function cardsFor(
   return ids.flatMap((id) => {
     const c = cardOf(items, kind, id, grade);
     if (!c) return [];
+    // An affix card is the affix's own strength, whatever door dealt it (`affixStrengthFloor`).
+    if (c.kind === "affix") return [{ ...c, grade: affixStrengthFloor(id) }];
     const tag = gradeTagPart(c.kind, grade);
     return [grade > 1
       ? {
@@ -1061,12 +1080,18 @@ export function heldSpell(
  * Whether this affix can go on this key at all: the attach rule the reward
  * screen will apply, asked before the card is dealt rather than after.
  *
- * A key with every slot full still takes a **duplicate** of an affix it holds,
- * because a duplicate is a tier rather than a fourth slot (doc 013).
+ * An affix is one fixed effect with no tiers to climb, so a key that already
+ * holds it does not take it again; a full key takes a new one in place of one
+ * it holds.
  */
 export function affixFitsHeld(affix: SpellAffix, key: HeldSpell): boolean {
-  if (key.affixes.includes(affix.id)) return true;
-  if (key.affixes.length >= AFFIX_SLOTS) return false;
+  // One fixed effect, no ladder: a key that has it has all of it.
+  if (key.affixes.includes(affix.id)) return false;
+  /*
+   * A full key still takes a new one: the attach screen asks which affix it
+   * replaces. With no tiers there is no duplicate to deal a full key instead,
+   * and dropping it from the pool left only the fallback of every affix.
+   */
   return affixFitsSpell(affix, {
     params: {
       shape: key.shape, count: key.count, spread: key.spread ?? 0, wake_reach: key.wake ?? 0,
@@ -1084,7 +1109,7 @@ export function fittingAffixes(held: readonly HeldSpell[]): readonly SpellAffix[
   return fits.length > 0 ? fits : SPELL_AFFIXES;
 }
 
-/** An affix as a reward card: its tier-one line, its surcharge, and where it fits. */
+/** An affix as a reward card: its line, its surcharge, and where it fits. */
 function affixCard(a: SpellAffix): OfferCard {
   return {
     kind: "affix", itemId: a.id, label: a.name,

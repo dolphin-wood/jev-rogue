@@ -28,7 +28,7 @@ function world(): World {
 describe("equipping one key", () => {
   it("leaves the other keys' spells, levels, affixes, cooldowns and banks untouched", () => {
     const w = world();
-    const first = withLevel(attachAffix(w.spells[0]!, "resonance", 2)!, 3);
+    const first = withLevel(attachAffix(w.spells[0]!, "resonance")!, 3);
     first.cooldownMs = 420;
     w.spells[0] = first;
     const second = w.spells[1]!;
@@ -41,7 +41,7 @@ describe("equipping one key", () => {
     expect(w.spells[2]?.item.base).toBe("returning_edge");
     expect(w.spells[0]).toBe(first);
     expect(w.spells[0]!.level).toBe(3);
-    expect(w.spells[0]!.affixes.map((a) => [a.id, a.tier])).toEqual([["resonance", 2]]);
+    expect(w.spells[0]!.affixes.map((a) => a.id)).toEqual(["resonance"]);
     expect(w.spells[0]!.cooldownMs).toBe(420);
     expect(w.spells[1]).toBe(second);
     expect(w.spells[1]!.bank).toBe(2);

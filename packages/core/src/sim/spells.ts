@@ -292,8 +292,9 @@ export function withLevel(slot: SpellSlot, level: number): SpellSlot {
  * Gold for taking a spell apart: its level, and every affix tier invested in
  * it, at a lossy rate (doc 013, "Replacing a spell dismantles it into gold").
  */
-export function dismantleValue(level: number, affixTiers: readonly number[] = []): number {
-  return 12 + 8 * (Math.max(1, level) - 1) + 6 * affixTiers.reduce((a, b) => a + b, 0);
+/** `affixStrengths`: each attached affix's strength (`affixStrengthFloor`), what it is worth. */
+export function dismantleValue(level: number, affixStrengths: readonly number[] = []): number {
+  return 12 + 8 * (Math.max(1, level) - 1) + 6 * affixStrengths.reduce((a, b) => a + b, 0);
 }
 
 /** Doc 013: three affix slots per spell, nine in the run. */
@@ -378,7 +379,7 @@ export function slotCost(slot: SpellSlot | null, items: ItemRegistry, _staff: St
   if (!slot) return Infinity;
   const base = items.get(slot.item.base)?.mana ?? RANK_MAX;
   // What the attached affixes add: see `affixCostMult`.
-  const affixes = (slot.affixes ?? []).reduce((m, a) => m * affixCostMult(a.id, a.tier), 1);
+  const affixes = (slot.affixes ?? []).reduce((m, a) => m * affixCostMult(a.id), 1);
   return Math.round(spellCost(slot.item, base) * levelManaMult(slot.level ?? 1) * affixes * 10) / 10;
 }
 
@@ -407,31 +408,20 @@ export function makeSpell(item: ItemInstance): SpellSlot {
 }
 
 /**
- * Attaches an event affix, or raises the tier of one already held.
- *
- * Doc 013: a duplicate **upgrades** rather than taking a second slot, and the
- * ladder has three rungs. Returns null only when the affix is new and the
- * three slots are full — a duplicate always fits, because it takes no slot.
+ * Attaches an event affix. An affix is one fixed effect with no ladder to
+ * climb (`SpellAffix.effect`), so one already on the key is not attached
+ * again: the key is returned as it was. `replace` names an affix to take off
+ * a full spell to make room — that one is simply lost, it is not worth gold.
+ * Returns null when the affix is new and the slots are full.
  */
-/**
- * Attaches an affix at `tier` (a drop's rarity is its head start on the
- * ladder). A duplicate raises the held one by the incoming tier; `replace`
- * names an affix to take off a full spell to make room — that one is simply
- * lost, it is not worth gold.
- */
-export function attachAffix(slot: SpellSlot, id: string, tier = 1, replace?: string): SpellSlot | null {
-  const held = slot.affixes.find((a) => a.id === id);
-  if (held) {
-    const next = Math.min(3, held.tier + tier) as 1 | 2 | 3;
-    return { ...slot, affixes: slot.affixes.map((a) => (a.id === id ? { id, tier: next } : a)) };
-  }
-  const start = Math.max(1, Math.min(3, tier)) as 1 | 2 | 3;
+export function attachAffix(slot: SpellSlot, id: string, replace?: string): SpellSlot | null {
+  if (slot.affixes.some((a) => a.id === id)) return slot;
   if (replace) {
     if (!slot.affixes.some((a) => a.id === replace)) return null;
-    return { ...slot, affixes: slot.affixes.map((a) => (a.id === replace ? { id, tier: start } : a)) };
+    return { ...slot, affixes: slot.affixes.map((a) => (a.id === replace ? { id } : a)) };
   }
   if (slot.affixes.length >= AFFIX_SLOTS) return null;
-  return { ...slot, affixes: [...slot.affixes, { id, tier: start }] };
+  return { ...slot, affixes: [...slot.affixes, { id }] };
 }
 
 /**

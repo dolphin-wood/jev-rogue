@@ -25,7 +25,7 @@ import type { BriefingInput } from "./briefing.ts";
 import { AFFIX_LANES } from "./questions/affixes.ts";
 import { decidingPhrases } from "./deciding.ts";
 import {
-  ANCHOR_SPEC, COMPOSITION_SPEC, DENSITY_SPEC, ELITE_GRADE_SPEC, ELITE_PORTAL_SPEC, ELITE_PRESENCE_SPEC,
+  ANCHOR_SPEC, COMPOSITION_SPEC, DENSITY_SPEC, ELITE_PORTAL_SPEC, ELITE_PRESENCE_SPEC,
   ENTRY_SPEC, FAMILY_SPEC, KIND_SPEC, MOOD_SPEC, NORMAL_GRADE_SPEC, NPC_SPEC, SIZE_SPEC, SYMMETRY_SPEC,
   SUBSPECIES_WEIGHT_SPEC, TENSION_SPEC, VARIETY_SPEC, WAVES_SPEC,
 } from "./questions/specs.ts";
@@ -33,7 +33,7 @@ import { LANE_SPEC } from "./questions/affixes.ts";
 
 /** Every record of hand-written specs, for the rules that hold across all of them. */
 const SPEC_RECORDS = {
-  ANCHOR_SPEC, COMPOSITION_SPEC, DENSITY_SPEC, ELITE_GRADE_SPEC, ELITE_PORTAL_SPEC, ELITE_PRESENCE_SPEC,
+  ANCHOR_SPEC, COMPOSITION_SPEC, DENSITY_SPEC, ELITE_PORTAL_SPEC, ELITE_PRESENCE_SPEC,
   ENTRY_SPEC, FAMILY_SPEC, KIND_SPEC, LANE_SPEC, MOOD_SPEC, NORMAL_GRADE_SPEC, NPC_SPEC, SIZE_SPEC,
   SUBSPECIES_WEIGHT_SPEC, SYMMETRY_SPEC, TENSION_SPEC, VARIETY_SPEC, WAVES_SPEC,
 };
@@ -68,7 +68,7 @@ function input(over: Partial<BriefingInput> = {}): BriefingInput {
     },
     build: {
       keys: [
-        { base: "magic_bolt", level: 2, affixes: [{ id: "repeat", tier: 1 }] },
+        { base: "magic_bolt", level: 2, affixes: [{ id: "repeat" }] },
         { base: "shock_arc", level: 1, affixes: [] },
         null,
       ],
@@ -848,7 +848,7 @@ const NEUTRAL_EXCEPTIONS: readonly RegExp[] = [
   // A measured bucket whose vocabulary is never / rarely / often.
   /^- Casts the bar refused for want of mana:/,
   // Content: an affix's own effect text, and the lane the typed words name.
-  /, tier \d+ of \d+/,
+  /, strength \d+ of \d+/,
   /^- That lane is:/,
   // The plain per-room lines finding 5a measured as inert.
   /^- Room \d+: /,

@@ -546,7 +546,7 @@ describe("the run's own affixes (Dash Slash)", () => {
       for (let i = 0; i < 60; i++) step(w, at(PX + 400, PY));
       return w.player.x - PX;
     };
-    expect(ran(withAffix("momentum"))).toBeGreaterThan(ran(arena("dash_slash", "run-bare")) + 60);
+    expect(ran(withAffix("momentum"))).toBeGreaterThan(ran(arena("dash_slash", "run-bare")) + 40);
   });
 
   it("undertow: the wake leaves a body beside the run nearer its line, not further off", () => {

@@ -49,13 +49,12 @@ import { lightFire } from "./fire.ts";
 /** One affix on one spell, at one of its three tiers. */
 export interface AttachedAffix {
   readonly id: string;
-  readonly tier: 1 | 2 | 3;
 }
 
 /** The effect an attached affix has at its current tier, or null if unknown. */
 export function effectOf(a: AttachedAffix): AffixEffect | null {
   const def = spellAffixById(a.id);
-  return def ? def.tiers[a.tier - 1]!.effect : null;
+  return def ? def.effect : null;
 }
 
 /**

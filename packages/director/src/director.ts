@@ -34,7 +34,7 @@ import { ruleTensionWeights } from "./rule.ts";
 import { choiceQuestion, clampFreeText, INTENT_CLAUSE, offeredKeys } from "./questions/common.ts";
 import type { QuestionStyle } from "./questions/common.ts";
 import {
-  ANCHOR_SPEC, COMPOSITION_SPEC, DENSITY_SPEC, ELITE_GRADE_SPEC, ELITE_PORTAL_SPEC, ELITE_PRESENCE_SPEC,
+  ANCHOR_SPEC, COMPOSITION_SPEC, DENSITY_SPEC, ELITE_PORTAL_SPEC, ELITE_PRESENCE_SPEC,
   ENTRY_SPEC, KIND_SPEC, NORMAL_GRADE_SPEC, NPC_SPEC,
   SUBSPECIES_WEIGHT_SPEC, VARIETY_SPEC,
   WAVES_SPEC, cardNegativesDiscriminate, cardNotFor, subspeciesSpec,
@@ -809,37 +809,6 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
           )), spec: ELITE_PORTAL_SPEC.elite! },
         ],
       });
-      /*
-       * The grades were asked as the option ids "1", "2" and "3" with the
-       * whole condition in prose. Confidence came back at about 0.26 with a
-       * fifth of the mass on the escape option, and the answer never moved.
-       * The ids are now words, and each says its one condition.
-       */
-      /*
-       * **A catch-up, not the grade.** A door's strength is set by how far the
-       * run has come (`baseStrength`): later rooms deal better spells, bigger
-       * stats and the strongest affixes. What is asked is only whether a run
-       * that is behind gets one more on top, so the question is not asked
-       * where there is no more to give.
-       */
-      if ((choices.strength?.elite ?? 2) < 3)
-        questions.elite_grade = choiceQuestion({
-          labels, style,
-          instructions:
-            "The elite portal's reward already comes one strength above this point of the run. Choose whether " +
-            "it goes one strength further, as a catch-up for a run that is behind; answer from health, recent " +
-            "damage and clear speed.",
-          options: [
-            { ...opt("raised", grounded(
-              "The elite door's own strength for this point of the run.",
-              ["clear_speed", "fast", "normal"], ["health", "ok", "full"], ["recent_damage", "none", "some"],
-            )), spec: ELITE_GRADE_SPEC.raised! },
-            { ...opt("best", grounded(
-              "One strength further, as far as strength goes.",
-              ["clear_speed", "slow"], ["health", "low", "critical"], ["recent_damage", "heavy"],
-            )), spec: ELITE_GRADE_SPEC.best! },
-          ],
-        });
     }
     if (choices.lateGrade)
       questions.normal_grade = choiceQuestion({
@@ -973,9 +942,10 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
         });
 
         let eliteKind: RewardCardKind | null = null;
-        // The run's own strength for this point (`baseStrength`); the answers are a catch-up on top.
+        // The run's own strength for this point (`baseStrength`). An elite door is
+        // always its own, one above a normal's; only a normal door takes a catch-up.
         const strength = choices.strength ?? { normal: 1, elite: 2 };
-        let eliteGrade: 1 | 2 | 3 = strength.elite;
+        const eliteGrade: 1 | 2 | 3 = strength.elite;
         if (choices.elite && take("elite_portal") === "elite") {
           /*
            * **Which door is the hard one comes out of the same ranking.** It
@@ -992,7 +962,6 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
             question: "elite_kind (from the need ranking)",
           });
           eliteKind = pick as RewardCardKind;
-          if (strength.elite < 3 && take("elite_grade") === "best") eliteGrade = (strength.elite + 1) as 2 | 3;
         }
         const normalGrade = (choices.lateGrade && strength.normal < 3 && take("normal_grade") === "raised"
           ? strength.normal + 1 : strength.normal) as 1 | 2 | 3;
@@ -1131,7 +1100,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
           "element, what it costs and what is already attached to it — and against the player's own words " +
           "in intent free text, which is the one input they wrote themselves. Every card on the list can go " +
           "on the staff as it stands: a new spell fills the first empty key, a copy of a held spell raises " +
-          "that key's level and fills no key, and an affix the staff already carries raises its tier. " +
+          "that key's level and fills no key, and an affix goes on a key that does not carry it yet. " +
           INTENT_CLAUSE + namedSpellFit,
       }),
       for_style: choiceQuestion({

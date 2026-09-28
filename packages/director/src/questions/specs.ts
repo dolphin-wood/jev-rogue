@@ -107,11 +107,11 @@ export const KIND_SPEC: Readonly<Record<string, OptionSpec>> = {
   },
   affix: {
     what: "An affix door. It attaches a modifier to a spell already held — it chains, it burns, it comes "
-      + "back off walls — in one of that key's affix slots; a duplicate raises the tier of the one "
-      + "attached. It fills no key. The build section says how many affix slots are still open across the "
-      + "staff, and which are on which key.",
-    not_for: "A staff with no affix slot left anywhere, where the card can only raise the tier of an "
-      + "affix already attached.",
+      + "back off walls — in one of that key's affix slots, or in place of one on a full key. It fills no "
+      + "key, and a key never takes an affix it already carries. The build section says how many affix "
+      + "slots are still open across the staff, and which are on which key.",
+    not_for: "A staff with no affix slot left anywhere, where every card means giving up an affix already "
+      + "attached.",
   },
   /*
    * **What each family raises, by name**, because a player asks for these in
@@ -203,19 +203,6 @@ export const ELITE_PORTAL_SPEC: Readonly<Record<string, OptionSpec>> = {
  * rather than "the best roll the game has" and "a run with nothing left to
  * want", which were a ranking of the option and a verdict on the player.
  */
-export const ELITE_GRADE_SPEC: Readonly<Record<string, OptionSpec>> = {
-  raised: {
-    what: "The elite door's reward at the elite strength for this point of the run: one above a normal door's, "
-      + "and higher the later the room.",
-    not_for: "A player who is low on health, has been clearing slowly, or has just lost heavily in a room.",
-  },
-  best: {
-    what: "The elite door's reward one strength further, as far as strength goes: how the game lets a run "
-      + "that is behind make up ground.",
-    not_for: "A player on a full bar who has been clearing quickly and has lost little over the last rooms.",
-  },
-};
-
 export const NORMAL_GRADE_SPEC: Readonly<Record<string, OptionSpec>> = {
   ordinary: {
     what: "The rewards at the strength this point of the run deals, which rises on its own as the run goes on.",

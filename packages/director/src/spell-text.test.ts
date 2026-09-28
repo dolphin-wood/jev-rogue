@@ -134,7 +134,7 @@ describe("every card's own text, as the Director reads it", () => {
     for (const item of BASE_ITEMS) expect(verdictsIn(item.description), item.id).toEqual([]);
     for (const a of SPELL_AFFIXES) {
       expect(verdictsIn(a.description), a.id).toEqual([]);
-      for (const t of a.tiers) expect(verdictsIn(t.text), `${a.id}: ${t.text}`).toEqual([]);
+      expect(verdictsIn(a.text), `${a.id}: ${a.text}`).toEqual([]);
     }
     for (const u of STAT_UPGRADES) expect(verdictsIn(u.description), u.id).toEqual([]);
   });

@@ -19,7 +19,7 @@ for (let s = 0; s < 8; s++) {
   const w = createWorld({ room: toRoomPlan(g, { id: "g", seed_key: "g" + s, reward_kind: "item", params_source: "rule" }), encounter: null, staff,
     slots: [plainInstance("magic_bolt", "a"), plainInstance("frost_needle", "b"), plainInstance("seeker_swarm", "c"), null, null, null], hearts: 6 + LEVEL_HEARTS * 5,
     xp: XP_TO_NEXT.slice(0, 5).reduce((a, b) => a + b, 0), rng: src.stream("w"), roomIndex: 10, guardian: true, placement: "waves" });
-  w.spells.forEach((sl, i) => { if (sl) w.spells[i] = withLevel(attachAffix(sl, i === 0 ? "scatter" : "seek", 1) ?? sl, 3); });
+  w.spells.forEach((sl, i) => { if (sl) w.spells[i] = withLevel(attachAffix(sl, i === 0 ? "scatter" : "seek") ?? sl, 3); });
   const log = emptyRoom(10, "combat");
   const g0 = w.enemies.find((e) => e.guardian)!;
   const r = fight(w, SKILL_PROFILES[prof as keyof typeof SKILL_PROFILES], 120000, false, log);

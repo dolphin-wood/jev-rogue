@@ -225,8 +225,9 @@ function run(
   const key = `${level}:${affixes.map((a) => a.join("")).join(",")}${hold === "tap" ? ":tap" : ""}${scenario === "pinned" || scenario === scenarioOf(ITEMS.get(spell)) ? "" : `:${scenario}`}`;
   const { w, bodies, home, aim } = arena(spell, targets, key);
   if (scenario === "swinging") w.player.mods.manaPerHit = 0;
-  for (const [id, tier] of affixes) {
-    const next = w.spells[0] ? attachAffix(w.spells[0], id, tier) : null;
+  // An affix is one fixed effect now; the pair's number is only the seed key it was measured under.
+  for (const [id] of affixes) {
+    const next = w.spells[0] ? attachAffix(w.spells[0], id) : null;
     if (next) w.spells[0] = next;
   }
   // A level is the other half of a build: +20% damage a level and +10% mana,
@@ -288,8 +289,9 @@ const STRAFE_HZ = 0.55;
 
 function runMoving(spell: string, affixes: readonly [string, number][] = [], level = 1): number {
   const { w, bodies, home, aim } = arena(spell, single, `move:${level}:${affixes.map((a) => a.join("")).join(",")}`);
-  for (const [id, tier] of affixes) {
-    const next = w.spells[0] ? attachAffix(w.spells[0], id, tier) : null;
+  // An affix is one fixed effect now; the pair's number is only the seed key it was measured under.
+  for (const [id] of affixes) {
+    const next = w.spells[0] ? attachAffix(w.spells[0], id) : null;
     if (next) w.spells[0] = next;
   }
   if (level > 1 && w.spells[0]) w.spells[0] = withLevel(w.spells[0], level);
@@ -513,7 +515,7 @@ function fits(item: BaseItem, id: string, held: readonly string[]): boolean {
   return !!a && affixFitsSpell(a, item, held);
 }
 
-/** The best single affix and the best pair, both at tier three on a level-five spell. */
+/** The best single affix and the best pair on a level-five spell. */
 function ladder(item: BaseItem, targets: readonly [number, number][]): {
   best: { name: string; dps: number }; stacked: { name: string; dps: number; affixes: [string, number][] };
 } {
@@ -826,7 +828,7 @@ for (const r of rows.filter((x) => x.scenario !== "pinned"))
 /* ------------------------------- the ladder ------------------------------- */
 
 if (!QUICK) {
-  console.log(`\nwhat a build does to each spell, against the sword (level ${SPELL_LEVEL_MAX}, affixes at tier ${TOP}):`);
+  console.log(`\nwhat a build does to each spell, against the sword (level ${SPELL_LEVEL_MAX}, affixes as they are):`);
   console.log(`${"id".padEnd(16)} base   max    max+affix         max+stack                  stack pack`);
   const finished = rows.filter((r) => !defence(r)).map((r) => r.stacked.dps / swordSingle);
   const mFinished = median(finished);
@@ -876,7 +878,7 @@ const LOADOUTS: readonly [string, readonly [string, number][]][] = [
   ["pierce 3 + chain 3", [["pierce", 3], ["chain", 3]]],
   ["kindle 3 + fork 3", [["kindle", 3], ["fork", 3]]],
 ];
-console.log(`\naffix loadouts on magic_bolt, top tier, same 20 s (moving: a strafing body, aimed at where it was):`);
+console.log(`\naffix loadouts on magic_bolt, same 20 s (moving: a strafing body, aimed at where it was):`);
 console.log(`${"loadout".padEnd(24)} single  pack  moving      vs bare`);
 const bare = run("magic_bolt", single);
 const bareMoving = runMoving("magic_bolt");
