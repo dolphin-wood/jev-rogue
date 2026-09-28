@@ -77,7 +77,7 @@ const RIFT_SCAR_MS = 1500;
 
 export function castRift(
   w: World, x: number, y: number, angle: number, length: number,
-  opts: { width?: number; teleMs?: number; damage?: number; bolt?: boolean; summon?: boolean; rock?: boolean; beam?: boolean } = {},
+  opts: { width?: number; teleMs?: number; damage?: number; bolt?: boolean; summon?: boolean; rock?: boolean; beam?: boolean; breaksProps?: boolean } = {},
 ): Rift {
   const r: Rift = {
     alive: true, x, y, angle, length,
@@ -89,6 +89,7 @@ export function castRift(
     ...(opts.bolt && opts.summon ? { summon: true } : {}),
     ...(opts.rock ? { rock: true } : {}),
     ...(opts.beam ? { beam: true } : {}),
+    ...(opts.breaksProps ? { breaksProps: true } : {}),
   };
   w.rifts.push(r);
   w.events.push({ kind: "telegraph", x, y, what: riftName(r, "bolt", "rock") });
@@ -326,11 +327,15 @@ export function armDistance(a: Arm, x: number, y: number): number {
   return Math.hypot(x - (x0 + vx * t), y - (y0 + vy * t));
 }
 
-/** How far a rift reaches along its line before stone stops it. */
-export function lineToWall(w: World, x: number, y: number, angle: number, max: number): number {
+/**
+ * How far a rift reaches along its line before stone stops it. With
+ * `throughProps` a prop does not stop it: the Frontier Veteran's blows go
+ * through the room's clutter and break it (`isStone`, doc 024).
+ */
+export function lineToWall(w: World, x: number, y: number, angle: number, max: number, throughProps = false): number {
   const step = 6;
   for (let d = step; d <= max; d += step) {
-    if (circleHitsWall(w.room.grid, x + Math.cos(angle) * d, y + Math.sin(angle) * d, 2)) return d - step;
+    if (circleHitsWall(w.room.grid, x + Math.cos(angle) * d, y + Math.sin(angle) * d, 2, throughProps)) return d - step;
   }
   return max;
 }
@@ -579,12 +584,14 @@ const FLAME_BURN = 0.35;
  * stops at the first wall. Shared with the renderer, which draws the
  * telegraph and the flame to the same shape the damage uses.
  */
-export function flameRays(w: World, x: number, y: number, aim: number, range = MUSKET_RANGE, spreadDeg = MUSKET_SPREAD_DEG): number[] {
+export function flameRays(
+  w: World, x: number, y: number, aim: number, range = MUSKET_RANGE, spreadDeg = MUSKET_SPREAD_DEG, throughProps = false,
+): number[] {
   const half = (spreadDeg / 2) * Math.PI / 180;
   const out: number[] = [];
   for (let i = 0; i < FLAME_RAYS; i++) {
     const a = aim - half + (2 * half * i) / (FLAME_RAYS - 1);
-    out.push(lineToWall(w, x, y, a, range));
+    out.push(lineToWall(w, x, y, a, range, throughProps));
   }
   return out;
 }
@@ -593,7 +600,9 @@ export function flameRays(w: World, x: number, y: number, aim: number, range = M
 export function muzzleOf(w: World, e: Enemy, aim: number): { x: number; y: number } {
   const x = e.x + Math.cos(aim) * MUSKET_MUZZLE_PX;
   const y = e.y - 3 + Math.sin(aim) * MUSKET_MUZZLE_PX;
-  if (circleHitsWall(w.room.grid, x, y, 2) || !hasLineOfSight(w.room.grid, e.x, e.y, x, y)) return { x: e.x, y: e.y };
+  // A crate against the Frontier Veteran's gun is no stone to it (`isStone`).
+  const through = !!e.guardian;
+  if (circleHitsWall(w.room.grid, x, y, 2, through) || !hasLineOfSight(w.room.grid, e.x, e.y, x, y, through)) return { x: e.x, y: e.y };
   return { x, y };
 }
 
@@ -605,9 +614,12 @@ function fireMusket(w: World, e: Enemy): void {
   const m = muzzleOf(w, e, aim);
   const range = MUSKET_RANGE * (e.guardian ? GUARDIAN_ATTACK_RANGE_MULT : 1);
   const spreadDeg = MUSKET_SPREAD_DEG * (e.guardian ? GUARDIAN_MUSKET_SPREAD_MULT : 1);
+  // The Frontier Veteran's fire rolls through the room's props and burns them down (`flameCovers`).
+  const through = !!e.guardian;
   w.flames.push({
     alive: true, owner: e.id, x: m.x, y: m.y, aim,
-    range, spreadDeg, rays: flameRays(w, m.x, m.y, aim, range, spreadDeg), ms: 0, hit: false,
+    range, spreadDeg, rays: flameRays(w, m.x, m.y, aim, range, spreadDeg, through), ms: 0, hit: false,
+    ...(through ? { breaksProps: true } : {}),
   });
   // The shot is a blow, not a hiss: the world holds for two frames and the
   // gun throws its bearer back a step. It shakes nothing unless it hits.
@@ -626,20 +638,29 @@ function flameReach(f: Flame, a: number): number {
   return f.rays[i]! * (1 - k) + f.rays[i + 1]! * k;
 }
 
+/**
+ * Whether a circle is inside the flame as it rolls out: its front, its spread
+ * and its reach on that line (a wall between is a wall between), allowing for
+ * the circle's own size. The player's hit and the props it burns share it.
+ */
+export function flameCovers(f: Flame, x: number, y: number, r: number): boolean {
+  if (f.ms >= FLAME_ROLL_MS + 80) return false;
+  const front = f.range * Math.min(1, f.ms / FLAME_ROLL_MS);
+  const d = Math.hypot(x - f.x, y - f.y);
+  let da = Math.atan2(y - f.y, x - f.x) - f.aim;
+  while (da > Math.PI) da -= Math.PI * 2;
+  while (da < -Math.PI) da += Math.PI * 2;
+  const half = (f.spreadDeg / 2) * Math.PI / 180;
+  return Math.abs(da) <= half + r / Math.max(8, d)
+    && d - r <= Math.min(front, flameReach(f, Math.max(-half, Math.min(half, da))));
+}
+
 function stepFlame(w: World, f: Flame, dtMs: number, hooks: AttackHooks): void {
   f.ms += dtMs;
   if (f.ms >= FLAME_LIFE_MS) { f.alive = false; return; }
-  const front = f.range * Math.min(1, f.ms / FLAME_ROLL_MS);
   const p = w.player;
-  if (!f.hit && f.ms < FLAME_ROLL_MS + 80) {
-    const d = Math.hypot(p.x - f.x, p.y - f.y);
-    let da = Math.atan2(p.y - f.y, p.x - f.x) - f.aim;
-    while (da > Math.PI) da -= Math.PI * 2;
-    while (da < -Math.PI) da += Math.PI * 2;
-    const half = (f.spreadDeg / 2) * Math.PI / 180;
-    // Inside the flame's front, its spread and its reach on that line (a
-    // wall between is a wall between), allowing for the body's own size.
-    if (Math.abs(da) <= half + PLAYER_RADIUS / Math.max(8, d) && d - PLAYER_RADIUS <= Math.min(front, flameReach(f, Math.max(-half, Math.min(half, da))))) {
+  if (!f.hit) {
+    if (flameCovers(f, p.x, p.y, PLAYER_RADIUS)) {
       f.hit = true;
       // The Frontier Veteran's spray costs what its ram does, as a share (`GUARDIAN_POWER`, doc 024).
       const owner = w.enemies.find((o) => o.id === f.owner);

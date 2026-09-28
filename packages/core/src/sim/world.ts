@@ -63,7 +63,7 @@ import type { Destructible } from "./props.ts";
 import type { SpellSlot } from "./spells.ts";
 import type { BulletEmission } from "../encounters/patterns.ts";
 import { turnToward } from "./aim.ts";
-import { ARM_TELE_MS, castArm, castRift, castRanged, castShockwave, dragStep, interruptToll, layWake, lineToWall, onExpansionDeath, shockwaveHits, stepAttacks } from "./attacks.ts";
+import { ARM_TELE_MS, castArm, castRift, castRanged, castShockwave, dragStep, flameCovers, interruptToll, layWake, lineToWall, onExpansionDeath, riftHits, shockwaveHits, stepAttacks } from "./attacks.ts";
 import type { AttackHooks } from "./attacks.ts";
 import { computeFlowField, tileOf } from "./flow.ts";
 import {
@@ -911,6 +911,7 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   if (guardianIntro(w)) {
     stepGuardianIntro(w, dtMs);
     stepAttacks(w, dtMs, attackHooks(w));
+    veteranBreaksProps(w);
     stepParticles(w, dtMs);
     return w;
   }
@@ -926,6 +927,7 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   }
   // The expansion's rifts, mines, tethers, lobs, fields and discs.
   stepAttacks(w, dtMs, attackHooks(w));
+  veteranBreaksProps(w);
   // A travelling band — the slam's, a sword wave — breaks the stone it runs into, once a wave each.
   for (const s of w.shockwaves) {
     if (!s.alive || s.chargeMs > 0 || s.byPlayer) continue;
@@ -3038,6 +3040,30 @@ export const BOSS_SLAM_IMPACT_PX = 56;
  */
 const BOSS_PROP_DAMAGE = 18;
 const BOSS_PROP_WAVE_DAMAGE = 12;
+/**
+ * **The Frontier Veteran's blows are not stopped by the room's clutter**
+ * (doc 024). Its stakes, its volley's lines and its fire run through props
+ * rather than ending at them (`isStone`) and smash each they reach: a line
+ * when it fires, the fire as it rolls out. Only stone holds them. Its sweep,
+ * bash and palisade smash what they hit where they land
+ * (`resolveEnemySwings`, `stepEruptions`), and its ram already does
+ * (`smashProps`).
+ */
+function veteranBreaksProps(w: World): void {
+  for (const r of w.rifts) {
+    if (!r.alive || !r.breaksProps || r.teleMs > 0 || r.activeMs <= 0) continue;
+    r.breaksProps = false;
+    smashPropsWhere(w, (q) => riftHits(r, q.x, q.y, q.radius));
+  }
+  for (const f of w.flames)
+    if (f.alive && f.breaksProps) smashPropsWhere(w, (q) => flameCovers(f, q.x, q.y, q.radius));
+}
+
+/** Smashes outright every standing prop `hits` finds; not the throne hall's columns, which only the king's blows wear. */
+function smashPropsWhere(w: World, hits: (q: Destructible) => boolean): void {
+  for (const q of w.props) if (q.hp > 0 && !hallProp(q) && hits(q)) damageProp(w, q, q.hp);
+}
+
 /** Breaks what `hits` finds among the standing props, each at most once for the blow that `seen` belongs to. */
 function bossStrikesProps(w: World, hits: (q: Destructible) => boolean, seen: number[], amount = BOSS_PROP_DAMAGE): void {
   w.props.forEach((q, i) => {
@@ -5150,8 +5176,10 @@ function resolveEnemySwings(w: World): void {
       box.x = e.x;
       box.y = e.y;
     }
-    // The king's sword breaks what it passes through (`BOSS_PROP_DAMAGE`), once a swing each.
+    // The king's sword breaks what it passes through (`BOSS_PROP_DAMAGE`), once a swing each;
+    // the Frontier Veteran's sweep and bash smash it outright (`veteranBreaksProps`).
     if (e.archetype === "boss") bossStrikesProps(w, (q) => sectorHits(box, q, q.radius), box.hitIds);
+    else if (e.guardian) smashPropsWhere(w, (q) => sectorHits(box, q, q.radius));
     // Dedup per swing, the same way the player's own arc does: one attack is
     // one hit however many frames the player spends inside it.
     if (box.hitIds.includes(PLAYER_HIT_ID)) continue;
@@ -5753,6 +5781,8 @@ function stepEruptions(w: World, dtMs: number): void {
     c.ageMs = 0;
     // An enemy's cell (the Frontier Veteran's palisade): the player, once a cast, and nothing else.
     if (c.hostile) {
+      // A stake comes up through whatever stands on its cell (`veteranBreaksProps`).
+      smashPropsWhere(w, (q) => propHit(q, c.x, c.y, c.radius));
       const p = w.player;
       if (w.hostileCastHit !== c.castId && Math.hypot(p.x - c.x, p.y - c.y) <= c.radius + PLAYER_RADIUS) {
         w.hostileCastHit = c.castId;

@@ -636,6 +636,12 @@ export interface Rift {
   beam?: boolean;
   /** A bolt of the king's call at a phase change rather than his storm: drawn violet, the same blow. */
   summon?: boolean;
+  /**
+   * The Frontier Veteran's line (doc 024): it goes through the room's props
+   * rather than stopping at them, and breaks each it crosses when it fires.
+   * Cleared once it has.
+   */
+  breaksProps?: boolean;
 }
 
 /**
@@ -924,6 +930,8 @@ export interface Flame {
   ms: number;
   /** Whether it has already struck the player: one hit a shot. */
   hit: boolean;
+  /** The Frontier Veteran's fire: it rolls through the room's props and burns each it reaches (`flameCovers`). */
+  breaksProps?: boolean;
 }
 
 /** One cell of grass: whole until fire reaches it, burning for a while, then burnt for good. */

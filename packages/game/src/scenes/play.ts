@@ -6388,7 +6388,7 @@ export class PlayScene extends Phaser.Scene {
       const m = muzzleOf(w, e, e.facing);
       const range = MUSKET_RANGE * (e.guardian ? GUARDIAN_ATTACK_RANGE_MULT : 1);
       const spreadDeg = MUSKET_SPREAD_DEG * (e.guardian ? GUARDIAN_MUSKET_SPREAD_MULT : 1);
-      const rays = flameRays(w, m.x, m.y, e.facing, range, spreadDeg);
+      const rays = flameRays(w, m.x, m.y, e.facing, range, spreadDeg, !!e.guardian);
       const half = (spreadDeg / 2) * Math.PI / 180;
       drawFlameCone(g, m.x, m.y, e.facing, half, rays, t, w.tick, this.teleView());
     }
