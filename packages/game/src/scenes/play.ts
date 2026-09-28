@@ -18180,32 +18180,17 @@ function drawEnemy(
         grit.setFillStyle(0xb9b9c6, 0.5 * (1 - land)).setDepth(4);
       }
     }
-  } else if (e.guardian && e.meleeKind === "charge" && e.attack === "lunge") {
-    /*
-     * The ram is a burst, not a walk cycle: ease into a long, low launch and
-     * hand the last slice to the authored `follow` frame. The cubic ease is
-     * intentionally front-loaded so the body feels like it has mass behind
-     * it, while the small vertical squash keeps the sprite from floating.
-     */
-    const spec = MELEE_ATTACKS.charge;
-    const t = Math.max(0, Math.min(1, 1 - e.attackMs / Math.max(1, spec.lungeMs)));
-    const burst = 1 - Math.pow(1 - t, 3);
-    const impact = Math.max(0, (t - 0.78) / 0.22);
-    // Keep the run low and forceful. The backward lean belongs exclusively
-    // to the following brake/recover frame, so the charge reads as two clear
-    // beats instead of morphing into a thrust before it has stopped.
-    img.setScale(
-      base * (1 + 0.08 * burst + 0.08 * impact),
-      base * (1 - 0.05 * burst - 0.06 * impact),
-    );
   } else if (e.guardian && e.meleeKind === "charge" && e.brakeMs > 0) {
     /*
-     * The first brake frame lands hard: a square-root curve makes the squash
-     * arrive immediately, then release over the authored `recover` pose.
+     * The ram and its stop are carried by the authored `follow` and `recover`
+     * frames, not by squashing the sprite: at `GUARDIAN_SCALE` a fractional
+     * stretch drops and doubles whole art-pixel columns under nearest
+     * sampling, which read as the drawing tearing. The stop keeps only its
+     * drop onto the floor, arriving at once and easing out.
      */
     const stop = Math.pow(1 - brakeFraction(e), 0.45);
     img.y += 2.5 * stop;
-    img.setScale(base * (1 + 0.16 * stop), base * (1 - 0.2 * stop));
+    img.setScale(base);
   } else if ((e.meleeKind === "bristle" || e.meleeKind === "lance") && e.attack === "windup") {
     // Bracing to drive the spikes out: drawn in and down a touch.
     img.setScale(base * 1.04, base * 0.94);
@@ -18281,6 +18266,9 @@ function drawEnemy(
   img.x += feel.offX;
   img.y += feel.offY;
   img.setRotation(img.rotation + feel.tilt);
+  // Drawn at twice a warden's size, the Veteran's art pixels are large enough
+  // that an uneven one shows as a tear; hold it to whole screen pixels.
+  if (e.guardian) snapToScreenTexels(img, scene.cameras.main.zoom);
 
   /*
    * **Calling the storm**: a blue glow off his whole outline, pulsing out
@@ -19890,6 +19878,24 @@ function overheadPx(e: { archetype: string; radius: number; guardian?: unknown }
   // the helmet or obscure its raised-gun silhouette.
   if (e.guardian) return Math.round((e.radius / GUARDIAN_SCALE + 9) * GUARDIAN_SCALE) + 26;
   return e.archetype === "boss" ? 56 + BOSS_DRAW_RISE_PX : e.radius + 9;
+}
+
+/**
+ * Holds a nearest-sampled image to the screen's pixel grid: each texel a whole
+ * number of screen pixels wide and tall, and its top-left edge on a screen
+ * pixel. A fractional scale or offset makes some art-pixel columns one pixel
+ * wider than their neighbours, which is invisible on a small body and a
+ * visible tear on a large one. `zoom` is screen pixels per world unit.
+ */
+function snapToScreenTexels(img: Phaser.GameObjects.Image, zoom: number): void {
+  const snapScale = (s: number): number =>
+    Math.sign(s || 1) * Math.max(1, Math.round(Math.abs(s) * zoom)) / zoom;
+  const sx = snapScale(img.scaleX), sy = snapScale(img.scaleY);
+  img.setScale(sx, sy);
+  const w = img.width * Math.abs(sx), h = img.height * Math.abs(sy);
+  const left = Math.round((img.x - w * img.originX) * zoom) / zoom;
+  const top = Math.round((img.y - h * img.originY) * zoom) / zoom;
+  img.setPosition(left + w * img.originX, top + h * img.originY);
 }
 
 /** How far apart a room's two drains are kept, in cells: two grates side by side read as one broken one. */
