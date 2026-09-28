@@ -3,7 +3,7 @@ id: 027
 title: Poise
 status: proposed
 date: 2026-09-28
-summary: Every body has poise, shown as a thin gold bar under its feet. A blow wears it by the blow's weight, not its damage, so a sword blow or a heavy spell wears it and a spray of sparks barely does. Nothing short of the break interrupts a body, and the break interrupts whatever it had started. How much poise a body has is set by how long its attacks are announced, so a held sword can never lock it and a quick attack is never unstoppable. Poise refills slowly, only after two seconds unhit, and after a break the body cannot be broken again for 1.85 s. The Frontier Veteran's poise is its stance. The bellringer's ward heals.
+summary: Every body has poise; the plated and the elites show it as a thin gold line under their feet. A blow wears it by the blow's weight, not its damage, so a sword blow or a heavy spell wears it and a spray of sparks barely does. Nothing short of the break interrupts a body, and the break interrupts whatever it had started. How much poise a body has is set by how long its attacks are announced, so a held sword can never lock it and a quick attack is never unstoppable. Poise refills slowly, only after two seconds unhit, and after a break the body cannot be broken again for 1.85 s. The Frontier Veteran's poise is its stance. The bellringer's ward heals.
 depends_on: [005, 006, 013, 019, 024]
 ---
 
@@ -78,7 +78,8 @@ Three things carry over:
 | After a break | a guard of `POISE_GUARD_MS` past the stagger (1.85 s in all). Blows land, but they neither wear its poise nor interrupt it. It always gets a turn inside it, since every tell in the roster is shorter |
 | Recovery | nothing comes back for `POISE_REGEN_DELAY_MS` (2 s) after its last blow, longer than a dodge and the attack it answered. Then it refills at `POISE_REGEN_PER_S` (40% of the bar a second) |
 | Scaling | multiplied by the room's `hp` (the player's damage grows too) and softened in the opening by `Ramp.poise` (0.6 → 0.8 → 1 by room 6), blended room by room like the rest of the ramp. `armored` doubles it |
-| Shown | a thin gold bar **under the feet**, filling as blows wear it, from the first blow until it has refilled. It flashes in its last quarter. During the guard it is pale and draining. It is under the feet because over the head it was drawn across every damage number |
+| Shown | on the **plated and the elites only**: a thin gold line under the feet, with no frame, filling as blows wear it, from the first blow until it has refilled. It flashes in its last quarter. During the guard it is pale and draining. The others break in two blows, so a bar on them was full the moment it appeared; whether they were stopped shows in the body. It is under the feet because over the head it was drawn across every damage number |
+| Heard | a plated body's break is `armour_break`, which is rare and earned. Every other body's break is heard as the hit that caused it: a cue of its own on each would rattle under every fight |
 
 ### How much, by tell
 

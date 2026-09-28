@@ -9,7 +9,7 @@ import {
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
   moodTransform, tintRGBA, dashInvulnerable, MELEE, POISE_BREAK_MS, POISE_BREAK_STAGGER_MS, POISE_GUARD_MS, brakeFraction, ENEMIES,
-  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_MUSKET_SPREAD_MULT, GUARDIAN_CALL_MS, GUARDIAN_STANCE, GUARDIAN_BROKEN_MS, GUARDIAN_SINK_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
+  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_MUSKET_SPREAD_MULT, GUARDIAN_CALL_MS, GUARDIAN_STANCE, GUARDIAN_BROKEN_MS, GUARDIAN_SINK_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, plated, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, audienceRoomFor, RUN_GUARDIAN_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTextKey, affixFitsSpell, itemShape,
@@ -8463,11 +8463,13 @@ export class PlayScene extends Phaser.Scene {
           // A body braking into a wall, and a shot stopped by a ward, are not
           // blows landed: they get the world's chip rather than the sword's.
           if (what.startsWith("brake:") || what.startsWith("wall:") || what === "ward") { sfx.play("wall_hit"); break; }
-          // Poise (`Enemy.poise`): breaking it uses the ordinary hit sound.
-          // Regular damage already emits that sound below; the fallback is
-          // for breaks caused by a wall or another interrupt with no damage
-          // hit event of its own.
+          // Poise (`Enemy.poise`): a plated body's break is heard as the plate
+          // giving, which is rare and earned (three or four blows). Every other
+          // body breaks in two, often, and is heard as the hit that did it:
+          // a cue of its own on each would be a rattle under every fight.
           if (what.startsWith("poise_break:")) {
+            const broken = w.enemies.find((o) => Math.hypot(o.x - ev.x, o.y - ev.y) < 1);
+            if (broken && plated(broken)) { sfx.play("armour_break"); break; }
             const hasRegularHit = w.events.some((o) =>
               o.kind === "enemy_hit" && o.amount !== undefined && !o.what?.startsWith("poise_")
                 && Math.hypot(o.x - ev.x, o.y - ev.y) < 1,
@@ -17985,7 +17987,12 @@ function drawEnemy(
    * head, where the damage numbers rise from, the status marks sit and the
    * alert pops: over the head every blow's number was drawn across it.
    */
+  // Only on a body worth reading one on: the plated and the elites. A rusher's
+  // is two blows long, so its bar was full the moment it appeared, and a room
+  // of them was a room of flickering lines; whether it was stopped shows in
+  // the body itself.
   if (!e.guardian && e.archetype !== "boss" && e.maxPoise > 0 && e.hp > 0 && e.spawnFadeMs <= 0
+    && (plated(e) || e.affixes.length > 0)
     && (e.poise < e.maxPoise - 0.01 || e.poiseGuardMs > 0)) {
     const W = Math.max(14, Math.round(e.radius * 1.8));
     const y = e.y + e.radius + 4;
