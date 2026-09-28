@@ -50,9 +50,10 @@ import {
   breakable, clearPropCell, expiredProps, placeFixtures, placeProps, placeStanding, propHit, stepProps,
   PROP_MANA_FRACTION,
 } from "./props.ts";
-import { COIN_VALUE, MANA_ORB, drop, makePickupPool, stepPickups } from "./pickups.ts";
+import { COIN_VALUE, MANA_ORB, burstCoins, drop, makePickupPool, stepPickups } from "./pickups.ts";
+import { CHEST_GOLD } from "../run/chest.ts";
 import { audienceKill, makeAudience, stepAudience } from "./audience.ts";
-import { GUARDIAN_XP, makeGuardian, stepGuardian } from "./guardian.ts";
+import { GUARDIAN_HEARTS, GUARDIAN_XP, makeGuardian, stepGuardian } from "./guardian.ts";
 import { makeObjective, placeTargets, stepObjective } from "./objective.ts";
 import {
   enteredPortal, makePortal, placeRewardNear, portalsBefore, raisePortals, stepPortals, stepReward,
@@ -331,6 +332,8 @@ export interface CreateWorldOptions {
   readonly audience?: boolean;
   /** Room 10's guardian fight (doc 024): the Drowned Warden stands in the room with its squad. */
   readonly guardian?: boolean;
+  /** A special room's chest (doc 026): it stands beside the reward once the room clears. */
+  readonly chest?: boolean;
 }
 
 /**
@@ -628,6 +631,7 @@ function buildWorld(input: CreateWorldOptions): World {
      */
     roomIndex: o.roomIndex ?? 99,
     ...(o.audience ? { audience: makeAudience(), awaitingBoss: true } : {}),
+    ...(o.chest ? { chestDue: true } : {}),
     ...(o.guardian ? { guardianRoom: true } : {}),
     coinBoost: Math.max(1, Math.min(COIN_BOOST_MAX, o.coinBoost ?? 1)),
     attackTokens: ATTACK_TOKENS,
@@ -923,7 +927,8 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
         kind: "reward_shown", x: w.rewardDrop.x, y: w.rewardDrop.y,
         what: w.rewardDrop.kind,
       });
-    } else if (w.offer) {
+    }
+    if (w.chestDue) placeChest(w); else if (w.offer) {
       /*
        * **A gold room scatters coins and opens.**
        *
@@ -958,6 +963,7 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
 function stepExits(w: World, dtMs: number, interact: boolean): void {
   stepPortals(w.portals, dtMs);
   stepReward(w.rewardDrop, dtMs);
+  stepChest(w);
   if (!w.exited) {
     const through = enteredPortal(w.portals, w.player, interact);
     if (through) {
@@ -967,6 +973,36 @@ function stepExits(w: World, dtMs: number, interact: boolean): void {
       });
     }
   }
+}
+
+/**
+ * **The chest takes its ground** (doc 026): beside the player like the reward,
+ * never on the reward's own cell or next to it, nor on a hazard.
+ */
+function placeChest(w: World): void {
+  w.chestDue = false;
+  const avoid = new Set(hazardCells(w));
+  const r = w.rewardDrop;
+  if (r) {
+    const rx = Math.floor(r.x / TILE_PX), ry = Math.floor(r.y / TILE_PX);
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) avoid.add((ry + dy) * GRID_W + rx + dx);
+  }
+  const at = placeRewardNear(w.room.grid, "stat", w.player, avoid);
+  w.chest = { x: at.x, y: at.y, open: false };
+  w.events.push({ kind: "telegraph", x: at.x, y: at.y, what: "chest_shown" });
+}
+
+/** How close the player comes for the chest to open: a touch, like a pickup. */
+const CHEST_REACH = TILE_PX * 0.9;
+
+/** Touched, the chest opens: its gold bursts out, and the caller hands over its stat on `chest_opened`. */
+function stepChest(w: World): void {
+  const c = w.chest;
+  if (!c || c.open || Math.hypot(w.player.x - c.x, w.player.y - c.y) > CHEST_REACH) return;
+  c.open = true;
+  burstCoins(w.pickups, c.x, c.y, CHEST_GOLD, w.rng);
+  for (const p of w.pickups) if (p.alive && p.kind === "coin") p.homing = true;
+  w.events.push({ kind: "telegraph", x: c.x, y: c.y, what: "chest_opened" });
 }
 
 /** Floor tiles a point can see, sampled on the tile grid. */
@@ -2507,7 +2543,14 @@ function onEnemyKilled(w: World, e: Enemy): void {
   // squad goes with it the same way, and its death pays a room (doc 024).
   if (e.archetype === "boss" || e.guardian)
     for (const other of w.enemies) if (other !== e && other.hp > 0) { other.summoned = true; other.hp = 0; }
-  if (e.guardian) payXp(w, GUARDIAN_XP, e.x, e.y);
+  if (e.guardian) {
+    payXp(w, GUARDIAN_XP, e.x, e.y);
+    for (let i = 0; i < GUARDIAN_HEARTS; i++) {
+      const h = drop(w.pickups, "heart", e.x, e.y, w.rng);
+      h.value = 0;
+      h.homing = true;
+    }
+  }
 }
 
 /*

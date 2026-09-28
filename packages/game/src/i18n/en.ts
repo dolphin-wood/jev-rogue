@@ -309,6 +309,7 @@ export const EN = {
   "toast.gaveUpReward": "Reward skipped  +{gold} {coin}",
   "toast.onKey": "{label} on {key}",
   "toast.toLv": "{spell} upgraded to Lv {level}",
+  "toast.chest": "Chest: {stat}, and {gold}{coin}",
   /* The auto level-up banner: the level, then what it gave. */
   "toast.levelUp": "LEVEL {n}   +{hp} health · sword {from} → {to}",
   "toast.alreadyMax": "{label} is already Lv {max}. Hold X to dismantle",

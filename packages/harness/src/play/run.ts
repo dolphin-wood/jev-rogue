@@ -15,7 +15,7 @@ import {
   levelAt, withLevels,
   observedFigures,
   bucketConsistency, cardStyleTags, measureOf, observedLabels, UNMEASURED,
-  makeEnemy, GRID_W, GRID_H, TILE_PX, runStaff, SPELL_LEVEL_MAX, slotCost, affixFitsSpell, spellAffixById, journalDoor, cardTypesOf,
+  makeEnemy, GRID_W, GRID_H, TILE_PX, runStaff, SPELL_LEVEL_MAX, slotCost, affixFitsSpell, spellAffixById, journalDoor, cardTypesOf, hasChest, CHEST_SALT, CHEST_GOLD,
 } from "@jr/core";
 import type {
   Archetype, ItemInstance, RoomType, JournalDoor, RunContext, RunHistory, RunJournalEntry, Staff, Tension, World,
@@ -524,6 +524,12 @@ export async function playRun(
           room_index: index, pool: cardPool(ITEMS, ownedFor(k), k, held, {}, needs), count: 1,
           pity: false, temptation: false, salt: `shop_${k}`,
         });
+    // A special room's chest (doc 026): one stat card, asked in the same request.
+    if (isFight && hasChest(seed, index, roomType))
+      cardReqs.push({
+        room_index: index, pool: cardPool(ITEMS, ownedFor("stat"), "stat", held, {}, needs), count: 1,
+        pity: false, temptation: false, salt: CHEST_SALT,
+      });
     const offerReq: OfferRequest = { cards: cardReqs };
 
     // The Director still plans the fights; the merchant and the boss are
@@ -539,6 +545,8 @@ export async function playRun(
     const answered = stage === "boss" || cardReqs.length === 0 ? null
       : planned?.offer ?? await director.planOffer(ctx, offerReq);
 
+    const chestAt = cardReqs.findIndex((r) => r.salt === CHEST_SALT);
+    const chestStat = chestAt >= 0 ? answered?.cards[chestAt]?.ids[0] ?? null : null;
     let cards: OfferCard[] = [];
     const cardIds = decidedCards ?? (isFight && door.reward !== "gold" ? answered?.cards[0]?.ids : undefined);
     if (cardIds && door.reward !== "gold") {
@@ -652,6 +660,14 @@ export async function playRun(
     totalMs += result.ms;
     // Doc 003's economy: a clear pays, an elite pays more.
     if (isFight) gold += elite ? 28 : 12;
+    // The chest, opened on the way to the reward (doc 026): its gold and the Director's stat.
+    if (hearts > 0 && result.cleared && chestStat) {
+      gold += CHEST_GOLD;
+      statsTaken++;
+      statsTaken_.push(chestStat);
+      mods = applyStat(mods, chestStat);
+      if (chestStat === "vigour") hearts += 1;
+    }
     const grade = isFight ? door.grade : 1;
 
     let reward: string | null = null;

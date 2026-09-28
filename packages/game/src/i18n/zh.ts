@@ -304,6 +304,7 @@ export const ZH: Table = {
   "toast.gaveUpReward": "已放弃奖励  +{gold} {coin}",
   "toast.onKey": "「{label}」→ {key}",
   "toast.toLv": "「{spell}」升至 Lv {level}",
+  "toast.chest": "宝箱：{stat}，以及 {gold}{coin}",
   "toast.levelUp": "升至 {n} 级   生命值 +{hp} · 剑 {from} → {to}",
   "toast.alreadyMax": "「{label}」已是 Lv {max}，长按 X 可拆解",
   "toast.atTopLevel": "「{label}」已满级：+{gold} {coin}",

@@ -45,8 +45,15 @@ export const GUARDIAN_ARMOUR = 60;
 export const GUARDIAN_SCALE = 2;
 /** What its death pays in experience: an ordinary room's take, at its top (`KING_AUDIENCE_XP`'s reasoning). */
 export const GUARDIAN_XP = 110;
+/**
+ * Hearts its death leaves, flying to the player: the heal after the fight
+ * (doc 024). It is the run's second-hardest room, and the rooms after it are
+ * the last stretch before the throne; the first audience needs none, since
+ * its spare hearts come home when he leaves.
+ */
+export const GUARDIAN_HEARTS = 2;
 /** The squad a later call brings: bodies the player has known since the opening rooms. */
-export const GUARDIAN_SQUAD: readonly EnemyId[] = ["rusher", "shooter", "rusher"];
+export const GUARDIAN_SQUAD: readonly EnemyId[] = ["rusher", "shooter"];
 /** The most bodies its entrance brings, whatever the room's wave held. */
 export const GUARDIAN_ENTRANCE_MAX = 4;
 /** How long it holds its arm up before the dead answer: the call's telegraph, and the player's window. */
@@ -54,7 +61,7 @@ export const GUARDIAN_CALL_MS = 1100;
 /** How soon after the room opens it makes its entrance call: the player through the door and looking. */
 export const GUARDIAN_ENTRANCE_MS = 500;
 /** How long after one call before it may call again. */
-export const GUARDIAN_CALL_EVERY_MS = 16_000;
+export const GUARDIAN_CALL_EVERY_MS = 20_000;
 /** It calls again only when its squad is down to this many. */
 export const GUARDIAN_CALL_BELOW = 1;
 

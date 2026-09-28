@@ -74,6 +74,8 @@ on a rusher still standing would not have ended.
   doors out of room 4 are (`leadsToFixedFight`).
 - **It pays** its door's reward a grade higher and `GUARDIAN_XP`, an ordinary
   room's take, on the kill.
+  Its death also leaves `GUARDIAN_HEARTS` hearts flying to the player, and
+  the room leaves a chest (doc 026).
 - **It is a peak**, so room 11 is the trough (doc 014).
 - **On entry** the room shows its name, small and high, and one line of what
   to do: it calls the dead, and a ram into a wall breaks its armour. It never

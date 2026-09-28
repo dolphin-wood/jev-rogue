@@ -9,7 +9,7 @@ import {
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
   moodTransform, tintRGBA, dashInvulnerable, MELEE, ARMOUR_BREAK_MS, brakeFraction, ENEMIES,
-  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_CALL_MS, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
+  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_CALL_MS, hasChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, audienceRoomFor, RUN_GUARDIAN_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTierKey, affixFitsSpell, itemShape,
@@ -1185,6 +1185,11 @@ export class PlayScene extends Phaser.Scene {
   /** Card plans made when this room's doors opened, carried to the chosen door's room. */
   private doorCardPlans = new Map<RewardCardKind, CardPlan>();
   private roomCardPlan: CardPlan | null = null;
+  /** Whether this room leaves a chest (doc 026), and the stat the Director put in it. */
+  private chestDue = false;
+  private chestStat: string | null = null;
+  /** The chest on the floor, once the room has cleared. */
+  private chestGfx: { body: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Image } | null = null;
   /** A room with no fight met mid-run: which of them stands in it, or null for a fight. */
   private npcRoom: NpcKind | null = null;
   private npcRooms = 0;
@@ -2441,6 +2446,8 @@ export class PlayScene extends Phaser.Scene {
       audience: fight && isAudienceRoom(index, this.audienceRoom),
       // Room 10's guardian stands in its room from the first frame (doc 024).
       guardian: fight && isGuardianRoom(index),
+      // A special room leaves a chest beside its reward (doc 026).
+      chest: fight && this.chestDue && this.chestStat !== null,
       dealtMult: this.dealtMult,
       takenMult: this.takenMult,
       invincible: this.invincible,
@@ -2573,6 +2580,16 @@ export class PlayScene extends Phaser.Scene {
         room_index: run.roomIndex, pool: cardPool(ITEMS, this.ownedFor(kind), kind, held, promise, needs),
         count: CARDS_PER_OFFER, pity: this.needMisses >= 3, temptation: this.offersMade % 4 === 3,
       });
+    /*
+     * **The special room's chest** (doc 026): one stat card, asked of the
+     * Director in the same request, from the stat door's own pool.
+     */
+    this.chestDue = fight && hasChest(this.runSeed, run.roomIndex, this.elite ? "elite" : "combat", this.forceObjective !== null);
+    if (this.chestDue)
+      cards.push({
+        room_index: run.roomIndex, pool: cardPool(ITEMS, this.ownedFor("stat"), "stat", held, {}, needs),
+        count: 1, pity: false, temptation: false, salt: CHEST_SALT,
+      });
     // The merchant's shelf: one card of each kind gold buys.
     if (!fight && (stage === "shop" || this.npcRoom === "merchant"))
       for (const k of SHELF_KINDS)
@@ -2602,6 +2619,7 @@ export class PlayScene extends Phaser.Scene {
   ): Promise<{ offer: Offer; stock: OfferCard[] }> {
     this.portalPlan = null;
     this.cardPlan = null;
+    this.chestStat = null;
     const { kind, promise } = ask;
     if (stage === "boss") return { offer: { cards: [], doors: [], coins: 0 }, stock: [] };
     try {
@@ -2632,6 +2650,15 @@ export class PlayScene extends Phaser.Scene {
       let stock: OfferCard[] = [];
       const reqs = ask.request.cards ?? [];
       const cardPlan = plan.cards[0];
+      const chestAt = reqs.findIndex((r) => r.salt === CHEST_SALT);
+      const chestPlan = chestAt >= 0 ? plan.cards[chestAt] : undefined;
+      if (chestPlan) {
+        const prefix = `${CHEST_SALT}__`;
+        record(chestPlan.decisions.map((d) => ({ ...d, question: `${prefix}${d.question ?? ""}` })),
+          { prefix, label: "chest", blended: chestPlan.blended, ids: chestPlan.ids });
+        this.chestStat = chestPlan.ids[0] ?? null;
+      }
+      if (this.chestDue && !this.chestStat) this.chestStat = offerCards(ITEMS, src.stream("chest"), this.owned, "stat", held)[0]?.itemId ?? null;
       if (fight && kind !== "gold" && this.roomCards) {
         // Decided with the door the player came through, against the build they carried through it.
         this.cardPlan = this.roomCardPlan;
@@ -2666,6 +2693,7 @@ export class PlayScene extends Phaser.Scene {
       };
     } catch (err) {
       console.warn("[director] offer fell back to the rules:", err);
+      if (this.chestDue) this.chestStat = offerCards(ITEMS, src.stream("chest"), this.owned, "stat", held)[0]?.itemId ?? null;
       const fallbackOffer = ruleOffer(ITEMS, src.stream("offer"), this.owned, run,
         stage === "shop" ? shopKind(src.stream("shop")) : kind, held, promise, this.portalCount);
       const fixed = fixedExit(run.roomIndex);
@@ -3278,6 +3306,7 @@ export class PlayScene extends Phaser.Scene {
     this.eliteMarks = [];
     this.hideRewards();
     this.destroyRewardDrop();
+    this.destroyChest();
 
     this.buildPortalGfx();
   }
@@ -9079,6 +9108,8 @@ export class PlayScene extends Phaser.Scene {
         if (ev.kind === "telegraph" && ev.what?.startsWith("blink"))
           this.puffs.push({ x: ev.x, y: ev.y, ms: PUFF_MS, element: "none", scale: 1.7 });
         if (ev.kind === "reward_shown") this.buildRewardDrop();
+        if (ev.kind === "telegraph" && ev.what === "chest_shown") this.buildChest(ev.x, ev.y);
+        if (ev.kind === "telegraph" && ev.what === "chest_opened") this.openChest();
       }
       if (this.world.stats.shotsFired > shotsBefore) this.castFlash();
       // Every sound of this step, in one place: see `playWorldSounds`.
@@ -10165,6 +10196,68 @@ export class PlayScene extends Phaser.Scene {
       tu.objects.push(this.add.rectangle(barX, top, 2, trackH, 0x2a2750, 1).setOrigin(0, 0).setDepth(241));
       tu.objects.push(this.add.rectangle(barX, thumbY, 2, thumbH, 0x6a7396, 1).setOrigin(0, 0).setDepth(241.1));
     }
+  }
+
+  /**
+   * A stat upgrade, `times` over, into the run's modifiers. Applied to the
+   * **run's** modifiers, not to the player, because the player is rebuilt
+   * every room and the upgrade is not; the heart bonus is granted at once.
+   */
+  private grantStat(id: string, times = 1): void {
+    for (let k = 0; k < times; k++) {
+      this.mods = applyStat(this.mods, id);
+      this.statsTaken.push(id);
+      if (id === "vigour") this.world.player.hearts += 1;
+    }
+    /*
+     * The cards **and** the level: `baseMods` is the card half the world
+     * rebuilds the body from on every level, so both have to move or the
+     * next level-up would throw this card away (`run/levels.ts`).
+     */
+    this.world.baseMods = { ...this.mods };
+    this.world.player.mods = this.liveMods();
+    // The run's new modifiers reach this room's live numbers too.
+    if (id === "deep_well") {
+      this.world.staff = { ...this.world.staff, mana_max: Math.round(this.world.staffManaBase * this.world.player.mods.manaMax) };
+    }
+  }
+
+  /** The special room's chest on the floor (doc 026), shut, with a faint glow so it is found. */
+  private buildChest(x: number, y: number): void {
+    this.destroyChest();
+    const glow = this.add.image(x, y, this.uiTextureKey, safeFrame(this.atlas, "prop_chest_0", "prop_shop_0"))
+      .setOrigin(0.5, 0.6).setScale(1 / ART_SCALE).setDepth(4.4).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.35);
+    const body = this.add.image(x, y, this.uiTextureKey, safeFrame(this.atlas, "prop_chest_0", "prop_shop_0"))
+      .setOrigin(0.5, 0.6).setScale(1 / ART_SCALE).setDepth(bodyDepth(y, 0));
+    this.tweens.add({ targets: glow, alpha: 0.1, duration: 700, yoyo: true, repeat: -1 });
+    this.chestGfx = { body, glow };
+    this.sfx.play("reward_reveal");
+  }
+
+  /** Touched: the lid up, the gold out (the world's), and the Director's stat taken into the run. */
+  private openChest(): void {
+    const g = this.chestGfx;
+    if (g) {
+      g.body.setFrame(safeFrame(this.atlas, "prop_chest_1", "prop_chest_0"));
+      this.tweens.killTweensOf(g.glow);
+      g.glow.setFrame(safeFrame(this.atlas, "prop_chest_1", "prop_chest_0")).setAlpha(0.5);
+      this.tweens.add({ targets: g.glow, alpha: 0, duration: 900 });
+    }
+    this.sfx.play("clear");
+    const id = this.chestStat;
+    this.chestStat = null;
+    if (!id) return;
+    this.grantStat(id);
+    this.tookLabel = t("toast.chest", { stat: contentName(id, statById(id)?.name ?? id), gold: CHEST_GOLD, coin: "{coin}" });
+    this.tookMs = 2400;
+  }
+
+  private destroyChest(): void {
+    if (!this.chestGfx) return;
+    this.tweens.killTweensOf(this.chestGfx.glow);
+    this.chestGfx.body.destroy();
+    this.chestGfx.glow.destroy();
+    this.chestGfx = null;
   }
 
   /** A dismantled spell's gold, as coins bursting from where it was, flying to the player. */
@@ -11529,22 +11622,7 @@ export class PlayScene extends Phaser.Scene {
        * the player at their old total reads as having done nothing.
        */
       // An elite door's stat is applied twice.
-      for (let k = 0; k < Math.min(2, card.grade ?? 1); k++) {
-        this.mods = applyStat(this.mods, card.itemId);
-        this.statsTaken.push(card.itemId);
-        if (card.itemId === "vigour") this.world.player.hearts += 1;
-      }
-      /*
-       * The cards **and** the level: `baseMods` is the card half the world
-       * rebuilds the body from on every level, so both have to move or the
-       * next level-up would throw this card away (`run/levels.ts`).
-       */
-      this.world.baseMods = { ...this.mods };
-      this.world.player.mods = this.liveMods();
-      // The run's new modifiers reach this room's live numbers too.
-      if (card.itemId === "deep_well") {
-        this.world.staff = { ...this.world.staff, mana_max: Math.round(this.world.staffManaBase * this.world.player.mods.manaMax) };
-      }
+      this.grantStat(card.itemId, Math.min(2, card.grade ?? 1));
     } else if (card.itemId && this.heldIndex(card.itemId) >= 0) {
       // A copy of a held spell raises it; at the cap it is paid out instead.
       const at = this.heldIndex(card.itemId);

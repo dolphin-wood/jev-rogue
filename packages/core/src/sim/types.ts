@@ -2195,6 +2195,10 @@ export interface World {
   guardianRoom?: boolean;
   /** The room's objective in play (doc 025, `sim/objective.ts`). */
   objective?: ObjectiveState;
+  /** Whether this room leaves a chest when it clears (doc 026). */
+  chestDue?: boolean;
+  /** The chest on the floor once the room has cleared (doc 026); `open` once the player has touched it. */
+  chest?: { x: number; y: number; open: boolean };
   /**
    * Half the camera's view, px: what the player can see. A body fires only
    * from wholly inside it, and closes slower further off (`firePresence`).

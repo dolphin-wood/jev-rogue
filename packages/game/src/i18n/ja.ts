@@ -303,6 +303,7 @@ export const JA: Table = {
   "toast.gaveUpReward": "報酬を放棄  +{gold} {coin}",
   "toast.onKey": "「{label}」→ {key}",
   "toast.toLv": "「{spell}」が Lv {level} になった",
+  "toast.chest": "宝箱：{stat}、{gold}{coin}",
   "toast.levelUp": "レベル {n}   HP +{hp} · 剣 {from} → {to}",
   "toast.alreadyMax": "「{label}」はもう Lv {max}：X 長押しで分解",
   "toast.atTopLevel": "「{label}」は最大レベル：+{gold} {coin}",

@@ -9,7 +9,7 @@ import { NO_INPUT } from "./types.ts";
 import type { Enemy, World } from "./types.ts";
 import { WORLD_H, WORLD_W } from "./collide.ts";
 import {
-  GUARDIAN_ARMOUR, GUARDIAN_CALL_EVERY_MS, GUARDIAN_CALL_MS, GUARDIAN_ENTRANCE_MS, GUARDIAN_HP, GUARDIAN_SCALE, GUARDIAN_SQUAD, GUARDIAN_XP, makeGuardian,
+  GUARDIAN_ARMOUR, GUARDIAN_CALL_EVERY_MS, GUARDIAN_CALL_MS, GUARDIAN_ENTRANCE_MS, GUARDIAN_HEARTS, GUARDIAN_HP, GUARDIAN_SCALE, GUARDIAN_SQUAD, GUARDIAN_XP, makeGuardian,
 } from "./guardian.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
 import { plainInstance } from "../spells/index.ts";
@@ -101,6 +101,16 @@ describe("the Drowned Warden: the room", () => {
     expect(called).toBe(true);
     expect(g.armour).toBe(GUARDIAN_ARMOUR);
     expect(g.guardian!.callMs).toBeGreaterThan(GUARDIAN_CALL_EVERY_MS - 4000);
+  });
+
+  it("leaves hearts that fly to the player when it falls", () => {
+    const w = guardianWorld("hearts");
+    const g = guardianOf(w);
+    step(w, NO_INPUT);
+    w.player.hearts = 2;
+    g.hp = 0;
+    for (let i = 0; i < 60 * 4; i++) step(w, NO_INPUT);
+    expect(w.player.hearts).toBeGreaterThanOrEqual(2 + GUARDIAN_HEARTS);
   });
 
   it("takes its squad with it, and pays a room's experience", () => {

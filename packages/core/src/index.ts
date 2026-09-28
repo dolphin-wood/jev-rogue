@@ -31,3 +31,4 @@ export * from "./encounters/index.ts";
 // core because the client and the offline generator must run the same code.
 export * from "./audio/index.ts";
 export * from "./run/objectives.ts";
+export * from "./run/chest.ts";
