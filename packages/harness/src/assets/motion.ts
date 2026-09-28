@@ -109,6 +109,13 @@ export interface MotionSpec {
   readonly strike?: string;
   /** A drawn slump for the sleeper, if the body has one. */
   readonly slump?: string;
+  /**
+   * How far the gait rises and sinks, when not its weight's. A body drawn
+   * large — the warden, which the Frontier Veteran is drawn from at twice the
+   * size — carries the heavy bob as a jolt: up a step, down a step, one frame
+   * apart, on every stride.
+   */
+  readonly bob?: number;
 }
 
 const mul = ([x, y]: readonly [number, number], k: number): [number, number] => [Math.round(x * k), Math.round(y * k)];
@@ -157,8 +164,9 @@ function gaitOffsets(spec: MotionSpec, facing: Facing, i: number, n: number): Of
   const phase = (k: number) => (2 * Math.PI * (((k % n) + n) % n)) / n;
   const bobAt = (k: number): number => {
     const c = Math.abs(Math.cos(phase(k))), s = Math.abs(Math.sin(phase(k)));
-    if (c > 0.85) return -Math.round(t.bob * bobScale);
-    if (spec.weight !== "light" && s > 0.85) return Math.round(t.bob * bobScale);
+    const b = spec.bob ?? t.bob;
+    if (c > 0.85) return -Math.round(b * bobScale);
+    if (spec.weight !== "light" && s > 0.85) return Math.round(b * bobScale);
     return 0;
   };
   /*

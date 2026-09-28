@@ -19640,27 +19640,27 @@
     ],
     "enemy_warden_s_walk0": [
       48,
-      16
+      14
     ],
     "enemy_warden_s_walk1": [
       48,
-      10
+      12
     ],
     "enemy_warden_s_walk2": [
       48,
-      16
+      14
     ],
     "enemy_warden_s_walk3": [
       48,
-      16
+      14
     ],
     "enemy_warden_s_walk4": [
       48,
-      10
+      12
     ],
     "enemy_warden_s_walk5": [
       48,
-      16
+      14
     ],
     "enemy_warden_s_windup": [
       48,
@@ -19764,27 +19764,27 @@
     ],
     "enemy_warden_n_walk0": [
       48,
-      16
+      14
     ],
     "enemy_warden_n_walk1": [
       48,
-      10
+      12
     ],
     "enemy_warden_n_walk2": [
       48,
-      16
+      14
     ],
     "enemy_warden_n_walk3": [
       48,
-      16
+      14
     ],
     "enemy_warden_n_walk4": [
       48,
-      10
+      12
     ],
     "enemy_warden_n_walk5": [
       48,
-      16
+      14
     ],
     "enemy_warden_n_windup": [
       48,
@@ -19888,27 +19888,27 @@
     ],
     "enemy_warden_w_walk0": [
       48,
-      15
+      14
     ],
     "enemy_warden_w_walk1": [
       48,
-      11
+      12
     ],
     "enemy_warden_w_walk2": [
       48,
-      15
+      14
     ],
     "enemy_warden_w_walk3": [
       48,
-      15
+      14
     ],
     "enemy_warden_w_walk4": [
       48,
-      11
+      12
     ],
     "enemy_warden_w_walk5": [
       48,
-      15
+      14
     ],
     "enemy_warden_w_windup": [
       52,

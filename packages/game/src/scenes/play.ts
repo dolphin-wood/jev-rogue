@@ -17889,7 +17889,12 @@ function drawEnemy(
   const bossScale = e.archetype === "boss" ? bossFrameScale(atlas, name) : e.guardian ? GUARDIAN_SCALE : 1;
   if (bossScale !== 1) {
     if (e.archetype === "boss") img.x += bossBodyShift(atlas, name, flipX) * (bossScale - 1);
-    img.y -= (atlas.contentBottom(name) - atlas.frame(name).h / 2) * (bossScale - 1) / ART_SCALE;
+    // The Veteran's frames share one rig and one floor, so it scales from its
+    // standing foot line. Measured per frame, a stepping foot that reaches
+    // below that line lifted the whole body with it on every stride.
+    const stand = e.guardian ? name.replace(/_([nsw])_.*$/, "_$1_idle0") : name;
+    const feet = atlas.contentBottom(atlas.has(stand) ? stand : name);
+    img.y -= (feet - atlas.frame(name).h / 2) * (bossScale - 1) / ART_SCALE;
   }
   const base = (1 / ART_SCALE) * (e.affixes.length > 0 ? 1.1 : 1) * bossScale;
 
