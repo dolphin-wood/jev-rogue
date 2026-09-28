@@ -29,6 +29,18 @@ const FLOOR: Record<string, { extremes: number; travel: number }> = {
 };
 
 /**
+ * Bodies that walk smaller than the roster's floor on purpose (`MotionSpec.step`).
+ *
+ * The warden is plate armour, and the Frontier Veteran is drawn from it at
+ * twice the size, where the shared heavy stride read as a jolt on every
+ * step. It marches: short steps, no bob. Still a cycle, with the feet
+ * leaving their footprint and every frame its own drawing.
+ */
+const WALK_FLOOR: Record<string, { extremes: number; travel: number }> = {
+  warden: { extremes: 0.1, travel: 4 },
+};
+
+/**
  * How different a body's gather and its commit must be, as 1 − IoU.
  *
  * The guide number was 0.4. Three bodies cannot reach it without new
@@ -47,7 +59,8 @@ for (const name of modelNames()) {
 
     it("moves enough between the extremes of every cycle", () => {
       for (const m of measured) {
-        const floor = FLOOR[m.cycle.replace(/^.*_/, "")];
+        const cycle = m.cycle.replace(/^.*_/, "");
+        const floor = (cycle === "walk" ? WALK_FLOOR[name] : undefined) ?? FLOOR[cycle];
         if (!floor) continue;
         expect(m.extremes, `${name} ${m.facing}/${m.cycle} extremes`).toBeGreaterThanOrEqual(floor.extremes);
         const moved = Math.max(0, ...Object.values(m.travel));

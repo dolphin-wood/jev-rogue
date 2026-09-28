@@ -6,7 +6,11 @@
     "w"
   ],
   "weight": "heavy",
-  "bob": 0.5,
+  "step": {
+    "stride": 3,
+    "swing": 1,
+    "bob": 0
+  },
   "gait": "walk",
   "stand": "stand",
   "roles": {

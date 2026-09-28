@@ -110,12 +110,12 @@ export interface MotionSpec {
   /** A drawn slump for the sleeper, if the body has one. */
   readonly slump?: string;
   /**
-   * How far the gait rises and sinks, when not its weight's. A body drawn
-   * large — the warden, which the Frontier Veteran is drawn from at twice the
-   * size — carries the heavy bob as a jolt: up a step, down a step, one frame
-   * apart, on every stride.
+   * The gait's travel, where it is not its weight's. For a body that should
+   * walk smaller than its weight does: the warden is plate armour, and the
+   * Frontier Veteran is drawn from it at twice the size, where the heavy
+   * stride and bob read as a jolt on every step rather than as a march.
    */
-  readonly bob?: number;
+  readonly step?: Partial<Pick<Timing, "stride" | "lift" | "swing" | "bob">>;
 }
 
 const mul = ([x, y]: readonly [number, number], k: number): [number, number] => [Math.round(x * k), Math.round(y * k)];
@@ -159,14 +159,13 @@ function poseOf(base: string, offsets: Offsets, variants: Record<string, string>
  * body rides a slow figure of eight and its fins beat against it.
  */
 function gaitOffsets(spec: MotionSpec, facing: Facing, i: number, n: number): Offsets {
-  const t = TIMING[spec.weight];
+  const t = { ...TIMING[spec.weight], ...spec.step };
   const fwd = FORWARD[facing];
   const phase = (k: number) => (2 * Math.PI * (((k % n) + n) % n)) / n;
   const bobAt = (k: number): number => {
     const c = Math.abs(Math.cos(phase(k))), s = Math.abs(Math.sin(phase(k)));
-    const b = spec.bob ?? t.bob;
-    if (c > 0.85) return -Math.round(b * bobScale);
-    if (spec.weight !== "light" && s > 0.85) return Math.round(b * bobScale);
+    if (c > 0.85) return -Math.round(t.bob * bobScale);
+    if (spec.weight !== "light" && s > 0.85) return Math.round(t.bob * bobScale);
     return 0;
   };
   /*
