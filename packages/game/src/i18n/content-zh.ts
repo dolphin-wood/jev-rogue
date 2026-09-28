@@ -84,7 +84,7 @@ export const ZH_CONTENT: ContentTable = {
   fleet: { name: "轻盈", description: "移动更快。" },
   second_wind: { name: "回气", description: "冲刺冷却更短。" },
   long_stride: { name: "阔步", description: "冲刺距离更远。" },
-  wrath: { name: "怒火", description: "怒气上限 +1 格，可多储存一次回旋斩。" },
+  wrath: { name: "怒火", description: "怒气上限增加，可多储存回旋斩。" },
   vigour: { name: "体魄", description: "生命上限提高，并回满生命值。" },
   steady_nerve: { name: "镇定", description: "受击后的无敌时间更长。" },
   deep_well: { name: "深泉", description: "法力上限提高。" },

@@ -82,7 +82,7 @@ export const JA_CONTENT: ContentTable = {
   fleet: { name: "俊足", description: "移動が速くなる。" },
   second_wind: { name: "息継ぎ", description: "ダッシュのクールダウンが短くなる。" },
   long_stride: { name: "大股", description: "ダッシュの距離が伸びる。" },
-  wrath: { name: "憤怒", description: "怒りゲージが1つ増え、回転斬りを多く溜められる。" },
+  wrath: { name: "憤怒", description: "怒りゲージが増え、回転斬りを多く溜められる。" },
   vigour: { name: "頑健", description: "最大 HP が上がり、全回復する。" },
   steady_nerve: { name: "胆力", description: "被弾後の無敵時間が長くなる。" },
   deep_well: { name: "深き泉", description: "最大マナが上がる。" },

@@ -85,7 +85,7 @@ export const PLAYER_TEXT: Readonly<Record<string, string>> = {
   fleet: "Move faster.",
   second_wind: "Your dash comes back sooner.",
   long_stride: "Your dash goes further.",
-  wrath: "+1 rage segment, so you can store one more spin attack.",
+  wrath: "More rage segments, so you can store more spin attacks.",
   vigour: "More max health, and a full heal.",
   steady_nerve: "Longer invulnerability after you're hit.",
   deep_well: "More max mana.",
