@@ -18,7 +18,9 @@ import { rampFor } from "../encounters/ramp.ts";
 import { ENEMIES } from "../encounters/enemies.ts";
 import { bossSummonSpots } from "./world.ts";
 import { castRift, lineToWall } from "./attacks.ts";
-import { TILE_PX } from "../types.ts";
+import { eruptRing } from "./cast.ts";
+import { noPowers } from "../content/tags.ts";
+import { GRID_W, TILE_PX, Tile } from "../types.ts";
 
 /** Its bar. Sized for a room-10 build to take 40 to 60 s; `pnpm play` sets it (doc 024). */
 export const GUARDIAN_HP = 1300;
@@ -76,8 +78,10 @@ export const GUARDIAN_CALL_EVERY_MS = 20_000;
  * ring drawn on the floor, then the stakes. It stands planted for all of it.
  *
  * - **The stake line**, at range: three lanes fanned at the player.
- * - **The palisade**, on a player who has stuck to it: a ring round itself,
- *   so that standing in its shadow is not the answer to its poise.
+ * - **The palisade**, on a player who has stuck to it: rings of stakes
+ *   breaking out round it one after another — the player's Quake Ring in its
+ *   hands, larger and violet (`eruptRing`, a hostile cast) — so that standing
+ *   in its shadow is not the answer to its poise.
  */
 export const GUARDIAN_STAKES_EVERY_MS = 6500;
 /** How long the stakes' ground is drawn before it erupts. */
@@ -90,8 +94,36 @@ const STAKE_SPREAD = 0.4;
 const STAKE_REACH = TILE_PX * 9;
 /** Nearer than this the player is "stuck to it", and it throws the palisade instead. */
 const PALISADE_NEAR = TILE_PX * 3;
-/** The palisade's reach round it: past its shove, short of its ram. */
-const PALISADE_RADIUS = TILE_PX * 3.2;
+/** The palisade: rings, the gap between them, and the beat between one ring and the next. */
+const PALISADE_RINGS = 3;
+const PALISADE_STEP = TILE_PX * 1.1;
+const PALISADE_RING_MS = 150;
+/** Each stake's size, a Quake Ring cell's and a half. */
+const PALISADE_CELL = 20;
+/**
+ * **The volley** (排枪): the commander's own move. Its arm goes up and the
+ * drowned line fires across the room: lines drawn from wall to wall at any
+ * angle, pale and slow, each unrolling along the way it will fire, and then
+ * a bolt of light down each. One passes near the player, so standing still
+ * is never the answer; the rest cut the room into lanes to be read. It keeps
+ * fighting while they come due — the lines are the room's, not its.
+ */
+export const GUARDIAN_VOLLEY_EVERY_MS = 15_000;
+/** How long a volley line is drawn before it fires: long, as the player has to read several at once. */
+export const GUARDIAN_VOLLEY_TELE_MS = 1500;
+/** The lines in a volley, and the beat between one and the next coming due. */
+const VOLLEY_LINES = 5;
+const VOLLEY_STAGGER_MS = 160;
+/** How wide a volley line's hit is. */
+const VOLLEY_WIDTH = TILE_PX * 0.6;
+/** Its arm raised to give the order, standing. */
+const VOLLEY_ORDER_MS = 500;
+/**
+ * **The ram twice**: a ram that ends without its wall comes round again at
+ * once, the second off the first's recovery. Each is another chance at the
+ * wall, so the more it rams the more it opens.
+ */
+const GUARDIAN_CHAIN_REST_MS = 260;
 /** What a stake costs, in hearts: a warden's blow at the guardian's power. */
 const STAKE_DAMAGE = 1;
 /** It calls again only when its squad is down to this many. */
@@ -102,6 +134,13 @@ export interface GuardianState {
   callMs: number;
   /** Time until it may drive its stakes again. */
   stakesMs: number;
+  /** Time until it may order a volley. */
+  volleyMs: number;
+  /** Whether its last ram has already been followed by a second, and whether the next blow must be one. */
+  chained: boolean;
+  chainNext: boolean;
+  /** Whether it was in a ram last step, to see the one that just ended. */
+  wasCharging: boolean;
   /** Whether its arm is up in a call, to see the call end. */
   calling: boolean;
   /** Who the call now being made brings: the room's own wave at the entrance, the squad after. */
@@ -113,7 +152,9 @@ export interface GuardianState {
 /** The guardian, standing where it is put, on its own bar, with its entrance call to make. */
 export function makeGuardian(id: number, x: number, y: number, _roomIndex: number, entrance: readonly EnemyId[] = GUARDIAN_SQUAD): Enemy {
   const e = makeEnemy(id, "warden", x, y, [], { power: GUARDIAN_POWER });
-  e.guardian = { callMs: GUARDIAN_ENTRANCE_MS, stakesMs: GUARDIAN_STAKES_EVERY_MS / 2, calling: false, answer: entrance.slice(0, GUARDIAN_ENTRANCE_MAX), spots: [] };
+  e.guardian = {
+    callMs: GUARDIAN_ENTRANCE_MS, stakesMs: GUARDIAN_STAKES_EVERY_MS / 2, volleyMs: GUARDIAN_VOLLEY_EVERY_MS * 0.6,
+    chained: false, chainNext: false, wasCharging: false, calling: false, answer: entrance.slice(0, GUARDIAN_ENTRANCE_MAX), spots: [] };
   e.hp = e.maxHp = GUARDIAN_HP;
   e.poise = e.maxPoise = GUARDIAN_POISE;
   e.radius = Math.round(e.radius * GUARDIAN_SCALE);
@@ -155,8 +196,25 @@ export function stepGuardian(w: World, e: Enemy, dtMs: number): void {
   }
   if (g.callMs > 0) g.callMs -= dtMs;
   if (g.stakesMs > 0) g.stakesMs -= dtMs;
-  if (e.attack !== "approach" || e.pose !== "" || e.staggerMs > 0 || e.plantMs > 0) return;
-  if (g.stakesMs <= 0 && w.stats.elapsedMs > GUARDIAN_ENTRANCE_MS + GUARDIAN_CALL_MS) {
+  if (g.volleyMs > 0) g.volleyMs -= dtMs;
+  // The ram twice: one that ended without its wall comes round again, once.
+  const charging = e.attack !== "approach" && e.meleeKind === "charge";
+  if (charging) g.chainNext = false;
+  if (g.wasCharging && !charging) {
+    if (!g.chained && e.staggerMs <= 0) {
+      g.chained = true;
+      g.chainNext = true;
+      e.attackCooldownMs = Math.min(e.attackCooldownMs, GUARDIAN_CHAIN_REST_MS);
+    } else g.chained = false;
+  }
+  g.wasCharging = charging;
+  if (e.attack !== "approach" || e.pose !== "" || e.staggerMs > 0 || e.plantMs > 0 || g.chainNext) return;
+  const settled = w.stats.elapsedMs > GUARDIAN_ENTRANCE_MS + GUARDIAN_CALL_MS;
+  if (g.volleyMs <= 0 && settled) {
+    orderVolley(w, e, g);
+    return;
+  }
+  if (g.stakesMs <= 0 && settled) {
     driveStakes(w, e, g);
     return;
   }
@@ -179,7 +237,11 @@ function driveStakes(w: World, e: Enemy, g: GuardianState): void {
   const p = w.player;
   const near = Math.hypot(p.x - e.x, p.y - e.y) < PALISADE_NEAR;
   if (near) {
-    castRift(w, e.x, e.y, 0, 0, { width: PALISADE_RADIUS * 2, teleMs: GUARDIAN_STAKES_TELE_MS, damage: STAKE_DAMAGE });
+    eruptRing(w, { x: e.x, y: e.y }, {
+      damage: STAKE_DAMAGE, radius: PALISADE_CELL, rings: PALISADE_RINGS, first: e.radius + TILE_PX * 0.5,
+      step: PALISADE_STEP, delayMs: PALISADE_RING_MS, spacing: 2, weight: 0, kind: "earth", element: "none",
+      elementPower: 0, powers: noPowers(), proc: 0, statusMult: 1, burnMs: 0, spellIndex: -1, hostile: true,
+    }, 0, GUARDIAN_STAKES_TELE_MS);
   } else {
     const at = Math.atan2(p.y - e.y, p.x - e.x);
     for (let i = 0; i < STAKE_LANES; i++) {
@@ -193,6 +255,41 @@ function driveStakes(w: World, e: Enemy, g: GuardianState): void {
   e.velX = 0;
   e.velY = 0;
   w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: near ? "guardian_palisade" : "guardian_stakes" });
+}
+
+/**
+ * **The volley**: its arm up for the order, and `VOLLEY_LINES` lines across
+ * the room from wall to wall, each at its own angle, the first through the
+ * ground near the player and the rest anywhere, coming due a beat apart.
+ */
+function orderVolley(w: World, e: Enemy, g: GuardianState): void {
+  g.volleyMs = GUARDIAN_VOLLEY_EVERY_MS;
+  const ext = w.room.extent, p = w.player;
+  for (let i = 0; i < VOLLEY_LINES; i++) {
+    let x: number, y: number;
+    if (i === 0) {
+      const a = w.rng.next() * Math.PI * 2, d = w.rng.next() * TILE_PX * 1.5;
+      x = p.x + Math.cos(a) * d;
+      y = p.y + Math.sin(a) * d;
+    } else {
+      x = (2 + w.rng.next() * (ext.w - 4)) * TILE_PX;
+      y = (2 + w.rng.next() * (ext.h - 4)) * TILE_PX;
+    }
+    const tx = Math.floor(x / TILE_PX), ty = Math.floor(y / TILE_PX);
+    if (w.room.grid[ty * GRID_W + tx] !== Tile.Floor) continue;
+    const angle = w.rng.next() * Math.PI;
+    const back = lineToWall(w, x, y, angle + Math.PI, TILE_PX * 40);
+    const x0 = x + Math.cos(angle + Math.PI) * back, y0 = y + Math.sin(angle + Math.PI) * back;
+    const length = back + lineToWall(w, x, y, angle, TILE_PX * 40);
+    castRift(w, x0, y0, angle, length, {
+      width: VOLLEY_WIDTH, teleMs: GUARDIAN_VOLLEY_TELE_MS + i * VOLLEY_STAGGER_MS, damage: STAKE_DAMAGE, beam: true,
+    });
+  }
+  e.pose = "guardian_order";
+  e.poseMs = VOLLEY_ORDER_MS;
+  e.velX = 0;
+  e.velY = 0;
+  w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: "guardian_volley" });
 }
 
 /** The dead answer: the bodies rise round it. */

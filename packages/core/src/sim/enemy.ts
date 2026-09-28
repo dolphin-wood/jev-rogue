@@ -2074,8 +2074,9 @@ function chooseMelee(e: Enemy): MeleeKind | null {
    * the way in for a slam, and the walk is the tell.
    */
   if (baseArchetype(e.archetype) === "tank") return e.closeIn ? "cleave" : e.casts % 3 === 0 ? "charge" : "slam";
-  // The Frontier Veteran (doc 024): the tank's ram from range, its own shield shove on top of it.
-  if (e.guardian) return e.closeIn ? "bash" : "charge";
+  // The Frontier Veteran (doc 024): the tank's ram from range — twice running when the first misses —
+  // and on top of it the shield shove and the gun's sweep by turns.
+  if (e.guardian) return e.guardian.chainNext ? "charge" : e.closeIn ? (e.casts % 2 === 0 ? "sweep" : "bash") : "charge";
   // The boss: by phase, and by distance within the phase.
   if (e.archetype === "boss") {
     // Inside a string: the next blow is already decided (`BossPhase.strings`).

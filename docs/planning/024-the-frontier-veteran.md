@@ -3,7 +3,7 @@ id: 024
 title: The Frontier Veteran
 status: proposed
 date: 2026-09-27
-summary: Room 10, the last fight of the flooded depth, is a guardian fight. Beside its ram, spray and shove it drives stakes up from the floor, three lanes at range or a ring round itself up close. The Frontier Veteran is the warden's body, drawn larger in a violet light, with a heavy body's poise (doc 027), the warden's blunderbuss and the tank's ram. It has no phases. Its own move is the call. It raises its arm, marks show on the floor, and the dead rise round it; the call can't be broken. Its entrance is the first call, which raises the room's own wave. After that it calls again whenever its squad is down to one and the call has come round. The ram knocks it out on a wall, and a wall is the fight's opening; a burst of hits breaks its poise for a shorter one. The room is the first audience's bare arena, and its doors, reward, pacing and experience follow the audience room's. It stands where the opening view shows it, and its name is the small line over its bar. Code decides all of it; the Director still answers the door's reward.
+summary: Room 10, the last fight of the flooded depth, is a guardian fight. Beside its ram (twice when the first misses), spray, shove and sweep, it drives stakes up from the floor, three lanes at range or rings round itself up close, and orders volleys: pale lines across the room that unroll and then fire. The Frontier Veteran is the warden's body, drawn larger in a violet light, with a heavy body's poise (doc 027), the warden's blunderbuss and the tank's ram. It has no phases. Its own move is the call. It raises its arm, marks show on the floor, and the dead rise round it; the call can't be broken. Its entrance is the first call, which raises the room's own wave. After that it calls again whenever its squad is down to one and the call has come round. The ram knocks it out on a wall, and a wall is the fight's opening; a burst of hits breaks its poise for a shorter one. The room is the first audience's bare arena, and its doors, reward, pacing and experience follow the audience room's. It stands where the opening view shows it, and its name is the small line over its bar. Code decides all of it; the Director still answers the door's reward.
 depends_on: [005, 013, 019, 022]
 ---
 
@@ -48,8 +48,11 @@ already know it. Nothing assembles it into an ordinary room.
 | Blunderbuss | the warden's shot: raise, level, a wide spray, then a reload to stand in |
 | Ram | the tank's charge from mid range. **A head-on wall knocks it out**: the fight's big opening, set up by standing with a wall behind you |
 | Bash | the warden's shield shove, for a player standing on it |
+| Sweep | up close, by turns with the shove: the gun swung 210° across its front, heavier and wider than the shove. Behind it, or out of reach |
+| Ram twice | a ram that ends without its wall comes round again at once, off the first's recovery. The second is another chance at the wall |
 | Stake line (地刺) | every `GUARDIAN_STAKES_EVERY_MS`, at range: the gun's butt driven down, and three lanes fanned at the player drawn on the floor for `GUARDIAN_STAKES_TELE_MS`, then stakes. It stands planted through it and a beat after |
-| Palisade | the same turn on a player who has stuck to it: a ring of stakes round itself, so its shadow is no shelter from its poise |
+| Palisade | the same turn on a player who has stuck to it: the player's Quake Ring in its hands, larger and violet — three rings of stakes breaking out round it one after another (a hostile `eruptRing`), the ground cracking where each will come up. It hits once however many stakes the player stands in |
+| Volley (排枪) | every `GUARDIAN_VOLLEY_EVERY_MS`, its arm up to give the order: five lines from wall to wall at random angles, one through the ground near the player. Each is a thin pale line that unrolls along the way it will fire, then a bolt of light down all of it after `GUARDIAN_VOLLEY_TELE_MS` (1.5 s), a beat apart. It fights on while they come due |
 
 | Call | it plants and raises its arm for `GUARDIAN_CALL_MS`, a violet mark opening on the floor where each body will rise; then they rise. **Its poise is guarded through the call**, so nothing interrupts it |
 

@@ -1154,11 +1154,12 @@ function onFloor(world: World, x: number, y: number): boolean {
   return t === Tile.Floor || t === Tile.Door;
 }
 
-export function eruptRing(world: World, centre: { x: number; y: number }, spec: Landing, telegraphMs: number): void {
+export function eruptRing(world: World, centre: { x: number; y: number }, spec: Landing, telegraphMs: number, leadMs = 0): void {
   const cells: { x: number; y: number; delayMs: number }[] = [];
   for (let i = 0; i < Math.max(1, spec.rings); i++) {
     const r = spec.first + i * spec.step;
-    const wait = i * spec.delayMs + telegraphMs;
+    // `leadMs`: a wait before the first ring with no rock drawn over it, the cells cracking the floor (the enemy's ring).
+    const wait = i * spec.delayMs + telegraphMs + leadMs;
     if (r < 1) {
       cells.push({ x: centre.x, y: centre.y, delayMs: wait });
       continue;
@@ -1207,6 +1208,7 @@ function placeCells(
     slot.spellIndex = spec.spellIndex;
     slot.castId = castId;
     slot.telegraphMs = telegraphMs;
+    slot.hostile = !!spec.hostile;
   }
 }
 

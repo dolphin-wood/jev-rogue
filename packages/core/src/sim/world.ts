@@ -672,8 +672,9 @@ function buildWorld(input: CreateWorldOptions): World {
     eruptions: Array.from({ length: ERUPTION_POOL }, () => ({
       alive: false, x: 0, y: 0, delayMs: 0, ageMs: 0, fired: false, radius: 0, damage: 0,
       element: "none", elementPower: 1, powers: noPowers(), proc: 1, statusMult: 1, weight: 1, burnMs: 0, kind: "earth" as const, spellIndex: -1, castId: 0,
-      telegraphMs: 0,
+      telegraphMs: 0, hostile: false,
     })),
+    hostileCastHit: 0,
     pets: Array.from({ length: 2 }, () => ({
       alive: false, x: 0, y: 0, vx: 0, vy: 0, facing: 0, lifeMs: 0, maxLifeMs: 1, fireMs: 0,
       intervalMs: 700, damage: 0, range: 0, speed: 0,
@@ -5603,6 +5604,16 @@ function stepEruptions(w: World, dtMs: number): void {
     if (c.delayMs > 0) continue;
     c.fired = true;
     c.ageMs = 0;
+    // An enemy's cell (the Frontier Veteran's palisade): the player, once a cast, and nothing else.
+    if (c.hostile) {
+      const p = w.player;
+      if (w.hostileCastHit !== c.castId && Math.hypot(p.x - c.x, p.y - c.y) <= c.radius + PLAYER_RADIUS) {
+        w.hostileCastHit = c.castId;
+        hurtPlayer(w, c.x, c.y, "stakes", 0, c.damage);
+      }
+      w.events.push({ kind: "eruption", x: c.x, y: c.y, what: "stakes" });
+      continue;
+    }
     let hit = false;
     for (const e of w.enemies) {
       if (!isActive(e) || e.hp <= 0) continue;

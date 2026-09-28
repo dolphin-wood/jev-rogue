@@ -77,7 +77,7 @@ const RIFT_SCAR_MS = 1500;
 
 export function castRift(
   w: World, x: number, y: number, angle: number, length: number,
-  opts: { width?: number; teleMs?: number; damage?: number; bolt?: boolean; summon?: boolean; rock?: boolean } = {},
+  opts: { width?: number; teleMs?: number; damage?: number; bolt?: boolean; summon?: boolean; rock?: boolean; beam?: boolean } = {},
 ): Rift {
   const r: Rift = {
     alive: true, x, y, angle, length,
@@ -88,6 +88,7 @@ export function castRift(
     ...(opts.bolt ? { bolt: true } : {}),
     ...(opts.bolt && opts.summon ? { summon: true } : {}),
     ...(opts.rock ? { rock: true } : {}),
+    ...(opts.beam ? { beam: true } : {}),
   };
   w.rifts.push(r);
   w.events.push({ kind: "telegraph", x, y, what: riftName(r, "bolt", "rock") });
@@ -96,7 +97,7 @@ export function castRift(
 
 /** What a rift is called in its events and as a cause of hurt: `bolt` and `rock` name the sky's and the roof's. */
 function riftName(r: Rift, bolt: string, rock: string): string {
-  return r.bolt ? bolt : r.rock ? rock : r.length > 0 ? "rift" : "burst";
+  return r.bolt ? bolt : r.rock ? rock : r.beam ? "volley" : r.length > 0 ? "rift" : "burst";
 }
 
 /** Distance from a point to a rift's spine, which is a segment or, at length 0, a point. */
@@ -516,7 +517,7 @@ export function throwLob(
 /** Poses a body holds still through: the move is the whole of what it is doing. */
 export const PLANTED_POSES: ReadonlySet<string> = new Set([
   "musket_windup", "musket_fire", "musket_second", "musket_reload", "cast", "field", "burst", "peal_windup", "windup_hook", "anchor_cast", "lash_windup",
-  "flare_windup", "bloom_cast", "telegraph", "telegraph_walk", "lob_windup", "cinder_windup", "guardian_call", "guardian_stakes",
+  "flare_windup", "bloom_cast", "telegraph", "telegraph_walk", "lob_windup", "cinder_windup", "guardian_call", "guardian_stakes", "guardian_order",
 ]);
 
 /** Whether the body is posed in a move that holds it still. */

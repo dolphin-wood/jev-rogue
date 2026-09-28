@@ -383,6 +383,8 @@ export interface Landing {
   statusMult: number;
   burnMs: number;
   spellIndex: number;
+  /** An enemy's: it hits the player, not the bodies (the Frontier Veteran's palisade, doc 024). */
+  hostile?: boolean;
 }
 
 /**
@@ -477,6 +479,8 @@ export interface Eruption {
    * as `delayMs` runs against this.
    */
   telegraphMs: number;
+  /** An enemy's cell: it hits the player once a cast, and no body (`Landing.hostile`). */
+  hostile: boolean;
 }
 
 /**
@@ -628,6 +632,8 @@ export interface Rift {
   bolt?: boolean;
   /** A stone out of the roof (the king's fall into phase III, `BOSS_METEOR_MS`): the same circle, drawn and heard as rock. */
   rock?: boolean;
+  /** A line of the Frontier Veteran's volley (doc 024): the same segment, drawn as a pale line unrolling and then a bolt of light. */
+  beam?: boolean;
   /** A bolt of the king's call at a phase change rather than his storm: drawn violet, the same blow. */
   summon?: boolean;
 }
@@ -2228,6 +2234,8 @@ export interface World {
   vortices: Vortex[];
   /** Ground eruptions: the cells of a stone or fire line going off in turn. */
   eruptions: Eruption[];
+  /** The last hostile eruption cast that hit the player: a ring hits once however many of its cells they stand in. */
+  hostileCastHit: number;
   /** Summoned companions that follow the player and shoot. */
   pets: Pet[];
   /** Orbs cast by `orb` spells, pooled; see `Orb`. */
