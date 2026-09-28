@@ -17995,7 +17995,7 @@ function drawEnemy(
       : Math.min(1, 1 - e.poise / e.maxPoise);
     const hot = !guard && k > 0.75;
     const flash = hot ? 0.65 + 0.35 * Math.sin(scene.time.now / 90) : 1;
-    group.rectangle(e.x - W / 2 - 1, y, W + 2, 3, 0x0d0b1f, 0.8).setOrigin(0, 0.5).setDepth(9);
+    // No frame round it: the line alone, so a room of worn bodies is a few gold strokes, not a row of boxes.
     group.rectangle(e.x - W / 2, y, W * k, 1.6, guard ? 0xcfd6e8 : 0xf2b632, guard ? 0.7 : flash)
       .setOrigin(0, 0.5).setDepth(10);
   }
