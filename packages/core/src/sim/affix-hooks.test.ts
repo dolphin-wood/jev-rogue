@@ -401,6 +401,25 @@ describe("a spell an affix casts for free is still that spell", () => {
     }
   });
 
+  it("resonance on an enchant keeps it lit for as long as the sword keeps landing", () => {
+    for (const held of [false, true]) {
+      const w = arena(held ? { id: "resonance" } : undefined, "crescent_edge");
+      const body = dummy(w, 20, 0);
+      // One press to light it, then only the sword, for well past the enchant's own length.
+      step(w, aimAt(body, { spell: 0 }));
+      for (let i = 0; i < 20; i++) step(w, aimAt(body));
+      expect(w.player.enchant, "the press lit nothing").not.toBeNull();
+      const lit = w.player.enchant!.maxMs;
+      // Held in reach: the sword's knockback would walk it out of range.
+      const [bx, by] = [body.x, body.y];
+      for (let t = 0; t < lit * 2.5; t += 1000 / 60) {
+        body.x = bx; body.y = by; body.knockX = 0; body.knockY = 0;
+        step(w, aimAt(body, { swing: true }));
+      }
+      expect(!!w.player.enchant && w.player.enchant.ms > 0, `resonance ${held}`).toBe(held);
+    }
+  });
+
   it("resonance carries them too, and matches what the key casts", () => {
     const w = arena();
     infused(w, "resonance");

@@ -1,16 +1,19 @@
 import { featureCells } from "../rooms/features.ts";
-import { ENTRY_GRACE_MS, canStagger, POISE_BREAK_STAGGER_MS, POISE_RECOVER_MS } from "./enemy.ts";
+import { ENTRY_GRACE_MS, canStagger, POISE_BREAK_STAGGER_MS, BARRED_BREAK_STUN_MS, POISE_REGEN_DELAY_MS, POISE_REGEN_PER_S } from "./enemy.ts";
 import { describe, it, expect } from "vitest";
-import { createWorld, hurtEnemy, step, worldCleared, ELITE_HEAL_FRACTION, GRASS_CATCH_MS } from "./world.ts";
+import { createWorld, hurtEnemy, step, worldCleared, ELITE_HEAL_FRACTION, GRASS_CATCH_MS, poiseOfWeight, SWORD_POISE } from "./world.ts";
 import {
-  PLAYER_RADIUS, PLAYER_SPEED, NO_INPUT, ENEMY_BULLET_CAP, INVULN_MS, MAX_HEARTS,
+  PLAYER_RADIUS, PLAYER_SPEED, NO_INPUT, ENEMY_BULLET_CAP, INVULN_MS, MAX_HEARTS, HP_PER_HEART,
 } from "./types.ts";
 import type { Input, World } from "./types.ts";
 import {
-  beginWindup, makeEnemy, wake, SPAWN_FADE_MS, STAGGER_MS, TELEGRAPH_MS, THREAT_CAP_MS,
+  beginWindup, beamAim, BEAM_LOCK_MS, makeEnemy, wake, SPAWN_FADE_MS, STAGGER_MS, TELEGRAPH_MS, THREAT_CAP_MS,
 } from "./enemy.ts";
 import { liveCount, acquire } from "./bullets.ts";
-import { MELEE_ATTACKS } from "./melee.ts";
+import { ENEMY_MELEE_DAMAGE, MELEE_ATTACKS } from "./melee.ts";
+
+/** What an ordinary body's blade of `hearts` costs the player: cut by `ENEMY_MELEE_DAMAGE`, in whole health points. */
+const blade = (hearts: number): number => Math.floor(hearts * ENEMY_MELEE_DAMAGE * HP_PER_HEART + 1e-6) / HP_PER_HEART;
 import { SPELL_COST_BASE, SPELL_COST_PER_RANK, slotCost } from "./spells.ts";
 import { WORLD_W, WORLD_H, circleHitsWall, entryPosition } from "./collide.ts";
 import { GRID_W, GRID_H, TILE_PX, Tile } from "../types.ts";
@@ -310,8 +313,7 @@ describe("the player taking damage", () => {
       const e = makeEnemy(id, "rusher", w.player.x - 20, w.player.y, []);
       e.spawnFadeMs = 0;
       e.awake = true;
-      // Past the free first attack, then the real entry action wound forward
-      // to one step short of the commit, where the blade goes live.
+      // Put the body one step short of the commit, where the blade goes live.
       e.hasAttacked = true;
       // A drive turn; see `chooseMelee`.
       e.casts = 1;
@@ -324,16 +326,16 @@ describe("the player taking damage", () => {
     swipe(1);
     swipe(2);
     run(w, 2);
-    expect(w.player.hearts).toBeCloseTo(6 - 0.7, 5);
+    expect(w.player.hearts).toBeCloseTo(6 - blade(0.7), 5);
     run(w, 10);
-    expect(w.player.hearts).toBeCloseTo(6 - 0.7, 5);
+    expect(w.player.hearts).toBeCloseTo(6 - blade(0.7), 5);
 
     // Past the window, a fresh attack lands again. The window is 950 ms now,
     // so the wait is measured against `INVULN_MS` rather than a step count.
     run(w, Math.ceil(INVULN_MS / (1000 / 60)) + 4);
     swipe(3);
     run(w, 3);
-    expect(w.player.hearts).toBeCloseTo(6 - 1.4, 5);
+    expect(w.player.hearts).toBeCloseTo(6 - 2 * blade(0.7), 5);
   });
 
   it("is not hurt from behind a charging enemy", () => {
@@ -382,7 +384,7 @@ describe("the player taking damage", () => {
       step(w, NO_INPUT);
       for (const ev of w.events) if (ev.kind === "player_hit") causes.push(ev.what ?? "");
     }
-    expect(w.player.hearts).toBeCloseTo(6 - 0.7, 5);
+    expect(w.player.hearts).toBeCloseTo(6 - blade(0.7), 5);
     expect(causes).toEqual(["melee:rusher"]);
   });
 
@@ -955,13 +957,7 @@ describe("enemy behaviour", () => {
     expect(fired).toBe(true);
   });
 
-  it("gives away the first attack of every body, at full strength", () => {
-    /*
-     * Lidén's "miss the first time". A player meeting an archetype has no way
-     * to know its reach, arc or rhythm, and the usual answer is to charge them
-     * a heart for finding out. This shows the whole attack and withholds only
-     * the damage — once, per body, per room.
-     */
+  it("makes the first attack of every body live", () => {
     const w = world();
     const e = makeEnemy(1, "rusher", w.player.x + 20, w.player.y, []);
     e.spawnFadeMs = 0;
@@ -979,18 +975,9 @@ describe("enemy behaviour", () => {
       step(w, NO_INPUT);
       for (const ev of w.events) if (ev.kind === "player_hit") causes.push(ev.what ?? "");
     }
-    // It connected — the blade was live and found the player — and cost nothing.
-    expect(causes).toContain("graze:rusher");
-    expect(w.player.hearts).toBe(before);
-
-    // The second one is real.
-    e.staggerMs = 0;
-    e.attackCooldownMs = 0;
-    e.casts = 1;
-    beginWindup(w, e, w.player);
-    e.attackMs = 1;
-    for (let n = 0; n < 30 && w.player.hearts === before; n++) step(w, NO_INPUT);
-    expect(w.player.hearts).toBeCloseTo(before - 0.7, 5);
+    // The telegraph is the warning; the first committed hit is real.
+    expect(causes).toContain("melee:rusher");
+    expect(w.player.hearts).toBeCloseTo(before - blade(0.7), 5);
   });
 
   it("stuns the player with lightning, but never for longer than the mercy", () => {
@@ -1046,7 +1033,7 @@ describe("enemy behaviour", () => {
     beginWindup(w, e, w.player);
     const hearts = w.player.hearts;
     for (let i = 0; i < 120 && w.player.hearts === hearts; i++) step(w, NO_INPUT);
-    expect(w.player.hearts).toBeCloseTo(hearts - 1.5, 5);
+    expect(w.player.hearts).toBeCloseTo(hearts - blade(1.5), 5);
     expect(w.player.stunMs).toBeGreaterThan(0);
   });
 
@@ -1280,6 +1267,47 @@ describe("enemy behaviour", () => {
       // Clear the air so the next volley is measurable.
       for (const b of w.enemyBullets) b.alive = false;
     }
+  });
+
+  it("holds a watcher's lane still before the beam, so leaving it is the dodge", () => {
+    /*
+     * The beam has no travel. When it followed the player to the frame it lit
+     * — and was not even drawn — it was damage with no answer (playtest: "the
+     * turret room's laser fires with no warning"). The aim is long, and its
+     * last beat is locked: a player who steps off the lane then is not hit.
+     */
+    const w = world();
+    const s = makeEnemy(1, "watcher", 300, 200, []);
+    s.spawnFadeMs = 0;
+    s.awake = true;
+    s.telegraphMs = 0;
+    w.enemies.push(s);
+    w.player.x = 560;
+    w.player.y = 200;
+    w.stats.elapsedMs = ENTRY_GRACE_MS;
+
+    let aimMs = 0;
+    for (let i = 0; i < 1200 && !(s.telegraphMs > 0 && s.pending.length > 0); i++) step(w, NO_INPUT);
+    expect(s.pending.length).toBeGreaterThan(0);
+    aimMs = s.telegraphMs;
+    // Long enough to see the lane, read it and leave it.
+    expect(aimMs).toBeGreaterThanOrEqual(BEAM_LOCK_MS + 300);
+    for (let i = 0; i < 600 && s.telegraphMs > BEAM_LOCK_MS; i++) step(w, NO_INPUT);
+    const locked = beamAim(w, s);
+    expect(Math.abs(locked.y - 200)).toBeLessThan(4);
+
+    // Off the lane during the locked beat: the beam goes where it was shown.
+    w.player.y = 200 + PLAYER_RADIUS * 4;
+    const hp = w.player.hearts;
+    let beam: { x1: number; y1: number } | undefined;
+    for (let i = 0; i < 60; i++) {
+      step(w, NO_INPUT);
+      beam ??= w.tethers.find((t) => t.alive && t.kind === "beam");
+      if (beam && !w.tethers.some((t) => t.alive && t.kind === "beam")) break;
+    }
+    expect(beam).toBeDefined();
+    expect(Math.abs(beam!.y1 - 200)).toBeLessThan(8);
+    expect(w.player.hearts).toBe(hp);
   });
 
   it("makes a ranged body choose between moving and shooting", () => {
@@ -1569,46 +1597,105 @@ describe("enemy behaviour", () => {
     expect(held).toBe(true);
   });
 
-  it("gives the breaker the tank's poise, its base", () => {
-    for (const id of ["tank", "breaker"] as const) {
-      const e = makeEnemy(1, id, 0, 0, []);
-      expect(e.maxPoise, id).toBe(24);
-      expect(canStagger(e), id).toBe(false);
-    }
+  it("gives every body poise by how long it announces its attacks, and scales it with the room", () => {
+    // At the ramp's scale 1: the quick blades, the long ones, the heavy, the gunners.
+    const at1 = (id: Parameters<typeof makeEnemy>[1]) => makeEnemy(1, id, 0, 0, []).maxPoise;
+    expect(at1("rusher")).toBe(12);
+    expect(at1("warden")).toBe(20);
+    expect(at1("tank")).toBe(28);
+    expect(at1("shooter")).toBe(8);
+    // A subspecies is its base body's: the breaker the tank's, the pinner the shooter's.
+    expect(at1("breaker")).toBe(at1("tank"));
+    expect(at1("pinner")).toBe(at1("shooter"));
+    // Nothing short of a break interrupts any of them.
+    for (const id of ["rusher", "shooter", "tank"] as const) expect(canStagger(makeEnemy(1, id, 0, 0, [])), id).toBe(false);
+    // The room scales it as it scales health, and the opening softens it.
+    expect(makeEnemy(1, "rusher", 0, 0, [], { hp: 2, poise: 1 }).maxPoise).toBe(24);
+    expect(makeEnemy(1, "rusher", 0, 0, [], { hp: 1.5, poise: 0.6 }).maxPoise).toBe(11);
+    // An armored elite doubles its body's.
+    expect(makeEnemy(1, "rusher", 0, 0, ["armored"]).maxPoise).toBe(24);
   });
 
-  it("breaks a heavy body's poise with a burst, and will not break it again straight after", () => {
+  it("breaks a body's poise with a burst of blows, not with ticks, and will not break it again straight after", () => {
     const w = world();
     const e = makeEnemy(1, "tank", 300, 200, []);
     e.spawnFadeMs = 0; e.awake = true; e.alertMs = 0;
     // Enough health to be hit through two breaks.
     e.hp = e.maxHp = 500;
     w.enemies.push(e);
-    // Two hits it holds through.
-    expect(hurtEnemy(w, e, 10).broke).toBe(false);
-    expect(hurtEnemy(w, e, 10).broke).toBe(false);
+    // A tick is not a blow: a burn wears nothing.
+    for (let i = 0; i < 10; i++) hurtEnemy(w, e, 10, "fire");
+    expect(e.poise).toBe(e.maxPoise);
+    // Two blows it holds through (28 against 10 each).
+    expect(hurtEnemy(w, e, 10, "", undefined, 10).broke).toBe(false);
+    expect(hurtEnemy(w, e, 10, "", undefined, 10).broke).toBe(false);
     expect(e.staggerMs).toBe(0);
     // The third breaks it: a long stagger, and whole again.
-    expect(hurtEnemy(w, e, 10).broke).toBe(true);
+    expect(hurtEnemy(w, e, 10, "", undefined, 10).broke).toBe(true);
     expect(e.staggerMs).toBeGreaterThanOrEqual(POISE_BREAK_STAGGER_MS);
     expect(e.poise).toBe(e.maxPoise);
     // Straight after, however hard it is hit, it is not broken again.
-    for (let i = 0; i < 6; i++) expect(hurtEnemy(w, e, 10).broke).toBe(false);
+    for (let i = 0; i < 6; i++) expect(hurtEnemy(w, e, 10, "", undefined, 10).broke).toBe(false);
     expect(e.poise).toBe(e.maxPoise);
     // Once the guard is out, it can be.
     e.poiseGuardMs = 0;
-    hurtEnemy(w, e, 10); hurtEnemy(w, e, 10);
-    expect(hurtEnemy(w, e, 10).broke).toBe(true);
+    hurtEnemy(w, e, 10, "", undefined, 10); hurtEnemy(w, e, 10, "", undefined, 10);
+    expect(hurtEnemy(w, e, 10, "", undefined, 10).broke).toBe(true);
   });
 
-  it("fills a heavy body's poise again once it has gone a while unhit", () => {
+  it("stuns a body with a bar when it breaks, and only flinches one without", () => {
+    const w = world();
+    const tank = makeEnemy(1, "tank", 300, 200, []);
+    const rusher = makeEnemy(2, "rusher", 360, 200, []);
+    for (const e of [tank, rusher]) { e.spawnFadeMs = 0; e.awake = true; e.alertMs = 0; e.hp = e.maxHp = 500; w.enemies.push(e); }
+    expect(hurtEnemy(w, tank, 1, "", undefined, tank.maxPoise + 1).broke).toBe(true);
+    expect(tank.stunMs).toBe(BARRED_BREAK_STUN_MS);
+    expect(tank.staggerMs).toBeGreaterThanOrEqual(BARRED_BREAK_STUN_MS);
+    // Its guard runs on past the stun, so it is not stunned again as it stands.
+    expect(tank.poiseGuardMs).toBeGreaterThan(BARRED_BREAK_STUN_MS);
+    expect(hurtEnemy(w, rusher, 1, "", undefined, rusher.maxPoise + 1).broke).toBe(true);
+    expect(rusher.stunMs).toBe(0);
+    expect(rusher.staggerMs).toBe(POISE_BREAK_STAGGER_MS);
+  });
+
+  it("does not let a blow shove a plated body, only a light one", () => {
+    const w = world();
+    const tank = makeEnemy(1, "tank", 260, 150, []);
+    const rusher = makeEnemy(2, "rusher", 260, 260, []);
+    for (const e of [tank, rusher]) {
+      e.spawnFadeMs = 0; e.awake = true; e.alertMs = 0; e.attackCooldownMs = 1e9; e.speed = 0;
+      e.knockX = 400; e.knockY = 0;
+      w.enemies.push(e);
+    }
+    step(w, NO_INPUT);
+    // The plate drops the shove on the spot; the light body carries it, decaying.
+    expect(tank.knockX).toBe(0);
+    expect(rusher.knockX).toBeGreaterThan(100);
+  });
+
+  it("weighs a blow by its mass: a spark barely wears poise, a heavy spell more than the sword", () => {
+    expect(poiseOfWeight(0.4)).toBeLessThan(0.2);
+    expect(poiseOfWeight(1)).toBeLessThan(SWORD_POISE);
+    expect(poiseOfWeight(1.8)).toBeGreaterThan(SWORD_POISE);
+  });
+
+  it("fills a body's poise again slowly, and only once it has been left alone a while", () => {
     const w = world();
     const e = makeEnemy(1, "tank", 300, 200, []);
     e.spawnFadeMs = 0; e.awake = true; e.alertMs = 0; e.attackCooldownMs = 1e9;
     w.enemies.push(e);
-    hurtEnemy(w, e, 10);
+    hurtEnemy(w, e, 20, "", undefined, 20);
+    const worn = e.poise;
+    expect(worn).toBeLessThan(e.maxPoise);
+    const frames = (ms: number) => Math.ceil(ms / (1000 / 60));
+    // Nothing comes back while a dodge and the attack it answered play out.
+    for (let i = 0; i < frames(POISE_REGEN_DELAY_MS) - 5; i++) step(w, NO_INPUT);
+    expect(e.poise).toBe(worn);
+    // Then it climbs, and is not whole at once.
+    for (let i = 0; i < frames(300); i++) step(w, NO_INPUT);
+    expect(e.poise).toBeGreaterThan(worn);
     expect(e.poise).toBeLessThan(e.maxPoise);
-    for (let i = 0; i < Math.ceil(POISE_RECOVER_MS / (1000 / 60)) + 5; i++) step(w, NO_INPUT);
+    for (let i = 0; i < frames(1000 / POISE_REGEN_PER_S); i++) step(w, NO_INPUT);
     expect(e.poise).toBe(e.maxPoise);
   });
 

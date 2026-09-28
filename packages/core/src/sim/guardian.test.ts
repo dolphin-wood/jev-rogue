@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { createWorld, hurtEnemy, step, worldCleared } from "./world.ts";
+import { flameRays, MUSKET_RANGE, MUSKET_SPREAD_DEG } from "./attacks.ts";
 import { beginWindup, fire, makeEnemy, meleeSpec } from "./enemy.ts";
 import { NO_INPUT } from "./types.ts";
 import type { Enemy, World } from "./types.ts";
@@ -12,7 +13,7 @@ import {
   GUARDIAN_POISE, GUARDIAN_CALL_MS, GUARDIAN_INTRO_MS, GUARDIAN_INTRO_NOTICE_MS, GUARDIAN_INTRO_PRE_MS, GUARDIAN_INTRO_RECOVERY_MS, GUARDIAN_MID_CALL_DELAY_MS, GUARDIAN_HEARTS, GUARDIAN_HP, GUARDIAN_ACTION_GAP_MS, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_SCALE, GUARDIAN_SHOT_EVERY, GUARDIAN_SQUAD, GUARDIAN_STAKES_TELE_MS, GUARDIAN_VOLLEY_TELE_MS, GUARDIAN_VOLLEY_MS, GUARDIAN_XP, GUARDIAN_STANCE, GUARDIAN_BROKEN_MS, GUARDIAN_BROKEN_TAKEN, makeGuardian, stepGuardian,
 } from "./guardian.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
-import { TILE_PX } from "../types.ts";
+import { GRID_W, TILE_PX, Tile } from "../types.ts";
 import { plainInstance } from "../spells/index.ts";
 import { RngSource } from "../rng.ts";
 import { ENEMIES } from "../encounters/enemies.ts";
@@ -72,6 +73,34 @@ describe("the Frontier Veteran: the body", () => {
     const g = guardianOf(w);
     beginWindup(w, g, w.player, "charge");
     expect(g.swing.reach).toBeCloseTo(TILE_PX * meleeSpec(g)!.reachTiles);
+  });
+
+  it("makes the first ram a real hit and stops on the player", () => {
+    const w = guardianWorld("ram-first-hit");
+    const g = guardianOf(w);
+    w.invincible = false;
+    w.player.x = g.x + 120;
+    w.player.y = g.y;
+    g.pose = "";
+    g.poseMs = 0;
+    g.guardian!.introGraceMs = 0;
+    g.guardian!.callMs = 1e9;
+    g.guardian!.stakesMs = 1e9;
+    g.guardian!.volleyMs = 1e9;
+    g.attackCooldownMs = 1e9;
+    g.hasAttacked = false;
+    beginWindup(w, g, w.player, "charge");
+    g.attackMs = 40;
+    g.swing.trackingMs = 0;
+    const hearts = w.player.hearts;
+    for (let i = 0; i < 180 && w.player.hearts === hearts; i++) step(w, NO_INPUT);
+    expect(w.player.hearts).toBeCloseTo(hearts - 0.7, 5);
+    expect(w.player.stunMs).toBeGreaterThan(0);
+    expect(w.player.hurtX).toBeGreaterThan(0);
+    expect(Math.abs(w.player.hurtX)).toBeGreaterThan(Math.abs(w.player.hurtY) + 1);
+    expect(g.attack).not.toBe("lunge");
+    expect(g.velX).toBe(0);
+    expect(g.velY).toBe(0);
   });
 
   it("keeps its gun turn off screen and outside the squad's firing budget", () => {
@@ -247,14 +276,14 @@ describe("the Frontier Veteran: the room", () => {
     expect(g.guardian!.calling).toBe(true);
     const before = w.enemies.length;
     let broke = false;
-    for (let i = 0; i < 20 && !broke; i++) broke = hurtEnemy(w, g, 40).broke && g.guardian!.brokenMs > 0;
+    for (let i = 0; i < 20 && !broke; i++) broke = hurtEnemy(w, g, 40, "", undefined, 40).broke && g.guardian!.brokenMs > 0;
     expect(broke).toBe(true);
     expect(g.stunMs).toBeGreaterThanOrEqual(GUARDIAN_BROKEN_MS - 1);
     expect(g.staggerMs).toBeGreaterThanOrEqual(GUARDIAN_BROKEN_MS - 1);
     expect(g.guardian!.calling).toBe(false);
     expect(g.guardian!.stance).toBe(0);
     const hp = g.hp;
-    hurtEnemy(w, g, 20);
+    hurtEnemy(w, g, 20, "", undefined, 20);
     expect(hp - g.hp).toBe(Math.floor(20 * GUARDIAN_BROKEN_TAKEN));
     // Nothing wears it while it is down, and it gets up when the window is over.
     expect(g.guardian!.stance).toBe(0);
@@ -264,16 +293,21 @@ describe("the Frontier Veteran: the room", () => {
     expect(w.enemies.length).toBe(before);
   });
 
-  it("is not stunned by a poise break: the break interrupts, the stars are a stun's", () => {
+  it("has no poise under its stance: short of the stance, no blow interrupts it, and each one fills the bar", () => {
     const w = guardianWorld("poise-stars");
     const g = guardianOf(w);
     const steps = (ms: number) => Math.ceil(ms / (1000 / 60));
     for (let i = 0; i < steps(GUARDIAN_CALL_MS) + 4; i++) step(w, NO_INPUT);
-    g.poiseGuardMs = 0; g.poise = g.maxPoise;
-    expect(hurtEnemy(w, g, g.maxPoise + 1).broke).toBe(true);
-    expect(g.staggerMs).toBeGreaterThan(0);
+    g.staggerMs = 0;
+    const blow = GUARDIAN_STANCE / 3;
+    expect(hurtEnemy(w, g, blow, "", undefined, blow).broke).toBe(false);
+    expect(hurtEnemy(w, g, blow, "", undefined, blow).broke).toBe(false);
+    expect(g.staggerMs).toBe(0);
     expect(g.stunMs).toBeLessThanOrEqual(0);
-    expect(g.guardian!.stance).toBeLessThan(GUARDIAN_STANCE);
+    expect(g.guardian!.stance).toBeCloseTo(blow * 2, 5);
+    // A tick is not a blow: a burn fills nothing.
+    hurtEnemy(w, g, blow, "fire");
+    expect(g.guardian!.stance).toBeCloseTo(blow * 2, 5);
   });
 
   it("drives its stakes: three lanes at a player at range, a ring round itself on a player close by", () => {
@@ -306,6 +340,91 @@ describe("the Frontier Veteran: the room", () => {
       }
       expect(g.guardian!.stakesMs).toBeGreaterThan(0);
     }
+  });
+
+  describe("is not stopped by the room's props: it breaks them", () => {
+    const steps = (ms: number) => Math.ceil(ms / (1000 / 60));
+    /** A crate on the cell under a point, solid in the grid as a placed prop is. */
+    function crateAt(w: World, x: number, y: number): World["props"][number] {
+      const gx = Math.floor(x / TILE_PX), gy = Math.floor(y / TILE_PX);
+      w.room.grid[gy * GRID_W + gx] = Tile.Prop;
+      const q = {
+        kind: "crate" as const, gx, gy, x: (gx + 0.5) * TILE_PX, y: (gy + 0.5) * TILE_PX,
+        radius: TILE_PX * 0.45, hp: 7, maxHp: 7, brokenMs: 0, hitFlashMs: 0,
+      };
+      w.props.push(q);
+      return q;
+    }
+    function ready(seed: string, playerDx: number): { w: World; g: Enemy } {
+      const w = guardianWorld(seed);
+      const g = guardianOf(w);
+      for (let i = 0; i < steps(GUARDIAN_CALL_MS) + 4; i++) step(w, NO_INPUT);
+      for (const e of w.enemies) if (e !== g) e.hp = 0;
+      w.props.length = 0;
+      g.x = 320; g.y = 200 + TILE_PX / 2;
+      w.player.x = g.x + playerDx; w.player.y = g.y;
+      g.guardian!.volleyMs = 1e9; g.guardian!.callMs = 1e9;
+      g.guardian!.chainNext = false; g.guardian!.wasCharging = false;
+      g.attack = "approach"; g.pose = ""; g.poseMs = 0; g.staggerMs = 0; g.plantMs = 0; g.attackCooldownMs = 1e9; g.speed = 0;
+      g.alertMs = 0;
+      w.rifts.length = 0;
+      return { w, g };
+    }
+
+    it("drives its stake lanes through a crate, and the crate goes when they fire", () => {
+      const { w, g } = ready("stakes-through", 200);
+      const crate = crateAt(w, g.x + 100, g.y);
+      g.guardian!.stakesMs = 0;
+      step(w, NO_INPUT);
+      expect(g.pose).toBe("guardian_stakes");
+      const middle = w.rifts.filter((r) => r.alive).sort((a, b) => Math.abs(a.angle) - Math.abs(b.angle))[0]!;
+      // It runs on past the crate rather than ending in front of it.
+      expect(middle.length).toBeGreaterThan(crate.x - g.x + TILE_PX);
+      expect(crate.hp).toBeGreaterThan(0);
+      for (let i = 0; i < steps(GUARDIAN_STAKES_TELE_MS + 300); i++) step(w, NO_INPUT);
+      expect(crate.hp).toBeLessThanOrEqual(0);
+    });
+
+    it("rings its palisade on past a crate, and the stake under it breaks it", () => {
+      const { w, g } = ready("palisade-through", 50);
+      const crate = crateAt(w, g.x - g.radius - TILE_PX * 1.5, g.y);
+      g.guardian!.stakesMs = 0;
+      step(w, NO_INPUT);
+      expect(g.pose).toBe("guardian_stakes");
+      const cells = w.eruptions.filter((c) => c.alive && c.hostile);
+      // Cells stand beyond the crate on its side: it does not cast a shadow in the ring.
+      expect(cells.some((c) => c.x < crate.x - TILE_PX && Math.abs(c.y - crate.y) < TILE_PX)).toBe(true);
+      for (let i = 0; i < steps(GUARDIAN_STAKES_TELE_MS + 1500); i++) step(w, NO_INPUT);
+      expect(crate.hp).toBeLessThanOrEqual(0);
+    });
+
+    it("rolls its fire through a crate and burns it; a warden's stops at it", () => {
+      for (const veteran of [true, false]) {
+        const { w, g } = ready(`flame-through-${veteran}`, 200);
+        const crate = crateAt(w, g.x + 40, g.y);
+        const range = MUSKET_RANGE * (veteran ? GUARDIAN_ATTACK_RANGE_MULT : 1);
+        const rays = flameRays(w, g.x, g.y, 0, range, MUSKET_SPREAD_DEG, veteran);
+        const mid = rays[Math.floor(rays.length / 2)]!;
+        if (veteran) expect(mid).toBeGreaterThan(crate.x - g.x + TILE_PX);
+        else expect(mid).toBeLessThan(crate.x - g.x);
+        w.flames.push({
+          alive: true, owner: g.id, x: g.x, y: g.y, aim: 0, range, spreadDeg: MUSKET_SPREAD_DEG, rays, ms: 0, hit: false,
+          ...(veteran ? { breaksProps: true } : {}),
+        });
+        for (let i = 0; i < 30; i++) step(w, NO_INPUT);
+        expect(crate.hp <= 0, `veteran ${veteran}`).toBe(veteran);
+      }
+    });
+
+    it("smashes a crate its sweep passes through", () => {
+      const { w, g } = ready("sweep-through", 70);
+      const crate = crateAt(w, g.x + g.radius + TILE_PX * 0.5, g.y);
+      beginWindup(w, g, w.player, "sweep");
+      g.attackMs = 1;
+      g.swing.trackingMs = 0;
+      for (let i = 0; i < 40 && crate.hp > 0; i++) step(w, NO_INPUT);
+      expect(crate.hp).toBeLessThanOrEqual(0);
+    });
   });
 
   it("hurts the player with its palisade, once however many stakes they stand in", () => {

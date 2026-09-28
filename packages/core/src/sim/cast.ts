@@ -1154,7 +1154,10 @@ function onFloor(world: World, x: number, y: number): boolean {
   return t === Tile.Floor || t === Tile.Door;
 }
 
-export function eruptRing(world: World, centre: { x: number; y: number }, spec: Landing, telegraphMs: number, leadMs = 0): void {
+/** With `throughProps`, a prop between the centre and a cell does not drop it (the Frontier Veteran's palisade, `isStone`). */
+export function eruptRing(
+  world: World, centre: { x: number; y: number }, spec: Landing, telegraphMs: number, leadMs = 0, throughProps = false,
+): void {
   const cells: { x: number; y: number; delayMs: number }[] = [];
   for (let i = 0; i < Math.max(1, spec.rings); i++) {
     const r = spec.first + i * spec.step;
@@ -1174,7 +1177,7 @@ export function eruptRing(world: World, centre: { x: number; y: number }, spec: 
       // whatever the sight line to its edge says.
       const tx = Math.floor(x / TILE_PX), ty = Math.floor(y / TILE_PX);
       if (tx < 0 || ty < 0 || tx >= GRID_W || ty >= GRID_H || world.room.grid[ty * GRID_W + tx] === Tile.Wall) continue;
-      if (!hasLineOfSight(world.room.grid, centre.x, centre.y, x, y)) continue;
+      if (!hasLineOfSight(world.room.grid, centre.x, centre.y, x, y, throughProps)) continue;
       cells.push({ x, y, delayMs: wait });
     }
   }

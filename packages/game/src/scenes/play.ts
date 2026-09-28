@@ -8,8 +8,8 @@ import {
   GRID_W, GRID_H, TILE_PX, Tile, STEP_MS, MAX_HEARTS, HP_PER_HEART, ITEMS, SPELL_SLOTS, slotCost, runStaff, PLAYER_SPEED,
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
-  moodTransform, tintRGBA, dashInvulnerable, MELEE, POISE_BREAK_MS, brakeFraction, ENEMIES,
-  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_MUSKET_SPREAD_MULT, GUARDIAN_CALL_MS, GUARDIAN_STANCE, GUARDIAN_BROKEN_MS, GUARDIAN_SINK_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
+  moodTransform, tintRGBA, dashInvulnerable, MELEE, POISE_BREAK_MS, POISE_BREAK_STAGGER_MS, POISE_GUARD_MS, brakeFraction, ENEMIES,
+  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_MUSKET_SPREAD_MULT, GUARDIAN_CALL_MS, GUARDIAN_STANCE, GUARDIAN_BROKEN_MS, GUARDIAN_SINK_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, plated, showsPoise, breakStaggerMs, seenPlayer, beamAim, BEAM_LOCK_MS, lineToWall, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, audienceRoomFor, RUN_GUARDIAN_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTextKey, affixFitsSpell, itemShape,
@@ -2254,6 +2254,9 @@ export class PlayScene extends Phaser.Scene {
       viewHalf: { x: this.scale.width / this.worldZoom() / 2, y: this.scale.height / this.worldZoom() / 2 },
     });
     this.world = arena;
+    // A fresh clock: the assist's beat on the old one starts over (see `enterRoom`).
+    this.autoCaster.reset();
+    this.autoTargetId = null;
     this.world.spells.forEach((slot, i) => {
       if (!slot) return;
       let next = slot;
@@ -2497,6 +2500,13 @@ export class PlayScene extends Phaser.Scene {
     // The room that is ending banks its play time before its world is thrown
     // away; the game-over card adds the live room's own elapsed to it.
     if (this.world) this.runMs += this.world.stats.elapsedMs;
+    /*
+     * The new world's clock starts at 0, and the assist's beat is a time on
+     * the old one: kept, the first auto-cast of a room waited out about as
+     * long as the last room had run. A new room starts the beat afresh.
+     */
+    this.autoCaster.reset();
+    this.autoTargetId = null;
     this.world = createWorld({
       room, encounter, staff, slots,
       /*
@@ -6390,7 +6400,7 @@ export class PlayScene extends Phaser.Scene {
       const m = muzzleOf(w, e, e.facing);
       const range = MUSKET_RANGE * (e.guardian ? GUARDIAN_ATTACK_RANGE_MULT : 1);
       const spreadDeg = MUSKET_SPREAD_DEG * (e.guardian ? GUARDIAN_MUSKET_SPREAD_MULT : 1);
-      const rays = flameRays(w, m.x, m.y, e.facing, range, spreadDeg);
+      const rays = flameRays(w, m.x, m.y, e.facing, range, spreadDeg, !!e.guardian);
       const half = (spreadDeg / 2) * Math.PI / 180;
       drawFlameCone(g, m.x, m.y, e.facing, half, rays, t, w.tick, this.teleView());
     }
@@ -8465,8 +8475,20 @@ export class PlayScene extends Phaser.Scene {
           // A body braking into a wall, and a shot stopped by a ward, are not
           // blows landed: they get the world's chip rather than the sword's.
           if (what.startsWith("brake:") || what.startsWith("wall:") || what === "ward") { sfx.play("wall_hit"); break; }
-          // Poise (`Enemy.poise`): the break is heard as the plate giving; a blow it held through rings off it.
-          if (what.startsWith("poise_break:")) { sfx.play("armour_break"); break; }
+          // Poise (`Enemy.poise`): a plated body's break is heard as the plate
+          // giving, which is rare and earned (three or four blows). Every other
+          // body breaks in two, often, and is heard as the hit that did it:
+          // a cue of its own on each would be a rattle under every fight.
+          if (what.startsWith("poise_break:")) {
+            const broken = w.enemies.find((o) => Math.hypot(o.x - ev.x, o.y - ev.y) < 1);
+            if (broken && plated(broken)) { sfx.play("armour_break"); break; }
+            const hasRegularHit = w.events.some((o) =>
+              o.kind === "enemy_hit" && o.amount !== undefined && !o.what?.startsWith("poise_")
+                && Math.hypot(o.x - ev.x, o.y - ev.y) < 1,
+            );
+            if (!hasRegularHit) sfx.play("hit_enemy");
+            break;
+          }
           if (what.startsWith("poise_hold:")) { sfx.play("hit_armour", 1); break; }
           if (what.startsWith("prop:")) { sfx.play("hit_light", 0.9); break; }
           if (what === "tether_cut") { sfx.play("hit_light", 1.35); break; }
@@ -8724,6 +8746,9 @@ export class PlayScene extends Phaser.Scene {
       if (e.attack !== "windup") continue;
       winding.add(e.id);
       if (a.winding.has(e.id)) continue;
+      // The Veteran's long ram line is silent until the body actually commits;
+      // the launch sound is emitted by the lunge edge below.
+      if (e.guardian && e.meleeKind === "charge") continue;
       // The king's windups are seen, not heard: he is the one body the player is always watching (doc 020).
       if (e.archetype === "boss") continue;
       sfx.play(e.meleeKind && SLAM_KINDS.has(e.meleeKind) ? "tele_slam" : "tele_charge",
@@ -9116,7 +9141,10 @@ export class PlayScene extends Phaser.Scene {
     const guardianNoticed = this.world.guardianRoom === true
       && this.world.enemies.some((e) => e.guardian && e.hp > 0 && e.pose === "guardian_intro" && e.guardian.introNoticeSent);
     const transitionHushed = this.transitionUi?.to !== undefined && stageFor(this.transitionUi.to) === "boss";
-    this.sfx.setMusicHeld(guardianNoticed || transitionHushed || this.labSpeed !== 1 || this.kingIntro !== null, guardianNoticed);
+    // The king's entrance is silent only until the goblet leaves his hand (`tickKingIntro`):
+    // held for the whole of it, the boss theme never came in with the throw.
+    const kingHushed = this.kingIntro !== null && this.kingIntro.phase !== "throw" && this.kingIntro.phase !== "rise";
+    this.sfx.setMusicHeld(guardianNoticed || transitionHushed || this.labSpeed !== 1 || kingHushed, guardianNoticed);
     this.sfx.setMusicPaused(!dead && !this.pauseFromTitle
       && !!(this.pauseUi || this.staffUi || this.offerUi || this.hintsUi)
       && !this.titleUi && !this.gameOverUi && !this.victoryUi && !this.transitionUi
@@ -12479,7 +12507,8 @@ export class PlayScene extends Phaser.Scene {
     } else if (drop && rewardInReach(drop, this.world.player)) {
       this.prompt.setVisible(true);
       this.prompt.setText(t("prompt.open"));
-      this.promptAbove(drop.x, this.topOf(this.rewardGfx?.badge ?? null, drop.y - TILE_PX * 2.1 + 10));
+      // Just over the pedestal as it floats: a fixed two tiles left the prompt far above the reward.
+      this.promptAbove(drop.x, this.topOf(this.rewardGfx?.badge ?? this.rewardGfx?.body ?? null, drop.y - TILE_PX));
     } else if (near) {
       this.prompt.setVisible(true);
       // Names in Title Case, as they are everywhere else: `titleOfId` is the
@@ -14071,6 +14100,21 @@ export class PlayScene extends Phaser.Scene {
         drawAimLine(this.threatGfx, e.x, e.y, ux, uy, 420, aim.x, aim.y, t, tick, view);
       }
       /*
+       * **The watcher's lane.** Its beam has no travel, so the lane is the
+       * whole warning: drawn to the wall the beam will reach, tracking while it
+       * aims and then held still — and blinking — for `BEAM_LOCK_MS`, which is
+       * the beat to step off it.
+       */
+      if (e.archetype === "watcher" && e.telegraphMs > 0 && e.pending.length > 0) {
+        const aim = beamAim(w, e);
+        const a = Math.atan2(aim.y - e.y, aim.x - e.x);
+        const len = lineToWall(w, e.x, e.y, a, TILE_PX * 22);
+        const locked = e.telegraphMs <= BEAM_LOCK_MS;
+        const t = locked ? 1 : 0.5 * (1 - Math.min(1, (e.telegraphMs - BEAM_LOCK_MS) / 600));
+        drawAimLine(this.threatGfx, e.x, e.y, Math.cos(a), Math.sin(a), len,
+          e.x + Math.cos(a) * len, e.y + Math.sin(a) * len, t, tick, view);
+      }
+      /*
        * **The dashcut's line** (doc 020): where he will run, drawn for the
        * whole crouch as a sight line, because the answer is to leave the line,
        * and a blade drawn round the body said nothing about the run.
@@ -14098,8 +14142,10 @@ export class PlayScene extends Phaser.Scene {
          * and the line can never drift away from the real travel distance.
          */
         const fillEnd = windup * 0.42;
-        const holdEnd = windup * 0.55;
-        const blinkEnd = windup * 0.80;
+        // Leave a readable beat after the line reaches full distance before
+        // the two flashes announce the imminent launch.
+        const holdEnd = windup * 0.64;
+        const blinkEnd = windup * 0.88;
         let lineT = 1;
         let len = travel;
         let visible = true;
@@ -17246,9 +17292,11 @@ function specialPose(w: World, e: Enemy): string | null {
       if (e.pose === "guardian_stakes") return e.poseMs > 450 + 250 ? "windup" : "lunge";
       if (e.pose === "musket_fire" || e.pose === "musket_second") return "lunge";
       if (e.pose === "musket_reload" && e.poseMs > 800) return "lunge";
-      // Melee phases deliberately fall through to `enemyPose`. That resolver
-      // owns the authored lunge -> follow -> recover curve; returning `lunge`
-      // here used to hide both the impact frame and the dedicated brake frame.
+      // The shield bash: the plate comes up, then goes through. It borrows the
+      // gun's two frames rather than asking for art it has not been drawn — a
+      // heavy body raising and driving reads the same either way.
+      if (e.attack === "windup") return "windup";
+      if (e.attack === "lunge") return "lunge";
       return null;
     case "bellringer":
       if (e.pose === "cast") return e.poseMs > 260 ? "windup" : "cast";
@@ -17639,9 +17687,7 @@ function drawEnemy(
       facing: e.facing, idleAction: e.idleAction,
       roused,
       sleeping: !e.awake && e.idleRole === "sleeper",
-      // Veteran overrides the warden's normal melee with `charge`; checking
-      // only the base archetype kept it in the thrust frame through braking.
-      recoversBraced: e.meleeKind === "charge" || ENEMIES[e.archetype].melee === "charge",
+      recoversBraced: ENEMIES[e.archetype].melee === "charge",
       flinches: e.archetype !== "boss",
       idlesInStride: e.archetype === "boss",
       stationary: ENEMIES[e.archetype].behaviour === "stationary",
@@ -17978,15 +18024,47 @@ function drawEnemy(
 
   /*
    * **A poise break** (`Enemy.poise`): a ring thrown off the body as the
-   * burst knocks it into its long stagger. There is no bar for poise; what a
-   * hit does is the whole of what the player is told, and a blow held through
-   * throws steel sparks instead (`poise_hold`, in the event effects).
+   * burst knocks it into its long stagger. A plated body's blow held through
+   * throws steel sparks instead (`poise_hold`, in the event effects); every
+   * body's shows on its bar, below.
    */
   if (e.poiseBreakMs > 0) {
     const t = e.poiseBreakMs / POISE_BREAK_MS;
     const burst = group.circle(e.x, e.y + bob, e.radius + 3 + 18 * (1 - t), 0, 0);
     burst.setStrokeStyle(2, SHIELD_BLUE, t);
     burst.setDepth(8);
+  }
+
+  /*
+   * **The poise bar** (doc 027): a thin gold line under the feet, filling as
+   * blows wear the body's poise, the same bar and the same colour as the
+   * Frontier Veteran's stance, because it is the same thing — when it is full
+   * the next blow interrupts. Hidden while the poise is whole, so a room of
+   * untouched bodies is not a room of bars; it comes up with the first blow
+   * and goes when the poise has refilled. It flashes in its last quarter.
+   * After a break it is the guard, pale and draining: nothing will interrupt
+   * the body again until it is gone. Under the feet rather than over the
+   * head, where the damage numbers rise from, the status marks sit and the
+   * alert pops: over the head every blow's number was drawn across it.
+   */
+  // Only on a body worth reading one on: the plated and the elites. A rusher's
+  // is two blows long, so its bar was full the moment it appeared, and a room
+  // of them was a room of flickering lines; whether it was stopped shows in
+  // the body itself.
+  if (!e.guardian && e.archetype !== "boss" && e.maxPoise > 0 && e.hp > 0 && e.spawnFadeMs <= 0
+    && showsPoise(e)
+    && (e.poise < e.maxPoise - 0.01 || e.poiseGuardMs > 0)) {
+    const W = Math.max(14, Math.round(e.radius * 1.8));
+    const y = e.y + e.radius + 4;
+    const guard = e.poiseGuardMs > 0;
+    const k = guard
+      ? Math.min(1, e.poiseGuardMs / (breakStaggerMs(e) + POISE_GUARD_MS))
+      : Math.min(1, 1 - e.poise / e.maxPoise);
+    const hot = !guard && k > 0.75;
+    const flash = hot ? 0.65 + 0.35 * Math.sin(scene.time.now / 90) : 1;
+    // No frame round it: the line alone, so a room of worn bodies is a few gold strokes, not a row of boxes.
+    group.rectangle(e.x - W / 2, y, W * k, 1.6, guard ? 0xcfd6e8 : 0xf2b632, guard ? 0.7 : flash)
+      .setOrigin(0, 0.5).setDepth(10);
   }
 
   /*
@@ -18025,17 +18103,14 @@ function drawEnemy(
    * feel that only exists in the step function is feel nobody gets.
    */
   if (e.alertMs > 0) {
-    // The delivered alert mark, popping up at the body's upper-right corner.
-    // It belongs to the enemy, never to the middle of the screen; the Veteran
-    // and the small bodies use the same local cue.
+    // The delivered alert mark, popping up as it notices. (A notice held
+    // longer than `ALERT_MS` — the Veteran's entrance — is shown whole.)
     const pop = e.alertMs > ALERT_MS ? 1 : Math.min(1, (ALERT_MS - e.alertMs) / 90);
-    const alertX = e.x + e.radius * 0.82;
-    const alertY = e.y - e.radius - 12 - (1 - pop) * 4;
     if (atlas.has("icon_status_alert")) {
-      group.image(alertX, alertY, textureKey, "icon_status_alert")
+      group.image(e.x, e.y - e.radius - 14 - (1 - pop) * 4, textureKey, "icon_status_alert")
         .setOrigin(0.5).setScale((0.9 * (0.6 + 0.4 * pop)) / TUNED).setDepth(8);
     } else if (label) {
-      label(`alert:${e.id}`, alertX, alertY, "!", {
+      label(`alert:${e.id}`, e.x, e.y - e.radius - 12, "!", {
         fontFamily: fontFamily(), fontSize: "12px", color: "#ffe9a8",
       }).setOrigin(0.5).setDepth(8);
     }
@@ -18076,10 +18151,9 @@ function drawEnemy(
    */
   if (e.brakeMs > 0) {
     const t = brakeFraction(e);
-    // Lean away from travel. This is based on the sprite's facing, not the
-    // signed world-space lunge vector: the old expression cancelled its own
-    // mirror and could tilt a westbound body into the charge.
-    img.setRotation((flipX ? 1 : -1) * 0.34 * t);
+    // The lean is the pose now (see `enemyPose`), so this is only the last of
+    // it — a small tip that eases out as the skid ends.
+    img.setRotation(-e.lungeX * 0.12 * t * (flipX ? -1 : 1));
     for (let i = 0; i < 3; i++) {
       const spread = (i - 1) * 0.5;
       const a = Math.atan2(-e.lungeY, -e.lungeX) + spread;

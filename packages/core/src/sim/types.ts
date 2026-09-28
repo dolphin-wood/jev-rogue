@@ -636,6 +636,12 @@ export interface Rift {
   beam?: boolean;
   /** A bolt of the king's call at a phase change rather than his storm: drawn violet, the same blow. */
   summon?: boolean;
+  /**
+   * The Frontier Veteran's line (doc 024): it goes through the room's props
+   * rather than stopping at them, and breaks each it crosses when it fires.
+   * Cleared once it has.
+   */
+  breaksProps?: boolean;
 }
 
 /**
@@ -924,6 +930,8 @@ export interface Flame {
   ms: number;
   /** Whether it has already struck the player: one hit a shot. */
   hit: boolean;
+  /** The Frontier Veteran's fire: it rolls through the room's props and burns each it reaches (`flameCovers`). */
+  breaksProps?: boolean;
 }
 
 /** One cell of grass: whole until fire reaches it, burning for a while, then burnt for good. */
@@ -1034,6 +1042,11 @@ export interface Enemy {
    * being shown for one 300 ms window per room.
    */
   telegraphMs: number;
+  /**
+   * Where a watcher's beam will go, fixed for the last `BEAM_LOCK_MS` of its
+   * aim. Unset while the line still tracks. See `beamAim`.
+   */
+  beamLock?: { x: number; y: number };
   /** The boss's phase, 1..3; 1 for everything else. See `BOSS_PHASES`. */
   phase: number;
   /**
@@ -1401,23 +1414,26 @@ export interface Enemy {
   relocateMs: number;
   /**
    * **Poise**: how much of a beating it takes before a hit interrupts it.
-   * Hidden: there is no bar for it, only what a hit does — a hit it holds
-   * through rings off it (`poise_hold`), and the hit that breaks it knocks
+   * Shown as a thin gold bar under the body, filling as blows wear it, from
+   * the first blow until it has refilled (doc 027). A plated body's blow held
+   * through also rings off it (`poise_hold`); the blow that breaks it knocks
    * it into a long stagger (`poise_break`).
    *
    * It replaced armour, an outer pool of health that had to be spent before
    * the body could be interrupted, and was gone for good once spent: a heavy
    * body was unstoppable for two hits and then interrupted by every hit after,
-   * so it could be held in stagger to its death. Poise comes back. It fills
-   * again once the body has gone `POISE_RECOVER_MS` unhit, and after a break
-   * the body cannot be broken again for `POISE_GUARD_MS`, so a heavy body is
-   * interrupted by a burst of hits, not held down by a stream of them.
+   * so it could be held in stagger to its death. Poise comes back: slowly,
+   * once the body has gone `POISE_REGEN_DELAY_MS` unhit, and after a break
+   * the body cannot be broken again for `POISE_GUARD_MS`, so a body is
+   * interrupted by a burst of blows, not held down by a stream of them.
    *
-   * Zero for most bodies: any hit interrupts them, as it always did.
+   * Every body has some, set by how long its attacks are announced (`POISE`
+   * in `enemy.ts`); what a blow wears off it is the blow's weight, not its
+   * damage (`poiseOfWeight`). The Frontier Veteran's is its stance.
    */
   poise: number;
   maxPoise: number;
-  /** Time since the last hit on its poise; at `POISE_RECOVER_MS` it fills again. */
+  /** Time since the last blow on its poise; past `POISE_REGEN_DELAY_MS` it refills. */
   poiseIdleMs: number;
   /** After a break, the time left before it can be broken again. Hits land; they neither wear it nor interrupt. */
   poiseGuardMs: number;
@@ -1572,22 +1588,7 @@ export interface Enemy {
   attackCooldownMs: number;
   /** Temporary global attack lock; movement and emergence continue while every attack family is held. */
   attackLockMs: number;
-  /**
-   * False until this body has committed to one attack in this room.
-   *
-   * **Its first attack does no damage.** Lars Lidén's rule from *Artificial
-   * Stupidity: The Art of Intentional Mistakes* — have the enemy "miss the
-   * first time", so the attack indicates its direction and timing without
-   * costing the player anything. The whole shape of the attack is shown at
-   * full strength; only the damage is withheld.
-   *
-   * It is the cheapest fairness there is. A player meeting an archetype for
-   * the first time cannot know its reach, its arc or its rhythm, and the
-   * genre's usual answer is to charge them a heart for finding out. This
-   * teaches the same thing for free, once, and never again — and because the
-   * body is committed and recovering either way, the free attack is also the
-   * player's first opening.
-   */
+  /** Whether this body has committed an attack in this room. Retained for run telemetry. */
   hasAttacked: boolean;
   /** Direction locked at the end of the windup, so a lunge can be dodged. */
   lungeX: number;

@@ -552,6 +552,16 @@ export const FOUNTAIN_OFFERS_MAX = 2;
 export const NPC_MIN_NEED: Readonly<Record<NpcKind, number>> = {
   merchant: 0.1, fountain: 0.1, smith: 0.2,
 };
+/**
+ * **The fountain's floor when the bar is low or nearly gone** (`health` low
+ * or critical). The floor above keeps a drink off a door the Director barely
+ * weighed, but a played run showed the other side of it: out of the
+ * guardian's room on a sliver of the bar, Jev gave the fountain 0.05 and 0.04
+ * — it answered "hurt" with a survival stat — and the floor took the run's one
+ * drink off the list twice. A player that low is who the fountain is for, so
+ * the floor drops to where only a near-zero answer is still refused.
+ */
+export const FOUNTAIN_MIN_NEED_HURT = 0.02;
 
 export function portalChoices(run: RunShape, rng: Rng, count = drawPortalCount(rng)): PortalChoices {
   const n = Math.max(1, Math.min(count, REWARD_KINDS.length));

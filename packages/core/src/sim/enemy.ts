@@ -30,10 +30,10 @@ import { distanceAt, followField, UNREACHABLE } from "./flow.ts";
 import { turnToward } from "./aim.ts";
 import {
   makeStrike, makeSwingBox, armMeleeAttack, advanceBox, markStrike, strikeMarked,
-  wallSlamSquareness, MELEE_ATTACKS,
+  wallSlamSquareness, MELEE_ATTACKS, ENEMY_MELEE_DAMAGE,
 } from "./melee.ts";
 import {
-  HASTE_SPEED, castRanged, castShockwave, isElite, layWake, startWake, planted, riftLance, shockCleave, shockRing, sightBeam,
+  HASTE_SPEED, cancelDive, castRanged, castShockwave, isElite, layWake, startWake, planted, riftLance, shockCleave, shockRing, sightBeam,
   stepExpansion, submerged,
 } from "./attacks.ts";
 
@@ -126,6 +126,18 @@ export function seenPlayer(world: World, e: Enemy): { x: number; y: number } {
   const lagMs = PERCEPTION_MS[e.archetype] + (e.id % 4) * 25;
   const back = Math.round(lagMs / (1000 / 60));
   return trail[Math.max(0, trail.length - 1 - back)] ?? world.player;
+}
+
+/**
+ * How long before it fires a watcher's line stops tracking. The beam has no
+ * travel, so a line that followed the player to the last frame was a shot
+ * that could only be dodged by luck; locked, the last beat is the dodge.
+ */
+export const BEAM_LOCK_MS = 380;
+
+/** Where a watcher's beam is pointed right now: locked for its last beat, tracking before. */
+export function beamAim(world: World, e: Enemy): { x: number; y: number } {
+  return e.telegraphMs <= BEAM_LOCK_MS && e.beamLock ? e.beamLock : seenPlayer(world, e);
 }
 
 /**
@@ -452,6 +464,9 @@ const TEMPO: Readonly<Partial<Record<EnemyId, Tempo>>> = {
   // Emplacements think slowly and hit from a long way off.
   turret: { windup: 1, recover: 1, rest: 1, aim: 1.2 },
   sentinel: { windup: 1, recover: 1, rest: 1, aim: 1.15 },
+  // The watcher's shot has no travel, so the whole dodge lives in the aim:
+  // it has to be long enough to see the lane, read it and leave it.
+  watcher: { windup: 1, recover: 1, rest: 1, aim: 2.6 },
   rifter: { windup: 1, recover: 1, rest: 1, aim: 1.15 },
   // Skittish shooters: a short aim, so closing on one is urgent.
   shooter: { windup: 1, recover: 1, rest: 1, aim: 0.85 },
@@ -690,23 +705,79 @@ const ENGAGE_DELAY_MS = 420;
 export const ALERT_MS = 320;
 
 /**
- * **Poise by archetype** (`Enemy.poise`): the damage a burst of hits has to
- * deal before one interrupts it. Only the heavy bodies have any; everything
- * else is interrupted by any hit, as it always was. A sword hit is about 9 at
- * the start of a run, so a tank takes three in a row and a warden two. Not the
- * boss: nothing interrupts him (`canStagger`), and his weight is his health
- * and the turns he takes (`chooseBossAct`).
+ * **Poise by archetype** (`Enemy.poise`, doc 027): the poise damage a burst
+ * of hits has to deal before one interrupts it. **Every body has some**, and
+ * nothing short of the break interrupts it: a sword held down used to flinch
+ * every idle body in reach and push its next attack back, so the late run was
+ * a room of bodies waiting to be hit.
+ *
+ * **How much is set by how long its attacks are announced**, because poise is
+ * what lets a body finish an attack the player is standing in. A held sword
+ * lands about every 400 ms, so a body whose windup is `W` long is hit at most
+ * ⌈W / 400⌉ times before it commits; the poise covers that and a little more,
+ * and never so much that a body with a tell under a reaction's length cannot
+ * be stopped by anything the player has. Figures are at the ramp's scale 1;
+ * `poiseOf` multiplies them by the room's `hp` and `poise` (at room 8 a sword
+ * hit is about 15 and the ramp about ×1.85):
+ *
+ * | tier | bodies | tells | base | at room 8 |
+ * |---|---|---|---|---|
+ * | the quick blades | rusher, delver, burrower | 280–320 ms | 12 | 2 hits |
+ * | the long blades | lancer, warden, fusilier | 380–400 ms, the gun 950 | 18–20 | 3 hits |
+ * | the heavy | tank, breaker | 520–640 ms | 28 | 4 hits |
+ * | the gunners | shooter, turret, orbiter, sentinel, sower and theirs, the cinderlings | an aim of 320 ms | 8 | 1 hit |
+ * | the casters | summoner, bellringer, rifter, snarecaster and theirs | 620–900 ms | 12 | 2 hits |
+ *
+ * The gunners are the lowest: they keep their distance, and a sword that
+ * reaches one should break it. They are not zero, so a gunner the player
+ * stands on still gets its shot off inside the break's guard. Not the boss:
+ * nothing interrupts him (`canStagger`), and his weight is his health and the
+ * turns he takes (`chooseBossAct`). The Frontier Veteran's is its stance.
  */
-// The breaker is the tank's subspecies and the fusilier the warden's: their bodies, their poise.
-const POISE: Partial<Record<EnemyId, number>> = { tank: 24, breaker: 24, warden: 16, fusilier: 16 };
-/** A body's poise: its own, doubled by an `armored` affix, or the affix's flat poise on a body with none. */
-function poiseOf(archetype: EnemyId, affixPoise: number): number {
-  const own = POISE[archetype] ?? 0;
-  if (affixPoise <= 0) return own;
-  return own > 0 ? own * 2 : affixPoise;
+const POISE: Readonly<Record<string, number>> = {
+  rusher: 12, delver: 12, burrower: 12,
+  lancer: 18, warden: 20, fusilier: 20,
+  tank: 28, breaker: 28,
+  shooter: 8, turret: 8, orbiter: 8, sentinel: 8, sower: 8, cinderling: 8,
+  summoner: 12, bellringer: 12, rifter: 12, snarecaster: 12,
+};
+/** The poise a body's tier gives it, at the ramp's scale 1; a subspecies has its base body's unless it is named. */
+function tierPoise(archetype: EnemyId): number {
+  return POISE[archetype] ?? POISE[baseArchetype(archetype)] ?? 8;
 }
-/** Unhit this long, a body's poise is whole again: a heavy body is broken by pressure, not by hits spread across a fight. */
-export const POISE_RECOVER_MS = 1500;
+/**
+ * The bodies whose poise is **armour**: a blow they hold through rings off
+ * them with sparks and the armour sound (`poise_hold`). Every body has poise
+ * now, and a rusher that clanged like plate under every swing would be a
+ * rusher wearing plate; the rest show theirs on the bar alone.
+ */
+export function plated(e: Pick<Enemy, "archetype" | "affixes">): boolean {
+  const base = baseArchetype(e.archetype);
+  return base === "tank" || base === "warden" || e.affixes.includes("armored");
+}
+/**
+ * A body's poise: its tier's, scaled as its health is by the room (the
+ * player's damage grows over the run, and a figure that did not would be two
+ * hits in room 1 and a tap in room 14), softened in the opening rooms by
+ * `Ramp.poise`, and doubled by an `armored` affix.
+ */
+function poiseOf(archetype: EnemyId, affixPoise: number, scale: { readonly hp?: number; readonly poise?: number }): number {
+  const own = tierPoise(archetype) * (scale.hp ?? 1) * (scale.poise ?? 1);
+  return Math.round(affixPoise > 0 ? own * 2 : own);
+}
+/**
+ * **Poise recovers, slowly, and only once the body is left alone.**
+ *
+ * It used to be whole again the instant a body had gone 1.5 s unhit, so a
+ * player who dodged one attack lost every hit they had put into it — which
+ * punishes exactly the play the poise is there to ask for. Now nothing comes
+ * back for `POISE_REGEN_DELAY_MS`, which is longer than a dodge and the
+ * attack it answered, and then it refills at `POISE_REGEN_PER_S` of the bar a
+ * second: a player who steps out and back in keeps most of their work, and one
+ * who walks away for good finds it whole again.
+ */
+export const POISE_REGEN_DELAY_MS = 2000;
+export const POISE_REGEN_PER_S = 0.4;
 /**
  * **A break is an interrupt, not a stun.** The flinch it knocks the body into
  * is longer than an ordinary hit's (`STAGGER_MS`) and cancels what it had
@@ -715,6 +786,23 @@ export const POISE_RECOVER_MS = 1500;
  * and a break shown as one read as a body forever dazed.
  */
 export const POISE_BREAK_STAGGER_MS = 350;
+/**
+ * **A body whose poise shows on a bar is stunned when it breaks** (doc 027):
+ * the plated and the elites. Their bar takes three or four blows, and a
+ * 0.35 s flinch at the end of it read as the same as a hit — the work had no
+ * payoff. So their break is a short stun, stars and all: long enough for two
+ * or three more cuts, shorter than a wall's (`WALL_SLAM_STUN_MS`), which is
+ * still the bigger opening. The rest break in two blows and flinch.
+ */
+export const BARRED_BREAK_STUN_MS = 800;
+/** Whether a body shows its poise on a bar: the plated and the elites (the Frontier Veteran shows its stance). */
+export function showsPoise(e: Pick<Enemy, "archetype" | "affixes">): boolean {
+  return plated(e) || e.affixes.length > 0;
+}
+/** How long a break holds this body: a stun for a body with a bar, a flinch for the rest. */
+export function breakStaggerMs(e: Pick<Enemy, "archetype" | "affixes">): number {
+  return showsPoise(e) ? BARRED_BREAK_STUN_MS : POISE_BREAK_STAGGER_MS;
+}
 /**
  * After a break, how long before it can be broken again, counted from the
  * end of the break's stagger: without it the next burst would break it again
@@ -832,6 +920,8 @@ export function stagger(world: World, e: Enemy, ms = STAGGER_MS, force = false):
   e.bossString = [];
   e.bossStringAt0 = -1;
   e.bossLinked = false;
+  // And a delver's dive, which it had only begun (`cancelDive`).
+  cancelDive(e);
   dropToken(world, e);
   // And its aim: a hit interrupts a shot being lined up, which is the same
   // rule as interrupting a windup and for the same reason.
@@ -944,7 +1034,7 @@ export function makeEnemy(
    * a body's numbers are fixed at the moment it is created and nothing can
    * change what it is worth halfway through a fight.
    */
-  scale: { readonly hp?: number; readonly power?: number } = {},
+  scale: { readonly hp?: number; readonly power?: number; readonly poise?: number } = {},
 ): Enemy {
   const def = ENEMIES[archetype];
   /*
@@ -1008,8 +1098,8 @@ export function makeEnemy(
     staggerImmuneMs: 0,
     threatMs: 0,
     postX: x, postY: y, postMs: (id * 331) % 1200, relocateMs: 0,
-    poise: poiseOf(archetype, stats.poise),
-    maxPoise: poiseOf(archetype, stats.poise),
+    poise: poiseOf(archetype, stats.poise, scale),
+    maxPoise: poiseOf(archetype, stats.poise, scale),
     poiseIdleMs: 0,
     poiseGuardMs: 0,
     poiseBreakMs: 0,
@@ -1722,6 +1812,11 @@ function advanceMelee(e: Enemy, world: World, dtMs: number): void {
     e.swing.active = false;
   } else if (e.attack === "lunge") {
     e.swing.trackingMs = 0;
+    // A travelling melee body carries its hitbox with it. Leaving the box at
+    // the windup origin made long charges visually pass through the player
+    // while the resolver kept testing empty space behind the body.
+    e.swing.x = e.x;
+    e.swing.y = e.y;
     // Where the blade is now, from how far through the commit window it is.
     advanceBox(e.swing, 1 - Math.max(0, e.attackMs) / spec.lungeMs);
   } else {
@@ -2022,6 +2117,9 @@ export function beginWindup(world: World, e: Enemy, target: { x: number; y: numb
     } else e.windupMs += untilGrid(e.bossFightMs + e.windupMs, BEAT_MS);
     e.bossBladeAt = e.bossFightMs + e.windupMs;
   }
+  // The Veteran's ram is a boss-level commitment. Give its tell a little more
+  // room so the line can finish, hold, and blink before the body commits.
+  if (e.guardian && e.meleeKind === "charge") e.windupMs += 160;
   e.attackMs = e.windupMs;
   if (!spec) return;
   // Armed inert, so the telegraph the renderer draws *is* the hitbox.
@@ -2029,8 +2127,16 @@ export function beginWindup(world: World, e: Enemy, target: { x: number; y: numb
   // The king's blow costs what its place in the string says (`bossStringHearts`), not the spec's figure.
   const mult = e.archetype === "boss"
     ? e.damageMult * bossStringHearts(e.bossStringN - 1 - e.bossString.length, e.bossStringN) / Math.max(0.01, spec.damage)
-    : e.damageMult;
+    : e.damageMult * (e.guardian ? 1 : ENEMY_MELEE_DAMAGE);
   armMeleeAttack(e.swing, spec, e.x, e.y, bossAim(e, v.x, v.y), e.strafe, mult);
+  // The Veteran's body is enlarged independently of the warden's attack art.
+  // ResolveBodies keeps the player just outside that enlarged disc before the
+  // swing resolver runs, so the ram's centre-based box must reach the body's
+  // own edge or a contact can be separated before it is tested.
+  if (e.guardian && spec.kind === "charge") {
+    e.swing.bladeReach = Math.max(e.swing.bladeReach, e.radius + 1);
+    e.swing.reach = Math.max(e.swing.reach, e.radius + 1);
+  }
   if (e.guardian && spec.kind !== "charge") {
     // Its doubled body used an ordinary body's weapon geometry, making the
     // large sweep and shield visibly pass through the player before hitting.
@@ -2039,12 +2145,10 @@ export function beginWindup(world: World, e: Enemy, target: { x: number; y: numb
   }
   // The opening cut sets which way the whole string is drawn (`Enemy.bossComboFlip`).
   if (e.archetype === "boss" && (!e.bossLinked || e.bossLinkedBlow === null)) e.bossComboFlip = e.swing.sweep < 0;
-  /*
-   * The first attack this body makes in the room does no damage. Lidén's
-   * "miss the first time": the shape, the reach and the rhythm are all shown
-   * at full strength, and the player is not charged a heart for learning them.
-   */
-  if (!e.hasAttacked) e.swing.damage = 0;
+  // Every committed melee attack is live, including the first one. The
+  // telegraph is the player's warning; a hidden no-damage opening only made a
+  // successful collision look broken and gave the first attack a different
+  // damage rule from every later one.
   e.hasAttacked = true;
 }
 
@@ -2814,7 +2918,10 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
   // the smalls' climb out of the floor rather than starting after it.
   if (e.attackLockMs > 0) e.attackLockMs = Math.max(0, e.attackLockMs - dtMs);
   // The king is never moved by the player: no knockback from any hit, spell or shove (as he holds his ground against bodies).
-  if (e.archetype === "boss") { e.knockX = 0; e.knockY = 0; }
+  // Nor a plated body or the Frontier Veteran (doc 027): a heavy body a sword blow
+  // shoved out of reach had to walk back before it could answer, which made
+  // standing on it the safe place. Plate holds its ground, as Hades' armour does.
+  if (e.archetype === "boss" || e.guardian || plated(e)) { e.knockX = 0; e.knockY = 0; }
   if (anchored(e)) {
     e.knockX = 0;
     e.knockY = 0;
@@ -2975,11 +3082,11 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
   if (e.relocateMs > 0) e.relocateMs -= dtMs;
   if (e.poiseBreakMs > 0) e.poiseBreakMs -= dtMs;
   if (e.poiseGuardMs > 0) e.poiseGuardMs -= dtMs;
-  // Poise fills again once the body has gone a while unhit (`POISE_RECOVER_MS`).
-  if (e.maxPoise > 0 && e.poise < e.maxPoise) {
-    e.poiseIdleMs += dtMs;
-    if (e.poiseIdleMs >= POISE_RECOVER_MS) e.poise = e.maxPoise;
-  }
+  // Poise fills again, slowly, once the body has gone a while unhit (`POISE_REGEN_DELAY_MS`).
+  // The clock runs whole or not: a delver reads it too (`DIVE_AFTER_HIT_MS`).
+  e.poiseIdleMs = Math.min(60_000, e.poiseIdleMs + dtMs);
+  if (e.maxPoise > 0 && e.poise < e.maxPoise && e.poiseIdleMs >= POISE_REGEN_DELAY_MS)
+    e.poise = Math.min(e.maxPoise, e.poise + e.maxPoise * POISE_REGEN_PER_S * (dtMs / 1000));
   /*
    * Braking: an ordinary heavy body skids; the Veteran plants much harder.
    * Its charge already launches at full speed, so a strong first-frame drag
@@ -3786,15 +3893,21 @@ export function fire(world: World, e: Enemy, dtMs: number): void {
    * them — which is the whole reason the wind-up is dodgeable.
    */
   if (e.telegraphMs > 0) {
+    const before = e.telegraphMs;
     e.telegraphMs -= dtMs;
+    // The watcher's line stops following for the last beat, so the lane the
+    // player is shown is the lane that fires.
+    if (e.archetype === "watcher" && before > BEAM_LOCK_MS && e.telegraphMs <= BEAM_LOCK_MS)
+      e.beamLock = { ...seenPlayer(world, e) };
     if (e.telegraphMs > 0) return;
     world.events.push({ kind: "telegraph", x: e.x, y: e.y, what: e.archetype });
     if (e.pending.length > 0) {
       // Sight Beam: the elite sentinel's line is the shot, with no travel time.
-      if (e.archetype === "watcher") sightBeam(world, e, seenPlayer(world, e));
+      if (e.archetype === "watcher") sightBeam(world, e, beamAim(world, e));
       else release(world, e, e.pending as readonly BulletEmission[], 0, volleyFrom(world, e));
       e.pending = [];
     }
+    delete e.beamLock;
     dropFireToken(world, e);
     return;
   }

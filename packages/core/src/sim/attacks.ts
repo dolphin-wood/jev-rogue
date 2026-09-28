@@ -77,7 +77,7 @@ const RIFT_SCAR_MS = 1500;
 
 export function castRift(
   w: World, x: number, y: number, angle: number, length: number,
-  opts: { width?: number; teleMs?: number; damage?: number; bolt?: boolean; summon?: boolean; rock?: boolean; beam?: boolean } = {},
+  opts: { width?: number; teleMs?: number; damage?: number; bolt?: boolean; summon?: boolean; rock?: boolean; beam?: boolean; breaksProps?: boolean } = {},
 ): Rift {
   const r: Rift = {
     alive: true, x, y, angle, length,
@@ -89,6 +89,7 @@ export function castRift(
     ...(opts.bolt && opts.summon ? { summon: true } : {}),
     ...(opts.rock ? { rock: true } : {}),
     ...(opts.beam ? { beam: true } : {}),
+    ...(opts.breaksProps ? { breaksProps: true } : {}),
   };
   w.rifts.push(r);
   w.events.push({ kind: "telegraph", x, y, what: riftName(r, "bolt", "rock") });
@@ -326,11 +327,15 @@ export function armDistance(a: Arm, x: number, y: number): number {
   return Math.hypot(x - (x0 + vx * t), y - (y0 + vy * t));
 }
 
-/** How far a rift reaches along its line before stone stops it. */
-export function lineToWall(w: World, x: number, y: number, angle: number, max: number): number {
+/**
+ * How far a rift reaches along its line before stone stops it. With
+ * `throughProps` a prop does not stop it: the Frontier Veteran's blows go
+ * through the room's clutter and break it (`isStone`, doc 024).
+ */
+export function lineToWall(w: World, x: number, y: number, angle: number, max: number, throughProps = false): number {
   const step = 6;
   for (let d = step; d <= max; d += step) {
-    if (circleHitsWall(w.room.grid, x + Math.cos(angle) * d, y + Math.sin(angle) * d, 2)) return d - step;
+    if (circleHitsWall(w.room.grid, x + Math.cos(angle) * d, y + Math.sin(angle) * d, 2, throughProps)) return d - step;
   }
   return max;
 }
@@ -579,12 +584,14 @@ const FLAME_BURN = 0.35;
  * stops at the first wall. Shared with the renderer, which draws the
  * telegraph and the flame to the same shape the damage uses.
  */
-export function flameRays(w: World, x: number, y: number, aim: number, range = MUSKET_RANGE, spreadDeg = MUSKET_SPREAD_DEG): number[] {
+export function flameRays(
+  w: World, x: number, y: number, aim: number, range = MUSKET_RANGE, spreadDeg = MUSKET_SPREAD_DEG, throughProps = false,
+): number[] {
   const half = (spreadDeg / 2) * Math.PI / 180;
   const out: number[] = [];
   for (let i = 0; i < FLAME_RAYS; i++) {
     const a = aim - half + (2 * half * i) / (FLAME_RAYS - 1);
-    out.push(lineToWall(w, x, y, a, range));
+    out.push(lineToWall(w, x, y, a, range, throughProps));
   }
   return out;
 }
@@ -593,7 +600,9 @@ export function flameRays(w: World, x: number, y: number, aim: number, range = M
 export function muzzleOf(w: World, e: Enemy, aim: number): { x: number; y: number } {
   const x = e.x + Math.cos(aim) * MUSKET_MUZZLE_PX;
   const y = e.y - 3 + Math.sin(aim) * MUSKET_MUZZLE_PX;
-  if (circleHitsWall(w.room.grid, x, y, 2) || !hasLineOfSight(w.room.grid, e.x, e.y, x, y)) return { x: e.x, y: e.y };
+  // A crate against the Frontier Veteran's gun is no stone to it (`isStone`).
+  const through = !!e.guardian;
+  if (circleHitsWall(w.room.grid, x, y, 2, through) || !hasLineOfSight(w.room.grid, e.x, e.y, x, y, through)) return { x: e.x, y: e.y };
   return { x, y };
 }
 
@@ -605,9 +614,12 @@ function fireMusket(w: World, e: Enemy): void {
   const m = muzzleOf(w, e, aim);
   const range = MUSKET_RANGE * (e.guardian ? GUARDIAN_ATTACK_RANGE_MULT : 1);
   const spreadDeg = MUSKET_SPREAD_DEG * (e.guardian ? GUARDIAN_MUSKET_SPREAD_MULT : 1);
+  // The Frontier Veteran's fire rolls through the room's props and burns them down (`flameCovers`).
+  const through = !!e.guardian;
   w.flames.push({
     alive: true, owner: e.id, x: m.x, y: m.y, aim,
-    range, spreadDeg, rays: flameRays(w, m.x, m.y, aim, range, spreadDeg), ms: 0, hit: false,
+    range, spreadDeg, rays: flameRays(w, m.x, m.y, aim, range, spreadDeg, through), ms: 0, hit: false,
+    ...(through ? { breaksProps: true } : {}),
   });
   // The shot is a blow, not a hiss: the world holds for two frames and the
   // gun throws its bearer back a step. It shakes nothing unless it hits.
@@ -626,20 +638,29 @@ function flameReach(f: Flame, a: number): number {
   return f.rays[i]! * (1 - k) + f.rays[i + 1]! * k;
 }
 
+/**
+ * Whether a circle is inside the flame as it rolls out: its front, its spread
+ * and its reach on that line (a wall between is a wall between), allowing for
+ * the circle's own size. The player's hit and the props it burns share it.
+ */
+export function flameCovers(f: Flame, x: number, y: number, r: number): boolean {
+  if (f.ms >= FLAME_ROLL_MS + 80) return false;
+  const front = f.range * Math.min(1, f.ms / FLAME_ROLL_MS);
+  const d = Math.hypot(x - f.x, y - f.y);
+  let da = Math.atan2(y - f.y, x - f.x) - f.aim;
+  while (da > Math.PI) da -= Math.PI * 2;
+  while (da < -Math.PI) da += Math.PI * 2;
+  const half = (f.spreadDeg / 2) * Math.PI / 180;
+  return Math.abs(da) <= half + r / Math.max(8, d)
+    && d - r <= Math.min(front, flameReach(f, Math.max(-half, Math.min(half, da))));
+}
+
 function stepFlame(w: World, f: Flame, dtMs: number, hooks: AttackHooks): void {
   f.ms += dtMs;
   if (f.ms >= FLAME_LIFE_MS) { f.alive = false; return; }
-  const front = f.range * Math.min(1, f.ms / FLAME_ROLL_MS);
   const p = w.player;
-  if (!f.hit && f.ms < FLAME_ROLL_MS + 80) {
-    const d = Math.hypot(p.x - f.x, p.y - f.y);
-    let da = Math.atan2(p.y - f.y, p.x - f.x) - f.aim;
-    while (da > Math.PI) da -= Math.PI * 2;
-    while (da < -Math.PI) da += Math.PI * 2;
-    const half = (f.spreadDeg / 2) * Math.PI / 180;
-    // Inside the flame's front, its spread and its reach on that line (a
-    // wall between is a wall between), allowing for the body's own size.
-    if (Math.abs(da) <= half + PLAYER_RADIUS / Math.max(8, d) && d - PLAYER_RADIUS <= Math.min(front, flameReach(f, Math.max(-half, Math.min(half, da))))) {
+  if (!f.hit) {
+    if (flameCovers(f, p.x, p.y, PLAYER_RADIUS)) {
       f.hit = true;
       // The Frontier Veteran's spray costs what its ram does, as a share (`GUARDIAN_POWER`, doc 024).
       const owner = w.enemies.find((o) => o.id === f.owner);
@@ -707,7 +728,23 @@ const CHAIN_MS = 5000;
 const CHAIN_LENGTH = TILE_PX * 5;
 const DELVE_SURFACE_MS = 2600;
 const DIVE_MS = 500;
-const DELVE_UNDER_MAX_MS = 1200;
+/**
+ * **How long a delver is out of reach**, which was most of the complaint
+ * ("遁地的怪无敌帧太多了"). It was untouchable from the first frame of the
+ * dive, while it was still visibly above the floor, and up to 1.2 s under it:
+ * 1.7 s of a 4.9 s cycle, a third of its life. Now only the last
+ * `DIVE_UNTOUCHABLE_MS` of the dive, when it is into the ground, and at most
+ * `DELVE_UNDER_MAX_MS` under: about a second.
+ */
+const DELVE_UNDER_MAX_MS = 900;
+const DIVE_UNTOUCHABLE_MS = 150;
+/**
+ * **It does not go under while it is being hit.** A dive is how it moves,
+ * not a dodge: one that could start in the middle of the player's run of
+ * cuts took the body out from under the sword, which reads as the game
+ * cheating. Hit within this long, it stays up and fights.
+ */
+const DIVE_AFTER_HIT_MS = 1000;
 const EMERGE_MS = 600;
 const CINDER_TRAIL_MS = 660;
 const FLARE_MS = 1000;
@@ -1030,14 +1067,16 @@ function stepDelve(w: World, e: Enemy, dtMs: number, seen: { x: number; y: numbe
   e.delveMs -= dtMs;
   switch (e.delve) {
     case "surface":
-      if (e.delveMs <= 0 && e.attack === "approach") {
+      if (e.delveMs <= 0 && e.attack === "approach" && e.staggerMs <= 0 && e.poiseIdleMs >= DIVE_AFTER_HIT_MS) {
         e.delve = "diving";
         e.delveMs = DIVE_MS;
-        e.airborne = true;
+        // Still above the floor, and still in reach, until it is into it.
+        e.airborne = false;
         pose(e, "burrow", DIVE_MS);
       }
       return;
     case "diving":
+      e.airborne = e.delveMs <= DIVE_UNTOUCHABLE_MS;
       if (e.delveMs <= 0) {
         // The heading is locked as it goes under; the mound travels a straight line.
         const v = normalise(seen.x - e.x, seen.y - e.y);
@@ -1090,6 +1129,19 @@ function stepDelve(w: World, e: Enemy, dtMs: number, seen: { x: number; y: numbe
 /** Whether a body is under the floor: it neither moves by steering nor can be touched. */
 export function submerged(e: Enemy): boolean {
   return e.delve !== "surface";
+}
+
+/**
+ * **A break pulls a delver back up out of its dive** (doc 027): the dive is
+ * dropped, it is on the surface again with its surface clock started over,
+ * and it stays up for the stagger. What the break stops, it stops.
+ */
+export function cancelDive(e: Enemy): void {
+  if (e.delve !== "diving") return;
+  e.delve = "surface";
+  e.delveMs = DELVE_SURFACE_MS;
+  e.airborne = false;
+  if (e.pose === "burrow") { e.pose = ""; e.poseMs = 0; }
 }
 
 /* ============================== world step ================================ */

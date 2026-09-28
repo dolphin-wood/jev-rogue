@@ -38,11 +38,22 @@ export function isSolid(grid: Uint8Array, x: number, y: number): boolean {
   return t === Tile.Wall || t === Tile.Pillar || t === Tile.Door || t === Tile.Prop;
 }
 
-/** Four probes on the circle, which is enough at this tile size. */
-export function circleHitsWall(grid: Uint8Array, x: number, y: number, r: number): boolean {
+/**
+ * **Stone only**: solid, but not a prop. What the Frontier Veteran's blows
+ * stop at — they go through a room's crates and urns and break them on the
+ * way (doc 024), and only masonry holds them.
+ */
+export function isStone(grid: Uint8Array, x: number, y: number): boolean {
+  const t = tileAt(grid, x, y);
+  return t === Tile.Wall || t === Tile.Pillar || t === Tile.Door;
+}
+
+/** Four probes on the circle, which is enough at this tile size. With `throughProps`, only stone counts (`isStone`). */
+export function circleHitsWall(grid: Uint8Array, x: number, y: number, r: number, throughProps = false): boolean {
+  const solid = throughProps ? isStone : isSolid;
   return (
-    isSolid(grid, x - r, y) || isSolid(grid, x + r, y) ||
-    isSolid(grid, x, y - r) || isSolid(grid, x, y + r)
+    solid(grid, x - r, y) || solid(grid, x + r, y) ||
+    solid(grid, x, y - r) || solid(grid, x, y + r)
   );
 }
 
@@ -162,15 +173,17 @@ export function entryPosition(side: "N" | "E" | "S" | "W", ext: Extent): Vec {
 
 /**
  * Whether a straight line between two points clears the walls. Stepped at
- * half a tile, which is finer than any obstacle the generator places.
+ * half a tile, which is finer than any obstacle the generator places. With
+ * `throughProps`, only stone blocks it (`isStone`).
  */
-export function hasLineOfSight(grid: Uint8Array, ax: number, ay: number, bx: number, by: number): boolean {
+export function hasLineOfSight(grid: Uint8Array, ax: number, ay: number, bx: number, by: number, throughProps = false): boolean {
   const dx = bx - ax;
   const dy = by - ay;
   const steps = Math.ceil(Math.hypot(dx, dy) / (TILE_PX / 2));
+  const solid = throughProps ? isStone : isSolid;
   for (let i = 1; i < steps; i++) {
     const t = i / steps;
-    if (isSolid(grid, ax + dx * t, ay + dy * t)) return false;
+    if (solid(grid, ax + dx * t, ay + dy * t)) return false;
   }
   return true;
 }

@@ -67,7 +67,7 @@ export const ELITE_DAMAGE = 1.3;
 export const ELITE_SPEED = 1.15;
 export const ELITE_REST = 0.85;
 
-/** Poise an `armored` elite carries when its body has none: two sword hits in a row before one interrupts it. */
+/** Poise an `armored` elite would carry if its body had none. Every body has some now (doc 027), so the affix doubles it. */
 export const ARMORED_POISE = 18;
 
 export const AFFIXES: Readonly<Record<EliteAffix, AffixDef>> = {

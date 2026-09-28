@@ -1,6 +1,6 @@
 /** A special room's chest (doc 026): where it stands, and what touching it pays. */
 import { describe, expect, it } from "vitest";
-import { chestInReach, createWorld, openChest, step } from "./world.ts";
+import { answerOffer, chestInReach, createWorld, openChest, step } from "./world.ts";
 import { NO_INPUT } from "./types.ts";
 import type { World } from "./types.ts";
 import { WORLD_H, WORLD_W } from "./collide.ts";
@@ -11,7 +11,9 @@ import { CHEST_GOLD, hasChest } from "../run/chest.ts";
 import { RUN_GUARDIAN_ROOM, audienceRoomFor } from "../run/doors.ts";
 import { objectiveFor } from "../run/objectives.ts";
 
-function chestWorld(seed: string, chest: boolean): World {
+const DOORS = [{ reward: "spell", elite: false, type: "combat" }, { reward: "gold", elite: false, type: "combat" }] as const;
+
+function chestWorld(seed: string, chest: boolean, gold = false): World {
   const src = new RngSource(seed);
   const g = generateRoom(
     { space: "open_arena", symmetry: "mirrored", size: "compact", mood: { temperature: "cold", brightness: "dim", particle_intensity: "calm" } },
@@ -22,9 +24,35 @@ function chestWorld(seed: string, chest: boolean): World {
     encounter: null, props: 0, staff: { slots: 6, mana_max: 120 },
     slots: [plainInstance("magic_bolt"), null, null, null, null, null], hearts: 6,
     rng: src.stream("world"), roomIndex: 7, chest, viewHalf: { x: WORLD_W, y: WORLD_H },
-    offer: { cards: [{ kind: "stat", label: "Fleet", itemId: "fleet", stats: "", description: "" }], doors: [] },
+    offer: gold
+      ? { cards: [], doors: DOORS }
+      : { cards: [{ kind: "stat", label: "Fleet", itemId: "fleet", stats: "", description: "" }], doors: DOORS },
   });
 }
+
+describe("the way out", () => {
+  it("does not open in a card room until the reward is taken", () => {
+    for (const chest of [false, true]) {
+      const w = chestWorld(`gate-${chest}`, chest);
+      for (let i = 0; i < 5 && !w.cleared; i++) step(w, NO_INPUT);
+      expect(w.cleared).toBe(true);
+      expect(w.rewardPending).toBe(true);
+      expect(w.portals.filter((p) => p.open)).toHaveLength(0);
+      answerOffer(w);
+      expect(w.portals.filter((p) => p.open)).toHaveLength(DOORS.length);
+    }
+  });
+
+  it("opens in a gold room as it clears, chest or none", () => {
+    for (const chest of [false, true]) {
+      const w = chestWorld(`gold-${chest}`, chest, true);
+      for (let i = 0; i < 5 && !w.cleared; i++) step(w, NO_INPUT);
+      expect(w.cleared).toBe(true);
+      expect(w.rewardDrop).toBeNull();
+      expect(w.portals.filter((p) => p.open)).toHaveLength(DOORS.length);
+    }
+  });
+});
 
 describe("the chest", () => {
   it("stands beside the reward once the room clears, and pays its gold when opened, not on a touch", () => {

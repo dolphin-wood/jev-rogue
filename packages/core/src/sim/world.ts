@@ -53,7 +53,7 @@ import {
 import { COIN_VALUE, MANA_ORB, burstCoins, drop, makePickupPool, stepPickups } from "./pickups.ts";
 import { CHEST_GOLD } from "../run/chest.ts";
 import { audienceKill, makeAudience, stepAudience } from "./audience.ts";
-import { armGuardianIntroVolley, GUARDIAN_BREAK_STANCE, GUARDIAN_BROKEN_TAKEN, GUARDIAN_HEARTS, GUARDIAN_INTRO_MS, GUARDIAN_INTRO_NOTICE_MS, GUARDIAN_INTRO_PRE_MS, GUARDIAN_INTRO_RECOVERY_MS, GUARDIAN_OPENING_MAX, GUARDIAN_SINK_MS, GUARDIAN_STANCE, GUARDIAN_XP, makeGuardian, stepGuardian, wearStance } from "./guardian.ts";
+import { armGuardianIntroVolley, GUARDIAN_BROKEN_TAKEN, GUARDIAN_HEARTS, GUARDIAN_INTRO_MS, GUARDIAN_INTRO_NOTICE_MS, GUARDIAN_INTRO_PRE_MS, GUARDIAN_INTRO_RECOVERY_MS, GUARDIAN_OPENING_MAX, GUARDIAN_SINK_MS, GUARDIAN_STANCE, GUARDIAN_XP, makeGuardian, stepGuardian, wearStance } from "./guardian.ts";
 import { makeObjective, OBJECTIVE_ENTRY_GRACE_MS, placeTargets, stepObjective } from "./objective.ts";
 import {
   enteredPortal, makePortal, placeRewardNear, portalsBefore, raisePortals, stepPortals, stepReward,
@@ -63,7 +63,7 @@ import type { Destructible } from "./props.ts";
 import type { SpellSlot } from "./spells.ts";
 import type { BulletEmission } from "../encounters/patterns.ts";
 import { turnToward } from "./aim.ts";
-import { ARM_TELE_MS, castArm, castRift, castRanged, castShockwave, dragStep, interruptToll, layWake, lineToWall, onExpansionDeath, shockwaveHits, stepAttacks } from "./attacks.ts";
+import { ARM_TELE_MS, castArm, castRift, castRanged, castShockwave, dragStep, flameCovers, interruptToll, layWake, lineToWall, onExpansionDeath, riftHits, shockwaveHits, stepAttacks } from "./attacks.ts";
 import type { AttackHooks } from "./attacks.ts";
 import { computeFlowField, tileOf } from "./flow.ts";
 import {
@@ -71,7 +71,7 @@ import {
   dropFireToken, POISE_BREAK_MS, POISE_BREAK_STAGGER_MS, POISE_GUARD_MS, SPAWN_FADE_MS, SPAWN_TELEGRAPH_MS, ENEMY_FREEZE_MS, STAGGER_MS,
   ENEMY_BURN_MS, ENEMY_POISON_MS, ENEMY_BURN_SOURCES, ENEMY_POISON_STACKS, SHATTER_MULT,
   STATUS_BREADTH_MULT, statusBreadth, ALERT_MS,
-  meleeSpec,
+  meleeSpec, plated, showsPoise, breakStaggerMs,
   spikeVolley, SPIKE_SIZE, release, bossPhase, BOSS_POWER,
   beginWindup, bossBehind, bossLevel, BOSS_ROAR_MS, BOSS_LINK_RECOVER_MS, BOSS_DASH_SLIDE, bossDashWake, bossTempo,
 } from "./enemy.ts";
@@ -142,6 +142,39 @@ function swordStagger(w: World, e: Enemy): void {
 const SPELL_STAGGER_WEIGHT = 1.2;
 
 /**
+ * **What a blow does to poise, as a share of its damage** (doc 027).
+ *
+ * Mass, not damage, is what makes a body stop: a stream of sparks can kill a
+ * rusher without ever making it flinch, and a stone shard stops it. The
+ * spell's own `weight` already says which it is — it decides how far a hit
+ * pushes and whether it staggered — so it decides this too:
+ *
+ * - **light** (under 1: sparks, darts, seekers, pellets, sprays): 0.1. They
+ *   wear a bar only as a side effect; a build of them has to reach the break
+ *   some other way, or not need it.
+ * - **the bolt's class** (1 to 1.2): 0.4.
+ * - **heavy** (1.2 and over: the cannon, the shard, the glacier spike, the
+ *   void orb, the quake): its weight itself, 1.2 to 2.4. A heavy spell cast on
+ *   a body in reach of the sword breaks what the sword alone would take two
+ *   or three blows to.
+ *
+ * The sword is `SWORD_POISE`. A tick of a burn, a cloud, lava or a doom
+ * mark's slow half is 0: a tick is not a blow.
+ */
+export function poiseOfWeight(weight: number): number {
+  if (weight >= SPELL_STAGGER_WEIGHT) return weight;
+  return weight >= 1 ? 0.4 : 0.1;
+}
+/** The sword's blow is all mass: its damage is its poise. The last of a run lands heavier, and a spin's blows lighter. */
+export const SWORD_POISE = 1;
+const SWORD_FINISHER_POISE = 1.5;
+const SPIN_POISE = 0.5;
+/** A dash's cut and a free strike are blades: the sword's own share. */
+const STRIKE_POISE = 1;
+/** What an effect a hit carries (a chain's arc, a mark's burst, a harvest) does to poise: a little. */
+const PROC_POISE = 0.2;
+
+/**
  * Impact freeze and camera trauma per event.
  *
  * Frames, not milliseconds, is how these are actually reasoned about: one
@@ -205,14 +238,17 @@ const PARTICLE_POOL = 256;
  */
 const PROPS_PER_ROOM = 6;
 /**
- * How many enemies may be attacking at once, whatever the room holds.
+ * How many enemies may be attacking at once, whatever the room holds — the
+ * most a room's own figure (`Ramp.tokens`, which climbs over the run) may be.
  *
- * Two, which is where the Arkham games sit. Three is defensible and six is
+ * Two was where the Arkham games sit, and it was a flat two from room 3 on,
+ * which the late run outgrew: the build that meets room 12 is not the one
+ * that met room 3. Three now, reached at room 10. Three is defensible and six is
  * not: there is no position that answers six simultaneous commitments, so a
  * room that allows it has one strategy, which is to keep running. See
  * `World.attackTokens`.
  */
-const ATTACK_TOKENS = 2;
+const ATTACK_TOKENS = 3;
 /**
  * ...plus one per this many awake bodies.
  *
@@ -235,16 +271,18 @@ const TOKENS_PER_AWAKE = 3;
  */
 const PLAYER_TRAIL_DEPTH = 24;
 /**
- * How many ranged bodies may be winding up or shooting at once.
+ * How many ranged bodies may be winding up or shooting at once, at most; the
+ * room's own figure is `Ramp.tokens`, as for the blades.
  *
- * Two. It was one, which was correct when the problem was volume and wrong
+ * Three, for the same reason as `ATTACK_TOKENS`; it was two, and before that
+ * one, which was correct when the problem was volume and wrong
  * once the other four constraints landed — every shot is now telegraphed,
  * bodies are silent at close range, they cannot fire while repositioning and
  * they aim at a stale position. Stacked with a cap of one, ranged enemies
  * dealt no damage at all. The cap exists so that three shooters are not three
  * times the fire; it does not need to make them harmless.
  */
-const FIRE_TOKENS = 2;
+const FIRE_TOKENS = 3;
 /**
  * The view the simulation assumes when no camera says otherwise: the viewport,
  * one 21 × 13-tile view (doc 017). The harness plays against it.
@@ -911,6 +949,7 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   if (guardianIntro(w)) {
     stepGuardianIntro(w, dtMs);
     stepAttacks(w, dtMs, attackHooks(w));
+    veteranBreaksProps(w);
     stepParticles(w, dtMs);
     return w;
   }
@@ -926,6 +965,7 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   }
   // The expansion's rifts, mines, tethers, lobs, fields and discs.
   stepAttacks(w, dtMs, attackHooks(w));
+  veteranBreaksProps(w);
   // A travelling band — the slam's, a sword wave — breaks the stone it runs into, once a wave each.
   for (const s of w.shockwaves) {
     if (!s.alive || s.chargeMs > 0 || s.byPlayer) continue;
@@ -1059,7 +1099,9 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
         what: w.rewardDrop.kind,
       });
     }
-    if (w.chestDue) placeChest(w); else if (w.offer) {
+    // The chest stands beside whatever the room pays; it never stands in for the reward's gate.
+    if (w.chestDue) placeChest(w);
+    if (w.offer && w.offer.cards.length === 0) {
       /*
        * **A gold room scatters coins and opens.**
        *
@@ -1499,7 +1541,8 @@ function resolveSwing(w: World, dtMs: number): void {
   for (const e of struck) {
     // A blow of the swing proper, not the spin's: the one kind of kill a streak counts.
     w.swordBlow = w.player.swingStretch === 1;
-    const { broke, blocked } = hurtEnemy(w, e, box.damage, e.awake ? "" : "sneak", w.player);
+    const swordPoise = w.player.swingStretch !== 1 ? SPIN_POISE : box.finisher ? SWORD_FINISHER_POISE : SWORD_POISE;
+    const { broke, blocked } = hurtEnemy(w, e, box.damage, e.awake ? "" : "sneak", w.player, box.damage * swordPoise);
     w.swordBlow = false;
     // Off the roaring king: no damage, no gauge, no mana — only the clang and a jolt.
     if (blocked) { impact(w, HITSTOP_HIT, TRAUMA_HIT); continue; }
@@ -1587,6 +1630,13 @@ const PROP_HIT_ID_BASE = -2;
  */
 export function hurtEnemy(
   w: World, e: Enemy, raw: number, tag = "", from?: { x: number; y: number },
+  /**
+   * What the blow does to the body's poise (doc 027), which is not what it
+   * does to its health: a sword blow or a heavy spell is mass, a spray of
+   * sparks is not. Every caller names it (`poiseOfWeight`, `SWORD_POISE`); a
+   * burn, a cloud or lava leaves it at 0, since a tick is not a blow.
+   */
+  poiseDamage = 0,
 ): { broke: boolean; blocked?: boolean } {
   // The king roaring cannot be hurt (`Enemy.bossRoarMs`): the blow rings off him.
   if (e.bossRoarMs > 0) {
@@ -1637,40 +1687,49 @@ export function hurtEnemy(
   if (amount > 0)
     w.events.push({ kind: "damage", x: e.x, y: e.y - e.radius, what: `hp${tag ? `:${tag}` : ""}`, amount });
   e.hp -= amount;
+  // The blow's weight, by what it hit through: what made the damage larger makes the blow heavier.
+  const poiseHit = amount > 0 ? poiseDamage * mult * w.dealtMult : 0;
   /*
-   * **The Frontier Veteran's stance** (doc 024): every hit wears it, and the
-   * one that wears it through puts it on its knees. It is the fight's big
-   * payoff, and it lands as one: held longer than a kill.
+   * **The Frontier Veteran's poise is its stance** (doc 024): the gold bar
+   * over its head, which the same blows fill, and whose break puts it on its
+   * knees. It is the fight's big payoff, and it lands as one: held longer than
+   * a kill. It has no second, smaller poise under it — the bar every body
+   * shows is the one that interrupts it.
    */
-  if (amount > 0 && e.guardian && e.hp > 0 && wearStance(w, e, amount)) {
-    impact(w, HITSTOP_CAP, TRAUMA_KILL);
-    emit(w, e.x, e.y, "kill", 14);
-    return { broke: true };
-  }
-  /*
-   * **Poise** (`Enemy.poise`): all of the damage is health, and the same
-   * damage wears the poise. A hit it holds through rings off it, so a player
-   * can see that the body took it and did not flinch; the hit that wears it
-   * through knocks it into a long stagger and cancels what it had started.
-   * After a break it cannot be broken again for a while (`POISE_GUARD_MS`).
-   */
-  if (amount <= 0 || e.maxPoise <= 0 || e.hp <= 0 || e.archetype === "boss") return { broke: false };
-  e.poiseIdleMs = 0;
-  if (e.poiseGuardMs > 0) {
-    w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_hold:${e.archetype}` });
+  if (e.guardian) {
+    if (poiseHit > 0 && e.hp > 0 && wearStance(w, e, poiseHit)) {
+      impact(w, HITSTOP_CAP, TRAUMA_KILL);
+      emit(w, e.x, e.y, "kill", 14);
+      return { broke: true };
+    }
     return { broke: false };
   }
-  e.poise -= amount;
+  /*
+   * **Poise** (`Enemy.poise`, doc 027): all of the damage is health, and the
+   * blow's weight (`poiseDamage`) wears the poise. A hit it holds through is
+   * shown on the body's bar, and rings off a plated body with sparks; the hit
+   * that wears it through knocks it into a long stagger and cancels what it
+   * had started. After a break it cannot be broken again for a while
+   * (`POISE_GUARD_MS`).
+   */
+  if (poiseHit <= 0 || e.maxPoise <= 0 || e.hp <= 0 || e.archetype === "boss") return { broke: false };
+  e.poiseIdleMs = 0;
+  if (e.poiseGuardMs > 0) {
+    if (plated(e)) w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_hold:${e.archetype}` });
+    return { broke: false };
+  }
+  e.poise -= poiseHit;
   if (e.poise > 0) {
-    w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_hold:${e.archetype}` });
+    if (plated(e)) w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_hold:${e.archetype}` });
     return { broke: false };
   }
   e.poise = e.maxPoise;
-  e.poiseGuardMs = POISE_BREAK_STAGGER_MS + POISE_GUARD_MS;
+  const held = breakStaggerMs(e);
+  e.poiseGuardMs = held + POISE_GUARD_MS;
   e.poiseBreakMs = POISE_BREAK_MS;
-  stagger(w, e, POISE_BREAK_STAGGER_MS, true);
-  // On the Frontier Veteran a break also wears its stance: the burst counts twice.
-  if (e.guardian) wearStance(w, e, GUARDIAN_STANCE * GUARDIAN_BREAK_STANCE);
+  stagger(w, e, held, true);
+  // A body with a bar is stunned by its break, with the stars that say so (`BARRED_BREAK_STUN_MS`).
+  if (showsPoise(e)) e.stunMs = Math.max(e.stunMs, held);
   // A break is worth more than the hit that caused it: the fight changes.
   impact(w, HITSTOP_KILL, TRAUMA_KILL);
   w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_break:${e.archetype}` });
@@ -3036,6 +3095,30 @@ export const BOSS_SLAM_IMPACT_PX = 56;
  */
 const BOSS_PROP_DAMAGE = 18;
 const BOSS_PROP_WAVE_DAMAGE = 12;
+/**
+ * **The Frontier Veteran's blows are not stopped by the room's clutter**
+ * (doc 024). Its stakes, its volley's lines and its fire run through props
+ * rather than ending at them (`isStone`) and smash each they reach: a line
+ * when it fires, the fire as it rolls out. Only stone holds them. Its sweep,
+ * bash and palisade smash what they hit where they land
+ * (`resolveEnemySwings`, `stepEruptions`), and its ram already does
+ * (`smashProps`).
+ */
+function veteranBreaksProps(w: World): void {
+  for (const r of w.rifts) {
+    if (!r.alive || !r.breaksProps || r.teleMs > 0 || r.activeMs <= 0) continue;
+    r.breaksProps = false;
+    smashPropsWhere(w, (q) => riftHits(r, q.x, q.y, q.radius));
+  }
+  for (const f of w.flames)
+    if (f.alive && f.breaksProps) smashPropsWhere(w, (q) => flameCovers(f, q.x, q.y, q.radius));
+}
+
+/** Smashes outright every standing prop `hits` finds; not the throne hall's columns, which only the king's blows wear. */
+function smashPropsWhere(w: World, hits: (q: Destructible) => boolean): void {
+  for (const q of w.props) if (q.hp > 0 && !hallProp(q) && hits(q)) damageProp(w, q, q.hp);
+}
+
 /** Breaks what `hits` finds among the standing props, each at most once for the blow that `seen` belongs to. */
 function bossStrikesProps(w: World, hits: (q: Destructible) => boolean, seen: number[], amount = BOSS_PROP_DAMAGE): void {
   w.props.forEach((q, i) => {
@@ -4300,7 +4383,7 @@ function damageTag(_w: World, b: Bullet): string {
 function hookSim(w: World): HookSim {
   return {
     hurt: (e, amount) => {
-      hurtEnemy(w, e, amount);
+      hurtEnemy(w, e, amount, "", undefined, amount * PROC_POISE);
       // Counted like every other hit: a mark's detonation or a harvest burst is damage the player dealt.
       w.stats.damageDealt += amount;
       e.hitFlashMs = HIT_FLASH_MS;
@@ -4430,7 +4513,12 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
         // a mark. Before the damage, so a detonation sees the body it is on.
         onHit(w, b, e, hookSim(w));
         // From where the shot came, a body-length back along its travel.
-        hurtEnemy(w, e, b.damage, unaware ? "sneak" : damageTag(w, b), { x: px - ux * 24, y: py - uy * 24 });
+        const { blocked } = hurtEnemy(w, e, b.damage, unaware ? "sneak" : damageTag(w, b), { x: px - ux * 24, y: py - uy * 24 },
+          b.damage * poiseOfWeight(b.weight || 1));
+        // An enchant's wave is the sword's edge thrown, so it fills the rage
+        // gauge too — at a fraction of a blow's rate, since it pierces a crowd.
+        if (b.delivery === "wave" && !blocked)
+          gainRage(w, (e.hp <= 0 ? RAGE_PER_KILL : RAGE_PER_HIT) * WAVE_RAGE_MULT);
         if (e.hp <= 0) onKill(w, b, e, hookSim(w));
         w.stats.damageDealt += b.damage;
         // A shot that arrived: the numerator of "how often the player hits".
@@ -5138,41 +5226,50 @@ function resolveEnemySwings(w: World): void {
     if (!isActive(e) || e.hp <= 0) continue;
     const box = e.swing;
     if (!box.active) continue;
-    // The king's sword breaks what it passes through (`BOSS_PROP_DAMAGE`), once a swing each.
+    const spec = meleeSpec(e);
+    const ram = spec !== null && spec.commitSpeed >= 3 && e.attack === "lunge";
+    const dashcut = e.archetype === "boss" && e.meleeKind === "dashcut" && e.attack === "lunge";
+    // Enemy movement is resolved after the attack clock. Keep a live lunge's
+    // hitbox on the body's final position for this step, rather than one frame
+    // behind at the windup origin (especially important for a long ram).
+    if (e.attack === "lunge") {
+      box.x = e.x;
+      box.y = e.y;
+    }
+    // The king's sword breaks what it passes through (`BOSS_PROP_DAMAGE`), once a swing each;
+    // the Frontier Veteran's sweep and bash smash it outright (`veteranBreaksProps`).
     if (e.archetype === "boss") bossStrikesProps(w, (q) => sectorHits(box, q, q.radius), box.hitIds);
+    else if (e.guardian) smashPropsWhere(w, (q) => sectorHits(box, q, q.radius));
     // Dedup per swing, the same way the player's own arc does: one attack is
     // one hit however many frames the player spends inside it.
     if (box.hitIds.includes(PLAYER_HIT_ID)) continue;
-    if (!sectorHits(box, p, PLAYER_RADIUS)) continue;
+    // A committed charge is a body collision, not a directional sword arc:
+    // catching the player from the side or back must still stop the charge.
+    const chargeContact = (ram || dashcut) && circlesOverlap(e.x, e.y, e.radius, p.x, p.y, PLAYER_RADIUS);
+    if (!chargeContact && !sectorHits(box, p, PLAYER_RADIUS)) continue;
     box.hitIds.push(PLAYER_HIT_ID);
-    /*
-     * A zero-damage blade still connects, it just costs nothing. That is how
-     * an archetype's first attack in a room teaches its reach for free (see
-     * `Enemy.hasAttacked`) — the hit is marked as landed so the swing does not
-     * keep looking for a second victim, and the player is told it grazed them.
-     */
-    const dashcut = e.archetype === "boss" && e.meleeKind === "dashcut" && e.attack === "lunge";
+    // A deliberately zero-damage blade still connects and is marked once, so
+    // it cannot retrigger every frame. Normal melee specs are all live.
     if (box.damage <= 0) {
       w.events.push({ kind: "player_hit", x: e.x, y: e.y, what: `graze:${e.archetype}`, amount: 0 });
       if (dashcut) dashcutImpact(w, e);
       continue;
     }
-    /* Ordinary blades do not stun. A committed ram is the exception: the
+    /* Ordinary blades do not stun. A committed charge is the exception: the
      * impact stops the heavy body and briefly takes control of the player so
      * the hit reads as a collision, without launching them across the room. */
-    const spec = meleeSpec(e);
-    const ram = spec !== null && spec.commitSpeed >= 3 && e.attack === "lunge";
-    const before = p.hearts;
     /*
      * A ram shoves along **its own line of travel**, not away from the body's
      * centre: a player caught at the edge of the front went sideways, which
      * is not what being hit by a moving mass does to you.
      */
-    if (ram) hurtPlayer(w, p.x - e.lungeX, p.y - e.lungeY, `melee:${e.archetype}`, RAM_HIT_STUN_MS, box.damage);
+    if (ram || dashcut) hurtPlayer(w, p.x - e.lungeX, p.y - e.lungeY, `melee:${e.archetype}`, RAM_HIT_STUN_MS, box.damage);
     else hurtPlayer(w, e.x, e.y, `melee:${e.archetype}`, 0, box.damage);
 
-    if (dashcut) { if (p.hearts < before) dashcutImpact(w, e); }
-    else if (ram && p.hearts < before) ramImpact(w, e, spec);
+    if (dashcut) dashcutImpact(w, e);
+    // The charge must stop on contact even through player invulnerability or
+    // stance guard; the collision itself ends the committed movement.
+    else if (ram && spec) ramImpact(w, e, spec);
   }
 }
 
@@ -5197,9 +5294,11 @@ function dashcutImpact(w: World, e: Enemy): void {
   // Into the string's next blow at once, or the dashcut's own recovery when it was the whole turn.
   e.attackMs = e.bossString.length > 0 ? BOSS_LINK_RECOVER_MS : (meleeSpec(e)?.recoverMs ?? 0);
   e.swing.active = false;
-  e.velX = e.lungeX * BOSS_DASH_SLIDE;
-  e.velY = e.lungeY * BOSS_DASH_SLIDE;
-  e.brakeMs = meleeSpec(e)?.brakeMs ?? 0;
+  // A player collision ends the committed run immediately; the slide is only
+  // used when the dash reaches its natural endpoint without hitting anyone.
+  e.velX = 0;
+  e.velY = 0;
+  e.brakeMs = Math.min(meleeSpec(e)?.brakeMs ?? 0, RAM_BRAKE_FRAME_MS);
   w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `brake:${e.archetype}` });
   bossDashWake(w, e);
 }
@@ -5221,7 +5320,7 @@ function dashcutImpact(w: World, e: Enemy): void {
 const RAM_THROW_PX = 56;
 const RAM_THROW_MS = 220;
 /** A charge hit briefly takes control, but should not launch the player across the room. */
-const RAM_HIT_STUN_MS = 420;
+const RAM_HIT_STUN_MS = 600;
 /** The impact is an immediate stop; the short brake timer is only for the authored stop frame. */
 const RAM_BRAKE_FRAME_MS = 180;
 
@@ -5547,7 +5646,7 @@ function stepDashStrike(w: World, dtMs: number): void {
         if (!isActive(e) || e.hp <= 0) continue;
         if (!circlesOverlap(s.x, s.y, s.radius, e.x, e.y, e.radius)) continue;
         wake(w, e);
-        hurtEnemy(w, e, s.damage, s.element !== "none" ? s.element : "", s);
+        hurtEnemy(w, e, s.damage, s.element !== "none" ? s.element : "", s, s.damage * STRIKE_POISE);
         w.stats.damageDealt += s.damage;
         applyElementsTo(e, s.powers, s.statusMult, s.proc);
         e.hitFlashMs = HIT_FLASH_MS;
@@ -5591,7 +5690,7 @@ function stepDashStrike(w: World, dtMs: number): void {
     // A body the run itself cut is not cut again by its wake: the wake is for the ground beside the run.
     p.strikeWake?.byPlayer?.hits.push(e.id);
     wake(w, e);
-    hurtEnemy(w, e, p.strikeDamage, p.strikeElement !== "none" ? p.strikeElement : "", p);
+    hurtEnemy(w, e, p.strikeDamage, p.strikeElement !== "none" ? p.strikeElement : "", p, p.strikeDamage * STRIKE_POISE);
     w.stats.damageDealt += p.strikeDamage;
     applyElementsTo(e, p.strikePowers, p.strikeStatusMult, p.strikeProc);
     e.hitFlashMs = HIT_FLASH_MS;
@@ -5679,7 +5778,7 @@ function stepPlayerWakes(w: World): void {
       if (!shockwaveHits(s, e.x, e.y, e.radius) || !hasLineOfSight(w.room.grid, s.x, s.y, e.x, e.y)) continue;
       cut.hits.push(e.id);
       wake(w, e);
-      hurtEnemy(w, e, cut.damage, cut.element !== "none" ? cut.element : "", s);
+      hurtEnemy(w, e, cut.damage, cut.element !== "none" ? cut.element : "", s, cut.damage * poiseOfWeight(cut.weight));
       w.stats.damageDealt += cut.damage;
       applyElementsTo(e, cut.powers, cut.statusMult, cut.proc);
       e.hitFlashMs = HIT_FLASH_MS;
@@ -5742,6 +5841,8 @@ function stepEruptions(w: World, dtMs: number): void {
     c.ageMs = 0;
     // An enemy's cell (the Frontier Veteran's palisade): the player, once a cast, and nothing else.
     if (c.hostile) {
+      // A stake comes up through whatever stands on its cell (`veteranBreaksProps`).
+      smashPropsWhere(w, (q) => propHit(q, c.x, c.y, c.radius));
       const p = w.player;
       if (w.hostileCastHit !== c.castId && Math.hypot(p.x - c.x, p.y - c.y) <= c.radius + PLAYER_RADIUS) {
         w.hostileCastHit = c.castId;
@@ -5760,7 +5861,7 @@ function stepEruptions(w: World, dtMs: number): void {
         e.eruptionCastId = c.castId;
       }
       hit = true;
-      hurtEnemy(w, e, c.damage, c.element !== "none" ? c.element : "", { x: c.x, y: c.y });
+      hurtEnemy(w, e, c.damage, c.element !== "none" ? c.element : "", { x: c.x, y: c.y }, c.damage * poiseOfWeight(c.weight));
       w.stats.damageDealt += c.damage;
       applyElementsTo(e, c.powers, c.statusMult, c.proc);
       e.hitFlashMs = HIT_FLASH_MS;
@@ -5811,7 +5912,8 @@ function stepVortices(w: World, dtMs: number): void {
         moveSliding(w.room.grid, e, (dx / d) * strength * dt, (dy / d) * strength * dt, e.radius);
       }
       if (tick && d < v.radius * 0.75) {
-        hurtEnemy(w, e, v.damage, v.element !== "none" ? v.element : "");
+        // The maw's pull is a grind, not a blow; its collapse is the blow.
+        hurtEnemy(w, e, v.damage, v.element !== "none" ? v.element : "", undefined, v.damage * poiseOfWeight(0));
         w.stats.damageDealt += v.damage;
         applyElementsTo(e, v.powers, v.statusMult, v.proc);
         e.hitFlashMs = HIT_FLASH_MS;
@@ -5834,7 +5936,7 @@ function collapse(w: World, v: World["vortices"][number]): void {
     if (!isActive(e) || e.hp <= 0) continue;
     if (Math.hypot(e.x - v.x, e.y - v.y) > v.radius) continue;
     hit = true;
-    hurtEnemy(w, e, v.collapseDamage, v.element !== "none" ? v.element : "", v);
+    hurtEnemy(w, e, v.collapseDamage, v.element !== "none" ? v.element : "", v, v.collapseDamage * poiseOfWeight(SPELL_STAGGER_WEIGHT));
     w.stats.damageDealt += v.collapseDamage;
     applyElementsTo(e, v.powers, v.statusMult, v.proc);
     e.hitFlashMs = HIT_FLASH_MS;
@@ -5875,7 +5977,7 @@ function doomBurst(w: World, x: number, y: number, damage: number, radius: numbe
   for (const e of w.enemies) {
     if (!isActive(e) || e.hp <= 0) continue;
     if (Math.hypot(e.x - x, e.y - y) > radius + e.radius) continue;
-    hurtEnemy(w, e, damage, "dot:doom", { x, y });
+    hurtEnemy(w, e, damage, "dot:doom", { x, y }, damage * PROC_POISE);
     w.stats.damageDealt += damage;
     e.hitFlashMs = HIT_FLASH_MS;
     w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: e.archetype, amount: damage });
@@ -6129,6 +6231,8 @@ const AMBUSH_MULT = 2;
 /** Rage per connecting sword hit and per sword kill, in segments. */
 const RAGE_PER_HIT = 0.12;
 const RAGE_PER_KILL = 0.35;
+/** What an enchant's wave earns of that, per body it crosses (`stepPlayerBullets`). */
+const WAVE_RAGE_MULT = 0.4;
 
 function gainRage(w: World, amount: number): void {
   const p = w.player;
@@ -6253,7 +6357,7 @@ function answerStance(w: World, share: number): void {
     if (d > s.radius + e.radius) continue;
     hit = true;
     wake(w, e);
-    hurtEnemy(w, e, damage, s.element !== "none" ? s.element : "", p);
+    hurtEnemy(w, e, damage, s.element !== "none" ? s.element : "", p, damage * poiseOfWeight(s.weight));
     w.stats.damageDealt += damage;
     applyElementsTo(e, s.powers, s.statusMult, s.proc);
     e.hitFlashMs = HIT_FLASH_MS;

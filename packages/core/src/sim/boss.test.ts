@@ -50,13 +50,14 @@ describe("the run-progress ramp's late half", () => {
      * body *hits* for is still untouched until the mid run.
      */
     const floor = rampFor(1).hp;
-    for (const i of [1, 2, 3, 5]) {
+    for (const i of [1, 2, 3]) {
       expect(rampFor(i).hp, `room ${i}`).toBe(floor);
       expect(rampFor(i).power, `room ${i}`).toBe(1);
     }
-    for (const [a, b] of [[5, 6], [6, 10], [10, 14]] as const) {
-      expect(rampFor(b).hp).toBeGreaterThan(rampFor(a).hp);
-      expect(rampFor(b).power).toBeGreaterThanOrEqual(rampFor(a).power);
+    // And from there every room a little more than the last, not a step every few rooms (`rampFor`).
+    for (let i = 4; i <= 14; i++) {
+      expect(rampFor(i).hp, `room ${i}`).toBeGreaterThan(rampFor(i - 1).hp);
+      expect(rampFor(i).power, `room ${i}`).toBeGreaterThan(rampFor(i - 1).power);
     }
     // Health moves further than damage: a hit that costs more is a hit that
     // costs more whether or not it was readable.

@@ -230,7 +230,9 @@ describe("a run of swings: two cuts alike, a heavier one back, then a rest", () 
   it("holds the run's last cut longer when it lands", () => {
     const w = world();
     // Bolted down, in reach along the facing, and not worth dying for.
-    put(w, 1, w.player.x + 30, w.player.y - SWING_ORIGIN_LIFT, "turret" as "rusher");
+    const t = put(w, 1, w.player.x + 30, w.player.y - SWING_ORIGIN_LIFT, "turret" as "rusher");
+    // Its poise holds through the whole run, so no break's own freeze stands in for the cut's.
+    t.poise = t.maxPoise = 1000;
     const stops: number[] = [];
     for (let n = 0; n < SWING_RUN; n++) {
       let most = 0;
