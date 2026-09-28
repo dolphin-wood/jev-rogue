@@ -102,6 +102,7 @@ export const JA: Table = {
   "hint.close": "閉じる",
   "hint.move": "移動",
   "hint.take": "獲得",
+  "hint.claim": "受け取る",
   "hint.buy": "購入",
   "hint.leave": "立ち去る",
   "hint.or": "または",

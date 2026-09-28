@@ -161,6 +161,7 @@ function holdBodies(w: World): void {
   for (const e of w.enemies) {
     if (e.archetype === "boss" || e.hp <= 0) continue;
     e.staggerMs = Math.max(e.staggerMs, 500);
+    e.stunMs = Math.max(e.stunMs, 500);
     e.attack = "approach";
     e.attackMs = 0;
     e.swing.active = false;

@@ -285,26 +285,16 @@ export function enemyPose(
     if (ready("dormant")) return "dormant";
   }
   /*
-   * Braking uses the **windup** drawing, which is a body leaning back.
-   *
-   * It is the same shape a mass arriving makes: braced against its own
-   * momentum, weight on the back foot. Reusing it means a charge's skid has a
-   * pose rather than a rotation applied to a walk frame, and it costs no art —
-   * the drawing already exists for the other end of the same move.
+   * Braking has an authored recovery drawing. The delivered sheets call it
+   * `recover`: it is the planted, arms-out frame after the body has arrived,
+   * rather than the raised `windup` that announces an attack. The fallback
+   * keeps older sheets safe, but the charge-capable bodies all have the real
+   * frame and should never snap back into their lunge during the skid.
    */
-  /*
-   * Braking, and then recovering from a brake, both hold the **windup**
-   * drawing — a body leaning back, braced against its own momentum.
-   *
-   * The recovery used to fall back to the lunge pose, so a ram went lean-back
-   * and then snapped into a mid-charge stance for the two thirds of a second
-   * it spent standing still afterwards. The whole move should read as one
-   * arc: wind up, launch, arrive braced, hold braced. A jab is the opposite
-   * and springs back out, which is what its lunge pose is for.
-   */
-  if (e.brakeMs > 0 && ready("windup")) return "windup";
+  const bracePose = e.recoversBraced && ready("recover") ? "recover" : ready("windup") ? "windup" : null;
+  if (e.brakeMs > 0 && bracePose) return bracePose;
   if (e.attack === "windup" && ready("windup")) return "windup";
-  if (e.attack === "recover" && e.recoversBraced && ready("windup")) return "windup";
+  if (e.attack === "recover" && e.recoversBraced && bracePose) return bracePose;
   /*
    * The commit has three drawings where the model composes them: the strike,
    * the frame it carries past the strike, and the way back to standing. A

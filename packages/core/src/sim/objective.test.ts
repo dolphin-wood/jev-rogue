@@ -4,7 +4,7 @@ import { createWorld, step, worldCleared } from "./world.ts";
 import { NO_INPUT } from "./types.ts";
 import type { World } from "./types.ts";
 import { WORLD_H, WORLD_W } from "./collide.ts";
-import { DESTROY_TARGETS, HOLD_MS, holdLeftS, targetsLeft } from "./objective.ts";
+import { DESTROY_TARGETS, HOLD_MS, OBJECTIVE_ENTRY_GRACE_MS, holdLeftS, targetsLeft } from "./objective.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
 import { plainInstance } from "../spells/index.ts";
 import { RngSource } from "../rng.ts";
@@ -33,6 +33,15 @@ function objectiveWorld(kind: "hold" | "destroy", seed: string): World {
 const run = (w: World, ms: number) => { for (let i = 0; i < Math.ceil(ms / (1000 / 60)); i++) step(w, NO_INPUT); };
 
 describe("a hold", () => {
+  it("gives the opening wave three seconds to show the arena before attacking", () => {
+    const w = objectiveWorld("hold", "h-grace");
+    step(w, NO_INPUT);
+    expect(w.enemies.length).toBeGreaterThan(0);
+    expect(w.enemies.every((e) => e.attackLockMs > 0 && e.telegraphMs === 0)).toBe(true);
+    run(w, OBJECTIVE_ENTRY_GRACE_MS + 100);
+    expect(w.enemies.every((e) => e.attackLockMs === 0)).toBe(true);
+  });
+
   it("starts with forty-two seconds on its clock", () => {
     const w = objectiveWorld("hold", "h0");
     expect(HOLD_MS).toBe(42_000);
@@ -62,6 +71,15 @@ describe("a hold", () => {
 });
 
 describe("a destroy room", () => {
+  it("holds every target's attacks for the first three seconds", () => {
+    const w = objectiveWorld("destroy", "d-grace");
+    const targets = w.enemies.filter((e) => e.objectiveTarget);
+    expect(targets).toHaveLength(DESTROY_TARGETS);
+    expect(targets.every((e) => e.attackLockMs === OBJECTIVE_ENTRY_GRACE_MS && e.telegraphMs === 0)).toBe(true);
+    run(w, OBJECTIVE_ENTRY_GRACE_MS + 100);
+    expect(targets.every((e) => e.attackLockMs === 0)).toBe(true);
+  });
+
   it("stands its turrets, marked, and is not clear while one stands", () => {
     const w = objectiveWorld("destroy", "d1");
     expect(targetsLeft(w)).toBe(DESTROY_TARGETS);

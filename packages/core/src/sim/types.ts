@@ -915,6 +915,10 @@ export interface Flame {
   x: number;
   y: number;
   aim: number;
+  /** The unoccluded front's maximum travel; individual rays may stop sooner at walls. */
+  range: number;
+  /** Its spread across the muzzle, so hit testing and the warning use the same cone. */
+  spreadDeg: number;
   /** Its reach along each ray across the spread, each cut short by the first wall. */
   rays: number[];
   ms: number;
@@ -1351,6 +1355,21 @@ export interface Enemy {
    */
   staggerMs: number;
   /**
+   * **A stun**: the long, helpless part of a stagger, shown with stars over
+   * the head — a charge knocked out on a wall, a ringer whose line was cut,
+   * the Frontier Veteran's stance broken. A poise break or a heavy spell's
+   * flinch staggers without it, so the stars mean one thing.
+   */
+  stunMs: number;
+  /**
+   * **Under the floor** while the Frontier Veteran's volley comes due (doc
+   * 024): its squad goes to ground, so the player reads the lines alone.
+   * Untouchable and doing nothing; it rises again as a spawn does. `sinkMs`
+   * is the first part of it, the going down, for the renderer.
+   */
+  hideMs: number;
+  sinkMs: number;
+  /**
    * Counts down after a **spell** has staggered this body, and refuses the
    * next one while it runs.
    *
@@ -1551,6 +1570,8 @@ export interface Enemy {
   fireTokenMs: number;
   /** Set after an attack, so the same body does not immediately re-commit. */
   attackCooldownMs: number;
+  /** Temporary global attack lock; movement and emergence continue while every attack family is held. */
+  attackLockMs: number;
   /**
    * False until this body has committed to one attack in this room.
    *

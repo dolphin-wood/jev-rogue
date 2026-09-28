@@ -947,7 +947,7 @@ export const MELEE_ATTACKS: Readonly<Record<MeleeAttackSpec["kind"], MeleeAttack
    *
    * It is a different question from the rusher's thrust rather than a bigger
    * one. The rusher asks for a sidestep inside 190 ms; the ram is telegraphed
-   * for half a second, crosses five tiles, and cannot be interrupted because
+   * for half a second, crosses a little over six tiles at full burst speed, and cannot be interrupted because
    * the body is armoured — so the answer is not a flinch but **leaving the
    * lane**, chosen early and committed to. And because it stuns itself on a
    * wall, where the player stands while it winds up decides where it ends up,
@@ -957,18 +957,14 @@ export const MELEE_ATTACKS: Readonly<Record<MeleeAttackSpec["kind"], MeleeAttack
    * is a wide front rather than a projecting blade.
    *
    * **The distance is the attack, and it matches the range it commits from.**
-   * At 7x its own 34 px/s it covers about 165 px in 700 ms, against a commit
-   * range of 150 — so it crosses the gap it announced and stops, rather than
-   * continuing that far *past* the player. Two earlier versions were wrong in
-   * opposite directions for the same reason: with a shared 46 px commit range
-   * it began at contact and then overshot by five tiles, which read as both
-   * pointless and absurd. And before that it moved 20 px, because the
-   * acceleration ramp was being applied to the commit as well as the approach;
-   * the launch is exempt from it now.
+   * The launch is deliberately a hard step to full speed — no acceleration
+   * buffer — then a short, forceful run. At 12x its own 34 px/s it covers
+   * about 204 px in 500 ms, 20% less than the earlier 255 px run, before the authored
+   * recovery/brake pose. The warning line uses this same distance.
    */
   charge: {
     kind: "charge", bladeDeg: 74, sweepDeg: 0, reachTiles: 0.95,
-    damage: 1.5, knockback: 420, commitSpeed: 7,
+    damage: 1.5, knockback: 420, commitSpeed: 12,
     /*
      * The recovery **is** the skid, so the two are the same number.
      *
@@ -982,7 +978,7 @@ export const MELEE_ATTACKS: Readonly<Record<MeleeAttackSpec["kind"], MeleeAttack
      * The real opening is still the wall slam, which is 1200 ms and has to be
      * set up.
      */
-    windupMs: 520, lungeMs: 700, recoverMs: 440, brakeMs: 440, stunsOnWall: true,
+    windupMs: 520, lungeMs: 500, recoverMs: 440, brakeMs: 440, stunsOnWall: true,
     // Its whole cycle is already over two seconds; with a short rest on top it
     // was charging about every three, which is too often for something this
     // large to still read as a commitment.

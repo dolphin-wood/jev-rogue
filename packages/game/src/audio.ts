@@ -294,9 +294,9 @@ export class Sfx {
    * remixes the layers) and, in the boss room, the boss's phase. Called every
    * frame; a repeat is free, so the caller never has to track edges.
    */
-  setMusic(state: MusicState, mood: Mood | null, bossPhase = 1, bossClockMs?: number, bossRate = 1): void {
+  setMusic(state: MusicState, mood: Mood | null, bossPhase = 1, bossClockMs?: number, bossRate = 1, roomRate = 1): void {
     this.pendingState = { state, mood, bossPhase };
-    this.music?.setState(state, mood, bossPhase, bossClockMs, bossRate);
+    this.music?.setState(state, mood, bossPhase, bossClockMs, bossRate, roomRate);
   }
 
   musicState(): MusicState {

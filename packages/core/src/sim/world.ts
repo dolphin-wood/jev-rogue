@@ -53,8 +53,8 @@ import {
 import { COIN_VALUE, MANA_ORB, burstCoins, drop, makePickupPool, stepPickups } from "./pickups.ts";
 import { CHEST_GOLD } from "../run/chest.ts";
 import { audienceKill, makeAudience, stepAudience } from "./audience.ts";
-import { GUARDIAN_HEARTS, GUARDIAN_XP, makeGuardian, stepGuardian } from "./guardian.ts";
-import { makeObjective, placeTargets, stepObjective } from "./objective.ts";
+import { armGuardianIntroVolley, GUARDIAN_BREAK_STANCE, GUARDIAN_BROKEN_TAKEN, GUARDIAN_HEARTS, GUARDIAN_INTRO_MS, GUARDIAN_INTRO_NOTICE_MS, GUARDIAN_INTRO_PRE_MS, GUARDIAN_INTRO_RECOVERY_MS, GUARDIAN_OPENING_MAX, GUARDIAN_SINK_MS, GUARDIAN_STANCE, GUARDIAN_XP, makeGuardian, stepGuardian, wearStance } from "./guardian.ts";
+import { makeObjective, OBJECTIVE_ENTRY_GRACE_MS, placeTargets, stepObjective } from "./objective.ts";
 import {
   enteredPortal, makePortal, placeRewardNear, portalsBefore, raisePortals, stepPortals, stepReward,
 } from "./exits.ts";
@@ -70,7 +70,7 @@ import {
   anchored, bossStringHearts, hatchMinion, isActive, livingSummoners, makeEnemy, makeKing, kingFloorHp, stepEnemy, stagger, canStagger, midAttack, wake, dropToken,
   dropFireToken, POISE_BREAK_MS, POISE_BREAK_STAGGER_MS, POISE_GUARD_MS, SPAWN_FADE_MS, SPAWN_TELEGRAPH_MS, ENEMY_FREEZE_MS, STAGGER_MS,
   ENEMY_BURN_MS, ENEMY_POISON_MS, ENEMY_BURN_SOURCES, ENEMY_POISON_STACKS, SHATTER_MULT,
-  STATUS_BREADTH_MULT, statusBreadth,
+  STATUS_BREADTH_MULT, statusBreadth, ALERT_MS,
   meleeSpec,
   spikeVolley, SPIKE_SIZE, release, bossPhase, BOSS_POWER,
   beginWindup, bossBehind, bossLevel, BOSS_ROAR_MS, BOSS_LINK_RECOVER_MS, BOSS_DASH_SLIDE, bossDashWake, bossTempo,
@@ -440,9 +440,9 @@ export function createWorld(input: CreateWorldOptions): World {
 /**
  * **The Frontier Veteran takes its ground** (doc 024): as far from the door as
  * the opening view allows, awake, alone, and **in sight**, its bar and name
- * over it included. The room's own wave is its entrance: a beat after the
- * room opens it raises its arm and they rise round it, so the player has to
- * be able to see it do so. The view is the camera's at the door: centred on
+ * over it included. The room's own wave remains the opening fight; the
+ * Veteran demonstrates a harmless line, then calls one fixed squad mid-fight.
+ * The view is the camera's at the door: centred on
  * the player, held inside the room (`viewHalf`).
  */
 function placeGuardian(w: World): void {
@@ -456,6 +456,12 @@ function placeGuardian(w: World): void {
   const inView = (x: number, y: number): boolean =>
     Math.abs(x - cx) <= half.x - side && y - cy >= -(half.y - above) && y - cy <= half.y - below;
   let best: { x: number; y: number; d: number } | null = null;
+  // Stage the entrance in the lane directly ahead of the player, toward the
+  // room's centre, instead of placing the Veteran in a far corner.
+  const roomCentre = { x: roomW / 2, y: roomH / 2 };
+  const forward = normalise(roomCentre.x - p.x, roomCentre.y - p.y);
+  const centreDistance = Math.hypot(roomCentre.x - p.x, roomCentre.y - p.y);
+  const targetDistance = Math.max(TILE_PX * 4, Math.min(TILE_PX * 8, centreDistance - TILE_PX * 1.5));
   for (let gy = 3; gy < ext.h - 3; gy++)
     for (let gx = 3; gx < ext.w - 3; gx++) {
       let open = true;
@@ -464,18 +470,35 @@ function placeGuardian(w: World): void {
       if (!open) continue;
       const x = (gx + 0.5) * TILE_PX, y = (gy + 0.5) * TILE_PX;
       if (w.props.some((q) => q.hp > 0 && Math.hypot(q.x - x, q.y - y) < TILE_PX * 2)) continue;
+      const projected = (x - p.x) * forward.x + (y - p.y) * forward.y;
+      const lateral = Math.abs((x - p.x) * forward.y - (y - p.y) * forward.x);
       // Out of sight is only ever a fallback: any cell in view beats every cell out of it.
-      const d = Math.hypot(x - p.x, y - p.y) - Math.abs(x - (ext.w / 2) * TILE_PX) * 0.5 + (inView(x, y) ? 1e6 : 0);
+      const d = (inView(x, y) ? 1e6 : 0)
+        - Math.abs(projected - targetDistance) * 4
+        - lateral * 2;
       if (!best || d > best.d) best = { x, y, d };
     }
   const at = best ?? { x: (ext.w / 2) * TILE_PX, y: (ext.h / 2) * TILE_PX };
-  // The room's own wave does not walk in: it is what the guardian's entrance call raises.
-  // Only bodies that walk: an emplacement does not rise from the floor at a call.
-  const entrance = w.pendingWaves.flatMap((wave) => wave.spawns.flatMap((sp) => Array<EnemyId>(sp.count).fill(sp.archetype)))
-    .filter((id) => ENEMIES[id].behaviour !== "stationary");
-  w.pendingWaves = [];
-  const g = makeGuardian(w.nextEnemyId++, at.x, at.y, w.roomIndex, entrance.length > 0 ? entrance : undefined);
+  // Keep the room's own opening wave, but make it a light three-body beat:
+  // the Veteran's later call is a separate, fixed squad rather than a second
+  // crowd arriving on top of a full late-room wave.
+  let openingLeft = GUARDIAN_OPENING_MAX;
+  w.pendingWaves = w.pendingWaves.flatMap((wave) => {
+    if (wave.atMs > 0) return [wave];
+    if (openingLeft <= 0) return [];
+    const spawns = wave.spawns.flatMap((spawn) => {
+      const count = Math.min(openingLeft, spawn.count);
+      openingLeft -= count;
+      return count > 0 ? [{ ...spawn, count }] : [];
+    });
+    return spawns.length > 0 ? [{ ...wave, spawns }] : [];
+  });
+  const g = makeGuardian(w.nextEnemyId++, at.x, at.y, w.roomIndex);
   g.spawnFadeMs = 0;
+  g.facing = Math.atan2(w.player.y - g.y, w.player.x - g.x);
+  // The entrance composition is a face-to-face beat: the player looks at the
+  // Veteran as soon as the room places it in the forward lane.
+  w.player.facing = Math.atan2(g.y - w.player.y, g.x - w.player.x);
   w.enemies.push(g);
   w.cleared = false;
   w.events.push({ kind: "telegraph", x: at.x, y: at.y, what: "guardian_arrives" });
@@ -746,11 +769,97 @@ export function worldCleared(w: World): boolean {
     && w.deathBursts.length === 0;
 }
 
+/** The Veteran's opening state, including the one-second stretch where the room is still live. */
+function guardianIntroPending(w: World): Enemy | undefined {
+  return w.enemies.find((e) => e.guardian && e.hp > 0 && e.pose === "guardian_intro");
+}
+
+/** The locked part of the entrance: notice, laser, and the smalls going under. */
+function guardianIntro(w: World): Enemy | undefined {
+  const g = guardianIntroPending(w);
+  return g && g.poseMs <= GUARDIAN_INTRO_NOTICE_MS + 1900 ? g : undefined;
+}
+
+/** Put every body into the same readable noticing beat. */
+function armGuardianIntroActors(w: World): void {
+  const g = guardianIntro(w);
+  if (!g) return;
+  for (const e of w.enemies) {
+    if (e.hp <= 0 || e.gone) continue;
+    e.awake = true;
+    e.alertMs = GUARDIAN_INTRO_MS;
+    e.velX = 0;
+    e.velY = 0;
+    e.attack = "approach";
+    e.attackMs = 0;
+    e.swing.active = false;
+    e.pending = [];
+    e.telegraphMs = 0;
+    e.facing = Math.atan2(w.player.y - e.y, w.player.x - e.x);
+  }
+}
+
+/** Advance only the cutscene clocks. The real rifts still run and can hurt a player who walks into them. */
+function stepGuardianIntro(w: World, dtMs: number): void {
+  const g = guardianIntroPending(w);
+  if (!g) return;
+  const gs = g.guardian!;
+  if (!gs.introNoticeSent) {
+    gs.introNoticeSent = true;
+    armGuardianIntroActors(w);
+    w.events.push({ kind: "telegraph", x: g.x, y: g.y, what: "guardian_intro_notice" });
+  }
+  g.poseMs -= dtMs;
+  // Keep the alert marks and bodies planted for the one-second noticing beat.
+  if (!gs.introVolleyArmed && g.poseMs > 1900) armGuardianIntroActors(w);
+  // When the marks vanish, the warning lanes appear and the opening pack
+  // begins sinking under the floor on the same beat.
+  if (!gs.introVolleyArmed && g.poseMs <= 1900) {
+    gs.introVolleyArmed = true;
+    for (const e of w.enemies) if (e.hp > 0) e.alertMs = 0;
+    armGuardianIntroVolley(w, g);
+    for (const e of w.enemies) {
+      if (e === g || e.hp <= 0 || e.hideMs > 0 || e.spawnFadeMs > 0) continue;
+      e.hideMs = Math.max(0, g.poseMs) + GUARDIAN_SINK_MS;
+      e.sinkMs = GUARDIAN_SINK_MS;
+      e.airborne = true;
+    }
+  }
+  for (const e of w.enemies) {
+    if (e === g || e.hideMs <= 0) continue;
+    e.hideMs = Math.max(0, e.hideMs - dtMs);
+    if (e.sinkMs > 0) e.sinkMs -= dtMs;
+    e.velX = 0;
+    e.velY = 0;
+    if (e.hideMs <= 0) {
+      e.airborne = false;
+      e.spawnFadeMs = SPAWN_FADE_MS + SPAWN_TELEGRAPH_MS;
+      w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "boss_summon" });
+    }
+  }
+  if (g.poseMs > 0) return;
+  g.pose = "";
+  g.poseMs = 0;
+  g.guardian!.introGraceMs = GUARDIAN_INTRO_RECOVERY_MS;
+  g.attackCooldownMs = Math.max(g.attackCooldownMs, GUARDIAN_INTRO_RECOVERY_MS);
+  for (const e of w.enemies) {
+    if (e.hp <= 0) continue;
+    e.alertMs = 0;
+    e.attackLockMs = Math.max(e.attackLockMs, GUARDIAN_INTRO_RECOVERY_MS);
+  }
+}
+
 export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistry = ITEMS): World {
   w.events.length = 0;
   w.tick++;
+  // The first second belongs to the room: enemies keep their normal motion
+  // until the cutscene clock reaches the notice beat. Once it crosses that
+  // boundary, the locked intro path below takes over on this same frame.
+  const pendingIntro = guardianIntroPending(w);
+  if (pendingIntro && pendingIntro.poseMs > GUARDIAN_INTRO_NOTICE_MS + 1900)
+    pendingIntro.poseMs -= dtMs;
   // A dead player does nothing: no moving, swinging, casting or dodging.
-  const input: Input = w.player.hearts > 0 ? input0 : NO_INPUT;
+  const input: Input = w.player.hearts > 0 && !guardianIntro(w) ? input0 : NO_INPUT;
 
   // Trauma decays on the wall clock, so the camera keeps settling through a
   // freeze rather than holding a shake that never resolves.
@@ -795,6 +904,16 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   // A room objective (doc 025): its clock, its targets, and the waves it sends again.
   stepObjective(w, dtMs);
   releaseWaves(w);
+
+  /* Once the room's live first beat has elapsed, the Veteran's entrance is a
+   * real cutscene in the simulation: the player and bodies are held while its
+   * beams count down. */
+  if (guardianIntro(w)) {
+    stepGuardianIntro(w, dtMs);
+    stepAttacks(w, dtMs, attackHooks(w));
+    stepParticles(w, dtMs);
+    return w;
+  }
 
   resolveSwing(w, dtMs);
   resolveFires(w, dtMs);
@@ -1505,6 +1624,8 @@ export function hurtEnemy(
   const resist = tag ? resistOf(e.archetype, tag) : 1;
   if (resist === 0) return { broke: false };
   mult *= resist;
+  // The Frontier Veteran on its knees takes more from everything: the window the stance paid for (doc 024).
+  if (e.guardian && e.guardian.brokenMs > 0) mult *= GUARDIAN_BROKEN_TAKEN;
   // Damage is a whole number: rounded down, never below one.
   const amount = raw > 0 ? Math.max(1, Math.floor(raw * mult * w.dealtMult)) : 0;
   /*
@@ -1516,6 +1637,16 @@ export function hurtEnemy(
   if (amount > 0)
     w.events.push({ kind: "damage", x: e.x, y: e.y - e.radius, what: `hp${tag ? `:${tag}` : ""}`, amount });
   e.hp -= amount;
+  /*
+   * **The Frontier Veteran's stance** (doc 024): every hit wears it, and the
+   * one that wears it through puts it on its knees. It is the fight's big
+   * payoff, and it lands as one: held longer than a kill.
+   */
+  if (amount > 0 && e.guardian && e.hp > 0 && wearStance(w, e, amount)) {
+    impact(w, HITSTOP_CAP, TRAUMA_KILL);
+    emit(w, e.x, e.y, "kill", 14);
+    return { broke: true };
+  }
   /*
    * **Poise** (`Enemy.poise`): all of the damage is health, and the same
    * damage wears the poise. A hit it holds through rings off it, so a player
@@ -1538,6 +1669,8 @@ export function hurtEnemy(
   e.poiseGuardMs = POISE_BREAK_STAGGER_MS + POISE_GUARD_MS;
   e.poiseBreakMs = POISE_BREAK_MS;
   stagger(w, e, POISE_BREAK_STAGGER_MS, true);
+  // On the Frontier Veteran a break also wears its stance: the burst counts twice.
+  if (e.guardian) wearStance(w, e, GUARDIAN_STANCE * GUARDIAN_BREAK_STANCE);
   // A break is worth more than the hit that caused it: the fight changes.
   impact(w, HITSTOP_KILL, TRAUMA_KILL);
   w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_break:${e.archetype}` });
@@ -2166,6 +2299,14 @@ function releaseWaves(w: World): void {
          */
         const e = makeEnemy(w.nextEnemyId++, spawn.archetype, at.x, at.y, affixes, rampFor(w.roomIndex));
         w.stats.enemiesSpawned++;
+        // Hold/destroy rooms begin with a readable arena beat. Bodies may
+        // stand, turn and move, while every attack family remains locked;
+        // music and the rest of the room continue normally.
+        if (w.objective && !w.objective.done && w.objective.ms < OBJECTIVE_ENTRY_GRACE_MS) {
+          e.attackLockMs = OBJECTIVE_ENTRY_GRACE_MS - w.objective.ms;
+          e.telegraphMs = 0;
+          e.pending = [];
+        }
         // Facing the player from its first frame, not the default east.
         e.facing = Math.atan2(w.player.y - e.y, w.player.x - e.x);
         /*
@@ -5016,16 +5157,9 @@ function resolveEnemySwings(w: World): void {
       if (dashcut) dashcutImpact(w, e);
       continue;
     }
-    /*
-     * No blade stuns, not even a ram's.
-     *
-     * A charge did briefly, and it was too much: the player is already shoved,
-     * already flashing, already down a heart, and a charge arrives often enough
-     * that adding lost control on top made a single mistake compound. Lightning
-     * keeps its stun because it is the one attack that gives nearly a second of
-     * marked ground first — being under it is a decision, so it can afford a
-     * consequence a melee hit cannot.
-     */
+    /* Ordinary blades do not stun. A committed ram is the exception: the
+     * impact stops the heavy body and briefly takes control of the player so
+     * the hit reads as a collision, without launching them across the room. */
     const spec = meleeSpec(e);
     const ram = spec !== null && spec.commitSpeed >= 3 && e.attack === "lunge";
     const before = p.hearts;
@@ -5034,7 +5168,7 @@ function resolveEnemySwings(w: World): void {
      * centre: a player caught at the edge of the front went sideways, which
      * is not what being hit by a moving mass does to you.
      */
-    if (ram) hurtPlayer(w, p.x - e.lungeX, p.y - e.lungeY, `melee:${e.archetype}`, 0, box.damage);
+    if (ram) hurtPlayer(w, p.x - e.lungeX, p.y - e.lungeY, `melee:${e.archetype}`, RAM_HIT_STUN_MS, box.damage);
     else hurtPlayer(w, e.x, e.y, `melee:${e.archetype}`, 0, box.damage);
 
     if (dashcut) { if (p.hearts < before) dashcutImpact(w, e); }
@@ -5076,18 +5210,20 @@ function dashcutImpact(w: World, e: Enemy): void {
  * The charge carried on through the player at full speed, as if they were
  * not there, and the player got the same small nudge every hit gives. Two
  * bodies colliding should read as one handing its motion to the other: the
- * player is thrown down the line of the charge, hard, and the charger's
- * commit ends there — its speed drops to a fraction and it goes into the
+ * player is thrown a short distance down the line of the charge, and the
+ * charger's commit ends there — its speed drops to zero and it goes into the
  * braking recovery it would have had at the end of its run. The stop is
  * also the opening, so a ram that lands is punishable in the same way as one
  * that missed, which is what keeps taking the hit from being strictly worse
  * than dodging it in every respect.
  */
-/** How far the player is thrown, in px, and over how long. Three tiles. */
-const RAM_THROW_PX = 96;
-const RAM_THROW_MS = 260;
-/** The charger's speed after the hit: a short slide, braked to a stop. */
-const RAM_SLIDE_PX_PER_S = 90;
+/** How far the player is thrown, in px, and over how long. Less than two tiles. */
+const RAM_THROW_PX = 56;
+const RAM_THROW_MS = 220;
+/** A charge hit briefly takes control, but should not launch the player across the room. */
+const RAM_HIT_STUN_MS = 420;
+/** The impact is an immediate stop; the short brake timer is only for the authored stop frame. */
+const RAM_BRAKE_FRAME_MS = 180;
 
 function ramImpact(w: World, e: Enemy, spec: NonNullable<ReturnType<typeof meleeSpec>>): void {
   const p = w.player;
@@ -5098,9 +5234,9 @@ function ramImpact(w: World, e: Enemy, spec: NonNullable<ReturnType<typeof melee
   e.attack = "recover";
   e.attackMs = spec.recoverMs;
   e.swing.active = false;
-  e.velX = e.lungeX * RAM_SLIDE_PX_PER_S;
-  e.velY = e.lungeY * RAM_SLIDE_PX_PER_S;
-  if (spec.brakeMs > 0) e.brakeMs = spec.brakeMs;
+  e.velX = 0;
+  e.velY = 0;
+  e.brakeMs = Math.min(spec.brakeMs, RAM_BRAKE_FRAME_MS);
   /*
    * A ram lands like one: the room holds for a beat, and the
    * renderer is told where and which way (`ram`), so the impact has a burst
@@ -5638,8 +5774,9 @@ function stepEruptions(w: World, dtMs: number): void {
     }
     if (c.burnMs > 0) lightFire(w, c.x, c.y, "player", { radius: c.radius, lifeMs: c.burnMs, damage: c.damage * 0.2 });
     if (hit) impact(w, HITSTOP_HIT * (1 + c.weight * 0.5), TRAUMA_HIT * Math.max(1, c.weight));
-    // A rock from above (a telegraphed cell, Meteor's) shakes the room when it lands, hit or miss.
-    if (c.telegraphMs > 0) w.trauma = Math.min(1, w.trauma + TRAUMA_SKY_LANDING);
+    // A rock from above (Meteor's fire landing) shakes the room when it lands,
+    // hit or miss. Hostile earth uses `telegraphMs` only to expose its warning.
+    if (c.telegraphMs > 0 && c.kind === "fire") w.trauma = Math.min(1, w.trauma + TRAUMA_SKY_LANDING);
     w.events.push({ kind: "eruption", x: c.x, y: c.y, what: c.kind });
   }
 }
@@ -6020,6 +6157,7 @@ function attackHooks(w: World): AttackHooks {
     hatch: (x, y, from) => { hatchMinion(w, x, y, from); },
     knockDown: (e, ms) => {
       e.staggerMs = ms;
+      e.stunMs = ms;
       e.attack = "approach";
       e.attackMs = 0;
       e.swing.active = false;

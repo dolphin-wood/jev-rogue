@@ -29,7 +29,7 @@
  * the same test the lancer's swap uses.
  */
 import { TILE_PX, GRID_W, GRID_H } from "../types.ts";
-import { GUARDIAN_FLAME } from "./guardian.ts";
+import { GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_FLAME, GUARDIAN_MUSKET_SPREAD_MULT } from "./guardian.ts";
 import type { EnemyId } from "../types.ts";
 import { baseArchetype } from "../encounters/enemies.ts";
 import { PLAYER_RADIUS } from "./types.ts";
@@ -110,6 +110,15 @@ function riftDistance(r: Rift, x: number, y: number): number {
   const t = len2 > 0 ? Math.max(0, Math.min(1, ((x - r.x) * vx + (y - r.y) * vy) / len2)) : 0;
   return Math.hypot(x - (r.x + vx * t), y - (r.y + vy * t));
 }
+
+/**
+ * **A beam's edge forgives** (the Frontier Veteran's volley): the player is
+ * hit only when the line's core reaches their middle half, so a line that
+ * only grazes them passes. The glow drawn round it is wider than what hits,
+ * never narrower: a player who sees daylight between the line and themself
+ * is never struck.
+ */
+export const BEAM_GRAZE = 0.4;
 
 export function riftHits(r: Rift, x: number, y: number, radius: number): boolean {
   return riftDistance(r, x, y) <= r.width / 2 + radius;
@@ -518,6 +527,7 @@ export function throwLob(
 export const PLANTED_POSES: ReadonlySet<string> = new Set([
   "musket_windup", "musket_fire", "musket_second", "musket_reload", "cast", "field", "burst", "peal_windup", "windup_hook", "anchor_cast", "lash_windup",
   "flare_windup", "bloom_cast", "telegraph", "telegraph_walk", "lob_windup", "cinder_windup", "guardian_call", "guardian_stakes", "guardian_order",
+  "guardian_intro",
 ]);
 
 /** Whether the body is posed in a move that holds it still. */
@@ -569,12 +579,12 @@ const FLAME_BURN = 0.35;
  * stops at the first wall. Shared with the renderer, which draws the
  * telegraph and the flame to the same shape the damage uses.
  */
-export function flameRays(w: World, x: number, y: number, aim: number): number[] {
-  const half = (MUSKET_SPREAD_DEG / 2) * Math.PI / 180;
+export function flameRays(w: World, x: number, y: number, aim: number, range = MUSKET_RANGE, spreadDeg = MUSKET_SPREAD_DEG): number[] {
+  const half = (spreadDeg / 2) * Math.PI / 180;
   const out: number[] = [];
   for (let i = 0; i < FLAME_RAYS; i++) {
     const a = aim - half + (2 * half * i) / (FLAME_RAYS - 1);
-    out.push(lineToWall(w, x, y, a, MUSKET_RANGE));
+    out.push(lineToWall(w, x, y, a, range));
   }
   return out;
 }
@@ -593,7 +603,12 @@ function fireMusket(w: World, e: Enemy): void {
   // snapped to the live position would land outside its own warning.
   const aim = e.facing;
   const m = muzzleOf(w, e, aim);
-  w.flames.push({ alive: true, owner: e.id, x: m.x, y: m.y, aim, rays: flameRays(w, m.x, m.y, aim), ms: 0, hit: false });
+  const range = MUSKET_RANGE * (e.guardian ? GUARDIAN_ATTACK_RANGE_MULT : 1);
+  const spreadDeg = MUSKET_SPREAD_DEG * (e.guardian ? GUARDIAN_MUSKET_SPREAD_MULT : 1);
+  w.flames.push({
+    alive: true, owner: e.id, x: m.x, y: m.y, aim,
+    range, spreadDeg, rays: flameRays(w, m.x, m.y, aim, range, spreadDeg), ms: 0, hit: false,
+  });
   // The shot is a blow, not a hiss: the world holds for two frames and the
   // gun throws its bearer back a step. It shakes nothing unless it hits.
   w.hitstopMs = Math.max(w.hitstopMs, MUSKET_HITSTOP_MS);
@@ -604,7 +619,7 @@ function fireMusket(w: World, e: Enemy): void {
 
 /** The flame's reach at angle `a` off its aim, between its rays. */
 function flameReach(f: Flame, a: number): number {
-  const half = (MUSKET_SPREAD_DEG / 2) * Math.PI / 180;
+  const half = (f.spreadDeg / 2) * Math.PI / 180;
   const t = ((a + half) / (2 * half)) * (f.rays.length - 1);
   const i = Math.max(0, Math.min(f.rays.length - 2, Math.floor(t)));
   const k = Math.max(0, Math.min(1, t - i));
@@ -614,14 +629,14 @@ function flameReach(f: Flame, a: number): number {
 function stepFlame(w: World, f: Flame, dtMs: number, hooks: AttackHooks): void {
   f.ms += dtMs;
   if (f.ms >= FLAME_LIFE_MS) { f.alive = false; return; }
-  const front = MUSKET_RANGE * Math.min(1, f.ms / FLAME_ROLL_MS);
+  const front = f.range * Math.min(1, f.ms / FLAME_ROLL_MS);
   const p = w.player;
   if (!f.hit && f.ms < FLAME_ROLL_MS + 80) {
     const d = Math.hypot(p.x - f.x, p.y - f.y);
     let da = Math.atan2(p.y - f.y, p.x - f.x) - f.aim;
     while (da > Math.PI) da -= Math.PI * 2;
     while (da < -Math.PI) da += Math.PI * 2;
-    const half = (MUSKET_SPREAD_DEG / 2) * Math.PI / 180;
+    const half = (f.spreadDeg / 2) * Math.PI / 180;
     // Inside the flame's front, its spread and its reach on that line (a
     // wall between is a wall between), allowing for the body's own size.
     if (Math.abs(da) <= half + PLAYER_RADIUS / Math.max(8, d) && d - PLAYER_RADIUS <= Math.min(front, flameReach(f, Math.max(-half, Math.min(half, da))))) {
@@ -711,6 +726,9 @@ export function stepExpansion(
     if (e.poseMs <= 0) finishPose(w, e, seen);
   }
   if (e.moveMs > 0) e.moveMs -= dtMs;
+  // Let an existing emerge/recovery animation finish, but do not begin a new
+  // special move during a scripted no-attack window.
+  if (e.attackLockMs > 0) return;
   const gap = Math.hypot(seen.x - e.x, seen.y - e.y);
   const free = e.poseMs <= 0 && e.attack === "approach";
 
@@ -1091,7 +1109,7 @@ export function stepAttacks(w: World, dtMs: number, hooks: AttackHooks): void {
     }
     if (r.activeMs > 0) {
       r.activeMs -= dtMs;
-      if (!r.struck && riftHits(r, p.x, p.y, PLAYER_RADIUS)) {
+      if (!r.struck && riftHits(r, p.x, p.y, r.beam ? PLAYER_RADIUS * BEAM_GRAZE : PLAYER_RADIUS)) {
         r.struck = true;
         hooks.hurtPlayer(p.x, p.y, riftName(r, "lightning", "rockfall"), 0, r.damage);
       }

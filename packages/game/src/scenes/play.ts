@@ -9,7 +9,7 @@ import {
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
   moodTransform, tintRGBA, dashInvulnerable, MELEE, POISE_BREAK_MS, brakeFraction, ENEMIES,
-  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_CALL_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
+  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_MUSKET_SPREAD_MULT, GUARDIAN_CALL_MS, GUARDIAN_STANCE, GUARDIAN_BROKEN_MS, GUARDIAN_SINK_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, audienceRoomFor, RUN_GUARDIAN_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTextKey, affixFitsSpell, itemShape,
@@ -816,6 +816,16 @@ const VOLLEY_GLOW = 0xffb488;
 /** How fast a volley line runs out of its wall, and how long its bolt takes to fade. */
 const VOLLEY_UNROLL_MS = 200;
 const VOLLEY_FADE_MS = 420;
+/** How far past each end a volley line is drawn: off any view, so neither end is ever seen. */
+const VOLLEY_DRAW_PAST = 2000;
+/** The flooded-depth theme, raised just under a semitone for the Veteran's arena. */
+const VETERAN_MUSIC_RATE = 1.045;
+/** Where the Frontier Veteran's raised muzzle is in the warden's 96 px windup frame, by facing (`e` mirrors `w`). */
+const GUARDIAN_MUZZLE: Readonly<Record<"n" | "s" | "w", readonly [number, number]>> = { s: [56, 7], n: [39.5, 14], w: [46, 11] };
+/** A volley line's bloom when it fires, outermost first: its width as a multiple of the line's, and its alpha. */
+const VOLLEY_BLOOM: readonly (readonly [number, number])[] = [[4.2, 0.07], [3, 0.11], [2, 0.18], [1.4, 0.28]];
+/** The haze gathering round a line in its last fifth before it fires, the same falloff, fainter. */
+const VOLLEY_HAZE: readonly (readonly [number, number])[] = [[3, 0.05], [2, 0.08], [1.2, 0.14]];
 /** Its palisade's stakes: the player's Quake Ring, turned to its violet. */
 const GUARDIAN_STAKE_TINT = 0xc49cff;
 /** Its tint while staggered: its violet warmed toward the stagger's cast, so it is still itself. */
@@ -1997,7 +2007,10 @@ export class PlayScene extends Phaser.Scene {
     this.holdGfx = this.add.graphics().setDepth(9.3);
     this.modalHoldGfx = this.add.graphics().setDepth(250);
     this.beamGfx = this.add.graphics().setDepth(9.2).setBlendMode(Phaser.BlendModes.ADD);
-    this.fxSheets = bakeFxTextures(this, { blastLen: Math.round(MUSKET_RANGE * 2), blastSpreadDeg: MUSKET_SPREAD_DEG });
+    this.fxSheets = bakeFxTextures(this, {
+      blastLen: Math.round(MUSKET_RANGE * GUARDIAN_ATTACK_RANGE_MULT * 2),
+      blastSpreadDeg: MUSKET_SPREAD_DEG * GUARDIAN_MUSKET_SPREAD_MULT,
+    });
     const image = this.textures.get("sheet").getSourceImage() as HTMLImageElement;
     const canvas = document.createElement("canvas");
     canvas.width = image.width;
@@ -6369,16 +6382,19 @@ export class PlayScene extends Phaser.Scene {
   private drawMuzzles(): void {
     const w = this.world;
     const g = this.threatGfx;
-    const half = (MUSKET_SPREAD_DEG / 2) * Math.PI / 180;
     for (const e of w.enemies) {
       if (e.archetype !== "warden" || e.pose !== "musket_windup" || e.hp <= 0) continue;
       const t = 1 - e.poseMs / MUSKET_WINDUP_MS;
       const m = muzzleOf(w, e, e.facing);
-      const rays = flameRays(w, m.x, m.y, e.facing);
+      const range = MUSKET_RANGE * (e.guardian ? GUARDIAN_ATTACK_RANGE_MULT : 1);
+      const spreadDeg = MUSKET_SPREAD_DEG * (e.guardian ? GUARDIAN_MUSKET_SPREAD_MULT : 1);
+      const rays = flameRays(w, m.x, m.y, e.facing, range, spreadDeg);
+      const half = (spreadDeg / 2) * Math.PI / 180;
       drawFlameCone(g, m.x, m.y, e.facing, half, rays, t, w.tick, this.teleView());
     }
     const f = this.bladeGfx;
     for (const fl of w.flames) {
+      const half = (fl.spreadDeg / 2) * Math.PI / 180;
       const n = fl.rays.length;
       const reachAt = (off: number) => {
         const t = ((off + half) / (2 * half)) * (n - 1);
@@ -7994,7 +8010,9 @@ export class PlayScene extends Phaser.Scene {
 
     // The meteor: its mark, and the rock coming down on it.
     for (const c of w.eruptions) {
-      if (!c.alive || c.fired || c.telegraphMs <= 0) continue;
+      // `telegraphMs` is also used by hostile earth spikes so their cracks
+      // can be timed. Only a fire landing is a rock falling from the sky.
+      if (!c.alive || c.fired || c.telegraphMs <= 0 || c.kind !== "fire") continue;
       const t = 1 - Math.max(0, c.delayMs) / c.telegraphMs;
       drawMeteorShadow(floor, c.x, c.y, c.radius, t, view);
       this.drawFallingRock(c.x, c.y, c.radius, t);
@@ -8501,10 +8519,24 @@ export class PlayScene extends Phaser.Scene {
           break;
         }
         case "telegraph": {
+          if (ev.what === "guardian_arrives") {
+            // The entrance owns the room's silence; the first audible Veteran
+            // cue is allowed only after this pose has ended.
+            if (!(w.guardianRoom === true && w.enemies.some((e) => e.guardian && e.pose === "guardian_intro")))
+              sfx.play("cast_windup", 0.55);
+            break;
+          }
+          // The entrance is intentionally silent: the room's music is held
+          // from arrival until the laser and burrow sequence has finished.
+          if (ev.what === "guardian_intro_notice") break;
           // The Frontier Veteran's arm going up: the call heard before the dead answer (doc 024).
           if (ev.what === "guardian_call") sfx.play("cast_void", 0.6);
           if (ev.what === "guardian_stakes" || ev.what === "guardian_palisade") sfx.play("hit_heavy", 0.7);
-          if (ev.what === "guardian_volley") sfx.play("cast_void", 0.8);
+          // Both the entrance laser and the ordinary volley announce
+          // themselves visually. Their only audio is the live beam firing.
+          if (ev.what === "guardian_volley" || ev.what === "volley") break;
+          // Its stance broken: the heaviest sound in the fight, the one it was for.
+          if (ev.what === "guardian_broken") { sfx.play("hit_heavy", 1); sfx.play("cast_void", 0.5); }
           if (ev.what?.startsWith("boss_phase:")) {
             const next = Number(ev.what.slice("boss_phase:".length));
             const king = this.world.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
@@ -8546,6 +8578,8 @@ export class PlayScene extends Phaser.Scene {
           else if (what === "boss_land") sfx.play("boss_impact", 0.9);
           // An add of his rising at the call.
           else if (what === "boss_summon") sfx.play("cast_void", 0.8);
+          // The Frontier Veteran's squad going to ground for the volley.
+          else if (what === "guardian_burrow") sfx.play("impact_stone", 0.8);
           // Phase III's stomps: the strike, lighter and higher than the charged blow they lead to.
           else if (what === "boss_stomp") sfx.play("boss_impact", 1.15);
           else if (what.startsWith("boss_")) sfx.play("boss_impact");
@@ -8603,7 +8637,13 @@ export class PlayScene extends Phaser.Scene {
           break;
         }
         case "dash": sfx.play("dash"); break;
-        case "wave_spawned": sfx.play("enemy_wake", 0.9); break;
+        case "wave_spawned":
+          // The opening wave is already on screen during the Veteran's live
+          // first beat. Its single noticing chime comes from
+          // `guardian_intro_notice`, so do not add a second wake sound here.
+          if (w.guardianRoom === true && w.enemies.some((e) => e.guardian && e.hp > 0 && e.pose === "guardian_intro")) break;
+          sfx.play("enemy_wake", 0.9);
+          break;
         case "room_cleared": sfx.play("clear"); break;
         // A gold room's or a vendor's doors rise pending; what they are is asked now (`openDoors`).
         case "portals_open": sfx.play("portal_open"); void this.openDoors(); break;
@@ -8726,21 +8766,29 @@ export class PlayScene extends Phaser.Scene {
         this.burst(king.x + side, king.y + BOSS_FOOT_PX, 0x9a8a78, 3, 55, -Math.PI / 2, 2.6, 0.8, 220);
       }
     }
-    // Noticing is its own beat, so it gets its own cue.
+    // Noticing is its own beat, so it gets one cue. During the Veteran's live
+    // first second, ordinary enemy wake edges are deliberately silent; the
+    // single cue is reserved for the synchronized notice beat.
     const noticing = w.enemies.some((e) => e.alertMs > 0);
-    if (noticing && !this.wasNoticing) sfx.play("enemy_wake");
-    this.wasNoticing = noticing;
+    const guardianPending = w.guardianRoom === true
+      && w.enemies.some((e) => e.guardian && e.hp > 0 && e.pose === "guardian_intro");
+    const guardianNotice = guardianPending
+      && w.enemies.some((e) => e.guardian && e.hp > 0 && e.pose === "guardian_intro" && e.guardian.introNoticeSent);
+    if (noticing && !this.wasNoticing && (!guardianPending || guardianNotice)) sfx.play("enemy_wake");
+    this.wasNoticing = guardianPending && !guardianNotice ? false : noticing;
 
     /* And what the music should be doing, which is free to re-assert. */
     sfx.setAmbience(this.ambienceLevels());
     // The room's mood remixes the score; in the boss room, the boss's phase picks how much of it plays.
     // The boss's beat clock too, so the boss theme is played to the fight rather than beside it (doc 020).
     const boss = w.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
+    const veteran = w.enemies.some((e) => e.guardian && e.hp > 0);
     // Off 1× in the boss lab the fight's clock is not the music's, so it is not passed on.
     const introClock = this.kingIntro && (this.kingIntro.phase === "throw" || this.kingIntro.phase === "rise") ? this.kingIntro.clock : undefined;
     // Phase III's layers and tempo come in with the landing that opens it (`bossMusicPhase`, `bossTempo`).
     sfx.setMusic(this.musicStateNow(), w.room.params.mood, boss ? bossMusicPhase(boss) : 1,
-      this.labSpeed === 1 ? boss?.bossFightMs ?? introClock : undefined, boss ? bossTempo(boss) : 1);
+      this.labSpeed === 1 ? boss?.bossFightMs ?? introClock : undefined, boss ? bossTempo(boss) : 1,
+      veteran ? VETERAN_MUSIC_RATE : 1);
   }
 
   /** The key whose shape a cast event started on the caster, or the newest orb's; -1 when none is known. */
@@ -8871,6 +8919,7 @@ export class PlayScene extends Phaser.Scene {
      * 100 Hz) read under the boss theme as a hum rather than an event, and
      * has been taken out of the set.
      */
+    if (what === "guardian_volley" || what === "volley") return null;
     if (what.startsWith("boss_phase:")) return ["boss_impact", 0.8];
     // The call: the sword going up, the storm's voice pitched down.
     if (what === "boss_summon") return ["impact_storm", 0.7];
@@ -9056,6 +9105,12 @@ export class PlayScene extends Phaser.Scene {
      * menu's length back when the menu closed. Not for the cards that end a
      * run, the title or a transition: those are the music moving on.
      */
+    const guardianIntro = this.world.guardianRoom === true
+      && this.world.enemies.some((e) => e.guardian && e.hp > 0 && e.pose === "guardian_intro");
+    const transitionHushed = this.transitionUi?.to !== undefined && stageFor(this.transitionUi.to) === "boss";
+    // The Veteran's entrance is a silent visual beat. Hold the stem at zero;
+    // unlike a menu's muffled pause, the laser should own the room completely.
+    this.sfx.setMusicHeld(guardianIntro || transitionHushed || this.labSpeed !== 1 || this.kingIntro !== null);
     this.sfx.setMusicPaused(!dead && !this.pauseFromTitle
       && !!(this.pauseUi || this.staffUi || this.offerUi || this.hintsUi)
       && !this.titleUi && !this.gameOverUi && !this.victoryUi && !this.transitionUi
@@ -9326,6 +9381,13 @@ export class PlayScene extends Phaser.Scene {
         } else if (ev.kind === "hazard_tick" && ev.what === "ward_heal") {
           // A ward's healing (the bellringer's line): green motes rising off the body it holds.
           this.burst(ev.x, ev.y - 6, 0x8fe8a0, 5, 70, -Math.PI / 2, 0.9, 0.7);
+        } else if (ev.kind === "hazard_tick" && ev.what === "guardian_burrow") {
+          // Going under: earth thrown up where it sinks.
+          this.burst(ev.x, ev.y + 4, 0x7a5a3a, 10, 150, -Math.PI / 2, Math.PI, 0.7);
+        } else if (ev.kind === "telegraph" && ev.what === "guardian_broken") {
+          // The Frontier Veteran's stance broken: a gold ring off it, wider than a break's, and a shower of sparks.
+          this.ring(ev.x, ev.y, 6, 80, 0xf2b632, 520, 4);
+          this.burst(ev.x, ev.y - 10, 0xfff2c0, 24, 320, undefined, Math.PI * 2, 1.1);
         } else if (ev.kind === "hazard_tick" && ev.what === "boss_summon") {
           // An add of the king's called up: a violet flare where it rises, under its own spawn rings.
           this.burst(ev.x, ev.y, BOSS_CALL_GLOW, 12, 220, undefined, Math.PI * 2, 0.8);
@@ -10557,7 +10619,7 @@ export class PlayScene extends Phaser.Scene {
     const gold = this.uiText(cx + W / 2 - PAD, top + H - 14, `+${CHEST_GOLD}`, 9, "#ffd45e").setOrigin(1, 0.5).setDepth(203);
     objects.push(gold);
     objects.push(this.add.image(gold.x - gold.displayWidth - 8, gold.y, this.uiTextureKey, "pickup_coin_0").setOrigin(0.5).setDisplaySize(10, 10).setDepth(203));
-    objects.push(this.keys_(cx, cy + H / 2 + 20, `[E] ${t("hint.take")}`, 9, "#e8e3d8", 202));
+    objects.push(this.keys_(cx, cy + H / 2 + 20, `[E] ${t("hint.claim")}`, 9, "#e8e3d8", 202));
     this.chestUi = { objects };
     this.sfx.play("reward_reveal");
   }
@@ -14014,6 +14076,45 @@ export class PlayScene extends Phaser.Scene {
         const t = 1 - e.attackMs / Math.max(1, e.windupMs);
         drawAimLine(this.threatGfx, e.x, e.y, ux, uy, travel, e.x + ux * travel, e.y + uy * travel, t, tick, view);
       }
+      // The Veteran's ram has no sector: a thin laser-like lane grows from
+      // its body through the windup, ending at the unchanged travel distance.
+      if (e.guardian && e.meleeKind === "charge" && e.attack === "windup") {
+        const spec = MELEE_ATTACKS.charge;
+        const ux = Math.cos(e.swing.facing), uy = Math.sin(e.swing.facing);
+        const travel = e.speed * spec.commitSpeed * (spec.lungeMs / 1000);
+        const windup = Math.max(1, e.windupMs);
+        const elapsed = Math.max(0, Math.min(windup, windup - e.attackMs));
+        /*
+         * The ram's line is a little piece of choreography of its own:
+         * extend quickly, hold the full distance, blink twice, then leave one
+         * clean beat of stillness before the body launches.  Keeping this in
+         * the renderer means the hitbox remains the ordinary committed charge
+         * and the line can never drift away from the real travel distance.
+         */
+        const fillEnd = windup * 0.42;
+        const holdEnd = windup * 0.55;
+        const blinkEnd = windup * 0.80;
+        let lineT = 1;
+        let len = travel;
+        let visible = true;
+        if (elapsed < fillEnd) {
+          const u = elapsed / Math.max(1, fillEnd);
+          // Fast at the start, easing into the exact full attack distance.
+          lineT = 1 - Math.pow(1 - u, 2);
+          len = travel * Math.max(0.04, lineT);
+        } else if (elapsed < holdEnd) {
+          lineT = 1;
+        } else if (elapsed < blinkEnd) {
+          const phase = elapsed - holdEnd;
+          const halfFlash = Math.max(1, (blinkEnd - holdEnd) / 4);
+          // Four half-flashes = two visible pulses before the final pause.
+          visible = Math.floor(phase / halfFlash) % 2 === 0;
+        }
+        if (visible) {
+          drawAimLine(this.threatGfx, e.x, e.y, ux, uy, len,
+            e.x + ux * len, e.y + uy * len, lineT, tick, view);
+        }
+      }
       if (e.archetype === "boss") this.drawBossCrescent(e);
       const box = e.swing;
       if (box.reach <= 0) continue;
@@ -14041,7 +14142,7 @@ export class PlayScene extends Phaser.Scene {
         }
         const r = slam ? box.reach * (0.3 + 0.7 * t) : box.reach * 1.6 * (1 - t) + e.radius * 0.9 * t;
         drawRingTell(this.threatGfx, e.x, e.y - 2, r, spikeColour(e), t, tick, view);
-      } else if (e.attack === "windup" && e.meleeKind !== "dashcut") {
+      } else if (e.attack === "windup" && e.meleeKind !== "dashcut" && !(e.guardian && e.meleeKind === "charge")) {
         // Brightening as the commit approaches, so the tell has a clock in it
         // as well as a place. Measured against the windup this body is
         // actually running, which its tempo and jitter move (doc 005).
@@ -14197,7 +14298,7 @@ export class PlayScene extends Phaser.Scene {
          */
         // Not for the king: his own sword, turned to the cut by the renderer, is
         // the swing — a crescent over it was a second, stranger blade.
-        if (e.archetype !== "boss") {
+        if (e.archetype !== "boss" && !(e.guardian && e.meleeKind === "charge")) {
           this.bladeGfx.fillStyle(0xffffff, 1);
           drawCrescent(this.bladeGfx, box, {
             ...CRESCENT,
@@ -14483,6 +14584,20 @@ export class PlayScene extends Phaser.Scene {
       const t = c.ageMs / ERUPTION_SHOW_MS;
       if (c.kind === "earth") {
         const variant = (Math.abs(Math.round(c.x / 13) + Math.round(c.y / 13)) % 2) ? "b" : "a";
+        if (!c.fired && c.hostile && c.telegraphMs > 0) {
+          /*
+           * The Veteran's palisade used to spend its entire lead time as one
+           * dim crack frame. On a dark floor that read as no warning at all.
+           * Give every future stake a violet footprint for the full tell;
+           * successive rings brighten in turn as their own delay approaches.
+           */
+          const soon = Math.max(0, Math.min(1, 1 - c.delayMs / c.telegraphMs));
+          const pulse = 0.72 + 0.28 * Math.sin(this.time.now / 75 + c.x * 0.03 + c.y * 0.02);
+          g.fillStyle(GUARDIAN_STAKE_TINT, 0.08 + 0.1 * soon);
+          g.fillEllipse(c.x, c.y + 1, c.radius * 1.65, c.radius * 0.82);
+          g.lineStyle(1.2 + soon * 1.2, GUARDIAN_STAKE_TINT, (0.5 + 0.35 * soon) * pulse);
+          g.strokeEllipse(c.x, c.y + 1, c.radius * 1.75, c.radius * 0.9);
+        }
         // Waiting: the floor cracking, dim and still. Then out, and down.
         const step = !c.fired ? (c.delayMs > 90 ? 0 : 1) : t < 0.62 ? 2 : 3;
         const alpha = c.fired ? 1 : 0.4 + 0.5 * Math.max(0, 1 - c.delayMs / 250);
@@ -14719,34 +14834,54 @@ export class PlayScene extends Phaser.Scene {
        * gone like lightning (`VOLLEY_FADE_MS`, over the rift's scar).
        */
       if (r.beam) {
+        const g = this.hazardGfx;
+        /*
+         * Drawn off the screen at both ends: a line ending anywhere in view
+         * ends in a cap, and a cap slants into the wall it meets whatever it
+         * is shaped. It hits only across the room (`riftHits`), wall to wall.
+         */
+        const pad = VOLLEY_DRAW_PAST, ca = Math.cos(r.angle), sa = Math.sin(r.angle);
+        const sx = r.x - ca * pad, sy = r.y - sa * pad, fx = ex + ca * pad, fy = ey + sa * pad;
         if (r.teleMs > 0) {
           const k = 1 - r.teleMs / r.teleMaxMs;
           const unroll = Math.min(1, (r.teleMaxMs - r.teleMs) / VOLLEY_UNROLL_MS);
-          this.hazardGfx.fillStyle(VOLLEY_GLOW, 0.5 + 0.4 * k);
-          this.hazardGfx.fillCircle(r.x, r.y, 2.5 + 1.5 * k);
-          const bx = r.x + Math.cos(r.angle) * r.length * unroll, by = r.y + Math.sin(r.angle) * r.length * unroll;
-          this.hazardGfx.lineStyle(1, VOLLEY_TELE, 0.25 + 0.55 * k);
-          this.hazardGfx.lineBetween(r.x, r.y, bx, by);
-          // The head of the line as it runs out: a spark leading it.
+          // Run out across the view from off it, a spark leading it.
+          const bx = sx + (fx - sx) * unroll, by = sy + (fy - sy) * unroll;
+          g.lineStyle(1, VOLLEY_TELE, 0.25 + 0.55 * k);
+          g.lineBetween(sx, sy, bx, by);
           if (unroll < 1) {
-            this.hazardGfx.fillStyle(0xffffff, 0.8);
-            this.hazardGfx.fillCircle(bx, by, 1.5);
+            g.fillStyle(0xffffff, 0.8);
+            g.fillCircle(bx, by, 1.5);
           }
-          // Its last fifth, the width it will hit, faint either side.
+          // Its last fifth: a soft haze gathering round it, widest and faintest outside, no hard edge.
           if (k > 0.8) {
-            this.hazardGfx.lineStyle(r.width, VOLLEY_TELE, 0.08 + 0.4 * (k - 0.8));
-            this.hazardGfx.lineBetween(r.x, r.y, ex, ey);
+            const q = (k - 0.8) / 0.2;
+            for (const [bw, a] of VOLLEY_HAZE) {
+              g.lineStyle(r.width * bw, VOLLEY_TELE, a * q);
+              g.lineBetween(sx, sy, fx, fy);
+            }
           }
         } else {
           // From the instant it fires: the damage's window, then the scar's first moments, as one fade.
           const since = r.activeMs > 0 ? 230 - r.activeMs : 230 + (1500 - r.scarMs);
           const t = Math.max(0, Math.min(1, since / VOLLEY_FADE_MS));
           if (t < 1) {
-            const flicker = since < 60 ? 1.3 : 1;
-            this.hazardGfx.lineStyle(r.width * 2.2 * flicker * (1 - 0.5 * t), VOLLEY_GLOW, 0.45 * (1 - t));
-            this.hazardGfx.lineBetween(r.x, r.y, ex, ey);
-            this.hazardGfx.lineStyle(Math.max(1, r.width * 0.6 * flicker * (1 - 0.6 * t)), 0xffffff, 1 - t * t);
-            this.hazardGfx.lineBetween(r.x, r.y, ex, ey);
+            /*
+             * The glow is layers, not one stroke: each wider and fainter
+             * than the last, so the light falls off into the floor instead
+             * of ending on a line. The white core is what hits
+             * (`BEAM_GRAZE`); everything round it is only light.
+             */
+            const flicker = since < 60 ? 1.25 : 1;
+            const fade = 1 - t;
+            for (const [bw, a] of VOLLEY_BLOOM) {
+              g.lineStyle(r.width * bw * flicker * (1 - 0.4 * t), VOLLEY_GLOW, a * fade);
+              g.lineBetween(sx, sy, fx, fy);
+            }
+            g.lineStyle(Math.max(1, r.width * 0.8 * flicker * (1 - 0.5 * t)), 0xfff4e8, 0.9 * (1 - t * t));
+            g.lineBetween(sx, sy, fx, fy);
+            g.lineStyle(Math.max(1, r.width * 0.3 * flicker), 0xffffff, 1 - t * t);
+            g.lineBetween(sx, sy, fx, fy);
           }
         }
         continue;
@@ -15028,6 +15163,16 @@ export class PlayScene extends Phaser.Scene {
           }
         }
       } else if (this.burrowTrail.has(e.id)) this.burrowTrail.delete(e.id);
+      /*
+       * **Its squad under the floor** (doc 024): a still mound of earth in the
+       * guardian's violet where each went down, shivering, so the player
+       * knows where they will come up.
+       */
+      if (e.hideMs > 0 && e.sinkMs <= 0) {
+        const bob = Math.sin(tick * 0.7 + e.id) * 0.5;
+        img(e.x, e.y + 3 + bob, `vfx_mound_${((tick >> 3) + e.id) & 3}`, 2.6)
+          ?.setScale(0.7 / ART_SCALE, 0.45 / ART_SCALE).setTint(GUARDIAN_STAKE_TINT).setAlpha(0.85);
+      }
       if (e.wardHeal > 0)
         img(e.x, e.y - 2, `vfx_ward_aura_${(tick >> 3) % 3}`, 6.05)?.setDisplaySize(e.radius * 3.4, e.radius * 3.4).setAlpha(0.85);
       // Hurried by a bell: the cue goes on the body, never on the floor.
@@ -17083,6 +17228,9 @@ function specialPose(w: World, e: Enemy): string | null {
   // its own case.
   switch (OWN_POSES.has(e.archetype) ? e.archetype : baseArchetype(e.archetype)) {
     case "warden":
+      // The raised-gun frame begins only once the Veteran has noticed the
+      // player; during the first live second it keeps its ordinary activity.
+      if (e.pose === "guardian_intro" && e.guardian?.introNoticeSent) return "windup";
       // The drawn aim: raised to load, levelled to fire, and held level
       // through the start of the reload while the smoke clears.
       if (e.pose === "musket_windup") return "windup";
@@ -17092,11 +17240,9 @@ function specialPose(w: World, e: Enemy): string | null {
       if (e.pose === "guardian_stakes") return e.poseMs > 450 + 250 ? "windup" : "lunge";
       if (e.pose === "musket_fire" || e.pose === "musket_second") return "lunge";
       if (e.pose === "musket_reload" && e.poseMs > 800) return "lunge";
-      // The shield bash: the plate comes up, then goes through. It borrows the
-      // gun's two frames rather than asking for art it has not been drawn — a
-      // heavy body raising and driving reads the same either way.
-      if (e.attack === "windup") return "windup";
-      if (e.attack === "lunge") return "lunge";
+      // Melee phases deliberately fall through to `enemyPose`. That resolver
+      // owns the authored lunge -> follow -> recover curve; returning `lunge`
+      // here used to hide both the impact frame and the dedicated brake frame.
       return null;
     case "bellringer":
       if (e.pose === "cast") return e.poseMs > 260 ? "windup" : "cast";
@@ -17474,6 +17620,8 @@ function drawEnemy(
    * `drawExpansion`). What cannot be hit must not be seen as a target.
    */
   if ((e.archetype === "delver" || e.archetype === "burrower") && e.delve === "under") return;
+  // Gone to ground for the Frontier Veteran's volley: the mound is drawn (`drawExpansion`), not the body.
+  if (e.hideMs > 0 && e.sinkMs <= 0) return;
   // Only what the pose reads, named: spreading the whole body copied every
   // field of every enemy each frame, the largest allocation in the draw.
   const chosen = enemyFrame(
@@ -17483,7 +17631,9 @@ function drawEnemy(
       facing: e.facing, idleAction: e.idleAction,
       roused,
       sleeping: !e.awake && e.idleRole === "sleeper",
-      recoversBraced: ENEMIES[e.archetype].melee === "charge",
+      // Veteran overrides the warden's normal melee with `charge`; checking
+      // only the base archetype kept it in the thrust frame through braking.
+      recoversBraced: e.meleeKind === "charge" || ENEMIES[e.archetype].melee === "charge",
       flinches: e.archetype !== "boss",
       idlesInStride: e.archetype === "boss",
       stationary: ENEMIES[e.archetype].behaviour === "stationary",
@@ -17816,7 +17966,19 @@ function drawEnemy(
     group.rectangle(e.x - W / 2 - 1, y, W + 2, 5, 0x0d0b1f, 0.9).setOrigin(0, 0.5).setDepth(9);
     group.rectangle(e.x - W / 2, y, W * Math.max(0, e.hp / Math.max(1, e.maxHp)), 3, 0xd83a3a, 1)
       .setOrigin(0, 0.5).setDepth(10);
-    label?.(`guardian:name:${e.id}`, e.x, y - 10, t("hud.guardianTitle"), {
+    /*
+     * **Its stance** under the health (`GUARDIAN_STANCE`): gold, filling as the
+     * player stays on it, flashing as it nears the break. Broken, it is the
+     * time left on its knees, draining.
+     */
+    const g = e.guardian;
+    const sk = g.brokenMs > 0 ? g.brokenMs / GUARDIAN_BROKEN_MS : Math.min(1, g.stance / GUARDIAN_STANCE);
+    const hot = g.brokenMs > 0 || sk > 0.75;
+    const flash = hot ? 0.65 + 0.35 * Math.sin(scene.time.now / (g.brokenMs > 0 ? 60 : 90)) : 1;
+    group.rectangle(e.x - W / 2 - 1, y + 4, W + 2, 3, 0x0d0b1f, 0.9).setOrigin(0, 0.5).setDepth(9);
+    group.rectangle(e.x - W / 2, y + 4, W * sk, 1.6, g.brokenMs > 0 ? 0xfff2c0 : 0xf2b632, flash)
+      .setOrigin(0, 0.5).setDepth(10);
+    label?.(`guardian:name:${e.id}`, e.x, y - 6, t("hud.guardianTitle"), {
       fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(6, ZOOM) * ZOOM)}px`, color: "#e8c8ff",
       stroke: "#0d0b1f", strokeThickness: 2 * ZOOM,
     }).setScale(1 / ZOOM).setOrigin(0.5, 1).setDepth(10.5);
@@ -17828,13 +17990,17 @@ function drawEnemy(
    * feel that only exists in the step function is feel nobody gets.
    */
   if (e.alertMs > 0) {
-    // The delivered alert mark, popping up as it notices.
-    const pop = Math.min(1, (ALERT_MS - e.alertMs) / 90);
+    // The delivered alert mark, popping up at the body's upper-right corner.
+    // It belongs to the enemy, never to the middle of the screen; the Veteran
+    // and the small bodies use the same local cue.
+    const pop = e.alertMs > ALERT_MS ? 1 : Math.min(1, (ALERT_MS - e.alertMs) / 90);
+    const alertX = e.x + e.radius * 0.82;
+    const alertY = e.y - e.radius - 12 - (1 - pop) * 4;
     if (atlas.has("icon_status_alert")) {
-      group.image(e.x, e.y - e.radius - 14 - (1 - pop) * 4, textureKey, "icon_status_alert")
+      group.image(alertX, alertY, textureKey, "icon_status_alert")
         .setOrigin(0.5).setScale((0.9 * (0.6 + 0.4 * pop)) / TUNED).setDepth(8);
     } else if (label) {
-      label(`alert:${e.id}`, e.x, e.y - e.radius - 12, "!", {
+      label(`alert:${e.id}`, alertX, alertY, "!", {
         fontFamily: fontFamily(), fontSize: "12px", color: "#ffe9a8",
       }).setOrigin(0.5).setDepth(8);
     }
@@ -17848,7 +18014,7 @@ function drawEnemy(
    */
   if (e.hp > 0 && e.spawnFadeMs <= 0) {
     const status = e.frozenMs > 0 ? "freeze"
-      : e.staggerMs > 400 ? "stun"
+      : e.stunMs > 0 && e.staggerMs > 0 ? "stun"
       : e.burnMs > 0 ? "burn"
       : e.poisonMs > 0 ? "poison"
       : e.chillBuild > 0.3 ? "chill" : null;
@@ -17875,9 +18041,10 @@ function drawEnemy(
    */
   if (e.brakeMs > 0) {
     const t = brakeFraction(e);
-    // The lean is the pose now (see `enemyPose`), so this is only the last of
-    // it — a small tip that eases out as the skid ends.
-    img.setRotation(-e.lungeX * 0.12 * t * (flipX ? -1 : 1));
+    // Lean away from travel. This is based on the sprite's facing, not the
+    // signed world-space lunge vector: the old expression cancelled its own
+    // mirror and could tilt a westbound body into the charge.
+    img.setRotation((flipX ? 1 : -1) * 0.34 * t);
     for (let i = 0; i < 3; i++) {
       const spread = (i - 1) * 0.5;
       const a = Math.atan2(-e.lungeY, -e.lungeX) + spread;
@@ -17907,8 +18074,13 @@ function drawEnemy(
      * visible one. Above the head, where the armour bar is, because that is
      * where the player already looks for what a body is doing.
      */
-    if (e.staggerMs > STAGGER_MS) {
-      const y = e.y + bob - e.radius - 14;
+    /*
+     * Only a stun gets them (`Enemy.stunMs`): a poise break or a heavy spell
+     * staggers for longer than a hit, and stars on those read as a body that
+     * was stunned when it was only interrupted.
+     */
+    if (e.stunMs > 0) {
+      const y = e.y + bob - (e.guardian ? overheadPx(e) - 12 : e.radius + 14);
       for (let i = 0; i < 3; i++) {
         const a = (w.tick / 9) + (i / 3) * Math.PI * 2;
         const star = scene.add.star(
@@ -17920,7 +18092,18 @@ function drawEnemy(
     }
   }
 
-  if (e.spawnFadeMs > 0) {
+  if (e.hideMs > 0 && e.sinkMs > 0) {
+    /*
+     * **Going to ground** for the volley: the spawn's rise run backwards — a
+     * dark hole opens under it and it sinks into it, fading as it goes.
+     */
+    const t = 1 - Math.max(0, e.sinkMs) / GUARDIAN_SINK_MS;
+    const hole = group.ellipse(e.x, e.y + e.radius * 0.5, e.radius * 2.4 * Math.min(1, t * 2), e.radius * 0.95 * Math.min(1, t * 2), 0);
+    hole.setFillStyle(0x120d22, 0.72 * (1 - t * 0.5)).setDepth(2);
+    img.y += t * e.radius * 1.5;
+    img.setAlpha(1 - t);
+    img.setScale(base * (1 - 0.18 * t), base * (1 + 0.18 * t));
+  } else if (e.spawnFadeMs > 0) {
     /*
      * Arriving: the ground opens, the body rises out of it, and the landing
      * lands.
@@ -17997,6 +18180,32 @@ function drawEnemy(
         grit.setFillStyle(0xb9b9c6, 0.5 * (1 - land)).setDepth(4);
       }
     }
+  } else if (e.guardian && e.meleeKind === "charge" && e.attack === "lunge") {
+    /*
+     * The ram is a burst, not a walk cycle: ease into a long, low launch and
+     * hand the last slice to the authored `follow` frame. The cubic ease is
+     * intentionally front-loaded so the body feels like it has mass behind
+     * it, while the small vertical squash keeps the sprite from floating.
+     */
+    const spec = MELEE_ATTACKS.charge;
+    const t = Math.max(0, Math.min(1, 1 - e.attackMs / Math.max(1, spec.lungeMs)));
+    const burst = 1 - Math.pow(1 - t, 3);
+    const impact = Math.max(0, (t - 0.78) / 0.22);
+    // Keep the run low and forceful. The backward lean belongs exclusively
+    // to the following brake/recover frame, so the charge reads as two clear
+    // beats instead of morphing into a thrust before it has stopped.
+    img.setScale(
+      base * (1 + 0.08 * burst + 0.08 * impact),
+      base * (1 - 0.05 * burst - 0.06 * impact),
+    );
+  } else if (e.guardian && e.meleeKind === "charge" && e.brakeMs > 0) {
+    /*
+     * The first brake frame lands hard: a square-root curve makes the squash
+     * arrive immediately, then release over the authored `recover` pose.
+     */
+    const stop = Math.pow(1 - brakeFraction(e), 0.45);
+    img.y += 2.5 * stop;
+    img.setScale(base * (1 + 0.16 * stop), base * (1 - 0.2 * stop));
   } else if ((e.meleeKind === "bristle" || e.meleeKind === "lance") && e.attack === "windup") {
     // Bracing to drive the spikes out: drawn in and down a touch.
     img.setScale(base * 1.04, base * 0.94);
@@ -18013,6 +18222,37 @@ function drawEnemy(
    * missing precisely when the player was hitting it.
    */
   if (e.hitFlashMs > 0 && e.archetype !== "boss") img.setTintFill(HIT_FLASH_FILL);
+
+  /*
+   * **The volley's order** (doc 024): the gun held up for the whole of it, and
+   * its muzzle burning white — flickering while the lines are drawn, and a
+   * flare each time one of them fires, so the lines read as the gun's.
+   * Where the muzzle is in the raised frame is measured off the sheet
+   * (`GUARDIAN_MUZZLE`), mirrored with the body.
+   */
+  // The opening demonstration uses the exact same raised-gun animation and
+  // muzzle light as a normal volley; only its lanes are positioned safely.
+  if (e.guardian && e.hp > 0 && (e.pose === "guardian_order" || e.pose === "guardian_intro")) {
+    const dir = /_([nsw])_/.exec(name)?.[1] as "n" | "s" | "w" | undefined;
+    const m = dir ? GUARDIAN_MUZZLE[dir] : null;
+    if (m) {
+      const k = img.scaleY;
+      const mx = img.x + (m[0] - 48) * k * (flipX ? -1 : 1), my = img.y + (m[1] - 48) * k;
+      const now = scene.time.now;
+      const fired = w.rifts.some((r) => r.alive && r.beam && r.teleMs <= 0 && r.activeMs > 150);
+      const flick = 0.6 + 0.4 * Math.sin(now / 35) * Math.sin(now / 83);
+      const flare = fired ? 1 : 0;
+      group.circle(mx, my, 4 + 3 * flare + 1.5 * flick, 0xffe2c8, (0.16 + 0.18 * flare) * (0.6 + 0.4 * flick))
+        .setDepth(bodyDepth(e.y, 0) + 0.05).setBlendMode(Phaser.BlendModes.ADD);
+      group.circle(mx, my, 1.3 + 0.8 * flare + 0.6 * flick, 0xffffff, 0.55 + 0.45 * flick)
+        .setDepth(bodyDepth(e.y, 0) + 0.06);
+      if (flare > 0) {
+        const glint = scene.add.star(mx, my, 4, 0.8, 6, 0xffffff, 0.85).setDepth(bodyDepth(e.y, 0) + 0.07)
+          .setRotation((now / 60) % Math.PI);
+        group.add(glint);
+      }
+    }
+  }
 
   /*
    * The motion the frames do not carry (`body-feel.ts`): the give as a foot
@@ -19645,8 +19885,10 @@ function floorFrame(x: number, y: number, drains: ReadonlySet<number>): string {
  * circle he fights on, so his sit over his crown rather than on his chest.
  */
 function overheadPx(e: { archetype: string; radius: number; guardian?: unknown }): number {
-  // The Frontier Veteran is drawn at `GUARDIAN_SCALE` from its feet, so its head is that much higher.
-  if (e.guardian) return Math.round((e.radius / GUARDIAN_SCALE + 9) * GUARDIAN_SCALE) + 6;
+  // The Frontier Veteran is drawn at `GUARDIAN_SCALE` from its feet. Leave a
+  // deliberate margin above the scaled head so the bar and title never sit on
+  // the helmet or obscure its raised-gun silhouette.
+  if (e.guardian) return Math.round((e.radius / GUARDIAN_SCALE + 9) * GUARDIAN_SCALE) + 26;
   return e.archetype === "boss" ? 56 + BOSS_DRAW_RISE_PX : e.radius + 9;
 }
 

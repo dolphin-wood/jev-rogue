@@ -1035,10 +1035,7 @@ describe("enemy behaviour", () => {
     expect(w.player.dashMs).toBe(0);
   });
 
-  it("does not stun the player with a blade, even the tank's cleave", () => {
-    // A charge briefly did, and it was too much: by the time it lands the
-    // player is already shoved, flashing and down a heart. The tank's heavy
-    // cut inherits the rule.
+  it("stuns the player briefly when the tank's charge connects", () => {
     const w = world({ props: 0 });
     const e = makeEnemy(1, "tank", w.player.x + 44, w.player.y, []);
     e.spawnFadeMs = 0;
@@ -1050,7 +1047,7 @@ describe("enemy behaviour", () => {
     const hearts = w.player.hearts;
     for (let i = 0; i < 120 && w.player.hearts === hearts; i++) step(w, NO_INPUT);
     expect(w.player.hearts).toBeCloseTo(hearts - 1.5, 5);
-    expect(w.player.stunMs).toBe(0);
+    expect(w.player.stunMs).toBeGreaterThan(0);
   });
 
   it("a ram that connects throws the player down its line and stops itself", () => {

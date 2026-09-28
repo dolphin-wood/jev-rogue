@@ -103,6 +103,7 @@ export const ZH: Table = {
   "hint.close": "关闭",
   "hint.move": "移动",
   "hint.take": "选取",
+  "hint.claim": "收下",
   "hint.buy": "购买",
   "hint.leave": "离开",
   "hint.or": "或",

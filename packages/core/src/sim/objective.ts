@@ -13,6 +13,8 @@ import type { RoomObjective } from "../run/objectives.ts";
 
 /** How long a hold lasts: long enough to make surviving, rather than clearing, the room's focus. */
 export const HOLD_MS = 42_000;
+/** Time to read the objective, targets and arena before anything may attack. */
+export const OBJECTIVE_ENTRY_GRACE_MS = 3000;
 /** How many emplacements a destroy room stands. */
 export const DESTROY_TARGETS = 5;
 /**
@@ -96,6 +98,9 @@ export function placeTargets(w: World): void {
     t.hp = t.maxHp = Math.round(t.maxHp * DESTROY_TARGET_HP);
     t.objectiveTarget = true;
     t.awake = true;
+    t.attackLockMs = OBJECTIVE_ENTRY_GRACE_MS;
+    t.telegraphMs = 0;
+    t.pending = [];
     w.enemies.push(t);
   });
 }

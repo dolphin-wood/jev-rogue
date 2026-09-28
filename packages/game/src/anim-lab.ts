@@ -12,7 +12,7 @@
  * - **Effects**: the code-baked effect sheets (`fx/sheets.ts`), at any angle
  *   and frame length.
  */
-import { MUSKET_RANGE, MUSKET_SPREAD_DEG } from "@jr/core";
+import { GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_MUSKET_SPREAD_MULT, MUSKET_RANGE, MUSKET_SPREAD_DEG } from "@jr/core";
 import { bakeSheets } from "./fx/sheets.ts";
 import type { FxSheet } from "./fx/sheets.ts";
 import { drawRig, loadImage, playerRig, wardenRig } from "./lab/rig.ts";
@@ -30,7 +30,10 @@ async function main(): Promise<void> {
   ]);
   const atlas = json.frames;
   const rigs: Rig[] = [await playerRig(img, atlas), wardenRig(img, atlas)];
-  const fx: FxSheet[] = bakeSheets({ blastLen: Math.round(MUSKET_RANGE * 2), blastSpreadDeg: MUSKET_SPREAD_DEG });
+  const fx: FxSheet[] = bakeSheets({
+    blastLen: Math.round(MUSKET_RANGE * GUARDIAN_ATTACK_RANGE_MULT * 2),
+    blastSpreadDeg: MUSKET_SPREAD_DEG * GUARDIAN_MUSKET_SPREAD_MULT,
+  });
   const fxFrames = new Map(fx.map((s) => [s.name, s.frames.map((f) => {
     const c = document.createElement("canvas");
     c.width = f.w;

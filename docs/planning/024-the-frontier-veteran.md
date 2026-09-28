@@ -3,7 +3,7 @@ id: 024
 title: The Frontier Veteran
 status: proposed
 date: 2026-09-27
-summary: Room 10, the last fight of the flooded depth, is a guardian fight. Beside its ram (twice when the first misses), spray, shove and sweep, it drives stakes up from the floor, three lanes at range or rings round itself up close, and orders volleys: pale lines across the room that unroll and then fire. The Frontier Veteran is the warden's body, drawn larger in a violet light, with a heavy body's poise (doc 027), the warden's blunderbuss and the tank's ram. It has no phases. Its own move is the call. It raises its arm, marks show on the floor, and the dead rise round it; the call can't be broken. Its entrance is the first call, which raises the room's own wave. After that it calls again whenever its squad is down to one and the call has come round. The ram knocks it out on a wall, and a wall is the fight's opening; a burst of hits breaks its poise for a shorter one. The room is the first audience's bare arena, and its doors, reward, pacing and experience follow the audience room's. It stands where the opening view shows it, and its name is the small line over its bar. Code decides all of it; the Director still answers the door's reward.
+summary: Room 10, the last fight of the flooded depth, is a guardian fight. Beside its ram (twice when the first misses), spray, shove and sweep, it drives stakes up from the floor, three lanes at range or rings round itself up close, and orders volleys: pale lines across the room, crossing thick round the player, that unroll and then fire while it stands with its arm up and its squad goes to ground. The Frontier Veteran is the warden's body, drawn larger in a violet light, with a heavy body's poise (doc 027), the warden's blunderbuss and the tank's ram. It has no phases. Its own move is the call. It raises its arm, marks show on the floor, and the dead rise round it; poise can't break the call, but a broken stance can. Its entrance is the first call, which raises the room's own wave. After that it calls only once its squad is cleared and the clean guardian window has passed. A burst of hits breaks its poise, an interrupt. Every hit also wears its stance, a gold bar under its health. Worn through, the stance breaks and it goes to its knees, stunned, taking more from every hit: the fight's big payoff. The ram knocks it out on a wall and wears the stance deep. The room is the first audience's bare arena, and its doors, reward, pacing and experience follow the audience room's. It stands where the opening view shows it, and its name is the small line over its bar. Code decides all of it; the Director still answers the door's reward.
 depends_on: [005, 013, 019, 022]
 ---
 
@@ -44,17 +44,19 @@ already know it. Nothing assembles it into an ordinary room.
 | | |
 |---|---|
 | Bar | `GUARDIAN_HP`, and `GUARDIAN_POWER` on its blows (see "Measured") |
-| Poise | `GUARDIAN_POISE` (doc 027): about four hits in a row before one interrupts it, whole again after a pause, and not broken twice running |
-| Blunderbuss | the warden's shot: raise, level, a wide spray, then a reload to stand in |
-| Ram | the tank's charge from mid range. **A head-on wall knocks it out**: the fight's big opening, set up by standing with a wall behind you |
-| Bash | the warden's shield shove, for a player standing on it |
-| Sweep | up close, by turns with the shove: the gun swung 210° across its front, heavier and wider than the shove. Behind it, or out of reach |
-| Ram twice | a ram that ends without its wall comes round again at once, off the first's recovery. The second is another chance at the wall |
-| Stake line (地刺) | every `GUARDIAN_STAKES_EVERY_MS`, at range: the gun's butt driven down, and three lanes fanned at the player drawn on the floor for `GUARDIAN_STAKES_TELE_MS`, then stakes. It stands planted through it and a beat after |
-| Palisade | the same turn on a player who has stuck to it: the player's Quake Ring in its hands, larger and violet — three rings of stakes breaking out round it one after another (a hostile `eruptRing`), the ground cracking where each will come up. It hits once however many stakes the player stands in |
-| Volley (排枪) | every `GUARDIAN_VOLLEY_EVERY_MS`, its arm up to give the order: five lines out of the room's walls, edge to edge at random angles and through whatever stands in the room, one through the ground near the player. Each runs out of its wall in 0.2 s as a thin pale line with an emitter lit where it leaves the wall, is held for the rest of `GUARDIAN_VOLLEY_TELE_MS` (2 s), and then fires: the whole line lit at once, white on a warm glow, gone like lightning. A beat apart. It fights on while they come due |
+| Poise | `GUARDIAN_POISE` (doc 027): about four hits in a row before one interrupts it, whole again after a pause, and not broken twice running. An interrupt, never a stun: no stars |
+| Stance (架势) | `GUARDIAN_STANCE` (300): a gold bar under its health that every hit wears, a poise break `GUARDIAN_BREAK_STANCE` of it more and a wall `GUARDIAN_WALL_STANCE`. It flashes as it nears full. Left alone for 3 s it steadies, 30 a second. **Worn through, it is broken**: on its knees for `GUARDIAN_BROKEN_MS` (3.2 s) with stars over its head, whatever it had in hand dropped (a call goes unanswered), taking `GUARDIAN_BROKEN_TAKEN` (×1.5) from every hit, with a gold ring, sparks, and a long hitstop. The bar then drains with the time left. About eight seconds of a room-10 build's steady damage, so two or three breaks a fight |
+| Attack window | after every complete action, `GUARDIAN_ACTION_GAP_MS` (2.5 s) disables every attack family together. A ready fire shot, ram, stake drive or volley cannot fill another move's recovery; this is the player's guaranteed damage window |
+| Blunderbuss | the warden's shot: raise, level, a wide spray reaching `GUARDIAN_ATTACK_RANGE_MULT` as far and `GUARDIAN_MUSKET_SPREAD_MULT` as wide, then a reload to stand in |
+| Ram | the tank's charge from mid range, launched at full speed with no acceleration buffer. Its current travel is about 204 px, 20% shorter than the earlier 255 px run. It ends in a hard brake and the authored backward-leaning recovery frame, not a held thrust. The Veteran's charge has no sector overlay; its short hitstop and camera thump give the launch weight. **A head-on wall knocks it out**: the fight's big opening, set up by standing with a wall behind you |
+| Bash | the warden's shield shove, for a player standing on it, with the veteran's melee reach scaled by `GUARDIAN_ATTACK_RANGE_MULT` |
+| Sweep | up close, by turns with the shove: the gun swung 210° across its front, heavier and wider than the shove, with the veteran's melee reach scaled by `GUARDIAN_ATTACK_RANGE_MULT`. Behind it, or out of reach |
+| Ram twice | a ram that ends without its wall can come round again only after the same shared 2.5 s attack window. The second is another chance at the wall without reading as a continuous charge loop |
+| Stake line (地刺) | every `GUARDIAN_STAKES_EVERY_MS`, at range: the gun's butt driven down, and three lanes fanned at the player drawn on the floor for `GUARDIAN_STAKES_TELE_MS`, then stakes. Their original reach and spacing stay intact, so the warning does not become sparse. It stands planted through it and a beat after |
+| Palisade | the same turn on a player who has stuck to it: the player's Quake Ring in its hands, larger and violet — three rings of stakes breaking out round it one after another (a hostile `eruptRing`). Every future stake gets a visible violet floor footprint for the full 1.2 s tell, brightening in ring order. Its original radii and cells stay intact; the warning is the hit geometry. It hits once however many stakes the player stands in |
+| Volley (排枪) | every `GUARDIAN_VOLLEY_EVERY_MS`, it turns on the player and raises its gun to give the order, the muzzle burning white, flickering, and flaring as each line fires. Nine thin lines out of the room's walls, edge to edge and through whatever stands in the room, **all crossing within two and a half tiles of the player** at angles spread round the clock, one through the player's feet. Thin and many, so the room reads as lanes, not walls. Only a line's white core hits, and only when it reaches the player's middle (`BEAM_GRAZE`): a graze passes. The glow round it falls off in layers into the floor, wider than what hits, never narrower. They cross thick where the player stands and part as they go, so the answer is to move out along a gap. Each runs out of the screen in 0.2 s, is held for the rest of `GUARDIAN_VOLLEY_TELE_MS` (2 s), and then fires: the whole line lit at once, white on a warm glow, gone like lightning. A beat apart. **It stands with its arm up until the last has fired** (`GUARDIAN_VOLLEY_MS`), and **its squad goes to ground**: each body sinks into the floor, a violet mound where it went down, untouchable and doing nothing, and rises again as a spawn does once the last line has fired. The player reads the lines and nothing else |
 
-| Call | it plants and raises its arm for `GUARDIAN_CALL_MS`, a violet mark opening on the floor where each body will rise; then they rise. **Its poise is guarded through the call**, so nothing interrupts it |
+| Call | it plants and raises its arm for `GUARDIAN_CALL_MS`, a violet mark opening on the floor where each body will rise; then they rise. **Its poise is guarded through the call**, so a burst does not interrupt it; a broken stance drops it, and it calls again `BROKEN_CALL_RETRY_MS` later |
 
 **The call.** An old soldier who still commands the drowned dead calls them, and the call
 is both its entrance and its one move beyond a warden's.
@@ -64,12 +66,16 @@ is both its entrance and its one move beyond a warden's.
   wave (one wave of the build band, at most `GUARDIAN_ENTRANCE_MAX`). That
   wave never walks in through the room.
 - **Again.** It calls again once `GUARDIAN_CALL_EVERY_MS` has passed since the
-  last call, and only when its squad is down to `GUARDIAN_CALL_BELOW`. The
-  later squad is `GUARDIAN_SQUAD`.
-- **The rhythm.** A wall for the long opening, a burst of hits for a shorter
-  one. The call is planted and marked, so it is also a window: the player can
-  hit it, or get to the marks' side of the room first. It is not invincible
-  through the call, and the call can't be interrupted.
+  last call, and only after its squad is completely gone (`GUARDIAN_CALL_BELOW`).
+  While any add lives the clock cannot fall below `GUARDIAN_CALL_CLEAR_GRACE_MS`,
+  so clearing the last one always earns a clean window on the veteran. The later
+  squad is `GUARDIAN_SQUAD`.
+- **The rhythm.** A burst of hits for an interrupt; staying on it for its
+  knees; a wall for the surest way there. The call and the volley are
+  planted, so they are windows too: the player can hit it through the call,
+  or get to the marks' side of the room first, and a player who finds a gap
+  on its side of a volley can hit it standing. A stance worn through in the
+  call drops it.
 
 **Its squads die with it.** The fight is the guardian, and a room that ended
 on a rusher still standing would not have ended.
@@ -97,6 +103,9 @@ on a rusher still standing would not have ended.
   the king's alone.
 - **The camera** stays the room's usual close one: at twice a warden's size
   it fits.
+- **Its music** is the room score played at `VETERAN_MUSIC_RATE` (1.045), a
+  slight pitch and tempo lift that adds tension without turning it into the
+  king's theme.
 - **The Director** answers the door's reward only (doc 002). The room is the
   run's shape.
 
@@ -120,7 +129,9 @@ cost a whole heart and a burn at a warden's pace. As tuned:
 | `GUARDIAN_HP` | 1000 |
 | `GUARDIAN_POWER` | 0.3 of a warden's blows, not the room's ×1.45 |
 | `GUARDIAN_FLAME` | 0.4 of a heart a spray hit, and the burn |
-| `GUARDIAN_SHOT_EVERY` | twice a warden's 4.2 s |
+| `GUARDIAN_SHOT_EVERY` | 2.25 times a warden's 4.2 s |
+| `GUARDIAN_MUSKET_SPREAD_MULT` | 1.5× the warden's fire-cone angle |
+| `GUARDIAN_CHARGE_GAP_MULT` | 1.55× the ram's post-charge reset |
 
 These were later raised back to 1300, 0.5 and 0.6. Real play showed the harness is weaker than a player (a player clears the unchanged main build almost every time), so a harness loss is a relative figure, not a limit.
 
@@ -134,11 +145,19 @@ The guardian costs about what a hard ordinary room does, and it stops about
 two runs in thirty of the `average` profile that the plain room would have let
 through.
 
-## Measured (2026-09-28, no phases)
+## Measured (2026-09-28, stance and volley)
 
-With the phases gone and the call in their place, on the same numbers:
+With the stance, the volley round the player, the guardian standing through
+it and its squad under the floor, at `GUARDIAN_HP` 1300:
 
-| `pnpm guardian-bench` | won | mean | hearts left of 6 |
-|---|---|---|---|
-| `player` | 8 / 8 | 32 s | 2.5 to 5.2 |
-| `average` | 7 / 8 | 42 s | 0 to 3.4 |
+| `pnpm guardian-bench` | won | mean | hearts left | breaks a fight |
+|---|---|---|---|---|
+| `player` | 8 / 8 | 23 s | 6.1 to 7.9 | 2 |
+| `average` | 8 / 8 | 31 s | 2.8 to 4.5 | 3 |
+
+The same bench without them: `player` 8 / 8 in 26 s, `average` 4 / 8 in
+37 s. The volley lands on `average` about half again as often as before
+(it dodges lines badly) and on `player` not at all, and everything else
+lands far less: the guardian spends about
+ten seconds a fight on its knees and about eight standing through its
+volleys. Both are under the 40 to 60 s target.

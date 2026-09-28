@@ -103,6 +103,7 @@ export const EN = {
   "hint.close": "Close",
   "hint.move": "Move",
   "hint.take": "Take",
+  "hint.claim": "Claim",
   "hint.buy": "Buy",
   "hint.leave": "Leave",
   "hint.or": "or",

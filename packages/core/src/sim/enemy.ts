@@ -15,7 +15,7 @@ import type { Enemy, World } from "./types.ts";
 import {
   ENEMY_BULLET_CAP, SUMMONER_INTERVAL_S, SUMMONER_MINION_CAP, MAX_CONCURRENT_ENEMIES, BOSS_PHASES, bossPhaseAt, kingHp, KING_RETREAT_AT } from "../encounters/enemies.ts";
 import type { BossScript } from "../encounters/enemies.ts";
-import { GUARDIAN_SHOT_EVERY } from "./guardian.ts";
+import { GUARDIAN_ATTACK_GAP_MULT, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_CHARGE_GAP_MULT, GUARDIAN_SHOT_EVERY, GUARDIAN_STANCE, GUARDIAN_WALL_STANCE, wearStance } from "./guardian.ts";
 
 const SUMMONER_INTERVAL_MS = SUMMONER_INTERVAL_S * 1000;
 /**
@@ -780,6 +780,20 @@ function turnRate(world: World, e: Enemy): number {
 
 /** Claims one of the room's attack tokens, if any are free. */
 function takeToken(world: World, e: Enemy): boolean {
+  // A boss is the fight, not another member of its squad: adds cannot spend its turns.
+  if (e.guardian) {
+    // All Veteran attacks share one post-action window. `wasAttacking` also
+    // closes the single frame between an animation ending in this layer and
+    // `stepGuardian` observing that edge later in the world step.
+    if (e.guardian.actionGapMs > 0 || e.guardian.wasAttacking) return false;
+    // Its own due move has priority over starting a generic warden attack in
+    // the frame before `stepGuardian` gets to claim it.
+    if (!e.guardian.chainNext
+      && (e.guardian.callMs <= 0 || e.guardian.stakesMs <= 0 || e.guardian.volleyMs <= 0)) return false;
+    e.guardian.wasAttacking = true;
+    return true;
+  }
+  if (e.archetype === "boss") return true;
   if (e.hasToken) return true;
   if (world.attackTokens <= 0) return false;
   world.attackTokens--;
@@ -988,6 +1002,9 @@ export function makeEnemy(
     doomMs: 0, doomDamage: 0, doomRadius: 0, doomSpell: -1,
     contagion: 0, contagionReach: 0,
     staggerMs: 0,
+    stunMs: 0,
+    hideMs: 0,
+    sinkMs: 0,
     staggerImmuneMs: 0,
     threatMs: 0,
     postX: x, postY: y, postMs: (id * 331) % 1200, relocateMs: 0,
@@ -1006,6 +1023,7 @@ export function makeEnemy(
     retreatMs: RETREAT_BUDGET_MS,
     windedMs: 0,
     attackCooldownMs: 0,
+    attackLockMs: 0,
     hasAttacked: false,
     /*
      * Varied per body rather than 0.
@@ -1461,8 +1479,9 @@ function moveFor(e: Enemy, world: World, dt: number): { dx: number; dy: number }
       {
         const spec = meleeSpec(e);
         if (spec && e.attack !== "approach") return meleeStep(e, world, speed, amble, toward);
-        if (spec && e.attackCooldownMs <= 0) {
-          const reach = e.radius + PLAYER_RADIUS + spec.commitRange;
+        if (spec && e.attackCooldownMs <= 0 && e.attackLockMs <= 0) {
+          const reach = e.radius + PLAYER_RADIUS
+            + spec.commitRange * (e.guardian && spec.kind !== "charge" ? GUARDIAN_ATTACK_RANGE_MULT : 1);
           if (Math.hypot(p.x - e.x, p.y - e.y) <= reach && takeToken(world, e)) {
             beginWindup(world, e, p);
             return { dx: 0, dy: 0 };
@@ -1737,6 +1756,12 @@ function advanceMelee(e: Enemy, world: World, dtMs: number): void {
       e.facing = e.swing.facing;
       e.attack = "lunge";
       e.attackMs = spec.lungeMs;
+      if (e.guardian && e.meleeKind === "charge") {
+        // A short freeze and camera thump make the ram land with weight even
+        // when it misses the player and only tears through the floor.
+        world.hitstopMs = Math.max(world.hitstopMs, 45);
+        world.trauma = Math.min(1, world.trauma + 0.14);
+      }
       /*
        * **The king's dashcut runs to the player, not to the wall.** It used
        * to cross its whole six tiles whatever was in front of it, so a
@@ -1931,7 +1956,10 @@ function advanceMelee(e: Enemy, world: World, dtMs: number): void {
       // The turn is over: hand the token back and stand down for a beat, so
       // one body cannot hold a token permanently by re-committing instantly.
       dropToken(world, e);
-      e.attackCooldownMs = restAfter(world, e, spec.restMs);
+      const guardianGap = e.guardian
+        ? spec.kind === "charge" ? GUARDIAN_CHARGE_GAP_MULT : GUARDIAN_ATTACK_GAP_MULT
+        : 1;
+      e.attackCooldownMs = restAfter(world, e, spec.restMs * guardianGap);
       break;
     }
   }
@@ -2003,6 +2031,12 @@ export function beginWindup(world: World, e: Enemy, target: { x: number; y: numb
     ? e.damageMult * bossStringHearts(e.bossStringN - 1 - e.bossString.length, e.bossStringN) / Math.max(0.01, spec.damage)
     : e.damageMult;
   armMeleeAttack(e.swing, spec, e.x, e.y, bossAim(e, v.x, v.y), e.strafe, mult);
+  if (e.guardian && spec.kind !== "charge") {
+    // Its doubled body used an ordinary body's weapon geometry, making the
+    // large sweep and shield visibly pass through the player before hitting.
+    e.swing.bladeReach *= GUARDIAN_ATTACK_RANGE_MULT;
+    e.swing.reach *= GUARDIAN_ATTACK_RANGE_MULT;
+  }
   // The opening cut sets which way the whole string is drawn (`Enemy.bossComboFlip`).
   if (e.archetype === "boss" && (!e.bossLinked || e.bossLinkedBlow === null)) e.bossComboFlip = e.swing.sweep < 0;
   /*
@@ -2401,6 +2435,7 @@ function stepBossPhase(world: World, e: Enemy): void {
     e.swing.active = false;
     e.swing.trackingMs = 0;
     e.staggerMs = 0;
+    e.stunMs = 0;
     e.poiseBreakMs = 0;
     e.bossHooked = false;
     e.bossPlanMs = 0;
@@ -2543,13 +2578,15 @@ function meleeStep(
 ): { dx: number; dy: number } {
   const p = seenPlayer(world, e);
   // The gap this body's own attack commits from; see `commitRange`.
-  const reach = e.radius + PLAYER_RADIUS + (meleeSpec(e)?.commitRange ?? MELEE.range);
+  const spec0 = meleeSpec(e);
+  const reach = e.radius + PLAYER_RADIUS
+    + (spec0?.commitRange ?? MELEE.range) * (e.guardian && spec0?.kind !== "charge" ? GUARDIAN_ATTACK_RANGE_MULT : 1);
 
   switch (e.attack) {
     case "approach": {
       const gap2 = dist2(e.x, e.y, p.x, p.y);
       // The king's turns are his own (`chooseBossAct`): he is ready when the one he chose is a blade.
-      const ready = e.archetype === "boss" ? e.bossBlade !== null : e.attackCooldownMs <= 0;
+      const ready = e.archetype === "boss" ? e.bossBlade !== null : e.attackCooldownMs <= 0 && e.attackLockMs <= 0;
       // A volley turn is fired standing; and before his first turn he stands in the ceremony (the renderer's pose),
       // whether or not he can see them yet.
       if (e.archetype === "boss" && !ready && (e.bossVolleyMs > 0 || e.bossLastAct === "")) return { dx: 0, dy: 0 };
@@ -2669,7 +2706,7 @@ function meleeStep(
          * and wastes the one attack the player is supposed to respect.
          */
         const clear = hasLineOfSight(world.room.grid, e.x, e.y, p.x, p.y);
-        if (clear && gap2 <= reach * reach && firePresence(world, e) > 0 && takeToken(world, e)) {
+        if (clear && gap2 <= reach * reach && (e.guardian || firePresence(world, e) > 0) && takeToken(world, e)) {
           beginWindup(world, e, p);
           return { dx: 0, dy: 0 };
         }
@@ -2772,6 +2809,10 @@ function freeFloorNear(world: World, x: number, y: number): { x: number; y: numb
 
 export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
   const dt = dtMs / 1000;
+  // Unlike an ordinary post-attack cooldown, this runs while the body is
+  // hidden or emerging: the Veteran entrance's three-second truce includes
+  // the smalls' climb out of the floor rather than starting after it.
+  if (e.attackLockMs > 0) e.attackLockMs = Math.max(0, e.attackLockMs - dtMs);
   // The king is never moved by the player: no knockback from any hit, spell or shove (as he holds his ground against bodies).
   if (e.archetype === "boss") { e.knockX = 0; e.knockY = 0; }
   if (anchored(e)) {
@@ -2785,6 +2826,27 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
     e.spawnFadeMs -= dtMs;
     return;
   }
+
+  /*
+   * **Gone to ground** for the Frontier Veteran's volley (`Enemy.hideMs`):
+   * nothing this step, and when it is up it rises as a spawn does, the red
+   * rings first, so its coming back is read before it can hurt.
+   */
+  if (e.hideMs > 0) {
+    e.hideMs -= dtMs;
+    if (e.sinkMs > 0) e.sinkMs -= dtMs;
+    e.velX = 0;
+    e.velY = 0;
+    e.knockX = 0;
+    e.knockY = 0;
+    if (e.hideMs <= 0) {
+      e.airborne = false;
+      e.spawnFadeMs = SPAWN_FADE_MS + SPAWN_TELEGRAPH_MS;
+      world.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "boss_summon" });
+    }
+    return;
+  }
+  if (e.stunMs > 0) e.stunMs -= dtMs;
 
   /*
    * **A body inside stone is put back on the floor.**
@@ -2919,14 +2981,17 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
     if (e.poiseIdleMs >= POISE_RECOVER_MS) e.poise = e.maxPoise;
   }
   /*
-   * Braking: the velocity is shed gradually rather than being cut or coasting.
-   * 0.94 per frame carries it about 52 px — a tile and a half — with the last
-   * of it trailing off, which is the curve a heavy thing stopping has.
+   * Braking: an ordinary heavy body skids; the Veteran plants much harder.
+   * Its charge already launches at full speed, so a strong first-frame drag
+   * gives the requested burst -> abrupt stop curve without adding an easing
+   * buffer in front of the run. The remaining brake time is the punish pose,
+   * not another half-tile of travel.
    */
   if (e.brakeMs > 0) {
     e.brakeMs -= dtMs;
-    e.velX *= 0.94;
-    e.velY *= 0.94;
+    const drag = e.guardian && e.meleeKind === "charge" ? 0.72 : 0.94;
+    e.velX *= drag;
+    e.velY *= drag;
     if (e.brakeMs <= 0) {
       e.velX = 0;
       e.velY = 0;
@@ -2991,7 +3056,9 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
    * Noticing. Planted, facing the player, for one readable beat before the
    * fight starts. See `ALERT_MS`.
    */
-  if (e.alertMs > 0) {
+  // A body that is already in a posed move still has to advance that pose;
+  // the Veteran's opening alert can overlap the first call's raised-gun frame.
+  if (e.alertMs > 0 && e.pose === "") {
     e.alertMs -= dtMs;
     e.facing = turnToward(
       e.facing, Math.atan2(e.lookY - e.y, e.lookX - e.x), dtMs, turnScale(e),
@@ -3035,7 +3102,13 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
       e.velY = 0;
       return;
     }
-    if (!e.awake && noticesPlayer(world, e)) {
+    // The Veteran room owns one synchronized noticing beat. During its live
+    // first second the opening pack may patrol and idle, but ordinary aggro
+    // must not wake it early — that produced a first exclamation, a short
+    // chase, then a second scripted exclamation and an apparent position pop.
+    const waitingForGuardianNotice = world.guardianRoom === true
+      && world.enemies.some((o) => o.guardian && o.hp > 0 && o.pose === "guardian_intro" && !o.guardian.introNoticeSent);
+    if (!e.awake && !waitingForGuardianNotice && noticesPlayer(world, e)) {
       wake(world, e);
     } else if (!e.awake) {
       /*
@@ -3176,7 +3249,9 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
 
   const before = { x: e.x, y: e.y };
   // The king steps aside for no one: the crowd, and the player, give way to him.
-  const sep = e.archetype === "boss" ? { x: 0, y: 0 } : separation(world, e);
+  // A posed attack is planted in the literal sense too: crowd separation
+  // must not slide a caller, stake drive or volley order across its own tell.
+  const sep = e.archetype === "boss" || planted(e) ? { x: 0, y: 0 } : separation(world, e);
   const moved0 = moveFor(e, world, dt);
   /*
    * Steering names a target velocity; the body ramps toward it.
@@ -3338,6 +3413,7 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
       const square = wallSlamSquareness(r.blockedX, r.blockedY, e.lungeX, e.lungeY);
       if (spec?.stunsOnWall && square >= WALL_SLAM_COS) {
         e.staggerMs = WALL_SLAM_STUN_MS;
+        e.stunMs = WALL_SLAM_STUN_MS;
         e.attack = "approach";
         e.attackMs = 0;
         e.swing.active = false;
@@ -3347,7 +3423,10 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
         e.bossString = [];
         e.bossStringAt0 = -1;
         dropToken(world, e);
-        e.attackCooldownMs = restAfter(world, e, spec.restMs);
+        const guardianGap = e.guardian
+          ? spec.kind === "charge" ? GUARDIAN_CHARGE_GAP_MULT : GUARDIAN_ATTACK_GAP_MULT
+          : 1;
+        e.attackCooldownMs = restAfter(world, e, spec.restMs * guardianGap);
         // A body that has knocked itself out does not come back with the
         // second half of a combination: the slam is the player's window.
         e.comboLeft = 0;
@@ -3359,6 +3438,8 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
         if (e.guardian) {
           e.poiseBreakMs = POISE_BREAK_MS;
           world.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_break:${e.archetype}` });
+          // And it wears its stance deep: the wall is the surest way to its knees (`wearStance`).
+          wearStance(world, e, GUARDIAN_STANCE * GUARDIAN_WALL_STANCE);
         }
       }
     }
@@ -3565,9 +3646,19 @@ function closePresence(world: World, e: Enemy): number {
 const CLOSE_FADE_PX = TILE_PX * 5;
 const OFF_VIEW_SPEED = 0.6;
 
-function fire(world: World, e: Enemy, dtMs: number): void {
+export function fire(world: World, e: Enemy, dtMs: number): void {
   const def = ENEMIES[e.archetype];
   if (!def.pattern && !def.ranged) return;
+  if (e.attackLockMs > 0) return;
+  // The Veteran's entrance hands the player a clean three-second turn. Its
+  // ranged clock must pause too; `attackCooldownMs` alone gates only melee.
+  if (e.guardian && e.guardian.introGraceMs > 0) return;
+  if (e.guardian && (e.guardian.actionGapMs > 0 || e.guardian.wasAttacking)) return;
+  // The guardian layer runs after the shared enemy layer. Leave a due call,
+  // stake drive or volley a clean frame to take the body before its ordinary
+  // warden gun can plant it instead.
+  if (e.guardian && !e.guardian.chainNext
+    && (e.guardian.callMs <= 0 || e.guardian.stakesMs <= 0 || e.guardian.volleyMs <= 0)) return;
   /*
    * **One question at a time** (doc 020). The king fires only when a volley
    * is the turn he chose (`chooseBossAct`), standing: never under a blade or a
@@ -3586,7 +3677,10 @@ function fire(world: World, e: Enemy, dtMs: number): void {
    * none of it arrives from the dark, and the room is a clock the player
    * cannot hide from.
    */
-  const presence = e.objectiveTarget ? 1 : firePresence(world, e);
+  // The guardian remains the source of pressure across its arena. Its attacks
+  // are telegraphed at the player, so it does not inherit an ordinary mob's
+  // off-screen silence merely because the camera followed the player away.
+  const presence = e.objectiveTarget || e.guardian ? 1 : firePresence(world, e);
   if (presence <= 0) {
     if (e.telegraphMs > 0 || e.pending.length > 0) { e.pending = []; e.telegraphMs = 0; e.plantMs = 0; dropFireToken(world, e); }
     return;
@@ -3840,6 +3934,12 @@ const RANGED_TURN_MS = 950;
  * the shot — the wind-up is when the player is being asked to move.
  */
 function takeFireToken(world: World, e: Enemy): boolean {
+  // Boss fire runs on its own cadence; the summoned squad cannot spend that turn.
+  if (e.guardian) {
+    e.guardian.wasAttacking = true;
+    return true;
+  }
+  if (e.archetype === "boss") return true;
   if (e.hasFireToken) return true;
   // A destroy room's targets fire on their own clocks, outside the room's budget (doc 025).
   if (world.fireTokens <= 0 && !e.objectiveTarget) return false;
@@ -4068,6 +4168,7 @@ export function hatchMinion(world: World, x: number, y: number, from: EnemyId): 
 function summon(world: World, e: Enemy, dtMs: number): void {
   const def = ENEMIES[e.archetype];
   if (!def.summon) return;
+  if (e.attackLockMs > 0) return;
   e.summonMs -= dtMs;
   if (e.summonMs > 0) return;
   e.summonMs = SUMMONER_INTERVAL_MS;

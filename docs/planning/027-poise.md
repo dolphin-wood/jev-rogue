@@ -26,7 +26,8 @@ comes back.
 | The break | the hit that wears it through **interrupts** it: a `POISE_BREAK_STAGGER_MS` (0.35 s) flinch, longer than a hit's 0.19 s, that cancels its attack, windup or aim (`poise_break`: a ring, a spray, the break sound). Its poise is whole again. It is not a stun: the stun, the long window with its mark over the head, is a wall's (1.2 s) |
 | After a break | `POISE_GUARD_MS` past the stagger in which it can't be broken again: hits land, but they neither wear it nor interrupt it. It can't be held down |
 | Recovery | unhit for `POISE_RECOVER_MS`, it is whole again. A heavy body is broken by a burst, not by hits spread across a fight |
-| Shown | never as a bar. What a hit does is all the player is told. A visible bar would have to be a stagger bar, and most bodies die before one could matter |
+| Shown | never as a bar. What a hit does is all the player is told. A visible bar would have to be a stagger bar, and most bodies die before one could matter. The Frontier Veteran lives long enough for one, and has it on top of its poise: its stance (doc 024) |
+| Stars | only a stun (`Enemy.stunMs`) shows stars over the head and the stun mark: a wall, a cut ward line, the Frontier Veteran's broken stance. A break's stagger, or a heavy spell's, has neither |
 
 The king has none: nothing interrupts him (`canStagger`). The guardian's
 call can't be broken, because its poise is guarded while its arm is up. A
