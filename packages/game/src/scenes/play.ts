@@ -9107,12 +9107,16 @@ export class PlayScene extends Phaser.Scene {
      * menu's length back when the menu closed. Not for the cards that end a
      * run, the title or a transition: those are the music moving on.
      */
-    const guardianIntro = this.world.guardianRoom === true
-      && this.world.enemies.some((e) => e.guardian && e.hp > 0 && e.pose === "guardian_intro");
+    /*
+     * The Veteran's room plays its music as any room does until the Veteran
+     * sees the player: the music cuts out with the exclamation marks, and
+     * the rest of the entrance — the notice, the laser — is silent, owning
+     * the room completely, until the fight hands the music back.
+     */
+    const guardianNoticed = this.world.guardianRoom === true
+      && this.world.enemies.some((e) => e.guardian && e.hp > 0 && e.pose === "guardian_intro" && e.guardian.introNoticeSent);
     const transitionHushed = this.transitionUi?.to !== undefined && stageFor(this.transitionUi.to) === "boss";
-    // The Veteran's entrance is a silent visual beat. Hold the stem at zero;
-    // unlike a menu's muffled pause, the laser should own the room completely.
-    this.sfx.setMusicHeld(guardianIntro || transitionHushed || this.labSpeed !== 1 || this.kingIntro !== null);
+    this.sfx.setMusicHeld(guardianNoticed || transitionHushed || this.labSpeed !== 1 || this.kingIntro !== null, guardianNoticed);
     this.sfx.setMusicPaused(!dead && !this.pauseFromTitle
       && !!(this.pauseUi || this.staffUi || this.offerUi || this.hintsUi)
       && !this.titleUi && !this.gameOverUi && !this.victoryUi && !this.transitionUi

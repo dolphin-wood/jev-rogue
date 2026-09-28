@@ -65,6 +65,8 @@ const STYLED_RATE: Partial<Record<MusicStyle, Partial<Record<SfxName, number>>>>
 
 const SFX_VOLUME_KEY = "jr.vol.sfx";
 const MUSIC_VOLUME_KEY = "jr.vol.music";
+/** A music cut, seconds: as near instant as a gain ramp can be without a click. */
+const MUSIC_CUT_S = 0.02;
 
 /**
  * The alternative sound set, behind `?sfx=next`.
@@ -314,19 +316,24 @@ export class Sfx {
     this.music?.setPaused(on);
   }
 
-  /** The boss lab's slowed or paused fight: the music cannot slow with it, so it goes quiet. */
-  setMusicHeld(on: boolean): void {
+  /**
+   * The boss lab's slowed or paused fight: the music cannot slow with it, so it goes quiet.
+   *
+   * `cut` drops it at once rather than over a quarter second, for a silence
+   * that is itself the cue — the Frontier Veteran seeing the player.
+   */
+  setMusicHeld(on: boolean, cut = false): void {
     if (on === this.musicHeld) return;
     this.musicHeld = on;
-    this.applyMusicVolume();
+    this.applyMusicVolume(on && cut ? MUSIC_CUT_S : 0.25);
   }
 
-  private applyMusicVolume(): void {
+  private applyMusicVolume(rampS = 0.25): void {
     if (!this.musicOut) return;
     const target = this.style !== "off" && !this.musicHeld ? this.musicVolume : 0;
     const ctx = this.musicOut.context;
     this.musicOut.gain.cancelScheduledValues(ctx.currentTime);
     this.musicOut.gain.setValueAtTime(this.musicOut.gain.value, ctx.currentTime);
-    this.musicOut.gain.linearRampToValueAtTime(target, ctx.currentTime + 0.25);
+    this.musicOut.gain.linearRampToValueAtTime(target, ctx.currentTime + rampS);
   }
 }
