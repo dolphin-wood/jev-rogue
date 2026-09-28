@@ -5,10 +5,10 @@ import {
   portalChoices, RngSource, schoolOf, heldDominantTags, NPC_OFFERS_MAX, RUN_COMBAT_ROOMS,
 } from "@jr/core";
 import type { RunContext, RunShape } from "@jr/core";
-import { createDirector } from "./director.ts";
-import { FALLBACK } from "./types.ts";
+import { CARD_JUDGING, createDirector } from "./director.ts";
+import { EvaluatorError, FALLBACK } from "./types.ts";
 import type { Evaluator } from "./types.ts";
-import { optionText } from "./questions/common.ts";
+import { answerKeys, optionText } from "./questions/common.ts";
 
 function ctx(
   index: number,
@@ -263,7 +263,7 @@ describe("the Director's portals (doc 003)", () => {
   it("hands only a declined question to the rule table; the request's other answers stand", async () => {
     const declining: Evaluator = async (req) => ({
       answers: Object.fromEntries(Object.entries(req.questions).map(([name, q]) => {
-        const keys = Object.keys(q.criteria);
+        const keys = answerKeys(q);
         const choice = name === "normal_grade" ? FALLBACK : keys.find((k) => k !== FALLBACK)!;
         return [name, { choice, probabilities: Object.fromEntries(keys.map((k) => [k, k === choice ? 1 : 0])), confidence: null }];
       })),
@@ -279,10 +279,68 @@ describe("the Director's portals (doc 003)", () => {
 });
 
 describe("the Director's cards (doc 007)", () => {
+  it("asks Jev about each card on its own, and draws by each card's yes", async () => {
+    const liked = new Set(["frost_needle", "spirit_ally"]);
+    const evaluate: Evaluator = async (req) => ({
+      answers: Object.fromEntries(Object.entries(req.questions).map(([name, question]) => {
+        const ids = answerKeys(question);
+        if (question.type === "noul") {
+          const yes = liked.has(name.slice("fit_".length)) ? 1 : 0;
+          return [name, { choice: yes ? "yes" : "no", probabilities: { yes, no: 1 - yes }, confidence: null }];
+        }
+        const choice = ids.find((id) => id !== FALLBACK)!;
+        return [name, { choice, probabilities: Object.fromEntries(ids.map((id) => [id, id === choice ? 1 : 0])), confidence: null }];
+      })),
+      usage: { input_tokens: null },
+    });
+    const seen: import("./director.ts").ObservedRequest[] = [];
+    const pool = cardPool(ITEMS, [], "spell", [], {}, { style: "spam" });
+    const plan = await createDirector("jev", { evaluate, observe: (r) => seen.push(r) })
+      .planCards(ctx(4), { room_index: 4, pool, count: 3, pity: false, temptation: false });
+    const fits = Object.keys(seen[0]!.questions).filter((n) => n.startsWith("fit_"));
+    expect(fits).toHaveLength(pool.candidates.length);
+    // How a card is judged is said once, in the state, not in every card's question.
+    expect(seen[0]!.state["card_judging"]).toBe(CARD_JUDGING);
+    const fit = seen[0]!.questions[fits[0]!]!;
+    expect(fit.instructions).toContain("Judge it as card judging in the state says.");
+    expect(fit.instructions).not.toContain("Read it against the build");
+    expect(seen[0]!.questions.overall).toBeUndefined();
+    const sampled = plan.ids.filter((_, i) => plan.origins[i] === "sampled");
+    expect(new Set(sampled)).toEqual(liked);
+    expect(plan.source).toBe("jev");
+  });
+
+  it("sends how a card is judged beside the briefing", async () => {
+    const seen: import("./director.ts").ObservedRequest[] = [];
+    const evaluate: Evaluator = async () => { throw new EvaluatorError("timeout", "timed out"); };
+    const pool = cardPool(ITEMS, [], "spell", [], {}, { style: "spam" });
+    await createDirector("jev", { evaluate, state_format: "briefing", observe: (r) => seen.push(r) })
+      .planCards(ctx(4), { room_index: 4, pool, count: 3, pity: false, temptation: false });
+    expect(Object.keys(seen[0]!.state).sort()).toEqual(["briefing", "card_judging", "director_brief"]);
+  });
+
+  it("keeps the three choice axes on the rule arm", async () => {
+    const seen: import("./director.ts").ObservedRequest[] = [];
+    const pool = cardPool(ITEMS, [], "spell", [], {}, { style: "spam" });
+    await createDirector("rule", { observe: (r) => seen.push(r) })
+      .planCards(ctx(4), { room_index: 4, pool, count: 3, pity: false, temptation: false });
+    expect(Object.keys(seen[0]!.questions).some((n) => n.startsWith("fit_"))).toBe(false);
+    expect(seen[0]!.questions.overall).toBeTruthy();
+  });
+
+  it("answers every card from the rule table when Jev fails", async () => {
+    const failing: Evaluator = async () => { throw new EvaluatorError("timeout", "timed out"); };
+    const pool = cardPool(ITEMS, [], "spell", [], {}, { style: "spam" });
+    const plan = await createDirector("jev", { evaluate: failing })
+      .planCards(ctx(4), { room_index: 4, pool, count: 3, pity: false, temptation: false });
+    expect(plan.source).toBe("rule");
+    expect(plan.ids).toHaveLength(3);
+  });
+
   it("lists each held spell's compatible affixes once in Jev's state", async () => {
     const evaluate: Evaluator = async (req) => ({
       answers: Object.fromEntries(Object.entries(req.questions).map(([name, question]) => {
-        const ids = Object.keys(question.criteria);
+        const ids = answerKeys(question);
         const choice = ids.find((id) => id !== FALLBACK)!;
         return [name, {
           choice, probabilities: Object.fromEntries(ids.map((id) => [id, id === choice ? 1 : 0])),
@@ -301,9 +359,12 @@ describe("the Director's cards (doc 007)", () => {
       const held = [heldSpell(ITEMS.get("meteor")), heldSpell(ITEMS.get("shock_arc")), heldSpell(ITEMS.get("magic_bolt"))];
       const pool = cardPool(ITEMS, [], "affix", held);
       await director.planCards(run, { room_index: 4, pool, count: 3, pity: false, temptation: false });
-      const overall = seen[0]!.questions.overall!;
-      expect(overall.instructions).toContain("only when it is in that spell's list");
-      expect(optionText(overall.criteria["fork"]!)).not.toContain("Can attach to these held spells");
+      // Jev judges each affix on its own, and the instruction names the spell rule.
+      const fork = seen[0]!.questions.fit_fork!;
+      expect(fork.type).toBe("noul");
+      expect(fork.instructions).toContain("only when it is in that spell's list");
+      expect(fork.instructions).not.toContain("Can attach to these held spells");
+      expect(seen[0]!.questions.overall).toBeUndefined();
       if (state_format === "labels") {
         const bySpell = seen[0]!.state["affixes_by_spell"] as Record<string, string>;
         expect(bySpell["meteor"]?.split(" ")).toContain("scatter");
@@ -443,7 +504,7 @@ describe("the offer asked in one request (doc 002: parallel questions)", () => {
     const seen: import("./director.ts").ObservedRequest[] = [];
     const evaluate: Evaluator = async (req) => ({
       answers: Object.fromEntries(Object.entries(req.questions).map(([name, question]) => {
-        const ids = Object.keys(question.criteria);
+        const ids = answerKeys(question);
         const choice = ids.find((id) => id !== FALLBACK)!;
         return [name, {
           choice, probabilities: Object.fromEntries(ids.map((id) => [id, id === choice ? 1 : 0])),

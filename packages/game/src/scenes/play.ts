@@ -107,7 +107,7 @@ import { layoutDecisionTable, maxScrollFor } from "../ui/plan-table.ts";
 import { questionAsked, questionBase, questionName } from "../ui/question-names.ts";
 import type { TableRow } from "../ui/plan-table.ts";
 import type { AtlasJson } from "../assets/atlas.ts";
-import { AUTO_CAST_MAX_REACH_PX, AUTO_CAST_RESERVE, AUTO_CAST_SOON_MS, AutoCaster, autoCastable, autoCastReach } from "../auto-cast.ts";
+import { AUTO_CAST_MAX_REACH_PX, AUTO_CAST_RESERVE, AutoCaster, autoCastable, autoCastAnyReach, autoCastReach } from "../auto-cast.ts";
 import { freshRerollPool, rerollPrice } from "../offer-reroll.ts";
 
 /**
@@ -15221,9 +15221,9 @@ export class PlayScene extends Phaser.Scene {
       // Remembered even when the press is refused: the bar's cost tick
       // follows the key the player is actually using.
       this.lastSpellKey = i;
-      // The player's own key: the assist's waits start over (`AutoCaster`),
+      // The player's own key: the assist's beat starts over (`AutoCaster`),
       // and whatever it was aiming at is let go.
-      this.autoCaster.noteManual(i, this.world.tick * STEP_MS);
+      this.autoCaster.noteManual(i);
       this.autoTargetId = null;
       return i;
     }
@@ -15258,29 +15258,51 @@ export class PlayScene extends Phaser.Scene {
     const p = w.player;
     const free = p.castPending < 0 && p.castRecoverMs <= 0 && p.chargeKey < 0 && !p.stance && p.stunMs <= 0 && p.dashMs <= 0;
     const target = this.autoTarget();
+    // A body awake anywhere in the room: what an enchant or a companion is cast for (`autoCastAnyReach`).
+    const fight = w.enemies.some((e) => e.hp > 0 && e.awake && e.spawnFadeMs <= 0);
     const floor = w.staff.mana_max * AUTO_CAST_RESERVE;
     const dist = target ? Math.hypot(target.x - p.x, target.y - p.y) : Infinity;
-    const keys = w.spells.map((slot) => {
+    const keys = w.spells.map((slot, i) => {
       const params = ITEMS.get(slot?.item.base ?? "")?.params;
-      // Only a key whose own reach the body stands in: a short spell is not thrown at a far body.
-      if (!slot || !target || !params || dist > autoCastReach(params)) return { eligible: false, coming: false };
+      if (!slot || !params) return { held: false, ready: false, cost: 0 };
       // A tap, never a guard or a move of the body (`autoCastable`).
-      const tap = autoCastable(params, chargeMsOf(ITEMS, slot.item.base));
-      const cost = slotCost(slot, ITEMS, w.staff);
-      // How long until the key is back: its cooldown, or its bank's next charge.
-      const back = chargesOf(ITEMS, slot.item.base) > 0 && bankOf(slot, ITEMS) < 1
-        ? chargeIntervalMs(ITEMS, slot.item.base) - (slot.bankMs ?? 0)
-        : Math.max(0, slot.cooldownMs);
+      const held = autoCastable(params, chargeMsOf(ITEMS, slot.item.base));
+      /*
+       * Only a key whose own reach the body stands in: a short spell is not
+       * thrown at a far body. An enchant or a companion needs only a fight.
+       * And no spell that is still running (`keyRunningMs`) — an enchant on
+       * the sword, the blades round the body, a trail underfoot, the
+       * companion: recast early, it spends the bar to renew what is already
+       * there. It sits the draws out meanwhile, and comes back owed for them.
+       */
+      const inReach = autoCastAnyReach(params) ? fight : !!target && dist <= autoCastReach(params);
       return {
-        eligible: tap && spellReady(slot, ITEMS) && p.mana - cost >= floor,
-        // Owed its turn whatever the bar says now, so the bar is saved up for
-        // it — unless the bar could never pay for it above the floor.
-        coming: tap && back <= AUTO_CAST_SOON_MS && cost + floor <= w.staff.mana_max,
+        held,
+        ready: held && inReach && this.keyRunningMs(i) <= 0 && spellReady(slot, ITEMS),
+        cost: slotCost(slot, ITEMS, w.staff),
       };
     });
-    const key = this.autoCaster.pick(w.tick * STEP_MS, keys, free);
-    if (key !== null) this.autoTargetId = target!.id;
+    const key = this.autoCaster.pick(w.tick * STEP_MS, keys, free, { mana: p.mana, floor, max: w.staff.mana_max });
+    // An enchant or a companion with no body in reach aims nowhere in particular: the facing the player has.
+    if (key !== null) this.autoTargetId = target?.id ?? null;
     return key;
+  }
+
+  /**
+   * **How long a key's last cast is still running**, in ms, for the spells
+   * a recast renews rather than adds to: an enchant on the sword, a trail
+   * underfoot, a ring of orbiting blades, a companion. Zero for everything
+   * else, and for a key whose effect has run out.
+   */
+  private keyRunningMs(key: number): number {
+    const w = this.world;
+    const p = w.player;
+    let ms = 0;
+    if (p.enchant?.spellIndex === key) ms = Math.max(ms, p.enchant.ms);
+    if (p.trail?.spellIndex === key) ms = Math.max(ms, p.trail.ms);
+    for (const b of w.playerBullets) if (b.alive && b.orbitMs > 0 && b.spellIndex === key) ms = Math.max(ms, b.orbitMs);
+    for (const pet of w.pets) if (pet.alive && pet.spellIndex === key) ms = Math.max(ms, pet.lifeMs);
+    return Math.max(0, ms);
   }
 
   /** The body an auto-cast goes at, from its press until it has left the hand; null for none. */

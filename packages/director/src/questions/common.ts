@@ -12,8 +12,8 @@
  */
 import { describe } from "../describe.ts";
 import type { Describable, LabelSet } from "../describe.ts";
-import { FALLBACK } from "../types.ts";
-import type { ChoiceQuestion, OptionSpec } from "../types.ts";
+import { FALLBACK, NOUL_NO, NOUL_YES } from "../types.ts";
+import type { ChoiceQuestion, OptionSpec, Question } from "../types.ts";
 import { unground } from "./fits.ts";
 
 /** Doc 002: "described as 'none of these fits; let the game decide'". */
@@ -74,9 +74,15 @@ export function choiceQuestion(input: QuestionInput): ChoiceQuestion {
   return { type: "choice", instructions: input.instructions, criteria };
 }
 
-/** The option keys of a question, escape option excluded. */
-export function offeredKeys(question: ChoiceQuestion): string[] {
+/** The option keys of a question, escape option excluded; a Noul's are yes and no. */
+export function offeredKeys(question: Question): string[] {
+  if (question.type === "noul") return [NOUL_YES, NOUL_NO];
   return Object.keys(question.criteria).filter((k) => k !== FALLBACK);
+}
+
+/** Every key an answer to this question may carry, escape option included. */
+export function answerKeys(question: Question): string[] {
+  return question.type === "noul" ? [NOUL_YES, NOUL_NO] : Object.keys(question.criteria);
 }
 
 /** An option's text, whichever form it is in, for a readout or a test. */

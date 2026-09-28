@@ -159,7 +159,7 @@ export function buildReadout(
         probs: sorted(Object.keys(own).length > 0 ? own : dist),
         source: d?.source ?? req.source,
         ...(restricted ? { note: "renormalised over what was on offer", noteKey: "renormalised" as const }
-          : !d && BLENDED.has(unscoped(name)) ? { note: "blended, not drawn on its own", noteKey: "blended" as const }
+          : !d && (BLENDED.has(unscoped(name)) || unscoped(name).startsWith("fit_")) ? { note: "blended, not drawn on its own", noteKey: "blended" as const }
           : !d ? { note: "not needed this time", noteKey: "notNeeded" as const } : {}),
       };
     });
@@ -245,6 +245,8 @@ export const CATEGORY_OF: Readonly<Record<string, Category>> = {
 
 export function categoryOf(name: string): Category {
   if (name.startsWith("zone_")) return "layout";
+  // A card's own fit (`fit_<id>`), which the offer blends rather than draws.
+  if (unscoped(name).startsWith("fit_")) return "cards";
   if (name.startsWith("blended offer")) return "cards";
   return CATEGORY_OF[bare(unscoped(name))] ?? "other";
 }

@@ -46,7 +46,9 @@ Consequences:
 
 ## Primitives used
 
-Choice only. Score and Noul exist in the API but are not used, so the capability contract is one sentence: Jev returns a probability distribution over options code supplied.
+Choice, and Noul for one decision. The capability contract is one sentence: Jev returns a probability distribution over options code supplied.
+
+**Noul** (one probability that a statement holds) is used where every option has to be judged on its own rather than against the others: a reward card's fit (007, jev-findings 35). A choice question says which option is *the* answer, and over a long list the second-best option comes back near zero however well it fits; a Noul per option says how well each fits, and one option's yes costs no other option anything. The evaluator carries a Noul answer on as a two-option distribution, `{ yes, no }`, so the source, the rule table and the traces read one shape of answer. A Noul has no escape option: its answer is always a judgement. Score (a rubric level) exists in the API and is not used: measured against Noul on the same cards it separated a style's cards from the rest less well, used the bottom half of its scale, and cost more tokens.
 
 Choosing a quantity from a short option list ("grade 1", "grade 2") is a Choice, not counting. Code never asks Jev how many of something exist.
 

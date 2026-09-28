@@ -40,7 +40,7 @@ const GROUPS: readonly { readonly phrase: string; readonly matches: (name: strin
   },
   {
     phrase: "which cards this room's reward screen shows, and how widely the offer spreads",
-    matches: (n) => ["overall", "for_style", "for_needs", "variety", "temptation"].includes(n),
+    matches: (n) => ["overall", "for_style", "for_needs", "variety", "temptation"].includes(n) || n.startsWith("fit_"),
   },
   { phrase: "which way this player's spells are modified", matches: (n) => n === "affix_intent" },
 ];
