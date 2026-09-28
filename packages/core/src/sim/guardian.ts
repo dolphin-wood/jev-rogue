@@ -1,5 +1,5 @@
 /**
- * **The Drowned Warden**: room 10's guardian (doc 024).
+ * **The Frontier Veteran**: room 10's guardian (doc 024).
  *
  * The warden's body with a guardian's state: its armour, its blunderbuss and
  * its shield shove, and the tank's ram (`chooseMelee`). A head-on wall knocks

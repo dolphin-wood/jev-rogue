@@ -210,7 +210,7 @@ export const EN = {
   "card.legendary": "LEGENDARY",
   "hud.bossTitle": "THE CRYPT KING",
   "hud.bossUnknown": "???",
-  "hud.guardianTitle": "THE DROWNED WARDEN",
+  "hud.guardianTitle": "THE FRONTIER VETERAN",
   "hud.objectiveHold": "HOLD OUT",
   "hud.objectiveDestroy": "DESTROY THE TURRETS",
   "hud.holdLeft": "Hold out {s}s",

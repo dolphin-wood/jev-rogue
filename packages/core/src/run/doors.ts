@@ -178,7 +178,7 @@ export function leadsToAudience(roomIndex: number, audienceRoom = RUN_AUDIENCE_R
 
 /**
  * **Room 10's guardian** (doc 024): the last fight of the flooded depth is the
- * Drowned Warden's. Like the first audience it is one of the fourteen fights,
+ * Frontier Veteran's. Like the first audience it is one of the fourteen fights,
  * entered through an ordinary door, and the doors before it are narrowed the
  * same way (`leadsToFixedFight`).
  */

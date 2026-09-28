@@ -1,13 +1,13 @@
 ---
 id: 024
-title: The Drowned Warden
+title: The Frontier Veteran
 status: proposed
 date: 2026-09-27
-summary: Room 10, the last fight of the flooded depth, is a guardian fight. The Drowned Warden is the warden's body, drawn larger in a violet light, with the warden's armour and blunderbuss and the tank's ram. It has no phases. Its own move is the call. It raises its arm, marks show on the floor, and the dead rise round it, with half its armour back. Its entrance is the first call, which raises the room's own wave. After that it calls again whenever its squad is down to one and the call has come round. The ram knocks it out on a wall, which breaks its armour, and a wall is the fight's opening. The room is the first audience's bare arena, and its doors, reward, pacing and experience follow the audience room's. It stands where the opening view shows it, and its name is the small line over its bar. Code decides all of it; the Director still answers the door's reward.
+summary: Room 10, the last fight of the flooded depth, is a guardian fight. The Frontier Veteran is the warden's body, drawn larger in a violet light, with the warden's armour and blunderbuss and the tank's ram. It has no phases. Its own move is the call. It raises its arm, marks show on the floor, and the dead rise round it, with half its armour back. Its entrance is the first call, which raises the room's own wave. After that it calls again whenever its squad is down to one and the call has come round. The ram knocks it out on a wall, which breaks its armour, and a wall is the fight's opening. The room is the first audience's bare arena, and its doors, reward, pacing and experience follow the audience room's. It stands where the opening view shows it, and its name is the small line over its bar. Code decides all of it; the Director still answers the door's reward.
 depends_on: [005, 013, 019, 022]
 ---
 
-# 024 The Drowned Warden
+# 024 The Frontier Veteran
 
 ## Why
 
@@ -30,6 +30,11 @@ collision radius scaled to match. It is tinted violet, with a violet pool
 breathing under it and wisps rising round it, so it reads at a glance as more
 than the wardens the player has fought since room 6.
 
+**The name.** It was the Drowned Warden, but a gaoler's name sat oddly on a
+heavy soldier with a shield and a blunderbuss. It is **the Frontier Veteran**
+(边陲老将, 辺境の老将): an old soldier of the border, still at the last post
+of the flooded depth, still calling the men who drowned with it.
+
 It is not a new archetype. It is a warden carrying a guardian's state
 (`Enemy.guardian`), so the frames, the renderer, the death and the palette
 already know it. Nothing assembles it into an ordinary room.
@@ -46,7 +51,7 @@ already know it. Nothing assembles it into an ordinary room.
 
 | Call | it plants and raises its arm for `GUARDIAN_CALL_MS`, a violet mark opening on the floor where each body will rise; then they rise, and **half its armour is back** (`GUARDIAN_CALL_REARM`) |
 
-**The call.** A warden who commands the drowned dead calls them, and the call
+**The call.** An old soldier who still commands the drowned dead calls them, and the call
 is both its entrance and its one move beyond a warden's.
 
 - **Its entrance.** The room opens with it alone across the arena. After

@@ -1,5 +1,5 @@
 /**
- * The Drowned Warden (doc 024): what makes the guardian more than a warden,
+ * The Frontier Veteran (doc 024): what makes the guardian more than a warden,
  * each held to what the document promises.
  */
 import { describe, expect, it } from "vitest";
@@ -33,7 +33,7 @@ function guardianWorld(seed: string): World {
 }
 const guardianOf = (w: World): Enemy => w.enemies.find((e) => e.guardian)!;
 
-describe("the Drowned Warden: the body", () => {
+describe("the Frontier Veteran: the body", () => {
   it("is a warden, larger, armoured, on its own bar", () => {
     const g = makeGuardian(1, 100, 100, RUN_GUARDIAN_ROOM);
     expect(g.archetype).toBe("warden");
@@ -60,7 +60,7 @@ describe("the Drowned Warden: the body", () => {
   });
 });
 
-describe("the Drowned Warden: the room", () => {
+describe("the Frontier Veteran: the room", () => {
   it("stands across the room from the door, and the room is a fight until it falls", () => {
     const w = guardianWorld("stand");
     const g = guardianOf(w);
@@ -126,7 +126,7 @@ describe("the Drowned Warden: the room", () => {
   });
 });
 
-describe("the Drowned Warden: the doors", () => {
+describe("the Frontier Veteran: the doors", () => {
   it("is room 10, a fixed fight, whose doors in are narrowed as room 5's are", () => {
     expect(RUN_GUARDIAN_ROOM).toBe(10);
     expect(isFixedFightRoom(10)).toBe(true);

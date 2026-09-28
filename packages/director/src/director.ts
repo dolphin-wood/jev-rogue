@@ -421,7 +421,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
       : null;
     // The first wave only: the roof gives before a second would be called, and a second is never queued.
     let encounter = assembled ? { ...assembled.plan, waves: assembled.plan.waves.slice(0, 1), elite_affixes: [] } : null;
-    // Beside the Drowned Warden no plain warden: two of the same body is one to misread (doc 024).
+    // Beside the Frontier Veteran no plain warden: two of the same body is one to misread (doc 024).
     if (encounter && isGuardianRoom(ctx.room_index))
       encounter = {
         ...encounter,

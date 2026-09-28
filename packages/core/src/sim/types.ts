@@ -1044,7 +1044,7 @@ export interface Enemy {
   bossEntrance?: boolean;
   /** One of a destroy room's turrets (doc 025): bringing all of them down ends the fight. */
   objectiveTarget?: true;
-  /** Room 10's guardian (doc 024): a warden that is the Drowned Warden (`sim/guardian.ts`). */
+  /** Room 10's guardian (doc 024): a warden that is the Frontier Veteran (`sim/guardian.ts`). */
   guardian?: GuardianState;
   /** Going back up out of the room at the end of the first audience (`stepBossMeteor`). */
   bossLeaving?: boolean;

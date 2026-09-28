@@ -207,7 +207,7 @@ export const ZH: Table = {
   "card.legendary": "传说",
   "hud.bossTitle": "地穴之王",
   "hud.bossUnknown": "???",
-  "hud.guardianTitle": "溺亡典狱长",
+  "hud.guardianTitle": "边陲老将",
   "hud.objectiveHold": "坚守",
   "hud.objectiveDestroy": "摧毁炮台",
   "hud.holdLeft": "坚守 {s} 秒",

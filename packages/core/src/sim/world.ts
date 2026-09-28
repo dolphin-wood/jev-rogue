@@ -330,7 +330,7 @@ export interface CreateWorldOptions {
    * until he has come and gone.
    */
   readonly audience?: boolean;
-  /** Room 10's guardian fight (doc 024): the Drowned Warden stands in the room with its squad. */
+  /** Room 10's guardian fight (doc 024): the Frontier Veteran stands in the room with its squad. */
   readonly guardian?: boolean;
   /** A special room's chest (doc 026): it stands beside the reward once the room clears. */
   readonly chest?: boolean;
@@ -438,7 +438,7 @@ export function createWorld(input: CreateWorldOptions): World {
 }
 
 /**
- * **The Drowned Warden takes its ground** (doc 024): as far from the door as
+ * **The Frontier Veteran takes its ground** (doc 024): as far from the door as
  * the opening view allows, awake, alone, and **in sight**, its bar and name
  * over it included. The room's own wave is its entrance: a beat after the
  * room opens it raises its arm and they rise round it, so the player has to
@@ -2572,7 +2572,7 @@ function onEnemyKilled(w: World, e: Enemy): void {
   if (e.archetype === "lancer" && e.affixes.length > 0) deathBurst(w, e, "lance");
   else if (e.affixes.includes("volatile")) deathBurst(w, e, "volatile");
   // The boss's adds go with it: the fight is the boss, and a run that ended
-  // on a rusher still standing would not have ended. The Drowned Warden's
+  // on a rusher still standing would not have ended. The Frontier Veteran's
   // squad goes with it the same way, and its death pays a room (doc 024).
   if (e.archetype === "boss" || e.guardian)
     for (const other of w.enemies) if (other !== e && other.hp > 0) { other.summoned = true; other.hp = 0; }

@@ -2048,7 +2048,7 @@ function chooseMelee(e: Enemy): MeleeKind | null {
    * the way in for a slam, and the walk is the tell.
    */
   if (baseArchetype(e.archetype) === "tank") return e.closeIn ? "cleave" : e.casts % 3 === 0 ? "charge" : "slam";
-  // The Drowned Warden (doc 024): the tank's ram from range, its own shield shove on top of it.
+  // The Frontier Veteran (doc 024): the tank's ram from range, its own shield shove on top of it.
   if (e.guardian) return e.closeIn ? "bash" : "charge";
   // The boss: by phase, and by distance within the phase.
   if (e.archetype === "boss") {
@@ -3288,7 +3288,7 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
         e.comboLeft = 0;
         impactShake(world, e);
         /*
-         * **The Drowned Warden's plate breaks on the wall** (doc 024): a head-on
+         * **The Frontier Veteran's plate breaks on the wall** (doc 024): a head-on
          * slam is the fight's opening, until its next call puts the plate back.
          */
         if (e.guardian) {
@@ -3652,7 +3652,7 @@ function fire(world: World, e: Enemy, dtMs: number): void {
    * affixes that speed up a volley speed these up identically.
    */
   if (def.ranged) {
-    // The Drowned Warden fires less often than a warden: its ram is the other half of its turns (doc 024).
+    // The Frontier Veteran fires less often than a warden: its ram is the other half of its turns (doc 024).
     const period = def.ranged.interval_s * 1000 * (e.guardian ? GUARDIAN_SHOT_EVERY : 1);
     const before = e.patternMs;
     e.patternMs += scaled;

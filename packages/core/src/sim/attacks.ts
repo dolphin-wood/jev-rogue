@@ -568,7 +568,7 @@ function stepFlame(w: World, f: Flame, dtMs: number, hooks: AttackHooks): void {
     // wall between is a wall between), allowing for the body's own size.
     if (Math.abs(da) <= half + PLAYER_RADIUS / Math.max(8, d) && d - PLAYER_RADIUS <= Math.min(front, flameReach(f, Math.max(-half, Math.min(half, da))))) {
       f.hit = true;
-      // The Drowned Warden's spray costs what its ram does, as a share (`GUARDIAN_POWER`, doc 024).
+      // The Frontier Veteran's spray costs what its ram does, as a share (`GUARDIAN_POWER`, doc 024).
       const owner = w.enemies.find((o) => o.id === f.owner);
       hooks.hurtPlayer(f.x, f.y, "flame:warden", 0, owner?.guardian ? GUARDIAN_FLAME : 1);
       hooks.burnPlayer(FLAME_BURN);

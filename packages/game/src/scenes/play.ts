@@ -780,14 +780,14 @@ const CLOSE_DEAD_X = 34;
  */
 const BOSS_VIEW_SPARE = 1;
 /**
- * The Drowned Warden's colour (doc 024): a deep violet multiply over the
+ * The Frontier Veteran's colour (doc 024): a deep violet multiply over the
  * warden's own shading. The first cut's blue-green sank into the flooded
  * floor it stands on; violet is in no body's palette and no telegraph's.
  */
 const GUARDIAN_TINT = 0xb48cff;
 /** Its tint while staggered: its violet warmed toward the stagger's cast, so it is still itself. */
 const GUARDIAN_STAGGER_TINT = 0xe0a0e0;
-/** The Drowned Warden's overhead bars, health and plate, px wide. */
+/** The Frontier Veteran's overhead bars, health and plate, px wide. */
 const GUARDIAN_BAR_W = 64;
 /** The level a depth's own sound sits at everywhere in it (`ambienceLevels`): under a brazier or a grate beside the player. */
 const DEPTH_AMBIENCE = 0.3;
@@ -8244,7 +8244,7 @@ export class PlayScene extends Phaser.Scene {
           break;
         }
         case "telegraph": {
-          // The Drowned Warden's arm going up: the call heard before the dead answer (doc 024).
+          // The Frontier Veteran's arm going up: the call heard before the dead answer (doc 024).
           if (ev.what === "guardian_call") sfx.play("cast_void", 0.6);
           if (ev.what?.startsWith("boss_phase:")) {
             const next = Number(ev.what.slice("boss_phase:".length));
@@ -16321,7 +16321,7 @@ export class PlayScene extends Phaser.Scene {
      * king has none, since nothing interrupts him.
      */
     const bossFade = this.fadeMark();
-    // The king's bar, or the Drowned Warden's (doc 024): the one other body that gets one.
+    // The king's bar, or the Frontier Veteran's (doc 024): the one other body that gets one.
     const boss = w.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
     if (boss) {
       const BW = 280;
@@ -16646,7 +16646,7 @@ function specialPose(w: World, e: Enemy): string | null {
       // The drawn aim: raised to load, levelled to fire, and held level
       // through the start of the reload while the smoke clears.
       if (e.pose === "musket_windup") return "windup";
-      // The Drowned Warden's call (doc 024): the arm up, as the gun is raised to load.
+      // The Frontier Veteran's call (doc 024): the arm up, as the gun is raised to load.
       if (e.pose === "guardian_call") return "windup";
       if (e.pose === "musket_fire" || e.pose === "musket_second") return "lunge";
       if (e.pose === "musket_reload" && e.poseMs > 800) return "lunge";
@@ -17103,7 +17103,7 @@ function drawEnemy(
   // Up out of the hall the shadow goes too, and comes back as he falls: the mark is what is read up there.
   const skyK = Math.max(0, Math.min(1, (lift - 84) / 160));
   /*
-   * **The Drowned Warden's presence** (doc 024): a dark violet pool breathing
+   * **The Frontier Veteran's presence** (doc 024): a dark violet pool breathing
    * under it and wisps of it rising round the body, so the room reads as its
    * before anything else in it does.
    */
@@ -17227,7 +17227,7 @@ function drawEnemy(
    */
   if (isSubspecies(e.archetype) && e.hp > 0) subspecies?.apply(img, e.archetype);
   if (e.affixes.length > 0 && e.hp > 0) img.setTint(0xffa8b8);
-  // The Drowned Warden in its own cold light (doc 024), so it reads as more than the wardens before it.
+  // The Frontier Veteran in its own cold light (doc 024), so it reads as more than the wardens before it.
   else if (e.guardian && e.hp > 0) img.setTint(GUARDIAN_TINT);
 
   // Fire and poison gauges, as the player has them: filling on hits, the
@@ -17293,7 +17293,7 @@ function drawEnemy(
    * (`bossFrameScale`), from his feet: the body's middle and the foot line
    * stay where they were.
    */
-  // The Drowned Warden is the warden drawn larger, from its feet (doc 024; `GUARDIAN_SCALE` need not be whole).
+  // The Frontier Veteran is the warden drawn larger, from its feet (doc 024; `GUARDIAN_SCALE` need not be whole).
   const bossScale = e.archetype === "boss" ? bossFrameScale(atlas, name) : e.guardian ? GUARDIAN_SCALE : 1;
   if (bossScale !== 1) {
     if (e.archetype === "boss") img.x += bossBodyShift(atlas, name, flipX) * (bossScale - 1);
@@ -17367,7 +17367,7 @@ function drawEnemy(
      * a second health bar, or as nothing. Shield blue is the one blue in the
      * HUD vocabulary not already taken — ice is the pale cyan.
      */
-    // The Drowned Warden's plate sits over its health bar, as wide as it (doc 024).
+    // The Frontier Veteran's plate sits over its health bar, as wide as it (doc 024).
     const W = e.guardian ? GUARDIAN_BAR_W : Math.max(16, e.radius * 2.2);
     const y = e.y + bob - overheadPx(e) - (e.guardian ? 6 : 0);
     const back = group.rectangle(e.x - W / 2, y, W, 3, 0x0f1c3a, 0.9)
@@ -17384,7 +17384,7 @@ function drawEnemy(
   }
 
   /*
-   * **The Drowned Warden's bar is over its head** (doc 024), not the boss's
+   * **The Frontier Veteran's bar is over its head** (doc 024), not the boss's
    * across the bottom: its health, the armour bar over it, and its name over
    * both, with no marks, since it has no phases. The name holds its place
    * whether the plate is on or broken. The bottom bar is the king's alone.
@@ -17474,7 +17474,7 @@ function drawEnemy(
     // Jittered against its own clock rather than at random, so it reads as one
     // body being rattled instead of as the sprite flickering.
     img.x += Math.sin(e.staggerMs * 0.9) * 1.6;
-    // The stagger's warm cast; the Drowned Warden keeps its own light under it (doc 024).
+    // The stagger's warm cast; the Frontier Veteran keeps its own light under it (doc 024).
     img.setTint(e.guardian ? GUARDIAN_STAGGER_TINT : 0xffc0b0);
     /*
      * A long stagger is a knockdown, and it gets a mark of its own.
@@ -19183,7 +19183,7 @@ function floorFrame(x: number, y: number, drains: ReadonlySet<number>): string {
  * circle he fights on, so his sit over his crown rather than on his chest.
  */
 function overheadPx(e: { archetype: string; radius: number; guardian?: unknown }): number {
-  // The Drowned Warden is drawn at `GUARDIAN_SCALE` from its feet, so its head is that much higher.
+  // The Frontier Veteran is drawn at `GUARDIAN_SCALE` from its feet, so its head is that much higher.
   if (e.guardian) return Math.round((e.radius / GUARDIAN_SCALE + 9) * GUARDIAN_SCALE) + 6;
   return e.archetype === "boss" ? 56 + BOSS_DRAW_RISE_PX : e.radius + 9;
 }

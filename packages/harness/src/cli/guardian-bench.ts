@@ -1,5 +1,5 @@
 /**
- * **The Drowned Warden, measured on its own** (doc 024): its room at room 10's
+ * **The Frontier Veteran, measured on its own** (doc 024): its room at room 10's
  * ramp, a three-key build at level 6, eight seeds, one skill profile. Reports
  * each fight's end, the guardian's bar and armour at it, and what the hearts
  * went to.
