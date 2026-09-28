@@ -793,6 +793,8 @@ export interface Shockwave {
    * wake, and never breaks stone.
    */
   byPlayer?: PlayerWakeCut;
+  /** The king's ground ring (`bossShock`): drawn with his fire along its edge. A picture only. */
+  king?: boolean;
 }
 
 /** The stretches of one wake, which strike as one (`Shockwave.wake`). */

@@ -23,7 +23,7 @@ import {
   HIT_FLASH_MS, BOSS_ROAR_MS, spellReady, castTiming, hasLineOfSight,
 } from "@jr/core";
 import type {
-  Bullet, Enemy, EnemyId, Input, ItemInstance, Mood, Offer, OfferCard, Portal,
+  Bullet, Enemy, EnemyId, Shockwave, Input, ItemInstance, Mood, Offer, OfferCard, Portal,
   PlayerMods, RewardCardKind, RoomPlan, RoomType, RunHistory, World, AttachedAffix,
   Element, Tension, RunContext, RunJournalEntry, Staff, SpellSlot, MeleeKind, MusicState,
 } from "@jr/core";
@@ -6080,8 +6080,9 @@ export class PlayScene extends Phaser.Scene {
     if (!info) return;
     const w = this.world;
     const glow = HEART_GLOW[this.heartPhase - 1]!;
-    this.sprites.circle(b.x, b.y, b.radius * (1.7 + 0.6 * beat), glow, 0.16 + 0.22 * beat)
-      .setBlendMode(Phaser.BlendModes.ADD).setDepth(6.9);
+    // Swelled by scale, not radius: a pooled circle is rebuilt whenever its radius changes.
+    this.sprites.circle(b.x, b.y, b.radius * 1.7, glow, 0.16 + 0.22 * beat)
+      .setScale(1 + 0.35 * beat).setBlendMode(Phaser.BlendModes.ADD).setDepth(6.9);
     const i = ((w.tick >> 2) + n) % info.origins.length;
     const o = info.origins[i]!;
     this.sprites.image(b.x, b.y, FX_TEXTURE, `${sheet}_${i}`)
@@ -6119,9 +6120,9 @@ export class PlayScene extends Phaser.Scene {
       const px = king.x + BOSS_PALM_PX.x, py = king.y + BOSS_PALM_PX.y;
       const k = Math.min(1, (now - this.kingShotAt) / HEART_GATHER_MS);
       const depth = bodyDepth(king.y + king.radius, king.id) + 1e-3;
-      this.sprites.circle(px, py, 3 + 6 * k + 1.5 * beat, glow, 0.2 + 0.3 * k)
-        .setBlendMode(Phaser.BlendModes.ADD).setDepth(depth);
-      this.sprites.circle(px, py, 1.2 + 2.6 * k, ember[0], 0.95).setDepth(depth + 1e-4);
+      this.sprites.circle(px, py, 9, glow, 0.2 + 0.3 * k)
+        .setScale((3 + 6 * k + 1.5 * beat) / 9).setBlendMode(Phaser.BlendModes.ADD).setDepth(depth);
+      this.sprites.circle(px, py, 3.8, ember[0], 0.95).setScale((1.2 + 2.6 * k) / 3.8).setDepth(depth + 1e-4);
       for (let m = 0; m < 5; m++) {
         const u = (now / 520 + m / 5) % 1;
         const a = m * 1.2566 + now / 300;
@@ -6134,17 +6135,19 @@ export class PlayScene extends Phaser.Scene {
       f.ms += dt;
       const glow = HEART_GLOW[f.phase - 1]!;
       const ember = HEART_EMBER[f.phase - 1]!;
-      if (f.ms < 110) this.sprites.circle(f.x, f.y, 9 * (1 - f.ms / 110), ember[0], 0.9)
+      // Grown by scale at a fixed radius, the stroke divided back down: a pooled circle is rebuilt whenever its radius changes.
+      if (f.ms < 110) this.sprites.circle(f.x, f.y, 9, ember[0], 0.9).setScale(Math.max(0.01, 1 - f.ms / 110))
         .setBlendMode(Phaser.BlendModes.ADD).setDepth(9.6);
       if (f.ms < 200) {
         const k = f.ms / 200;
-        this.sprites.circle(f.x, f.y, 5 + 14 * k).setStrokeStyle(2.2 * (1 - k) + 0.4, glow, 0.9 * (1 - k))
+        const sc = (5 + 14 * k) / 10;
+        this.sprites.circle(f.x, f.y, 10).setScale(sc).setStrokeStyle((2.2 * (1 - k) + 0.4) / sc, glow, 0.9 * (1 - k))
           .setBlendMode(Phaser.BlendModes.ADD).setDepth(9.6);
       }
       if (f.ring && f.ms < 360) {
         const k = f.ms / 360;
-        const e = 1 - (1 - k) * (1 - k);
-        this.sprites.circle(f.x, f.y, 8 + 46 * e).setStrokeStyle(3 * (1 - k) + 0.5, glow, 0.7 * (1 - k))
+        const sc = (8 + 46 * (1 - (1 - k) * (1 - k))) / 30;
+        this.sprites.circle(f.x, f.y, 30).setScale(sc).setStrokeStyle((3 * (1 - k) + 0.5) / sc, glow, 0.7 * (1 - k))
           .setBlendMode(Phaser.BlendModes.ADD).setDepth(6.9);
       }
     }
@@ -6160,6 +6163,39 @@ export class PlayScene extends Phaser.Scene {
     }
     this.heartEmbers = this.heartEmbers.filter((e) => e.ms < e.life);
     if (this.heartEmbers.length > HEART_EMBER_CAP) this.heartEmbers.splice(0, this.heartEmbers.length - HEART_EMBER_CAP);
+  }
+
+  /**
+   * **The king's ground ring, burning** (`Shockwave.king`): tongues of his
+   * fire stood along its leading edge, in his phase's colours, lower as the
+   * band runs out, shedding embers. One image a tongue and nothing else —
+   * the band's own additive edge is its light — at most
+   * `KING_RING_TONGUES_MAX` a ring, and only those on screen. On the edge the band hits with, so the
+   * fire is the line to read; a picture only — the band is the sim's.
+   */
+  private drawKingRingFire(s: Shockwave): void {
+    const sheet = `flametongue_p${this.heartPhase}`;
+    const info = this.fxSheets.get(sheet);
+    if (!info) return;
+    const view = this.teleView();
+    const r = s.inner + s.thickness;
+    const life = Math.max(0, Math.min(1, (s.maxRadius - s.inner) / (TILE_PX * 3)));
+    const n = Math.min(KING_RING_TONGUES_MAX, Math.max(12, Math.round((Math.PI * 2 * r) / KING_RING_TONGUE_PX)));
+    const tick = this.world.tick;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const x = s.x + Math.cos(a) * r, y = s.y + Math.sin(a) * r;
+      if (x < view.x0 - 12 || x > view.x1 + 12 || y < view.y0 - 12 || y > view.y1 + 24) continue;
+      const h = ((i * 2654435761) >>> 0) / 4294967296;
+      const f = ((tick >> 2) + Math.floor(h * 4)) % info.origins.length;
+      const o = info.origins[f]!;
+      const k = (0.55 + 0.45 * h) * (0.4 + 0.6 * life);
+      this.sprites.image(x, y, FX_TEXTURE, `${sheet}_${f}`)
+        .setOrigin(o[0], o[1]).setScale(k * KING_RING_FLAME_SCALE, k * KING_RING_FLAME_SCALE * (0.8 + 0.35 * Math.sin(tick / 5 + i)))
+        .setDepth(bodyDepth(y, 0));
+      if (Math.random() < this.game.loop.delta / 2400)
+        this.heartEmbers.push({ x, y: y - 8 * k, vx: Math.cos(a) * 12 + (Math.random() - 0.5) * 10, vy: Math.sin(a) * 12 - 22, ms: 0, life: 300 + Math.random() * 250, phase: this.heartPhase });
+    }
   }
 
   /** One of the king's shots ending: a small burst of its fire, and a few embers thrown off it. */
@@ -14213,6 +14249,7 @@ export class PlayScene extends Phaser.Scene {
      * is unchanged, so the part that is on screen is identical either way.
      */
     drawShockwaves(this.soilGfx, this.ringGfx, w.shockwaves.filter((s) => s.facing === undefined), w.tick * STEP_MS, this.teleView());
+    for (const s of w.shockwaves) if (s.alive && s.king && s.chargeMs <= 0) this.drawKingRingFire(s);
     /*
      * The king's sword waves: the same crescent of energy the player's
      * enchant throws (`drawCrescentWave`), in the danger palette — a dark
@@ -18298,11 +18335,16 @@ const HEART_EMBER: readonly (readonly [number, number, number])[] = [
   [0xffe0a0, 0xe08a30, 0x8a3a8a],
   [0xffffff, 0xf8d8a8, 0xa87850],
 ];
+/** His ground ring's flames: one about every this many px of its edge, and no more than this many. */
+const KING_RING_TONGUE_PX = 14;
+/** How large a tongue is drawn: twice the sheet's own pixel, so it stands over the band's bright edge. */
+const KING_RING_FLAME_SCALE = 1;
+const KING_RING_TONGUES_MAX = 96;
 /** How long his palm takes to gather its fire back after a shot, ms. */
 const HEART_GATHER_MS = 450;
 /** A shot sheds an ember about this often, ms; and no more than this many are in the air. */
 const HEART_EMBER_EVERY_MS = 26;
-const HEART_EMBER_CAP = 260;
+const HEART_EMBER_CAP = 160;
 /** A volley of at least this many shots at once is a ring, and leaves his palm with a wide one. */
 const HEART_RING_SHOTS = 6;
 

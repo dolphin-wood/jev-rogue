@@ -2943,7 +2943,7 @@ function bossShock(w: World, e: Enemy, inner = 0): void {
     speed: BOSS_SHOCK_SPEED[e.phase] ?? 260,
     maxRadius: Math.hypot(GRID_W * TILE_PX, GRID_H * TILE_PX),
     damage: BOSS_SHOCK_DAMAGE * e.damageMult,
-  });
+  }).king = true;
 }
 
 function bossRing(w: World, e: Enemy, count: number, speed: number, offsetDeg: number): void {
