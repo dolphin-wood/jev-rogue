@@ -65,6 +65,7 @@ import {
 } from "@jr/core";
 import { RecolourableAtlas, facingFrame } from "../assets/atlas.ts";
 import { enemyFrame, frameForFacing, strideFor } from "./enemy-frames.ts";
+import { newStride, settleStride, stickyFacing, type Stride } from "./stride-settle.ts";
 import { bodyFeel, weightOf } from "./body-feel.ts";
 import { heldStaff, staffSpriteCentre, swingStaff, type HeldStaff } from "./blade.ts";
 import type { BodyFeel } from "./body-feel.ts";
@@ -2569,6 +2570,7 @@ export class PlayScene extends Phaser.Scene {
     this.throneFade = null;
     this.bossCine = null;
     bossEntrance.clear();
+    strides.clear();
     if (stage === "boss") {
       // In at the door, facing him.
       const p = this.world.player;
@@ -17366,6 +17368,8 @@ function specialPose(w: World, e: Enemy): string | null {
  * px. Drawn only — the body is on the floor at the foot of the dais throughout.
  */
 const bossEntrance = new Map<number, { ms: number; dy: number }>();
+/** Each warden's place in its walk across stops (`stride-settle.ts`), by enemy id; a new room restarts its ticks and them. */
+const strides = new Map<number, Stride>();
 /** How far up the dais steps the king is drawn now, px (negative is up), easing down to his feet. */
 function bossEntranceLift(e: Enemy): number {
   const walk = bossEntrance.get(e.id);
@@ -17642,9 +17646,31 @@ function drawEnemy(
     },
     w.tick, (n) => atlas.has(n), frameBaseOf(e),
   );
+  /*
+   * The warden's walk runs through its stops (`stride-settle.ts`): it
+   * finishes the step it was on before standing and starts again from the
+   * foot it left on, instead of cutting between the stride and the stand.
+   * And it turns only once it has clearly turned, rather than flipping
+   * between two facings a tick at a time along a diagonal.
+   */
+  let settled = chosen.name, settledFlip = chosen.flipX;
+  if (frameBaseOf(e) === "enemy_warden") {
+    const drawn = /^.*_[nsw]_/.exec(chosen.name)?.[0];
+    if (drawn) {
+      let s = strides.get(e.id);
+      if (!s || w.tick < s.tick) strides.set(e.id, s = newStride(e.travelled, w.tick));
+      s.facing = stickyFacing(s.facing, e.facing);
+      const facing = `${frameBaseOf(e)}_${s.facing === "e" ? "w" : s.facing}_`;
+      let n = 0;
+      while (atlas.has(`${facing}walk${n}`)) n++;
+      const pose = chosen.name.slice(drawn.length);
+      const shown = settleStride(s, pose, e.travelled, w.tick, n, strideFor(e.radius, e.speed), STEP_MS) ?? pose;
+      if (atlas.has(`${facing}${shown}`)) { settled = `${facing}${shown}`; settledFlip = s.facing === "e"; }
+    }
+  }
   const name = replacementFrame && atlas.has(replacementFrame)
-    ? replacementFrame : safeFrame(atlas, chosen.name, `${frameBaseOf(e)}_idle0`);
-  const flipX = e.archetype === "boss" ? bossFlip(w, e) : chosen.flipX;
+    ? replacementFrame : safeFrame(atlas, settled, `${frameBaseOf(e)}_idle0`);
+  const flipX = e.archetype === "boss" ? bossFlip(w, e) : settledFlip;
 
 
 
