@@ -102,15 +102,17 @@ const PALISADE_RING_MS = 150;
 const PALISADE_CELL = 20;
 /**
  * **The volley** (排枪): the commander's own move. Its arm goes up and the
- * drowned line fires across the room: lines drawn from wall to wall at any
- * angle, pale and slow, each unrolling along the way it will fire, and then
- * a bolt of light down each. One passes near the player, so standing still
- * is never the answer; the rest cut the room into lanes to be read. It keeps
- * fighting while they come due — the lines are the room's, not its.
+ * drowned line fires across the room out of its walls: lines from one side
+ * of the room to the other at any angle, through whatever stands in the
+ * room, each run out from its wall in a flash, then held for the player to
+ * read, then a bolt of light down the whole of it at once, gone like
+ * lightning. One passes near the player, so standing still is never the
+ * answer; the rest cut the room into lanes. It keeps fighting while they
+ * come due — the lines are the room's, not its.
  */
 export const GUARDIAN_VOLLEY_EVERY_MS = 15_000;
 /** How long a volley line is drawn before it fires: long, as the player has to read several at once. */
-export const GUARDIAN_VOLLEY_TELE_MS = 1500;
+export const GUARDIAN_VOLLEY_TELE_MS = 2000;
 /** The lines in a volley, and the beat between one and the next coming due. */
 const VOLLEY_LINES = 5;
 const VOLLEY_STAGGER_MS = 160;
@@ -278,9 +280,10 @@ function orderVolley(w: World, e: Enemy, g: GuardianState): void {
     const tx = Math.floor(x / TILE_PX), ty = Math.floor(y / TILE_PX);
     if (w.room.grid[ty * GRID_W + tx] !== Tile.Floor) continue;
     const angle = w.rng.next() * Math.PI;
-    const back = lineToWall(w, x, y, angle + Math.PI, TILE_PX * 40);
+    // Out of the room's walls: the whole room edge to edge, through pillars and all.
+    const back = toRoomEdge(ext, x, y, angle + Math.PI), fore = toRoomEdge(ext, x, y, angle);
     const x0 = x + Math.cos(angle + Math.PI) * back, y0 = y + Math.sin(angle + Math.PI) * back;
-    const length = back + lineToWall(w, x, y, angle, TILE_PX * 40);
+    const length = back + fore;
     castRift(w, x0, y0, angle, length, {
       width: VOLLEY_WIDTH, teleMs: GUARDIAN_VOLLEY_TELE_MS + i * VOLLEY_STAGGER_MS, damage: STAKE_DAMAGE, beam: true,
     });
@@ -290,6 +293,18 @@ function orderVolley(w: World, e: Enemy, g: GuardianState): void {
   e.velX = 0;
   e.velY = 0;
   w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: "guardian_volley" });
+}
+
+/** How far from a point to the inside of the room's outer wall along an angle. */
+function toRoomEdge(ext: { w: number; h: number }, x: number, y: number, angle: number): number {
+  const lo = TILE_PX, hx = (ext.w - 1) * TILE_PX, hy = (ext.h - 1) * TILE_PX;
+  const dx = Math.cos(angle), dy = Math.sin(angle);
+  let t = Infinity;
+  if (dx > 1e-6) t = Math.min(t, (hx - x) / dx);
+  if (dx < -1e-6) t = Math.min(t, (lo - x) / dx);
+  if (dy > 1e-6) t = Math.min(t, (hy - y) / dy);
+  if (dy < -1e-6) t = Math.min(t, (lo - y) / dy);
+  return Math.max(0, t);
 }
 
 /** The dead answer: the bodies rise round it. */

@@ -812,6 +812,9 @@ const GUARDIAN_TINT = 0xb48cff;
 /** The Frontier Veteran's volley lines: a pale warm line while they are drawn, a warm glow round the white bolt. */
 const VOLLEY_TELE = 0xffe2c8;
 const VOLLEY_GLOW = 0xffb488;
+/** How fast a volley line runs out of its wall, and how long its bolt takes to fade. */
+const VOLLEY_UNROLL_MS = 200;
+const VOLLEY_FADE_MS = 420;
 /** Its palisade's stakes: the player's Quake Ring, turned to its violet. */
 const GUARDIAN_STAKE_TINT = 0xc49cff;
 /** Its tint while staggered: its violet warmed toward the stagger's cast, so it is still itself. */
@@ -14670,15 +14673,18 @@ export class PlayScene extends Phaser.Scene {
       const ex = r.x + Math.cos(r.angle) * r.length;
       const ey = r.y + Math.sin(r.angle) * r.length;
       /*
-       * **A line of the Frontier Veteran's volley** (doc 024): a thin pale
-       * line that unrolls from the wall along the way it will fire over the
-       * first half of its warning, brightening as it comes due; then a bolt
-       * of light down all of it, wide and white, fading out. No scar.
+       * **A line of the Frontier Veteran's volley** (doc 024): an emitter
+       * lit at the wall, and a thin pale line run out of it across the room
+       * in a flash (`VOLLEY_UNROLL_MS`), held and brightening as it comes due;
+       * then the bolt: the whole line lit at once, white on a warm glow, and
+       * gone like lightning (`VOLLEY_FADE_MS`, over the rift's scar).
        */
       if (r.beam) {
         if (r.teleMs > 0) {
           const k = 1 - r.teleMs / r.teleMaxMs;
-          const unroll = Math.min(1, k / 0.55);
+          const unroll = Math.min(1, (r.teleMaxMs - r.teleMs) / VOLLEY_UNROLL_MS);
+          this.hazardGfx.fillStyle(VOLLEY_GLOW, 0.5 + 0.4 * k);
+          this.hazardGfx.fillCircle(r.x, r.y, 2.5 + 1.5 * k);
           const bx = r.x + Math.cos(r.angle) * r.length * unroll, by = r.y + Math.sin(r.angle) * r.length * unroll;
           this.hazardGfx.lineStyle(1, VOLLEY_TELE, 0.25 + 0.55 * k);
           this.hazardGfx.lineBetween(r.x, r.y, bx, by);
@@ -14692,12 +14698,17 @@ export class PlayScene extends Phaser.Scene {
             this.hazardGfx.lineStyle(r.width, VOLLEY_TELE, 0.08 + 0.4 * (k - 0.8));
             this.hazardGfx.lineBetween(r.x, r.y, ex, ey);
           }
-        } else if (r.activeMs > 0) {
-          const t = Math.max(0, Math.min(1, 1 - r.activeMs / 230));
-          this.hazardGfx.lineStyle(r.width * (1.6 - 0.6 * t), VOLLEY_GLOW, 0.5 * (1 - t));
-          this.hazardGfx.lineBetween(r.x, r.y, ex, ey);
-          this.hazardGfx.lineStyle(Math.max(1, r.width * 0.45), 0xffffff, 1 - t);
-          this.hazardGfx.lineBetween(r.x, r.y, ex, ey);
+        } else {
+          // From the instant it fires: the damage's window, then the scar's first moments, as one fade.
+          const since = r.activeMs > 0 ? 230 - r.activeMs : 230 + (1500 - r.scarMs);
+          const t = Math.max(0, Math.min(1, since / VOLLEY_FADE_MS));
+          if (t < 1) {
+            const flicker = since < 60 ? 1.3 : 1;
+            this.hazardGfx.lineStyle(r.width * 2.2 * flicker * (1 - 0.5 * t), VOLLEY_GLOW, 0.45 * (1 - t));
+            this.hazardGfx.lineBetween(r.x, r.y, ex, ey);
+            this.hazardGfx.lineStyle(Math.max(1, r.width * 0.6 * flicker * (1 - 0.6 * t)), 0xffffff, 1 - t * t);
+            this.hazardGfx.lineBetween(r.x, r.y, ex, ey);
+          }
         }
         continue;
       }
