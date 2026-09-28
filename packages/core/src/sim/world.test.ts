@@ -7,7 +7,7 @@ import {
 } from "./types.ts";
 import type { Input, World } from "./types.ts";
 import {
-  beginWindup, makeEnemy, wake, SPAWN_FADE_MS, STAGGER_MS, TELEGRAPH_MS, THREAT_CAP_MS,
+  beginWindup, beamAim, BEAM_LOCK_MS, makeEnemy, wake, SPAWN_FADE_MS, STAGGER_MS, TELEGRAPH_MS, THREAT_CAP_MS,
 } from "./enemy.ts";
 import { liveCount, acquire } from "./bullets.ts";
 import { MELEE_ATTACKS } from "./melee.ts";
@@ -1264,6 +1264,47 @@ describe("enemy behaviour", () => {
       // Clear the air so the next volley is measurable.
       for (const b of w.enemyBullets) b.alive = false;
     }
+  });
+
+  it("holds a watcher's lane still before the beam, so leaving it is the dodge", () => {
+    /*
+     * The beam has no travel. When it followed the player to the frame it lit
+     * — and was not even drawn — it was damage with no answer (playtest: "the
+     * turret room's laser fires with no warning"). The aim is long, and its
+     * last beat is locked: a player who steps off the lane then is not hit.
+     */
+    const w = world();
+    const s = makeEnemy(1, "watcher", 300, 200, []);
+    s.spawnFadeMs = 0;
+    s.awake = true;
+    s.telegraphMs = 0;
+    w.enemies.push(s);
+    w.player.x = 560;
+    w.player.y = 200;
+    w.stats.elapsedMs = ENTRY_GRACE_MS;
+
+    let aimMs = 0;
+    for (let i = 0; i < 1200 && !(s.telegraphMs > 0 && s.pending.length > 0); i++) step(w, NO_INPUT);
+    expect(s.pending.length).toBeGreaterThan(0);
+    aimMs = s.telegraphMs;
+    // Long enough to see the lane, read it and leave it.
+    expect(aimMs).toBeGreaterThanOrEqual(BEAM_LOCK_MS + 300);
+    for (let i = 0; i < 600 && s.telegraphMs > BEAM_LOCK_MS; i++) step(w, NO_INPUT);
+    const locked = beamAim(w, s);
+    expect(Math.abs(locked.y - 200)).toBeLessThan(4);
+
+    // Off the lane during the locked beat: the beam goes where it was shown.
+    w.player.y = 200 + PLAYER_RADIUS * 4;
+    const hp = w.player.hearts;
+    let beam: { x1: number; y1: number } | undefined;
+    for (let i = 0; i < 60; i++) {
+      step(w, NO_INPUT);
+      beam ??= w.tethers.find((t) => t.alive && t.kind === "beam");
+      if (beam && !w.tethers.some((t) => t.alive && t.kind === "beam")) break;
+    }
+    expect(beam).toBeDefined();
+    expect(Math.abs(beam!.y1 - 200)).toBeLessThan(8);
+    expect(w.player.hearts).toBe(hp);
   });
 
   it("makes a ranged body choose between moving and shooting", () => {

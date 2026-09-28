@@ -129,6 +129,18 @@ export function seenPlayer(world: World, e: Enemy): { x: number; y: number } {
 }
 
 /**
+ * How long before it fires a watcher's line stops tracking. The beam has no
+ * travel, so a line that followed the player to the last frame was a shot
+ * that could only be dodged by luck; locked, the last beat is the dodge.
+ */
+export const BEAM_LOCK_MS = 380;
+
+/** Where a watcher's beam is pointed right now: locked for its last beat, tracking before. */
+export function beamAim(world: World, e: Enemy): { x: number; y: number } {
+  return e.telegraphMs <= BEAM_LOCK_MS && e.beamLock ? e.beamLock : seenPlayer(world, e);
+}
+
+/**
  * Each archetype's gait: how long one push-and-settle cycle takes, and what
  * share of it is the push.
  *
@@ -452,6 +464,9 @@ const TEMPO: Readonly<Partial<Record<EnemyId, Tempo>>> = {
   // Emplacements think slowly and hit from a long way off.
   turret: { windup: 1, recover: 1, rest: 1, aim: 1.2 },
   sentinel: { windup: 1, recover: 1, rest: 1, aim: 1.15 },
+  // The watcher's shot has no travel, so the whole dodge lives in the aim:
+  // it has to be long enough to see the lane, read it and leave it.
+  watcher: { windup: 1, recover: 1, rest: 1, aim: 2.6 },
   rifter: { windup: 1, recover: 1, rest: 1, aim: 1.15 },
   // Skittish shooters: a short aim, so closing on one is urgent.
   shooter: { windup: 1, recover: 1, rest: 1, aim: 0.85 },
@@ -3800,15 +3815,21 @@ export function fire(world: World, e: Enemy, dtMs: number): void {
    * them — which is the whole reason the wind-up is dodgeable.
    */
   if (e.telegraphMs > 0) {
+    const before = e.telegraphMs;
     e.telegraphMs -= dtMs;
+    // The watcher's line stops following for the last beat, so the lane the
+    // player is shown is the lane that fires.
+    if (e.archetype === "watcher" && before > BEAM_LOCK_MS && e.telegraphMs <= BEAM_LOCK_MS)
+      e.beamLock = { ...seenPlayer(world, e) };
     if (e.telegraphMs > 0) return;
     world.events.push({ kind: "telegraph", x: e.x, y: e.y, what: e.archetype });
     if (e.pending.length > 0) {
       // Sight Beam: the elite sentinel's line is the shot, with no travel time.
-      if (e.archetype === "watcher") sightBeam(world, e, seenPlayer(world, e));
+      if (e.archetype === "watcher") sightBeam(world, e, beamAim(world, e));
       else release(world, e, e.pending as readonly BulletEmission[], 0, volleyFrom(world, e));
       e.pending = [];
     }
+    delete e.beamLock;
     dropFireToken(world, e);
     return;
   }

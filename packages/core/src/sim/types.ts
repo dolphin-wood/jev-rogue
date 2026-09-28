@@ -1034,6 +1034,11 @@ export interface Enemy {
    * being shown for one 300 ms window per room.
    */
   telegraphMs: number;
+  /**
+   * Where a watcher's beam will go, fixed for the last `BEAM_LOCK_MS` of its
+   * aim. Unset while the line still tracks. See `beamAim`.
+   */
+  beamLock?: { x: number; y: number };
   /** The boss's phase, 1..3; 1 for everything else. See `BOSS_PHASES`. */
   phase: number;
   /**

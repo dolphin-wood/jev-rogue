@@ -9,7 +9,7 @@ import {
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
   moodTransform, tintRGBA, dashInvulnerable, MELEE, POISE_BREAK_MS, brakeFraction, ENEMIES,
-  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_MUSKET_SPREAD_MULT, GUARDIAN_CALL_MS, GUARDIAN_STANCE, GUARDIAN_BROKEN_MS, GUARDIAN_SINK_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
+  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_MUSKET_SPREAD_MULT, GUARDIAN_CALL_MS, GUARDIAN_STANCE, GUARDIAN_BROKEN_MS, GUARDIAN_SINK_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, beamAim, BEAM_LOCK_MS, lineToWall, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, audienceRoomFor, RUN_GUARDIAN_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTextKey, affixFitsSpell, itemShape,
@@ -14086,6 +14086,21 @@ export class PlayScene extends Phaser.Scene {
         const uy = (aim.y - e.y) / d;
         const t = 1 - Math.min(1, e.telegraphMs / 700);
         drawAimLine(this.threatGfx, e.x, e.y, ux, uy, 420, aim.x, aim.y, t, tick, view);
+      }
+      /*
+       * **The watcher's lane.** Its beam has no travel, so the lane is the
+       * whole warning: drawn to the wall the beam will reach, tracking while it
+       * aims and then held still — and blinking — for `BEAM_LOCK_MS`, which is
+       * the beat to step off it.
+       */
+      if (e.archetype === "watcher" && e.telegraphMs > 0 && e.pending.length > 0) {
+        const aim = beamAim(w, e);
+        const a = Math.atan2(aim.y - e.y, aim.x - e.x);
+        const len = lineToWall(w, e.x, e.y, a, TILE_PX * 22);
+        const locked = e.telegraphMs <= BEAM_LOCK_MS;
+        const t = locked ? 1 : 0.5 * (1 - Math.min(1, (e.telegraphMs - BEAM_LOCK_MS) / 600));
+        drawAimLine(this.threatGfx, e.x, e.y, Math.cos(a), Math.sin(a), len,
+          e.x + Math.cos(a) * len, e.y + Math.sin(a) * len, t, tick, view);
       }
       /*
        * **The dashcut's line** (doc 020): where he will run, drawn for the
