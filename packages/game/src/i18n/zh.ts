@@ -214,7 +214,6 @@ export const ZH: Table = {
   "hud.targetsLeft": "炮台 {n}/{total}",
   "hud.briefHold": "坚持 {s} 秒。时间到之前敌人会源源不断。",
   "hud.briefDestroy": "摧毁 {n} 座标记的炮台。摧毁之前敌人会源源不断。",
-  "hud.briefGuardian": "它会召唤亡者助战。引它撞墙，就能打碎它的铠甲。",
   "hud.bossPhase": "第 {n} 阶段",
   "prompt.cutTheLink": "站到锁链上将其斩断",
   "card.upgradeLv": "升级 Lv {from} → {to}",

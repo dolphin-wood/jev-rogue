@@ -785,6 +785,8 @@ const BOSS_VIEW_SPARE = 1;
  * floor it stands on; violet is in no body's palette and no telegraph's.
  */
 const GUARDIAN_TINT = 0xb48cff;
+/** The Drowned Warden's overhead bars, health and plate, px wide. */
+const GUARDIAN_BAR_W = 64;
 /** The level a depth's own sound sits at everywhere in it (`ambienceLevels`): under a brazier or a grate beside the player. */
 const DEPTH_AMBIENCE = 0.3;
 /**
@@ -2481,10 +2483,10 @@ export class PlayScene extends Phaser.Scene {
     this.audienceK = 0;
     this.audienceDoneAt = -1;
     /*
-     * **A room that asks something else says what** as it opens: a room
-     * objective (doc 025) and the guardian (doc 024), each a short title and
-     * one line of what to do. Not the king's great name: these are rooms, and
-     * the first audience says nothing, since it is meant to come unannounced.
+     * **A room objective says what it asks** as it opens (doc 025): a short
+     * title and one line of what to do. Not the king's great name. The
+     * guardian says nothing here: its name is the small line over its bar
+     * (doc 024), and the first audience is meant to come unannounced.
      */
     const objective = this.world.objective?.kind;
     if (objective) this.time.delayedCall(400, () => {
@@ -2494,10 +2496,6 @@ export class PlayScene extends Phaser.Scene {
           objective === "hold" ? t("hud.briefHold", { s: holdLeftS(this.world) }) : t("hud.briefDestroy", { n: DESTROY_TARGETS }),
         );
     });
-    if (this.world.guardianRoom)
-      this.time.delayedCall(400, () => {
-        if (this.world.guardianRoom && !this.world.cleared) this.showRoomBrief(t("hud.guardianTitle"), t("hud.briefGuardian"));
-      });
 
     this.kingIntro = null;
     this.kingGoblet = null;
@@ -17303,8 +17301,9 @@ function drawEnemy(
      * a second health bar, or as nothing. Shield blue is the one blue in the
      * HUD vocabulary not already taken — ice is the pale cyan.
      */
-    const W = Math.max(16, e.radius * 2.2);
-    const y = e.y + bob - overheadPx(e);
+    // The Drowned Warden's plate sits over its health bar, as wide as it (doc 024).
+    const W = e.guardian ? GUARDIAN_BAR_W : Math.max(16, e.radius * 2.2);
+    const y = e.y + bob - overheadPx(e) - (e.guardian ? 6 : 0);
     const back = group.rectangle(e.x - W / 2, y, W, 3, 0x0f1c3a, 0.9)
       .setOrigin(0, 0.5).setDepth(9);
     const fill = group.rectangle(
@@ -17320,16 +17319,17 @@ function drawEnemy(
 
   /*
    * **The Drowned Warden's bar is over its head** (doc 024), not the boss's
-   * across the bottom: its name and its health, above the armour bar, with no
-   * marks, since it has no phases. The bottom bar is the king's alone.
+   * across the bottom: its health, the armour bar over it, and its name over
+   * both, with no marks, since it has no phases. The name holds its place
+   * whether the plate is on or broken. The bottom bar is the king's alone.
    */
   if (e.guardian && e.hp > 0 && e.spawnFadeMs <= 0) {
-    const W = 64;
-    const y = e.y + bob - overheadPx(e) - 6;
+    const W = GUARDIAN_BAR_W;
+    const y = e.y + bob - overheadPx(e);
     group.rectangle(e.x - W / 2 - 1, y, W + 2, 5, 0x0d0b1f, 0.9).setOrigin(0, 0.5).setDepth(9);
     group.rectangle(e.x - W / 2, y, W * Math.max(0, e.hp / Math.max(1, e.maxHp)), 3, 0xd83a3a, 1)
       .setOrigin(0, 0.5).setDepth(10);
-    label?.(`guardian:name:${e.id}`, e.x, y - 7, t("hud.guardianTitle"), {
+    label?.(`guardian:name:${e.id}`, e.x, y - 10, t("hud.guardianTitle"), {
       fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(6, ZOOM) * ZOOM)}px`, color: "#e8c8ff",
       stroke: "#0d0b1f", strokeThickness: 2 * ZOOM,
     }).setScale(1 / ZOOM).setOrigin(0.5, 1).setDepth(10.5);

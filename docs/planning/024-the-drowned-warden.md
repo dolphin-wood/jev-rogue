@@ -3,7 +3,7 @@ id: 024
 title: The Drowned Warden
 status: proposed
 date: 2026-09-27
-summary: Room 10, the last fight of the flooded depth, is a guardian fight. The Drowned Warden is the warden's body, drawn larger in a violet light, with the warden's armour and blunderbuss and the tank's ram. It has no phases. Its own move is the call. It raises its arm, marks show on the floor, and the dead rise round it, with half its armour back. Its entrance is the first call, which raises the room's own wave. After that it calls again whenever its squad is down to one and the call has come round. The ram knocks it out on a wall, which breaks its armour, and a wall is the fight's opening. The room is the first audience's bare arena, and its doors, reward, pacing and experience follow the audience room's. Its bar is over its head, and on entry the room shows its name and one line of what to do. Code decides all of it; the Director still answers the door's reward.
+summary: Room 10, the last fight of the flooded depth, is a guardian fight. The Drowned Warden is the warden's body, drawn larger in a violet light, with the warden's armour and blunderbuss and the tank's ram. It has no phases. Its own move is the call. It raises its arm, marks show on the floor, and the dead rise round it, with half its armour back. Its entrance is the first call, which raises the room's own wave. After that it calls again whenever its squad is down to one and the call has come round. The ram knocks it out on a wall, which breaks its armour, and a wall is the fight's opening. The room is the first audience's bare arena, and its doors, reward, pacing and experience follow the audience room's. It stands where the opening view shows it, and its name is the small line over its bar. Code decides all of it; the Director still answers the door's reward.
 depends_on: [005, 013, 019, 022]
 ---
 
@@ -78,9 +78,11 @@ on a rusher still standing would not have ended.
   Its death also leaves `GUARDIAN_HEARTS` hearts flying to the player, and
   the room leaves a chest (doc 026).
 - **It is a peak**, so room 11 is the trough (doc 014).
-- **On entry** the room shows its name, small and high, and one line of what
-  to do: it calls the dead, and a ram into a wall breaks its armour. It never
-  gets the king's great name.
+- **It stands in sight.** It takes the cell farthest from the door that the
+  opening view still shows, with room above for its bar and name, so its
+  entrance call is seen.
+- **Its name** is the small line over its bar, and nothing more: no title
+  across the screen, no line of how to fight it.
 - **Its bar** is over its head, with its name and no marks. The bottom bar is
   the king's alone.
 - **The camera** stays the room's usual close one: at twice a warden's size

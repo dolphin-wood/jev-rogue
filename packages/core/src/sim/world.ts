@@ -438,13 +438,23 @@ export function createWorld(input: CreateWorldOptions): World {
 }
 
 /**
- * **The Drowned Warden takes its ground** (doc 024): across the room from the
- * door, awake, alone. The room's own wave is its entrance: a beat after the
- * room opens it raises its arm and they rise round it. The farthest floor
- * cell from the entry with floor round it for its body.
+ * **The Drowned Warden takes its ground** (doc 024): as far from the door as
+ * the opening view allows, awake, alone, and **in sight**, its bar and name
+ * over it included. The room's own wave is its entrance: a beat after the
+ * room opens it raises its arm and they rise round it, so the player has to
+ * be able to see it do so. The view is the camera's at the door: centred on
+ * the player, held inside the room (`viewHalf`).
  */
 function placeGuardian(w: World): void {
   const ext = w.room.extent, grid = w.room.grid, p = w.player;
+  const roomW = ext.w * TILE_PX, roomH = ext.h * TILE_PX;
+  const half = w.viewHalf;
+  const cx = roomW <= half.x * 2 ? roomW / 2 : Math.max(half.x, Math.min(roomW - half.x, p.x));
+  const cy = roomH <= half.y * 2 ? roomH / 2 : Math.max(half.y, Math.min(roomH - half.y, p.y));
+  // Room for its body at the sides and below, and for its body, bar and name above.
+  const side = TILE_PX * 2, above = TILE_PX * 4, below = TILE_PX * 2;
+  const inView = (x: number, y: number): boolean =>
+    Math.abs(x - cx) <= half.x - side && y - cy >= -(half.y - above) && y - cy <= half.y - below;
   let best: { x: number; y: number; d: number } | null = null;
   for (let gy = 3; gy < ext.h - 3; gy++)
     for (let gx = 3; gx < ext.w - 3; gx++) {
@@ -454,7 +464,8 @@ function placeGuardian(w: World): void {
       if (!open) continue;
       const x = (gx + 0.5) * TILE_PX, y = (gy + 0.5) * TILE_PX;
       if (w.props.some((q) => q.hp > 0 && Math.hypot(q.x - x, q.y - y) < TILE_PX * 2)) continue;
-      const d = Math.hypot(x - p.x, y - p.y) - Math.abs(x - (ext.w / 2) * TILE_PX) * 0.5;
+      // Out of sight is only ever a fallback: any cell in view beats every cell out of it.
+      const d = Math.hypot(x - p.x, y - p.y) - Math.abs(x - (ext.w / 2) * TILE_PX) * 0.5 + (inView(x, y) ? 1e6 : 0);
       if (!best || d > best.d) best = { x, y, d };
     }
   const at = best ?? { x: (ext.w / 2) * TILE_PX, y: (ext.h / 2) * TILE_PX };
