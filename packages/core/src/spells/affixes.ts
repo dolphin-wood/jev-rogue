@@ -177,6 +177,13 @@ export interface SpellAffix {
    * resolve, and inheriting is almost always right.
    */
   readonly element: Element | null;
+  /**
+   * **The least strength of door that deals it** (`affixStrengthFloor`), 1 to
+   * 3; absent is 1. A door's strength is the grade it carries — and the tier
+   * its affix card comes at — so an affix that multiplies what a press is
+   * worth waits for the doors late in the run, duplicates included.
+   */
+  readonly minStrength?: 1 | 2 | 3;
   /** Exactly three, weakest first. Enforced by the schema test. */
   readonly tiers: readonly [AffixTier, AffixTier, AffixTier];
   /** One sentence, the kind a player reads once and remembers. */
@@ -659,6 +666,29 @@ BASE_AFFIXES.push(
 
 /** The affixes that change a run, and need its wake to mean anything. */
 const RUN_AFFIXES: ReadonlySet<string> = new Set(["momentum", "undertow", "finale"]);
+
+/*
+ * **The strength each affix waits for.** Measured on the bench (`pnpm
+ * spell-bench`, the affix loadouts on the bolt): `repeat` doubles what a key
+ * does to one body for a fifth more mana and tops most spells' best build, so
+ * it is a strength-III door's alone; the affixes that reach more bodies, turn
+ * a kill or a hit into more, or change what a spell does wait for II; the
+ * rest — defences, aim, elements — are dealt from the first room.
+ */
+const STRENGTH_FLOOR: Readonly<Record<string, 2 | 3>> = {
+  repeat: 3,
+  chain: 2, brand: 2, scatter: 2, haste: 2, resonance: 2, fork: 2,
+  momentum: 2, undertow: 2, finale: 2,
+};
+for (const a of BASE_AFFIXES) {
+  const floor = STRENGTH_FLOOR[a.id];
+  if (floor) (a as { minStrength?: 1 | 2 | 3 }).minStrength = floor;
+}
+
+/** The least door strength that deals this affix; 1 for any door. */
+export function affixStrengthFloor(id: string): 1 | 2 | 3 {
+  return spellAffixById(id)?.minStrength ?? 1;
+}
 
 export const AFFIX_TIERS = 3;
 

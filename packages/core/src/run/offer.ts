@@ -22,7 +22,7 @@ import { SPELL_DAMAGE_SCALE } from "../sim/cast.ts";
 import { AFFIX_SLOTS, SPELL_SLOTS, levelDamageMult, levelManaMult, spellCost, statusForecast, statusPerHit } from "../sim/spells.ts";
 import { num } from "../spells/items.ts";
 import { STAT_UPGRADES, statLine, statLinePart } from "./stats.ts";
-import { AFFIX_SURCHARGE_KEY, SPELL_AFFIXES, affixFitsLine, affixFitsSpell, affixSurchargePct, affixSurchargeText, affixTierKey, itemShape } from "../spells/affixes.ts";
+import { AFFIX_SURCHARGE_KEY, SPELL_AFFIXES, affixFitsLine, affixStrengthFloor, affixFitsSpell, affixSurchargePct, affixSurchargeText, affixTierKey, itemShape } from "../spells/affixes.ts";
 import { schoolOf } from "../spells/schools.ts";
 import type { SpellAffix, SpellShape } from "../spells/affixes.ts";
 import { legalDoorSets } from "./pacing.ts";
@@ -861,7 +861,8 @@ export function cardPool(
       ],
     }));
   } else if (kind === "affix") {
-    all = fittingAffixes(held).map((a) => ({
+    // A door whose strength is known deals only what it is strong enough for (`affixStrengthFloor`).
+    all = fittingAffixes(held).filter((a) => promise.grade === undefined || affixStrengthFloor(a.id) <= promise.grade).map((a) => ({
       id: a.id,
       description: cardText(a.id, a.description, a.name),
       ...(held.length > 0 && held.every((key) => key.id)
@@ -929,6 +930,31 @@ export function cardPool(
     kind, candidates, forced: [],
     ...(kept.length > 1 ? { guarantee: kept } : {}),
   };
+}
+
+/**
+ * **A door's cards, held to its strength.** The cards for every door are
+ * drawn before the doors' strengths are decided — they come in one request —
+ * so an affix the door turned out too weak for is swapped here for the next
+ * candidate of the same pool it is strong enough for, in the pool's own
+ * order, one not already on the door. A spell or a stat door, or a door
+ * strong enough for all it drew, is left as it is.
+ */
+export function holdToStrength(kind: RewardCardKind, ids: readonly string[], strength: number, pool: CardPool | undefined): string[] {
+  if (kind !== "affix") return [...ids];
+  const fits = (id: string) => affixStrengthFloor(id) <= strength;
+  if (ids.every(fits)) return [...ids];
+  const kept = ids.filter(fits);
+  const spare = (pool?.candidates ?? []).map((c) => c.id).filter((id) => fits(id) && !kept.includes(id));
+  const out: string[] = [];
+  for (const id of ids) {
+    if (fits(id)) out.push(id);
+    else {
+      const next = spare.shift();
+      if (next) out.push(next);
+    }
+  }
+  return out;
 }
 
 /** The cards for chosen ids, graded as the door promised. */

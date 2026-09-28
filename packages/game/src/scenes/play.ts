@@ -49,7 +49,7 @@ import type { BaseItem, CardNeeds, DoorOffer, NpcKind, OfferPromise, RoomStage, 
 import {
   BOSS_LEAP_RISE_MS, BOSS_LEAP_LOCK_MS, BOSS_METEOR_GATHER_MS, BOSS_METEOR_UP_MS, BOSS_METEOR_RAIN_MS, BOSS_SLAM_IMPACT_PX, BOSS_LEAP_RADIUS, BOSS_QUAKE_MS, SLAM_SHOCK_RADIUS,
   BOSS_POWER,
-  withLevel, levelDamageMult, dismantleValue, spellDetail, offerStatParts, slotStatParts, statusForecast, SPELL_DAMAGE_SCALE, rarityOf, STAT_UPGRADES, statById, SPELL_LEVEL_MAX, SCHOOL_COLOUR, schoolOf, spellSound, shapeEventSound, offerCards,
+  withLevel, levelDamageMult, dismantleValue, holdToStrength, baseStrength, spellDetail, offerStatParts, slotStatParts, statusForecast, SPELL_DAMAGE_SCALE, rarityOf, STAT_UPGRADES, statById, SPELL_LEVEL_MAX, SCHOOL_COLOUR, schoolOf, spellSound, shapeEventSound, offerCards,
   slotCooldownMs, DASH_COOLDOWN_MS, DASH_MS,
   chargeShare, chargesOf, bankOf, chargeIntervalMs, chargeMsOf, DASH_SPEED, acquire,
 } from "@jr/core";
@@ -2542,7 +2542,8 @@ export class PlayScene extends Phaser.Scene {
     if (!fight && (stage === "shop" || this.npcRoom === "merchant"))
       for (const k of SHELF_KINDS)
         cards.push({
-          room_index: run.roomIndex, pool: cardPool(ITEMS, this.ownedFor(k), k, held, {}, needs),
+          // The shelf deals what this point of the run is strong enough for (`baseStrength`), at tier one.
+          room_index: run.roomIndex, pool: cardPool(ITEMS, this.ownedFor(k), k, held, { grade: baseStrength(run.roomIndex, false) }, needs),
           count: 1, pity: false, temptation: false, salt: `shop_${k}`,
         });
     /*
@@ -3307,14 +3308,14 @@ export class PlayScene extends Phaser.Scene {
         this.eliteMarks.push({ portal, mark });
       }
       /*
-       * **The grade, as stars on the arch's top-right corner**: one for each
-       * step above the first, on an elite door and on a normal door raised
-       * late in the run alike. It was a star in the row of schools, which read
-       * as one more of them. Kept with the elite marks, which show and fade
-       * as the door does.
+       * **The door's strength, as stars on the arch's top-right corner**: one
+       * for each strength, I to III, the number the cards behind it say
+       * (`card.strength*`). A door's strength rises with the run
+       * (`baseStrength`), so every door shows at least one. Kept with the
+       * elite marks, which show and fade as the door does.
        */
-      for (let k = 1; k < (portal.grade ?? 1); k++) {
-        const star = this.add.star(portal.x + 10, portal.y - 9 + (k - 1) * 8.5, 5, 1.9, 4.2, 0xffd45e)
+      for (let k = 0; k < (portal.onward || portal.npc ? 0 : portal.grade ?? 1); k++) {
+        const star = this.add.star(portal.x + 10, portal.y - 9 + k * 8.5, 5, 1.9, 4.2, 0xffd45e)
           .setStrokeStyle(0.8, 0x0d0b1f).setDepth(8.7).setVisible(false);
         this.eliteMarks.push({ portal, mark: star });
       }
@@ -9562,7 +9563,7 @@ export class PlayScene extends Phaser.Scene {
      * answers in. `term` is the one place they become words, and the request
      * that goes to Jev is untouched by it (doc 002).
      */
-    const grade = (n: number) => (n > 1 ? `  ${t("plan.grade", { n })}` : "");
+    const grade = (n: number) => `  ${t("plan.grade", { n: ROMAN[n] ?? String(n) })}`;
     const types = doorTypes(promise);
     const reward = types
       ? t("plan.rewardPromise", { kind: term(this.roomReward, "reward_kind"), promise: types }) + grade(promise.grade)
@@ -10792,7 +10793,7 @@ export class PlayScene extends Phaser.Scene {
     const kinds: readonly RewardCardKind[] = this.shopping ? SHELF_KINDS : [this.roomReward];
     const requests = kinds.flatMap((kind): CardRequest[] => {
       const shown = current.filter((card) => card.kind === kind).map((card) => card.itemId ?? "");
-      const promise: OfferPromise = this.shopping ? {} : { grade: this.roomPromise.grade, style: this.intent.preset };
+      const promise: OfferPromise = this.shopping ? { grade: baseStrength(index, false) } : { grade: this.roomPromise.grade, style: this.intent.preset };
       const base = cardPool(ITEMS, this.ownedFor(kind), kind, held, promise, needs);
       const pool = freshRerollPool(base, shown, this.shopping ? 1 : CARDS_PER_OFFER);
       return pool ? [{
@@ -11673,7 +11674,9 @@ export class PlayScene extends Phaser.Scene {
         });
       doors = (plan.portals?.doors ?? ruleDoors(run, src.stream("offer"), this.portalCount)).map((d) => {
         if (d.npc || d.reward === "gold") return d;
-        const ids = plan.cards[kinds.indexOf(d.reward as (typeof kinds)[number])]?.ids ?? [];
+        const k = kinds.indexOf(d.reward as (typeof kinds)[number]);
+        // Held to the strength the door was given (`holdToStrength`).
+        const ids = holdToStrength(d.reward, plan.cards[k]?.ids ?? [], d.grade ?? 1, requests[k]?.pool);
         return ids.length ? { ...d, ...cardTypesOf(d.reward, ids), cards: ids } : d;
       });
       nextCardPlans = new Map(kinds.flatMap((kind, i) => {
@@ -11978,7 +11981,7 @@ export class PlayScene extends Phaser.Scene {
           : near.families?.length ? t("prompt.familyStat", { family: doorTypes(near)! })
             : term(near.reward ?? "", "reward_kind");
       const mark = near.onward || !near.elite ? "" : `${t("roomType.elite")} `;
-      const pips = near.onward || (near.grade ?? 1) <= 1 ? "" : ` ${"★".repeat((near.grade ?? 1) - 1)}`;
+      const pips = near.onward || near.npc ? "" : ` ${"★".repeat(near.grade ?? 1)}`;
       this.prompt.setText(t("prompt.portal", { what: `${mark}${what}${pips}` }));
       /*
        * Above the door's own badges — the reward or vendor icon, and the
@@ -18777,13 +18780,21 @@ function drawCardDeco(
   }
 }
 
-/** A card's look by rarity: its label, frame, ground and corner decoration. */
+/** A strength as the cards and doors write it. */
+const ROMAN: Readonly<Record<number, string>> = { 1: "I", 2: "II", 3: "III" };
+
+/**
+ * A card's look by its **strength** (the grade: I, II, III): its label, frame,
+ * ground and corner decoration. It was called rarity, and a card that was
+ * "legendary" behind a door that deals the strongest affixes read as two
+ * different things; it is one, and the label says which.
+ */
 const RARITY_STYLE: Readonly<Record<"common" | "rare" | "legendary", {
   label: StringKey; text: string; stroke: number; strokeOn: number; fill: number; fillOn: number; corner: number;
 }>> = {
-  common: { label: "card.common", text: "#c9cfe8", stroke: 0x5a628f, strokeOn: 0xe8e3d8, fill: 0x161334, fillOn: 0x221d46, corner: 0x8792b5 },
-  rare: { label: "card.rare", text: "#6fb4ff", stroke: 0x3f7fe0, strokeOn: 0x9fd0ff, fill: 0x13203f, fillOn: 0x1b2c58, corner: 0x5a9ef0 },
-  legendary: { label: "card.legendary", text: "#ffb040", stroke: 0xd08a30, strokeOn: 0xffd080, fill: 0x2a1d18, fillOn: 0x3a2818, corner: 0xe8a040 },
+  common: { label: "card.strength1", text: "#c9cfe8", stroke: 0x5a628f, strokeOn: 0xe8e3d8, fill: 0x161334, fillOn: 0x221d46, corner: 0x8792b5 },
+  rare: { label: "card.strength2", text: "#6fb4ff", stroke: 0x3f7fe0, strokeOn: 0x9fd0ff, fill: 0x13203f, fillOn: 0x1b2c58, corner: 0x5a9ef0 },
+  legendary: { label: "card.strength3", text: "#ffb040", stroke: 0xd08a30, strokeOn: 0xffd080, fill: 0x2a1d18, fillOn: 0x3a2818, corner: 0xe8a040 },
 };
 
 /** The colour of each kind of figure on a numbers line; see `statRow`. */

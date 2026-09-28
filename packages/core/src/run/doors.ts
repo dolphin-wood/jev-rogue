@@ -93,9 +93,31 @@ export function styleSchools(items: readonly BaseItem[]): Record<string, readonl
 }
 
 
+/**
+ * **A door's strength by where the run is** (its grade, 1 to 3): I through
+ * the opening rooms, II through the middle, III for the last fights, and an
+ * elite door one higher. What a door deals grows with how far the player has
+ * pushed — the level of its spell, the size of its stat, the tier of its
+ * affix and which affixes it may deal at all (`affixStrengthFloor`) — so the
+ * run gets better the further it goes. How the player is doing is only a
+ * correction on top (`STRENGTH_CATCH_UP`): one more for a run that is behind.
+ *
+ * `roomIndex` is the room the door leads **to**.
+ */
+export const STRENGTH_II_ROOM = 6;
+export const STRENGTH_III_ROOM = 11;
+export function baseStrength(roomIndex: number, elite: boolean): 1 | 2 | 3 {
+  const normal = roomIndex >= STRENGTH_III_ROOM ? 3 : roomIndex >= STRENGTH_II_ROOM ? 2 : 1;
+  return Math.min(3, normal + (elite ? 1 : 0)) as 1 | 2 | 3;
+}
+
+/** A rule door's catch-up: how often it is one stronger than the run's own, elite and normal. */
+const STRENGTH_CATCH_UP = { elite: 0.35, normal: 0.25 } as const;
+
 function gradeFor(elite: boolean, roomIndex: number, rng: Rng): number {
-  if (elite) return rng.next() < 0.35 ? 3 : 2;
-  return roomIndex >= 8 && rng.next() < 0.25 ? 2 : 1;
+  const base = baseStrength(roomIndex, elite);
+  const raise = rng.next() < (elite ? STRENGTH_CATCH_UP.elite : STRENGTH_CATCH_UP.normal) ? 1 : 0;
+  return Math.min(3, base + raise);
 }
 
 /**
@@ -380,8 +402,10 @@ export interface PortalChoices {
   readonly npcKinds: readonly NpcKind[];
   /** Whether one of the portals may be elite. */
   readonly elite: boolean;
-  /** Late in the run a normal door may be graded up. */
+  /** Whether a normal door may be raised one strength past the run's own (`baseStrength`) as a catch-up. */
   readonly lateGrade: boolean;
+  /** The strength the next room's doors carry by where the run is: normal, and elite. Absent: I and II. */
+  readonly strength?: { readonly normal: 1 | 2 | 3; readonly elite: 1 | 2 | 3 };
   readonly schools: readonly SpellSchool[];
   readonly families: readonly StatFamily[];
 }
@@ -519,7 +543,9 @@ export function portalChoices(run: RunShape, rng: Rng, count = drawPortalCount(r
     kinds: REWARD_KINDS,
     npcKinds: [...(npc ? ["merchant", "smith"] as const : []), ...(fountain ? ["fountain"] as const : [])],
     elite: legalDifficulties(run).includes("elite"),
-    lateGrade: run.roomIndex >= 8,
+    // A catch-up raise from the fourth room, while there is a strength left to raise to.
+    lateGrade: run.roomIndex >= 4 && baseStrength(run.roomIndex + 1, false) < 3,
+    strength: { normal: baseStrength(run.roomIndex + 1, false), elite: baseStrength(run.roomIndex + 1, true) },
     schools: SPELL_SCHOOLS,
     families: STAT_FAMILIES,
   };
@@ -530,9 +556,9 @@ export interface PortalAnswers {
   readonly kinds: readonly RewardCardKind[];
   /** The kind whose door is elite, or null for none. */
   readonly eliteKind: RewardCardKind | null;
-  readonly eliteGrade: 2 | 3;
-  /** A normal door's grade late in the run. */
-  readonly normalGrade: 1 | 2;
+  readonly eliteGrade: 1 | 2 | 3;
+  /** A normal door's strength: the run's own, or one past it as a catch-up. */
+  readonly normalGrade: 1 | 2 | 3;
   readonly npc: NpcKind | null;
 }
 
