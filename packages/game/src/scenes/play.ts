@@ -9123,7 +9123,10 @@ export class PlayScene extends Phaser.Scene {
     const transitionHushed = this.transitionUi?.to !== undefined && stageFor(this.transitionUi.to) === "boss";
     // The Veteran's entrance is a silent visual beat. Hold the stem at zero;
     // unlike a menu's muffled pause, the laser should own the room completely.
-    this.sfx.setMusicHeld(guardianIntro || transitionHushed || this.labSpeed !== 1 || this.kingIntro !== null);
+    // The king's entrance is silent only until the goblet leaves his hand (`tickKingIntro`):
+    // held for the whole of it, the boss theme never came in with the throw.
+    const kingHushed = this.kingIntro !== null && this.kingIntro.phase !== "throw" && this.kingIntro.phase !== "rise";
+    this.sfx.setMusicHeld(guardianIntro || transitionHushed || this.labSpeed !== 1 || kingHushed);
     this.sfx.setMusicPaused(!dead && !this.pauseFromTitle
       && !!(this.pauseUi || this.staffUi || this.offerUi || this.hintsUi)
       && !this.titleUi && !this.gameOverUi && !this.victoryUi && !this.transitionUi
