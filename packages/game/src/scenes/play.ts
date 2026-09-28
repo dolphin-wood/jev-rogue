@@ -2399,7 +2399,9 @@ export class PlayScene extends Phaser.Scene {
      * requests of their own (doc 002).
      */
     const planned = fight
-      ? await this.director.planRoom(ctx, { room_index: index, door_slot: 0, room_type: roomType }, this.tension, ask.request)
+      ? await this.director.planRoom(ctx, {
+        room_index: index, door_slot: 0, room_type: roomType, ...(this.forceObjective ? { objective: this.forceObjective } : {}),
+      }, this.tension, ask.request)
       : null;
     this.planned = planned;
     // The first audience is a peak whatever the doors said, so the room after it is the trough (doc 022).

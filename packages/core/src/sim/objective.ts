@@ -7,13 +7,24 @@
 import { makeEnemy } from "./enemy.ts";
 import type { Enemy, World } from "./types.ts";
 import { GRID_W, TILE_PX, Tile } from "../types.ts";
+import type { EnemyId } from "../types.ts";
 import { rampFor } from "../encounters/ramp.ts";
 import type { RoomObjective } from "../run/objectives.ts";
 
 /** How long a hold lasts: a room's length at the pacing doc 014 sizes a fight to. */
 export const HOLD_MS = 22_000;
-/** How many turrets a destroy room stands. */
-export const DESTROY_TARGETS = 3;
+/** How many emplacements a destroy room stands. */
+export const DESTROY_TARGETS = 5;
+/**
+ * **What they are**: every kind of emplacement the roster has, so the room
+ * asks four answers at once — step off the lightning's mark, stay off the
+ * beacon's burning ground, step out of the sentinel's lane, be out of the
+ * watcher's line before it lights. Each kind stands once before any stands
+ * twice.
+ */
+export const DESTROY_KINDS: readonly EnemyId[] = ["turret", "beacon", "sentinel", "watcher"];
+/** How much sturdier a target is than the same body in an ordinary room: each one is a thing to break, not a swing. */
+export const DESTROY_TARGET_HP = 2;
 /** How soon after the room's waves are spent it sends them again. */
 const REFILL_GAP_MS = 4000;
 /**
@@ -74,12 +85,19 @@ export function placeTargets(w: World): void {
     chosen.push(best);
     cells.splice(cells.indexOf(best), 1);
   }
-  for (const at of chosen) {
-    const t = makeEnemy(w.nextEnemyId++, "turret", at.x, at.y, [], rampFor(w.roomIndex));
+  const kinds = [...DESTROY_KINDS];
+  for (let i = kinds.length - 1; i > 0; i--) {
+    const j = Math.floor(w.rng.next() * (i + 1));
+    [kinds[i], kinds[j]] = [kinds[j]!, kinds[i]!];
+  }
+  chosen.forEach((at, i) => {
+    const kind = kinds[i % kinds.length]!;
+    const t = makeEnemy(w.nextEnemyId++, kind, at.x, at.y, [], rampFor(w.roomIndex));
+    t.hp = t.maxHp = Math.round(t.maxHp * DESTROY_TARGET_HP);
     t.objectiveTarget = true;
     t.awake = true;
     w.enemies.push(t);
-  }
+  });
 }
 
 export function stepObjective(w: World, dtMs: number): void {

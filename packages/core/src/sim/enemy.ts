@@ -3517,7 +3517,14 @@ function fire(world: World, e: Enemy, dtMs: number): void {
   }
   // Well past the view it holds its fire and drops what it was aiming; nearer
   // the edge, its clock runs slower in proportion (`firePresence`).
-  const presence = firePresence(world, e);
+  /*
+   * **A destroy room's targets fire across the whole room** (doc 025): off
+   * the screen as well as on it. What they throw is read where it lands — a
+   * strike's mark at the player's feet, a lane, a line drawn to them — so
+   * none of it arrives from the dark, and the room is a clock the player
+   * cannot hide from.
+   */
+  const presence = e.objectiveTarget ? 1 : firePresence(world, e);
   if (presence <= 0) {
     if (e.telegraphMs > 0 || e.pending.length > 0) { e.pending = []; e.telegraphMs = 0; e.plantMs = 0; dropFireToken(world, e); }
     return;
@@ -3772,9 +3779,10 @@ const RANGED_TURN_MS = 950;
  */
 function takeFireToken(world: World, e: Enemy): boolean {
   if (e.hasFireToken) return true;
-  if (world.fireTokens <= 0) return false;
+  // A destroy room's targets fire on their own clocks, outside the room's budget (doc 025).
+  if (world.fireTokens <= 0 && !e.objectiveTarget) return false;
   if (liveCount(world.enemyBullets) >= world.flightBudget) return false;
-  world.fireTokens--;
+  if (!e.objectiveTarget) world.fireTokens--;
   e.hasFireToken = true;
   return true;
 }
@@ -3783,7 +3791,7 @@ export function dropFireToken(world: World, e: Enemy): void {
   e.fireTokenMs = 0;
   if (!e.hasFireToken) return;
   e.hasFireToken = false;
-  world.fireTokens++;
+  if (!e.objectiveTarget) world.fireTokens++;
 }
 
 /**

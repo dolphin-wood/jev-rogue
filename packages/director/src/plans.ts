@@ -24,6 +24,8 @@ export interface DoorRef {
   readonly room_index: number;
   readonly door_slot: 0 | 1 | 2;
   readonly room_type: RoomType;
+  /** A room objective forced from outside the run's seed (the debug panel's entrances, doc 025); the seed's own otherwise. */
+  readonly objective?: import("@jr/core").RoomObjective;
 }
 
 /* --------------------------------- doors ---------------------------------- */

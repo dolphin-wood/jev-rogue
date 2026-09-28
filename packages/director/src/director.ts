@@ -1350,7 +1350,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
        * room is about, and a wall to stand behind would answer them without a
        * fight. So its space is the bare arena, and the space is not asked.
        */
-      const objective = objectiveFor(ctx.seed, ctx.room_index, door.room_type);
+      const objective = door.objective ?? objectiveFor(ctx.seed, ctx.room_index, door.room_type);
       const askQ1 = Object.fromEntries(Object.entries(q1).filter(([n]) =>
         !firstLook.includes(n) && !(depthTemperature && n === "mood_temperature")
         && !(objective === "destroy" && n === "space")));
