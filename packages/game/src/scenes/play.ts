@@ -8252,6 +8252,7 @@ export class PlayScene extends Phaser.Scene {
         case "telegraph": {
           // The Frontier Veteran's arm going up: the call heard before the dead answer (doc 024).
           if (ev.what === "guardian_call") sfx.play("cast_void", 0.6);
+          if (ev.what === "guardian_stakes" || ev.what === "guardian_palisade") sfx.play("hit_heavy", 0.7);
           if (ev.what?.startsWith("boss_phase:")) {
             const next = Number(ev.what.slice("boss_phase:".length));
             const king = this.world.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
@@ -16660,6 +16661,8 @@ function specialPose(w: World, e: Enemy): string | null {
       if (e.pose === "musket_windup") return "windup";
       // The Frontier Veteran's call (doc 024): the arm up, as the gun is raised to load.
       if (e.pose === "guardian_call") return "windup";
+      // The stakes (doc 024): the gun raised, then driven down as the ground erupts.
+      if (e.pose === "guardian_stakes") return e.poseMs > 450 + 250 ? "windup" : "lunge";
       if (e.pose === "musket_fire" || e.pose === "musket_second") return "lunge";
       if (e.pose === "musket_reload" && e.poseMs > 800) return "lunge";
       // The shield bash: the plate comes up, then goes through. It borrows the

@@ -17,6 +17,8 @@ import type { EnemyId } from "../types.ts";
 import { rampFor } from "../encounters/ramp.ts";
 import { ENEMIES } from "../encounters/enemies.ts";
 import { bossSummonSpots } from "./world.ts";
+import { castRift, lineToWall } from "./attacks.ts";
+import { TILE_PX } from "../types.ts";
 
 /** Its bar. Sized for a room-10 build to take 40 to 60 s; `pnpm play` sets it (doc 024). */
 export const GUARDIAN_HP = 1300;
@@ -66,12 +68,40 @@ export const GUARDIAN_CALL_MS = 1100;
 export const GUARDIAN_ENTRANCE_MS = 500;
 /** How long after one call before it may call again. */
 export const GUARDIAN_CALL_EVERY_MS = 20_000;
+/**
+ * **Its stakes** (地刺): the old soldier's other move, the frontier's own —
+ * the gun's butt driven into the floor and the ground answering in stakes.
+ * Both are rifts, the roster's one "this ground erupts" (`castRift`), so the
+ * warning is the one the player has read since the rifter: the lanes or the
+ * ring drawn on the floor, then the stakes. It stands planted for all of it.
+ *
+ * - **The stake line**, at range: three lanes fanned at the player.
+ * - **The palisade**, on a player who has stuck to it: a ring round itself,
+ *   so that standing in its shadow is not the answer to its poise.
+ */
+export const GUARDIAN_STAKES_EVERY_MS = 6500;
+/** How long the stakes' ground is drawn before it erupts. */
+export const GUARDIAN_STAKES_TELE_MS = 850;
+/** How long it stands planted after they go up: the stakes' own window. */
+const GUARDIAN_STAKES_REST_MS = 450;
+/** The stake line's lanes, their spread either side of the player, and their reach. */
+const STAKE_LANES = 3;
+const STAKE_SPREAD = 0.4;
+const STAKE_REACH = TILE_PX * 9;
+/** Nearer than this the player is "stuck to it", and it throws the palisade instead. */
+const PALISADE_NEAR = TILE_PX * 3;
+/** The palisade's reach round it: past its shove, short of its ram. */
+const PALISADE_RADIUS = TILE_PX * 3.2;
+/** What a stake costs, in hearts: a warden's blow at the guardian's power. */
+const STAKE_DAMAGE = 1;
 /** It calls again only when its squad is down to this many. */
 export const GUARDIAN_CALL_BELOW = 1;
 
 export interface GuardianState {
   /** Time until it may call; it calls once this is out and its squad is thin. */
   callMs: number;
+  /** Time until it may drive its stakes again. */
+  stakesMs: number;
   /** Whether its arm is up in a call, to see the call end. */
   calling: boolean;
   /** Who the call now being made brings: the room's own wave at the entrance, the squad after. */
@@ -83,7 +113,7 @@ export interface GuardianState {
 /** The guardian, standing where it is put, on its own bar, with its entrance call to make. */
 export function makeGuardian(id: number, x: number, y: number, _roomIndex: number, entrance: readonly EnemyId[] = GUARDIAN_SQUAD): Enemy {
   const e = makeEnemy(id, "warden", x, y, [], { power: GUARDIAN_POWER });
-  e.guardian = { callMs: GUARDIAN_ENTRANCE_MS, calling: false, answer: entrance.slice(0, GUARDIAN_ENTRANCE_MAX), spots: [] };
+  e.guardian = { callMs: GUARDIAN_ENTRANCE_MS, stakesMs: GUARDIAN_STAKES_EVERY_MS / 2, calling: false, answer: entrance.slice(0, GUARDIAN_ENTRANCE_MAX), spots: [] };
   e.hp = e.maxHp = GUARDIAN_HP;
   e.poise = e.maxPoise = GUARDIAN_POISE;
   e.radius = Math.round(e.radius * GUARDIAN_SCALE);
@@ -124,14 +154,45 @@ export function stepGuardian(w: World, e: Enemy, dtMs: number): void {
     return;
   }
   if (g.callMs > 0) g.callMs -= dtMs;
-  if (g.callMs > 0 || e.attack !== "approach" || e.pose !== "" || e.staggerMs > 0) return;
-  if (guardianSquad(w, e) > GUARDIAN_CALL_BELOW) return;
+  if (g.stakesMs > 0) g.stakesMs -= dtMs;
+  if (e.attack !== "approach" || e.pose !== "" || e.staggerMs > 0 || e.plantMs > 0) return;
+  if (g.stakesMs <= 0 && w.stats.elapsedMs > GUARDIAN_ENTRANCE_MS + GUARDIAN_CALL_MS) {
+    driveStakes(w, e, g);
+    return;
+  }
+  if (g.callMs > 0 || guardianSquad(w, e) > GUARDIAN_CALL_BELOW) return;
   g.calling = true;
   g.spots = bossSummonSpots(w, e, g.answer.length);
   e.pose = "guardian_call";
   e.poseMs = GUARDIAN_CALL_MS;
   e.poiseGuardMs = Math.max(e.poiseGuardMs, GUARDIAN_CALL_MS);
   w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: "guardian_call" });
+}
+
+/**
+ * **The stakes**: planted, the gun's butt down, and the ground drawn where it
+ * will erupt — three lanes at the player, or a ring round itself when the
+ * player is on it. It holds the pose until they have gone up and a beat after.
+ */
+function driveStakes(w: World, e: Enemy, g: GuardianState): void {
+  g.stakesMs = GUARDIAN_STAKES_EVERY_MS;
+  const p = w.player;
+  const near = Math.hypot(p.x - e.x, p.y - e.y) < PALISADE_NEAR;
+  if (near) {
+    castRift(w, e.x, e.y, 0, 0, { width: PALISADE_RADIUS * 2, teleMs: GUARDIAN_STAKES_TELE_MS, damage: STAKE_DAMAGE });
+  } else {
+    const at = Math.atan2(p.y - e.y, p.x - e.x);
+    for (let i = 0; i < STAKE_LANES; i++) {
+      const a = at + (i - (STAKE_LANES - 1) / 2) * STAKE_SPREAD;
+      const x0 = e.x + Math.cos(a) * e.radius, y0 = e.y + Math.sin(a) * e.radius;
+      castRift(w, x0, y0, a, lineToWall(w, x0, y0, a, STAKE_REACH), { teleMs: GUARDIAN_STAKES_TELE_MS, damage: STAKE_DAMAGE });
+    }
+  }
+  e.pose = "guardian_stakes";
+  e.poseMs = GUARDIAN_STAKES_TELE_MS + GUARDIAN_STAKES_REST_MS;
+  e.velX = 0;
+  e.velY = 0;
+  w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: near ? "guardian_palisade" : "guardian_stakes" });
 }
 
 /** The dead answer: the bodies rise round it. */

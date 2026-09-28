@@ -455,7 +455,7 @@ export function throwLob(
 /** Poses a body holds still through: the move is the whole of what it is doing. */
 export const PLANTED_POSES: ReadonlySet<string> = new Set([
   "musket_windup", "musket_fire", "musket_second", "musket_reload", "cast", "field", "burst", "peal_windup", "windup_hook", "anchor_cast", "lash_windup",
-  "flare_windup", "bloom_cast", "telegraph", "telegraph_walk", "lob_windup", "cinder_windup", "guardian_call",
+  "flare_windup", "bloom_cast", "telegraph", "telegraph_walk", "lob_windup", "cinder_windup", "guardian_call", "guardian_stakes",
 ]);
 
 /** Whether the body is posed in a move that holds it still. */
