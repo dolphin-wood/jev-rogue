@@ -15522,9 +15522,9 @@ export class PlayScene extends Phaser.Scene {
   }
 
   /**
-   * Bodies off the near camera's view, pointed at from its edge: a small
-   * wedge where the line from the view's centre leaves it, faint for a body
-   * that is awake and bright for one taking a turn to attack.
+   * Bodies off the near camera's view, pointed at from its edge. Objective
+   * targets get a larger opaque gold pointer with a dark rim, so it stands
+   * apart from the smaller, softer pointers used for ordinary enemies.
    */
   private drawOffscreen(cx: number, cy: number, halfW: number, halfH: number): void {
     const g = this.offscreenGfx;
@@ -15538,6 +15538,18 @@ export class PlayScene extends Phaser.Scene {
       const k = Math.min((halfW - inset) / Math.max(1e-6, Math.abs(rx)), (halfH - inset) / Math.max(1e-6, Math.abs(ry)));
       const ex = cx + rx * k, ey = cy + ry * k;
       const a = Math.atan2(ry, rx);
+      if (e.objectiveTarget) {
+        const s = 11;
+        const point = (r: number, angle: number) => [ex + Math.cos(angle) * r, ey + Math.sin(angle) * r] as const;
+        const tip = point(s, a), left = point(s, a + 2.45), right = point(s, a - 2.45);
+        g.fillStyle(0x0d0b1f, 1);
+        g.fillTriangle(tip[0], tip[1], left[0], left[1], right[0], right[1]);
+        const inner = s - 2.5;
+        const goldTip = point(inner, a), goldLeft = point(inner, a + 2.45), goldRight = point(inner, a - 2.45);
+        g.fillStyle(0xffd45e, 1);
+        g.fillTriangle(goldTip[0], goldTip[1], goldLeft[0], goldLeft[1], goldRight[0], goldRight[1]);
+        continue;
+      }
       const hot = e.hasFireToken || e.hasToken || e.telegraphMs > 0;
       g.fillStyle(hot ? 0xff5a6e : 0xffb0b8, hot ? 0.95 : 0.55);
       const s = hot ? 4.5 : 3.5;
