@@ -3,14 +3,17 @@ import { ENTRY_GRACE_MS, canStagger, POISE_BREAK_STAGGER_MS, POISE_RECOVER_MS } 
 import { describe, it, expect } from "vitest";
 import { createWorld, hurtEnemy, step, worldCleared, ELITE_HEAL_FRACTION, GRASS_CATCH_MS } from "./world.ts";
 import {
-  PLAYER_RADIUS, PLAYER_SPEED, NO_INPUT, ENEMY_BULLET_CAP, INVULN_MS, MAX_HEARTS,
+  PLAYER_RADIUS, PLAYER_SPEED, NO_INPUT, ENEMY_BULLET_CAP, INVULN_MS, MAX_HEARTS, HP_PER_HEART,
 } from "./types.ts";
 import type { Input, World } from "./types.ts";
 import {
   beginWindup, makeEnemy, wake, SPAWN_FADE_MS, STAGGER_MS, TELEGRAPH_MS, THREAT_CAP_MS,
 } from "./enemy.ts";
 import { liveCount, acquire } from "./bullets.ts";
-import { MELEE_ATTACKS } from "./melee.ts";
+import { ENEMY_MELEE_DAMAGE, MELEE_ATTACKS } from "./melee.ts";
+
+/** What an ordinary body's blade of `hearts` costs the player: cut by `ENEMY_MELEE_DAMAGE`, in whole health points. */
+const blade = (hearts: number): number => Math.floor(hearts * ENEMY_MELEE_DAMAGE * HP_PER_HEART + 1e-6) / HP_PER_HEART;
 import { SPELL_COST_BASE, SPELL_COST_PER_RANK, slotCost } from "./spells.ts";
 import { WORLD_W, WORLD_H, circleHitsWall, entryPosition } from "./collide.ts";
 import { GRID_W, GRID_H, TILE_PX, Tile } from "../types.ts";
@@ -323,16 +326,16 @@ describe("the player taking damage", () => {
     swipe(1);
     swipe(2);
     run(w, 2);
-    expect(w.player.hearts).toBeCloseTo(6 - 0.7, 5);
+    expect(w.player.hearts).toBeCloseTo(6 - blade(0.7), 5);
     run(w, 10);
-    expect(w.player.hearts).toBeCloseTo(6 - 0.7, 5);
+    expect(w.player.hearts).toBeCloseTo(6 - blade(0.7), 5);
 
     // Past the window, a fresh attack lands again. The window is 950 ms now,
     // so the wait is measured against `INVULN_MS` rather than a step count.
     run(w, Math.ceil(INVULN_MS / (1000 / 60)) + 4);
     swipe(3);
     run(w, 3);
-    expect(w.player.hearts).toBeCloseTo(6 - 1.4, 5);
+    expect(w.player.hearts).toBeCloseTo(6 - 2 * blade(0.7), 5);
   });
 
   it("is not hurt from behind a charging enemy", () => {
@@ -381,7 +384,7 @@ describe("the player taking damage", () => {
       step(w, NO_INPUT);
       for (const ev of w.events) if (ev.kind === "player_hit") causes.push(ev.what ?? "");
     }
-    expect(w.player.hearts).toBeCloseTo(6 - 0.7, 5);
+    expect(w.player.hearts).toBeCloseTo(6 - blade(0.7), 5);
     expect(causes).toEqual(["melee:rusher"]);
   });
 
@@ -974,7 +977,7 @@ describe("enemy behaviour", () => {
     }
     // The telegraph is the warning; the first committed hit is real.
     expect(causes).toContain("melee:rusher");
-    expect(w.player.hearts).toBeCloseTo(before - 0.7, 5);
+    expect(w.player.hearts).toBeCloseTo(before - blade(0.7), 5);
   });
 
   it("stuns the player with lightning, but never for longer than the mercy", () => {
@@ -1030,7 +1033,7 @@ describe("enemy behaviour", () => {
     beginWindup(w, e, w.player);
     const hearts = w.player.hearts;
     for (let i = 0; i < 120 && w.player.hearts === hearts; i++) step(w, NO_INPUT);
-    expect(w.player.hearts).toBeCloseTo(hearts - 1.5, 5);
+    expect(w.player.hearts).toBeCloseTo(hearts - blade(1.5), 5);
     expect(w.player.stunMs).toBeGreaterThan(0);
   });
 

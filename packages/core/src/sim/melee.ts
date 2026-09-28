@@ -887,6 +887,20 @@ export interface MeleeAttackSpec {
 }
 
 /**
+ * **What an ordinary body's blade costs**, as a share of its spec's
+ * `damage`: every melee blow but the king's and the Frontier Veteran's, which
+ * are tuned on their own (`bossStringHearts`, `GUARDIAN_POWER`).
+ *
+ * Every body's first attack in a room used to do no damage (Lidén's "miss the
+ * first time"). It was taken out so a blade that lands always costs, and it
+ * turned out to have been carrying most of the melee damage the player did
+ * not take: most bodies die before a second attack, so the free first one was
+ * about 62% of it, and the rooms came out a third to a half harder (the
+ * harness, 24 runs a side). This is the same cut spread over every blow.
+ */
+export const ENEMY_MELEE_DAMAGE = 0.4;
+
+/**
  * The three melee kinds are the same primitive with different numbers, not
  * three systems. A thrust is narrow, long and does not sweep, so it is dodged
  * sideways; a slash is wide, short and sweeps once, so it is dodged backwards;

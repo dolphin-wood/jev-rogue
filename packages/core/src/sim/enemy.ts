@@ -30,7 +30,7 @@ import { distanceAt, followField, UNREACHABLE } from "./flow.ts";
 import { turnToward } from "./aim.ts";
 import {
   makeStrike, makeSwingBox, armMeleeAttack, advanceBox, markStrike, strikeMarked,
-  wallSlamSquareness, MELEE_ATTACKS,
+  wallSlamSquareness, MELEE_ATTACKS, ENEMY_MELEE_DAMAGE,
 } from "./melee.ts";
 import {
   HASTE_SPEED, castRanged, castShockwave, isElite, layWake, startWake, planted, riftLance, shockCleave, shockRing, sightBeam,
@@ -2037,7 +2037,7 @@ export function beginWindup(world: World, e: Enemy, target: { x: number; y: numb
   // The king's blow costs what its place in the string says (`bossStringHearts`), not the spec's figure.
   const mult = e.archetype === "boss"
     ? e.damageMult * bossStringHearts(e.bossStringN - 1 - e.bossString.length, e.bossStringN) / Math.max(0.01, spec.damage)
-    : e.damageMult;
+    : e.damageMult * (e.guardian ? 1 : ENEMY_MELEE_DAMAGE);
   armMeleeAttack(e.swing, spec, e.x, e.y, bossAim(e, v.x, v.y), e.strafe, mult);
   // The Veteran's body is enlarged independently of the warden's attack art.
   // ResolveBodies keeps the player just outside that enlarged disc before the
