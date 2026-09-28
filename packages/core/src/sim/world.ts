@@ -53,6 +53,7 @@ import {
 import { COIN_VALUE, MANA_ORB, drop, makePickupPool, stepPickups } from "./pickups.ts";
 import { audienceKill, makeAudience, stepAudience } from "./audience.ts";
 import { GUARDIAN_XP, makeGuardian, stepGuardian } from "./guardian.ts";
+import { makeObjective, placeTargets, stepObjective } from "./objective.ts";
 import {
   enteredPortal, makePortal, placeRewardNear, portalsBefore, raisePortals, stepPortals, stepReward,
 } from "./exits.ts";
@@ -424,6 +425,12 @@ export function equipItem(
 export function createWorld(input: CreateWorldOptions): World {
   const w = buildWorld(input);
   if (input.guardian) placeGuardian(w);
+  // The room's objective (doc 025), with its own waves kept to send again.
+  const objective = input.room.objective;
+  if (objective) {
+    w.objective = makeObjective(objective, w.pendingWaves);
+    if (objective === "destroy") placeTargets(w);
+  }
   return w;
 }
 
@@ -712,7 +719,8 @@ export function worldCleared(w: World): boolean {
   // A burst still hanging is part of the fight: the room clears once it has flown.
   // And a room whose king is still to come — the throne before he stands, room 5
   // before the roof gives (doc 022) — is empty, not clear.
-  return !w.awaitingBoss && w.enemies.length === 0 && w.pendingWaves.length === 0 && livingSummoners(w) === 0
+  // Nor a room whose objective is still to meet (doc 025): a hold's clock, a destroy room's turrets.
+  return !w.awaitingBoss && !(w.objective && !w.objective.done) && w.enemies.length === 0 && w.pendingWaves.length === 0 && livingSummoners(w) === 0
     && w.deathBursts.length === 0;
 }
 
@@ -762,6 +770,8 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   stepTrail(w, dtMs);
   stepEnchant(w, dtMs);
   refreshFlow(w);
+  // A room objective (doc 025): its clock, its targets, and the waves it sends again.
+  stepObjective(w, dtMs);
   releaseWaves(w);
 
   resolveSwing(w, dtMs);

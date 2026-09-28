@@ -13,6 +13,7 @@ import type { AffixContext } from "../encounters/affixes.ts";
 import type { BossScript } from "../encounters/enemies.ts";
 import type { AudienceState } from "./audience.ts";
 import type { GuardianState } from "./guardian.ts";
+import type { ObjectiveState } from "./objective.ts";
 import type { FlowField } from "./flow.ts";
 import type { SwingBox } from "./melee.ts";
 import type { SpellSlot } from "./spells.ts";
@@ -1041,6 +1042,8 @@ export interface Enemy {
    * struck ground, no hurt (`stepBossMeteor`).
    */
   bossEntrance?: boolean;
+  /** One of a destroy room's turrets (doc 025): bringing all of them down ends the fight. */
+  objectiveTarget?: true;
   /** Room 10's guardian (doc 024): a warden that is the Drowned Warden (`sim/guardian.ts`). */
   guardian?: GuardianState;
   /** Going back up out of the room at the end of the first audience (`stepBossMeteor`). */
@@ -2190,6 +2193,8 @@ export interface World {
   audience?: AudienceState;
   /** Room 10's guardian fight (doc 024): seen whole from the first frame. */
   guardianRoom?: boolean;
+  /** The room's objective in play (doc 025, `sim/objective.ts`). */
+  objective?: ObjectiveState;
   /**
    * Half the camera's view, px: what the player can see. A body fires only
    * from wholly inside it, and closes slower further off (`firePresence`).

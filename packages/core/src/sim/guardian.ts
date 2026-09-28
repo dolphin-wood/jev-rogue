@@ -17,20 +17,20 @@ import { ENEMIES } from "../encounters/enemies.ts";
 import { bossSummonSpots } from "./world.ts";
 
 /** Its bar. Sized for a room-10 build to take 40 to 60 s; `pnpm play` sets it (doc 024). */
-export const GUARDIAN_HP = 1000;
+export const GUARDIAN_HP = 1300;
 /**
  * What its blows and shots cost, as a multiple of a warden's. Not the room's
  * ramp band (×1.45 at room 10): on a body that rams and sprays from across the
  * room that measured at five and a half hearts a fight, and nearly every run
  * ended here.
  */
-export const GUARDIAN_POWER = 0.3;
+export const GUARDIAN_POWER = 0.5;
 /**
  * What one hit of its spray costs, in hearts: a warden's shot is a whole heart
  * and a burn, and it was the larger half of what the guardian cost a weaker
  * player — the burn stays, the heart does not.
  */
-export const GUARDIAN_FLAME = 0.4;
+export const GUARDIAN_FLAME = 0.6;
 /**
  * Its blunderbuss's period, as a multiple of a warden's 4.2 s. A warden's shot
  * is its whole threat; the guardian's is half of it, with the ram the other

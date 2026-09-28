@@ -9,7 +9,7 @@ import {
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
   moodTransform, tintRGBA, dashInvulnerable, MELEE, ARMOUR_BREAK_MS, brakeFraction, ENEMIES,
-  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_PHASES, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
+  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_PHASES, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, audienceRoomFor, RUN_GUARDIAN_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTierKey, affixFitsSpell, itemShape,
@@ -779,8 +779,12 @@ const CLOSE_DEAD_X = 34;
  * its one cell of wall, and the HUD lies over the room as it does everywhere.
  */
 const BOSS_VIEW_SPARE = 1;
-/** The Drowned Warden's cold light (doc 024): a flooded blue-green multiply over the warden's own shading. */
-const GUARDIAN_TINT = 0x9fd8d0;
+/**
+ * The Drowned Warden's colour (doc 024): a deep violet multiply over the
+ * warden's own shading. The first cut's blue-green sank into the flooded
+ * floor it stands on; violet is in no body's palette and no telegraph's.
+ */
+const GUARDIAN_TINT = 0xb48cff;
 /** The level a depth's own sound sits at everywhere in it (`ambienceLevels`): under a brazier or a grate beside the player. */
 const DEPTH_AMBIENCE = 0.3;
 /**
@@ -1987,6 +1991,12 @@ export class PlayScene extends Phaser.Scene {
       // The king's two meetings (doc 022), on the build held now; the title is put away if it is up.
       toAudience: () => { if (!this.entering) { this.hideTitle(); void this.enterRoom(this.audienceRoom); } },
       toGuardian: () => { if (!this.entering) { this.hideTitle(); void this.enterRoom(RUN_GUARDIAN_ROOM); } },
+      toObjective: (kind) => {
+        if (this.entering) return;
+        this.hideTitle();
+        this.forceObjective = kind;
+        void this.enterRoom(Math.max(3, this.roomIndex === this.audienceRoom || this.roomIndex === RUN_GUARDIAN_ROOM ? 7 : this.roomIndex));
+      },
       toFinal: () => { if (!this.entering) { this.hideTitle(); void this.enterRoom(RUN_BOSS_ROOM); } },
       bossLab: {
         enter: () => this.enterBossLab(),
@@ -2387,7 +2397,11 @@ export class PlayScene extends Phaser.Scene {
       this.planRecords.set("room", { decisions: planned.decisions });
       playtestLog.decide(index, "room", planned.decisions);
     }
-    const room: RoomPlan = planned ? planned.plan : fixedRoom(stage === "boss" ? "boss" : "shop", src.stream("room"));
+    const plannedRoom: RoomPlan = planned ? planned.plan : fixedRoom(stage === "boss" ? "boss" : "shop", src.stream("room"));
+    // The debug panel's objective entrances (doc 025): this fight, with the objective forced.
+    const forced = this.forceObjective;
+    this.forceObjective = null;
+    const room: RoomPlan = forced && fight ? { ...plannedRoom, objective: forced } : plannedRoom;
     const encounter = planned?.plan.encounter ?? null;
     const mood: Mood = room.params.mood;
     const { offer, stock } = await this.planOffer(ctx, src, run, stage, fight, held, ask, planned?.offer);
@@ -2459,11 +2473,15 @@ export class PlayScene extends Phaser.Scene {
     this.camFocus = null;
     this.audienceK = 0;
     this.audienceDoneAt = -1;
-    // The guardian's room opens already whole, and its name comes up over it (doc 024).
-    if (this.world.guardianRoom) {
-      this.audienceK = 1;
+    // A room with an objective says so as it opens (doc 025).
+    const objective = this.world.objective?.kind;
+    if (objective) this.time.delayedCall(500, () => {
+      if (this.world.objective && !this.world.objective.done)
+        this.showKingName(t(objective === "hold" ? "hud.objectiveHold" : "hud.objectiveDestroy"));
+    });
+    // The guardian's name comes up as its room opens (doc 024); the view is the close one, as in any room.
+    if (this.world.guardianRoom)
       this.time.delayedCall(700, () => { if (this.world.guardianRoom && !this.world.cleared) this.showKingName(t("hud.guardianTitle")); });
-    }
 
     this.kingIntro = null;
     this.kingGoblet = null;
@@ -14837,6 +14855,9 @@ export class PlayScene extends Phaser.Scene {
     this.drawMinimap(this.camFocus.x, this.camFocus.y, halfW, halfH);
   }
 
+  /** An objective the debug panel forces on the next fight (doc 025). */
+  private forceObjective: "hold" | "destroy" | null = null;
+
   /** Which of rooms 4 to 6 the king drops into this run (doc 022): a function of the run's seed. */
   private get audienceRoom(): number {
     return audienceRoomFor(this.runSeed);
@@ -14849,9 +14870,7 @@ export class PlayScene extends Phaser.Scene {
 
   private audiencePull(delta: number): number {
     const a = this.world.audience;
-    // Room 10's guardian room is seen whole until it is cleared (doc 024).
-    let wide = (!!a && (a.phase === "rumble" || a.phase === "stones" || a.phase === "fight"))
-      || (!!this.world.guardianRoom && !this.world.cleared);
+    let wide = !!a && (a.phase === "rumble" || a.phase === "stones" || a.phase === "fight");
     if (a?.phase === "done") {
       if (this.audienceDoneAt < 0) this.audienceDoneAt = this.time.now;
       wide = this.time.now - this.audienceDoneAt < AUDIENCE_HOLD_MS;
@@ -15571,6 +15590,17 @@ export class PlayScene extends Phaser.Scene {
       const unbind = `boss_unbind_${Math.min(2, Math.max(1, e.phase - 1))}`;
       drawEnemy(this, w, e, this.textureKey, this.atlas, this.sprites, label, this.subspecies,
         roaring ? (BOSS_ROAR_MS - e.bossRoarMs < BOSS_UNBIND_BURST_MS ? unbind : `${unbind}_bare`) : undefined);
+      /*
+       * **A destroy room's turret wears a mark** (doc 025): a gold diamond over
+       * it, bobbing, so the three the room is about are told from the fight
+       * round them at a glance.
+       */
+      if (e.objectiveTarget && e.hp > 0) {
+        const bob = Math.sin(this.time.now / 260 + e.id) * 2;
+        const y = e.y - e.radius - 22 + bob;
+        this.sprites.rectangle(e.x, y, 7, 7, 0xffd45e, 1).setRotation(Math.PI / 4)
+          .setStrokeStyle(1.5, 0x0d0b1f, 1).setDepth(9.5);
+      }
     }
     if (this.bossDeath) {
       const { x, y, startedAt } = this.bossDeath;
@@ -16123,7 +16153,7 @@ export class PlayScene extends Phaser.Scene {
      */
     const bossFade = this.fadeMark();
     // The king's bar, or the Drowned Warden's (doc 024): the one other body that gets one.
-    const boss = w.enemies.find((e) => e.archetype === "boss" && e.hp > 0) ?? w.enemies.find((e) => e.guardian && e.hp > 0);
+    const boss = w.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
     if (boss) {
       const BW = 280;
       const BX = UI_W / 2 - BW / 2;
@@ -16145,9 +16175,9 @@ export class PlayScene extends Phaser.Scene {
         this.sprites.add(shieldMark(this, this.atlas, this.uiTextureKey, BX - 7, BY - 7, 8).setDepth(102));
       }
       // The marks are the script's (doc 022): the final's phase III at the half; none on the first audience's.
-      for (const mark of boss.guardian ? GUARDIAN_PHASES : boss.bossScript === "audience" ? [] : kingMarks(boss.bossScript))
+      for (const mark of boss.bossScript === "audience" ? [] : kingMarks(boss.bossScript))
         this.sprites.rectangle(BX + BW * mark, BY, 1, 9, 0xffe9a8, 0.8).setOrigin(0.5).setDepth(102);
-      this.ftext("boss:title", BX, BY - 11, t(boss.guardian ? "hud.guardianTitle" : boss.bossScript === "audience" ? "hud.bossUnknown" : "hud.bossTitle"), {
+      this.ftext("boss:title", BX, BY - 11, t(boss.bossScript === "audience" ? "hud.bossUnknown" : "hud.bossTitle"), {
         fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(7, ZOOM) * ZOOM)}px`, color: "#ffe9a8",
       }).setScale(1 / ZOOM).setOrigin(0, 0.5).setDepth(102);
       // The phase is named in the lab only: in a run the fight says it — the armour, the roar, the bar's colour.
@@ -16156,6 +16186,21 @@ export class PlayScene extends Phaser.Scene {
           fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(7, ZOOM) * ZOOM)}px`, color: boss.phase >= 3 ? "#ff9a6a" : "#c9cfe8",
         }).setScale(1 / ZOOM).setOrigin(1, 0.5).setDepth(102);
       this.fadeIfCovering(bossFade, BX - 2, BY - 18, BW + 4, 26);
+    }
+
+    /*
+     * **The room's objective** (doc 025), where the boss's bar would be: a
+     * hold's seconds, or the turrets still standing. Gone once it is met.
+     */
+    const obj = w.objective;
+    if (obj && !obj.done) {
+      const text = obj.kind === "hold"
+        ? t("hud.holdLeft", { s: holdLeftS(w) })
+        : t("hud.targetsLeft", { n: targetsLeft(w), total: DESTROY_TARGETS });
+      this.ftext("objective", UI_W / 2, UI_H - 52, text, {
+        fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(9, ZOOM) * ZOOM)}px`, color: "#ffe9a8",
+        stroke: "#0d0b1f", strokeThickness: 3 * ZOOM,
+      }).setScale(1 / ZOOM).setOrigin(0.5).setDepth(102);
     }
 
     const topFade = this.fadeMark();
@@ -16863,6 +16908,26 @@ function drawEnemy(
   const airK = Math.min(1, Math.abs(lift) / 84);
   // Up out of the hall the shadow goes too, and comes back as he falls: the mark is what is read up there.
   const skyK = Math.max(0, Math.min(1, (lift - 84) / 160));
+  /*
+   * **The Drowned Warden's presence** (doc 024): a dark violet pool breathing
+   * under it and wisps of it rising round the body, so the room reads as its
+   * before anything else in it does.
+   */
+  if (e.guardian && e.hp > 0) {
+    const now = scene.time.now;
+    const pulse = 0.5 + 0.5 * Math.sin(now / 420);
+    group.ellipse(e.x, e.y + e.radius * 0.35, e.radius * (3 + 0.35 * pulse), e.radius * (1.25 + 0.15 * pulse), 0x2a0f45, 0.35 + 0.15 * pulse)
+      .setDepth(2.9);
+    group.ellipse(e.x, e.y + e.radius * 0.35, e.radius * (3.4 + 0.5 * pulse), e.radius * (1.45 + 0.2 * pulse), 0, 0)
+      .setStrokeStyle(1.5, 0x9b6cff, 0.25 + 0.3 * pulse).setDepth(2.95);
+    for (let i = 0; i < 6; i++) {
+      const k = ((now / 1600 + i / 6) % 1);
+      const a = i * 1.7 + e.id;
+      const wx = e.x + Math.cos(a) * e.radius * (0.9 + 0.3 * Math.sin(now / 700 + i));
+      const wy = e.y + e.radius * 0.3 - k * e.radius * 3.2;
+      group.circle(wx, wy, 1.6 + 1.6 * (1 - k), 0x7a4cc8, 0.55 * (1 - k)).setDepth(bodyDepth(e.y, 0) + (i % 2 ? 0.01 : -0.01));
+    }
+  }
   const shadowName = `shadow_${ENEMY_FRAME[e.archetype].replace("enemy_", "")}`;
   if (atlas.has(shadowName)) {
     const shadow = group.image(
@@ -17105,6 +17170,24 @@ function drawEnemy(
     const burst = group.circle(e.x, e.y + bob, e.radius + 3 + 18 * (1 - t), 0, 0);
     burst.setStrokeStyle(2, SHIELD_BLUE, t);
     burst.setDepth(8);
+  }
+
+  /*
+   * **The Drowned Warden's bar is over its head** (doc 024), not the boss's
+   * across the bottom: its name, its health and the marks where its phases
+   * turn, above the armour bar. The bottom bar is the king's alone.
+   */
+  if (e.guardian && e.hp > 0 && e.spawnFadeMs <= 0) {
+    const W = 64;
+    const y = e.y + bob - overheadPx(e) - 6;
+    group.rectangle(e.x - W / 2 - 1, y, W + 2, 5, 0x0d0b1f, 0.9).setOrigin(0, 0.5).setDepth(9);
+    group.rectangle(e.x - W / 2, y, W * Math.max(0, e.hp / Math.max(1, e.maxHp)), 3, e.phase >= 3 ? 0xff5a3a : 0xd83a3a, 1)
+      .setOrigin(0, 0.5).setDepth(10);
+    for (const at of GUARDIAN_PHASES) group.rectangle(e.x - W / 2 + W * at, y, 1, 5, 0xffe9a8, 0.8).setOrigin(0.5).setDepth(10.5);
+    label?.(`guardian:name:${e.id}`, e.x, y - 7, t("hud.guardianTitle"), {
+      fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(6, ZOOM) * ZOOM)}px`, color: "#e8c8ff",
+      stroke: "#0d0b1f", strokeThickness: 2 * ZOOM,
+    }).setScale(1 / ZOOM).setOrigin(0.5, 1).setDepth(10.5);
   }
 
   /*
@@ -18887,7 +18970,9 @@ function floorFrame(x: number, y: number, drains: ReadonlySet<number>): string {
  * drawings are about that size; the Crypt King stands far taller than the
  * circle he fights on, so his sit over his crown rather than on his chest.
  */
-function overheadPx(e: { archetype: string; radius: number }): number {
+function overheadPx(e: { archetype: string; radius: number; guardian?: unknown }): number {
+  // The Drowned Warden is drawn at `GUARDIAN_SCALE` from its feet, so its head is that much higher.
+  if (e.guardian) return Math.round((e.radius / GUARDIAN_SCALE + 9) * GUARDIAN_SCALE) + 6;
   return e.archetype === "boss" ? 56 + BOSS_DRAW_RISE_PX : e.radius + 9;
 }
 

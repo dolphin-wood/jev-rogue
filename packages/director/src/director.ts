@@ -17,7 +17,7 @@ import {
   assemblePortals, SCHOOL_OF,
   rampDensities, rampAnchors, rampSubspecies, rampElitePresence, rampFor, rampRoster,
   keysLean, UNMEASURED, PORTAL_NEED_TEMPERATURE, PORTAL_TAIL_TEMPERATURE, NPC_MIN_NEED,
-  buildFacts, NO_BUILD, enemy, isFixedFightRoom, audienceRoomFor, isGuardianRoom, baseArchetype, audienceZones, biomeFor, BIOME_TEMPERATURE,
+  buildFacts, NO_BUILD, enemy, isFixedFightRoom, audienceRoomFor, objectiveFor, isGuardianRoom, baseArchetype, audienceZones, biomeFor, BIOME_TEMPERATURE,
 } from "@jr/core";
 import type {
   CounterScore, Distribution, EncounterProfile, RoomPlan,
@@ -1345,8 +1345,15 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
        * answer there and is not asked (doc 002).
        */
       const depthTemperature = BIOME_TEMPERATURE[biomeFor(door.room_index)];
+      /*
+       * **A destroy room is open floor** (doc 025): its turrets are what the
+       * room is about, and a wall to stand behind would answer them without a
+       * fight. So its space is the bare arena, and the space is not asked.
+       */
+      const objective = objectiveFor(ctx.seed, ctx.room_index, door.room_type);
       const askQ1 = Object.fromEntries(Object.entries(q1).filter(([n]) =>
-        !firstLook.includes(n) && !(depthTemperature && n === "mood_temperature")));
+        !firstLook.includes(n) && !(depthTemperature && n === "mood_temperature")
+        && !(objective === "destroy" && n === "space")));
       const r1 = await ask(
         offerQ ? mergeQuestions([askQ1, offerQ.questions]) : askQ1,
         offerQ ? { ...flatState(ctx, offerQ.state), ...state1 } : state1 as unknown as Record<string, unknown>,
@@ -1379,7 +1386,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
       const tension: Tension = tensions.length > 1
         ? pick("next_tension", TEMPERATURE.next_tension) as Tension
         : (tensions[0] ?? suggested);
-      const space = pick("space", ROOM_TEMPERATURES.space ?? 0.8) as SpaceArchetypeId;
+      const space = objective === "destroy" ? "audience_arena" : pick("space", ROOM_TEMPERATURES.space ?? 0.8) as SpaceArchetypeId;
       /*
        * **The look alternates in code** (`LOOK_REPEAT_PENALTY`).
        *
@@ -1535,10 +1542,12 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
         }
       }
 
+      // Another way to end the fight (doc 025), drawn by code from the run's seed, never asked.
       const plan: RoomPlan = {
         ...base,
         zones: dedupeResources(zones),
         encounter,
+        ...(objective ? { objective } : {}),
         source: { ...base.source, params: r1.source, encounter: encounter ? r2.source : "none" },
       };
 

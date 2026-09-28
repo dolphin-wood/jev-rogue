@@ -73,3 +73,24 @@ describe("the depths' light", () => {
     expect(seen.flatMap((o) => Object.keys(o.questions))).toContain("mood_temperature");
   });
 });
+
+describe("a destroy room's floor (doc 025)", () => {
+  it("is the bare arena: no wall inside it for the player to stand behind", async () => {
+    const { objectiveFor, GRID_W: W, Tile: T } = await import("@jr/core");
+    let found = 0;
+    for (let s = 0; s < 80 && found < 4; s++) {
+      for (let i = 3; i <= 14 && found < 4; i++) {
+        const seed = `destroy-${s}`;
+        if (objectiveFor(seed, i, "combat") !== "destroy") continue;
+        found++;
+        const c = { ...ctx(i, seed), seed, run_id: seed };
+        const r = await createDirector("rule").planRoom(c, { room_index: i, door_slot: 0, room_type: "combat" }, "build");
+        expect(r.plan.objective).toBe("destroy");
+        expect(r.plan.params.space).toBe("audience_arena");
+        for (let y = 1; y < r.plan.extent.h - 1; y++)
+          for (let x = 1; x < r.plan.extent.w - 1; x++) expect(r.plan.grid[y * W + x]).toBe(T.Floor);
+      }
+    }
+    expect(found).toBeGreaterThan(0);
+  });
+});
