@@ -272,6 +272,8 @@ export function fireUnit(
   const powers = noPowers();
   addPower(powers, str(base.params, "element", "none") as Element, num(base.params, "element_power", 1));
   addPowers(powers, mods.elements);
+  // Fire only an affix brought: its burn stacks lower (`ElementPowers.borrowedFire`).
+  if (powers.fire > 0 && str(base.params, "element", "none") !== "fire") powers.borrowedFire = true;
   const speed = num(base.params, "speed") * mods.speedMult;
   const radius = num(base.params, "radius") * mods.radiusMult
     * (charged ? CHARGE_TAP_SIZE + (1 - CHARGE_TAP_SIZE) * share : 1);

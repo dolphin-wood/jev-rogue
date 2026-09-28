@@ -9,7 +9,7 @@ import { ITEMS, plainInstance } from "../spells/index.ts";
 import { KING_AUDIENCE_XP, LEVEL_HEARTS, levelAt, withLevels, xpForKill } from "../run/levels.ts";
 import type { ItemRegistry } from "../spells/items.ts";
 import { GRID_W, GRID_H, TILE_PX, Tile } from "../types.ts";
-import { STATUS_ELEMENTS, copyPowers, noPowers } from "../content/tags.ts";
+import { BORROWED_BURN_SOURCES, STATUS_ELEMENTS, copyPowers, noPowers } from "../content/tags.ts";
 import { PROC_SPLIT } from "./cast.ts";
 import type { ElementPowers } from "../content/tags.ts";
 import type { MeleeKind, SpawnGroup } from "../types.ts";
@@ -3793,7 +3793,7 @@ function applyElementsTo(e: Enemy, powers: ElementPowers, mult = 1, proc = 1): v
   // see `Bullet.proc`.
   for (const el of STATUS_ELEMENTS) {
     const p = powers[el] * proc;
-    if (p > 0) applyElementTo(e, el, p, mult);
+    if (p > 0) applyElementTo(e, el, p, mult, el === "fire" && powers.borrowedFire ? BORROWED_BURN_SOURCES : 4);
   }
 }
 
@@ -3804,7 +3804,7 @@ function applyElementsTo(e: Enemy, powers: ElementPowers, mult = 1, proc = 1): v
  * already running keeps the strongest thing feeding it; a fresh one starts at
  * whatever lit it.
  */
-function applyElementTo(e: Enemy, element: string, power: number, mult = 1): void {
+function applyElementTo(e: Enemy, element: string, power: number, mult = 1, burnCap = 4): void {
   /*
    * An immune body takes no status either; a resistant one builds it slower.
    * The king roaring is immune to everything (`hurtEnemy`), and only his
@@ -3821,7 +3821,8 @@ function applyElementTo(e: Enemy, element: string, power: number, mult = 1): voi
   if (element === "fire") {
     if (e.burnMs > 0) {
       e.burnMs = Math.min(ENEMY_BURN_MS, e.burnMs + ENEMY_BURN_MS * add * 0.6);
-      e.burnSources = Math.min(4, e.burnSources + 1);
+      // Up to this hit's own cap, never taking off what a stronger fire already lit.
+      if (e.burnSources < burnCap) e.burnSources = Math.min(burnCap, e.burnSources + 1);
       return;
     }
     e.burnBuild = Math.min(1, e.burnBuild + add);

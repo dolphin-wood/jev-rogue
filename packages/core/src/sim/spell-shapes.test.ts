@@ -577,6 +577,30 @@ describe("the run's own affixes (Dash Slash)", () => {
   });
 });
 
+describe("fire an affix lends (kindle on a spell that is not fire)", () => {
+  const burnOn = (spell: string, affix?: string): number => {
+    const w = arena(spell, `burn-${spell}-${affix ?? "bare"}`);
+    if (affix) {
+      let slot = w.spells[0]!;
+      for (let t = 0; t < 3; t++) slot = attachAffix(slot, affix) ?? slot;
+      w.spells[0] = slot;
+    }
+    const e = body(w, 90, 0);
+    let most = 0;
+    for (let i = 0; i < 600; i++) {
+      run(w, at(e.x, e.y, { spell: 0 }), 1, [e]);
+      w.player.mana = w.staff.mana_max;
+      most = Math.max(most, e.burnSources);
+    }
+    return most;
+  };
+
+  it("keeps two sources lit at most, where a fire spell's own burn stacks to four", () => {
+    expect(burnOn("magic_bolt", "kindle")).toBe(2);
+    expect(burnOn("ember_dart")).toBeGreaterThan(2);
+  });
+});
+
 describe("stance (Counter Stance)", () => {
   const item = ITEMS.get("counter_stance")!;
   const full = Math.floor(Number(item.params["damage"]) * SPELL_DAMAGE_SCALE);
