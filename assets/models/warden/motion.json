@@ -27,12 +27,6 @@
     "idle_bare1": "bare1"
   },
   "poses": {
-    "walk0": { "base": "stand" },
-    "walk1": { "base": "stand", "parts": { "torso": { "at": [0, -2] } } },
-    "walk2": { "base": "stand", "parts": { "torso": { "at": [0, -1] } } },
-    "walk3": { "base": "stand" },
-    "walk4": { "base": "stand", "parts": { "torso": { "at": [0, -2] } } },
-    "walk5": { "base": "stand", "parts": { "torso": { "at": [0, -1] } } },
     "bare1": {
       "base": "bare",
       "parts": {
