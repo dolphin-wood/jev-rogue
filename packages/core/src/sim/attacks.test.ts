@@ -486,12 +486,56 @@ describe("the delver", () => {
   it("goes under, cannot be touched there, and erupts where the mound stops", () => {
     const w = world();
     const d = body(w, "delver", 120, 0);
-    d.delveMs = 0;
+    // Not hit for a while: it does not go under a sword (`DIVE_AFTER_HIT_MS`).
+    d.delveMs = 0; d.poiseIdleMs = 60_000;
     run(w, 700);
     expect(d.delve === "under" || d.delve === "diving").toBe(true);
     expect(d.airborne).toBe(true);
     for (let i = 0; i < 400 && d.delve !== "emerging"; i++) step(w, idle);
     expect(w.rifts.some((r) => r.length === 0)).toBe(true);
+  });
+
+  it("can be hit while it is still going down, and is out of reach about a second a dive", () => {
+    const w = world();
+    const d = body(w, "delver", 120, 0);
+    d.delveMs = 0; d.poiseIdleMs = 60_000; d.awake = true; d.alertMs = 0;
+    let dove = false;
+    let reachableWhileDiving = 0, untouchable = 0;
+    for (let i = 0; i < 6 * 60; i++) {
+      step(w, idle);
+      if (d.delve === "diving") { dove = true; if (!d.airborne) reachableWhileDiving++; }
+      if (d.airborne) untouchable++;
+      if (d.delve === "emerging") break;
+    }
+    expect(dove).toBe(true);
+    // Most of the dive is above the floor, and in reach.
+    expect(reachableWhileDiving * (1000 / 60)).toBeGreaterThan(300);
+    // A dive's time out of reach, the last of the dive and the run under: about a second.
+    expect(untouchable * (1000 / 60)).toBeLessThanOrEqual(1100);
+  });
+
+  it("does not go under while it is being hit, and a break pulls it back out of a dive", () => {
+    const w = world();
+    const d = body(w, "delver", 120, 0);
+    d.awake = true; d.alertMs = 0; d.hp = d.maxHp = 1000;
+    d.delveMs = 0;
+    // Hit just now: it stays up.
+    hurtEnemy(w, d, 1, "", undefined, 1);
+    step(w, idle);
+    expect(d.delve).toBe("surface");
+    // Left alone past the rule, it goes.
+    run(w, 1100);
+    expect(d.delve).not.toBe("surface");
+    // A break in the dive drops the dive.
+    const w2 = world();
+    const d2 = body(w2, "delver", 120, 0);
+    d2.awake = true; d2.alertMs = 0; d2.hp = d2.maxHp = 1000;
+    d2.delveMs = 0; d2.poiseIdleMs = 60_000;
+    for (let i = 0; i < 30 && d2.delve !== "diving"; i++) step(w2, idle);
+    expect(d2.delve).toBe("diving");
+    expect(hurtEnemy(w2, d2, d2.maxPoise + 1, "", undefined, d2.maxPoise + 1).broke).toBe(true);
+    expect(d2.delve).toBe("surface");
+    expect(d2.airborne).toBe(false);
   });
 });
 

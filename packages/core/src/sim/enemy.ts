@@ -33,7 +33,7 @@ import {
   wallSlamSquareness, MELEE_ATTACKS, ENEMY_MELEE_DAMAGE,
 } from "./melee.ts";
 import {
-  HASTE_SPEED, castRanged, castShockwave, isElite, layWake, startWake, planted, riftLance, shockCleave, shockRing, sightBeam,
+  HASTE_SPEED, cancelDive, castRanged, castShockwave, isElite, layWake, startWake, planted, riftLance, shockCleave, shockRing, sightBeam,
   stepExpansion, submerged,
 } from "./attacks.ts";
 
@@ -888,6 +888,8 @@ export function stagger(world: World, e: Enemy, ms = STAGGER_MS, force = false):
   e.bossString = [];
   e.bossStringAt0 = -1;
   e.bossLinked = false;
+  // And a delver's dive, which it had only begun (`cancelDive`).
+  cancelDive(e);
   dropToken(world, e);
   // And its aim: a hit interrupts a shot being lined up, which is the same
   // rule as interrupting a windup and for the same reason.
@@ -3046,11 +3048,10 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
   if (e.poiseBreakMs > 0) e.poiseBreakMs -= dtMs;
   if (e.poiseGuardMs > 0) e.poiseGuardMs -= dtMs;
   // Poise fills again, slowly, once the body has gone a while unhit (`POISE_REGEN_DELAY_MS`).
-  if (e.maxPoise > 0 && e.poise < e.maxPoise) {
-    e.poiseIdleMs += dtMs;
-    if (e.poiseIdleMs >= POISE_REGEN_DELAY_MS)
-      e.poise = Math.min(e.maxPoise, e.poise + e.maxPoise * POISE_REGEN_PER_S * (dtMs / 1000));
-  }
+  // The clock runs whole or not: a delver reads it too (`DIVE_AFTER_HIT_MS`).
+  e.poiseIdleMs = Math.min(60_000, e.poiseIdleMs + dtMs);
+  if (e.maxPoise > 0 && e.poise < e.maxPoise && e.poiseIdleMs >= POISE_REGEN_DELAY_MS)
+    e.poise = Math.min(e.maxPoise, e.poise + e.maxPoise * POISE_REGEN_PER_S * (dtMs / 1000));
   /*
    * Braking: an ordinary heavy body skids; the Veteran plants much harder.
    * Its charge already launches at full speed, so a strong first-frame drag

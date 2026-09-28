@@ -728,7 +728,23 @@ const CHAIN_MS = 5000;
 const CHAIN_LENGTH = TILE_PX * 5;
 const DELVE_SURFACE_MS = 2600;
 const DIVE_MS = 500;
-const DELVE_UNDER_MAX_MS = 1200;
+/**
+ * **How long a delver is out of reach**, which was most of the complaint
+ * ("遁地的怪无敌帧太多了"). It was untouchable from the first frame of the
+ * dive, while it was still visibly above the floor, and up to 1.2 s under it:
+ * 1.7 s of a 4.9 s cycle, a third of its life. Now only the last
+ * `DIVE_UNTOUCHABLE_MS` of the dive, when it is into the ground, and at most
+ * `DELVE_UNDER_MAX_MS` under: about a second.
+ */
+const DELVE_UNDER_MAX_MS = 900;
+const DIVE_UNTOUCHABLE_MS = 150;
+/**
+ * **It does not go under while it is being hit.** A dive is how it moves,
+ * not a dodge: one that could start in the middle of the player's run of
+ * cuts took the body out from under the sword, which reads as the game
+ * cheating. Hit within this long, it stays up and fights.
+ */
+const DIVE_AFTER_HIT_MS = 1000;
 const EMERGE_MS = 600;
 const CINDER_TRAIL_MS = 660;
 const FLARE_MS = 1000;
@@ -1051,14 +1067,16 @@ function stepDelve(w: World, e: Enemy, dtMs: number, seen: { x: number; y: numbe
   e.delveMs -= dtMs;
   switch (e.delve) {
     case "surface":
-      if (e.delveMs <= 0 && e.attack === "approach") {
+      if (e.delveMs <= 0 && e.attack === "approach" && e.staggerMs <= 0 && e.poiseIdleMs >= DIVE_AFTER_HIT_MS) {
         e.delve = "diving";
         e.delveMs = DIVE_MS;
-        e.airborne = true;
+        // Still above the floor, and still in reach, until it is into it.
+        e.airborne = false;
         pose(e, "burrow", DIVE_MS);
       }
       return;
     case "diving":
+      e.airborne = e.delveMs <= DIVE_UNTOUCHABLE_MS;
       if (e.delveMs <= 0) {
         // The heading is locked as it goes under; the mound travels a straight line.
         const v = normalise(seen.x - e.x, seen.y - e.y);
@@ -1111,6 +1129,19 @@ function stepDelve(w: World, e: Enemy, dtMs: number, seen: { x: number; y: numbe
 /** Whether a body is under the floor: it neither moves by steering nor can be touched. */
 export function submerged(e: Enemy): boolean {
   return e.delve !== "surface";
+}
+
+/**
+ * **A break pulls a delver back up out of its dive** (doc 027): the dive is
+ * dropped, it is on the surface again with its surface clock started over,
+ * and it stays up for the stagger. What the break stops, it stops.
+ */
+export function cancelDive(e: Enemy): void {
+  if (e.delve !== "diving") return;
+  e.delve = "surface";
+  e.delveMs = DELVE_SURFACE_MS;
+  e.airborne = false;
+  if (e.pose === "burrow") { e.pose = ""; e.poseMs = 0; }
 }
 
 /* ============================== world step ================================ */
