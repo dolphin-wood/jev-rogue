@@ -205,14 +205,17 @@ const PARTICLE_POOL = 256;
  */
 const PROPS_PER_ROOM = 6;
 /**
- * How many enemies may be attacking at once, whatever the room holds.
+ * How many enemies may be attacking at once, whatever the room holds — the
+ * most a room's own figure (`Ramp.tokens`, which climbs over the run) may be.
  *
- * Two, which is where the Arkham games sit. Three is defensible and six is
+ * Two was where the Arkham games sit, and it was a flat two from room 3 on,
+ * which the late run outgrew: the build that meets room 12 is not the one
+ * that met room 3. Three now, reached at room 10. Three is defensible and six is
  * not: there is no position that answers six simultaneous commitments, so a
  * room that allows it has one strategy, which is to keep running. See
  * `World.attackTokens`.
  */
-const ATTACK_TOKENS = 2;
+const ATTACK_TOKENS = 3;
 /**
  * ...plus one per this many awake bodies.
  *
@@ -235,16 +238,18 @@ const TOKENS_PER_AWAKE = 3;
  */
 const PLAYER_TRAIL_DEPTH = 24;
 /**
- * How many ranged bodies may be winding up or shooting at once.
+ * How many ranged bodies may be winding up or shooting at once, at most; the
+ * room's own figure is `Ramp.tokens`, as for the blades.
  *
- * Two. It was one, which was correct when the problem was volume and wrong
+ * Three, for the same reason as `ATTACK_TOKENS`; it was two, and before that
+ * one, which was correct when the problem was volume and wrong
  * once the other four constraints landed — every shot is now telegraphed,
  * bodies are silent at close range, they cannot fire while repositioning and
  * they aim at a stale position. Stacked with a cap of one, ranged enemies
  * dealt no damage at all. The cap exists so that three shooters are not three
  * times the fire; it does not need to make them harmless.
  */
-const FIRE_TOKENS = 2;
+const FIRE_TOKENS = 3;
 /**
  * The view the simulation assumes when no camera says otherwise: the viewport,
  * one 21 × 13-tile view (doc 017). The harness plays against it.

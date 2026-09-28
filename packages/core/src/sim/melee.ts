@@ -896,9 +896,12 @@ export interface MeleeAttackSpec {
  * turned out to have been carrying most of the melee damage the player did
  * not take: most bodies die before a second attack, so the free first one was
  * about 62% of it, and the rooms came out a third to a half harder (the
- * harness, 24 runs a side). This is the same cut spread over every blow.
+ * harness, 24 runs a side). A cut spread over every blow answers it: 0.4
+ * matched the harness's player and played as no damage at all to a real one
+ * (three hearts in fourteen rooms), so it is 0.8 — a hit is felt, and a
+ * player who is hit often loses more of the run to it.
  */
-export const ENEMY_MELEE_DAMAGE = 0.4;
+export const ENEMY_MELEE_DAMAGE = 0.8;
 
 /**
  * The three melee kinds are the same primitive with different numbers, not
