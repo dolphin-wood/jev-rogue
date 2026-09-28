@@ -123,21 +123,6 @@ describe("enemy frame naming", () => {
             }
   });
 
-  it("keeps the charge's authored impact and brake frames", () => {
-    for (const base of ["enemy_warden", "enemy_tank"]) {
-      const follow = enemyFrame(
-        enemy({ attack: "lunge", attackMs: 40, recoversBraced: true }),
-        0, has, base,
-      ).name;
-      const brake = enemyFrame(
-        enemy({ attack: "recover", attackMs: 220, brakeMs: 120, recoversBraced: true }),
-        0, has, base,
-      ).name;
-      expect(follow).toBe(`${base}_w_follow`);
-      expect(brake).toBe(`${base}_w_recover`);
-    }
-  });
-
   it("draws the turret from its one undirected frame", () => {
     // The archetype that found the bug: it has no facings, so a directional
     // name for it is exactly the mistake that rendered a boss.

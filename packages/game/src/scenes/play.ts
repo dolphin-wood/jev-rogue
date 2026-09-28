@@ -17259,9 +17259,11 @@ function specialPose(w: World, e: Enemy): string | null {
       if (e.pose === "guardian_stakes") return e.poseMs > 450 + 250 ? "windup" : "lunge";
       if (e.pose === "musket_fire" || e.pose === "musket_second") return "lunge";
       if (e.pose === "musket_reload" && e.poseMs > 800) return "lunge";
-      // Melee phases deliberately fall through to `enemyPose`. That resolver
-      // owns the authored lunge -> follow -> recover curve; returning `lunge`
-      // here used to hide both the impact frame and the dedicated brake frame.
+      // The shield bash: the plate comes up, then goes through. It borrows the
+      // gun's two frames rather than asking for art it has not been drawn — a
+      // heavy body raising and driving reads the same either way.
+      if (e.attack === "windup") return "windup";
+      if (e.attack === "lunge") return "lunge";
       return null;
     case "bellringer":
       if (e.pose === "cast") return e.poseMs > 260 ? "windup" : "cast";
@@ -17650,9 +17652,7 @@ function drawEnemy(
       facing: e.facing, idleAction: e.idleAction,
       roused,
       sleeping: !e.awake && e.idleRole === "sleeper",
-      // Veteran overrides the warden's normal melee with `charge`; checking
-      // only the base archetype kept it in the thrust frame through braking.
-      recoversBraced: e.meleeKind === "charge" || ENEMIES[e.archetype].melee === "charge",
+      recoversBraced: ENEMIES[e.archetype].melee === "charge",
       flinches: e.archetype !== "boss",
       idlesInStride: e.archetype === "boss",
       stationary: ENEMIES[e.archetype].behaviour === "stationary",
@@ -18009,17 +18009,14 @@ function drawEnemy(
    * feel that only exists in the step function is feel nobody gets.
    */
   if (e.alertMs > 0) {
-    // The delivered alert mark, popping up at the body's upper-right corner.
-    // It belongs to the enemy, never to the middle of the screen; the Veteran
-    // and the small bodies use the same local cue.
+    // The delivered alert mark, popping up as it notices. (A notice held
+    // longer than `ALERT_MS` — the Veteran's entrance — is shown whole.)
     const pop = e.alertMs > ALERT_MS ? 1 : Math.min(1, (ALERT_MS - e.alertMs) / 90);
-    const alertX = e.x + e.radius * 0.82;
-    const alertY = e.y - e.radius - 12 - (1 - pop) * 4;
     if (atlas.has("icon_status_alert")) {
-      group.image(alertX, alertY, textureKey, "icon_status_alert")
+      group.image(e.x, e.y - e.radius - 14 - (1 - pop) * 4, textureKey, "icon_status_alert")
         .setOrigin(0.5).setScale((0.9 * (0.6 + 0.4 * pop)) / TUNED).setDepth(8);
     } else if (label) {
-      label(`alert:${e.id}`, alertX, alertY, "!", {
+      label(`alert:${e.id}`, e.x, e.y - e.radius - 12, "!", {
         fontFamily: fontFamily(), fontSize: "12px", color: "#ffe9a8",
       }).setOrigin(0.5).setDepth(8);
     }
@@ -18060,10 +18057,9 @@ function drawEnemy(
    */
   if (e.brakeMs > 0) {
     const t = brakeFraction(e);
-    // Lean away from travel. This is based on the sprite's facing, not the
-    // signed world-space lunge vector: the old expression cancelled its own
-    // mirror and could tilt a westbound body into the charge.
-    img.setRotation((flipX ? 1 : -1) * 0.34 * t);
+    // The lean is the pose now (see `enemyPose`), so this is only the last of
+    // it — a small tip that eases out as the skid ends.
+    img.setRotation(-e.lungeX * 0.12 * t * (flipX ? -1 : 1));
     for (let i = 0; i < 3; i++) {
       const spread = (i - 1) * 0.5;
       const a = Math.atan2(-e.lungeY, -e.lungeX) + spread;
