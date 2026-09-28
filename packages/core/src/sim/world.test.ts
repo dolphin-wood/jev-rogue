@@ -1617,6 +1617,21 @@ describe("enemy behaviour", () => {
     expect(rusher.staggerMs).toBe(POISE_BREAK_STAGGER_MS);
   });
 
+  it("does not let a blow shove a plated body, only a light one", () => {
+    const w = world();
+    const tank = makeEnemy(1, "tank", 260, 150, []);
+    const rusher = makeEnemy(2, "rusher", 260, 260, []);
+    for (const e of [tank, rusher]) {
+      e.spawnFadeMs = 0; e.awake = true; e.alertMs = 0; e.attackCooldownMs = 1e9; e.speed = 0;
+      e.knockX = 400; e.knockY = 0;
+      w.enemies.push(e);
+    }
+    step(w, NO_INPUT);
+    // The plate drops the shove on the spot; the light body carries it, decaying.
+    expect(tank.knockX).toBe(0);
+    expect(rusher.knockX).toBeGreaterThan(100);
+  });
+
   it("weighs a blow by its mass: a spark barely wears poise, a heavy spell more than the sword", () => {
     expect(poiseOfWeight(0.4)).toBeLessThan(0.2);
     expect(poiseOfWeight(1)).toBeLessThan(SWORD_POISE);

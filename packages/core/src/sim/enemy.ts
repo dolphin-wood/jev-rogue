@@ -2903,7 +2903,10 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
   // the smalls' climb out of the floor rather than starting after it.
   if (e.attackLockMs > 0) e.attackLockMs = Math.max(0, e.attackLockMs - dtMs);
   // The king is never moved by the player: no knockback from any hit, spell or shove (as he holds his ground against bodies).
-  if (e.archetype === "boss") { e.knockX = 0; e.knockY = 0; }
+  // Nor a plated body or the Frontier Veteran (doc 027): a heavy body a sword blow
+  // shoved out of reach had to walk back before it could answer, which made
+  // standing on it the safe place. Plate holds its ground, as Hades' armour does.
+  if (e.archetype === "boss" || e.guardian || plated(e)) { e.knockX = 0; e.knockY = 0; }
   if (anchored(e)) {
     e.knockX = 0;
     e.knockY = 0;
