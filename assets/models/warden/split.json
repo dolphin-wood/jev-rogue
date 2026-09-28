@@ -74,7 +74,7 @@
     }
   ],
   "outlineLuma": 24,
-  "lift": 1.0,
+  "lift": 1,
   "paletteFrames": [
     "enemy_warden_s_idle0",
     "enemy_warden_s_windup",
@@ -112,9 +112,7 @@
   "rest": "torso",
   "fillFrom": {
     "torso": [
-      "steel",
-      "bone",
-      "warm"
+      "steel"
     ]
   },
   "fillRadius": {
@@ -344,13 +342,13 @@
             "name": "foot_l",
             "parent": "torso",
             "joint": "hip_l",
-            "depth": 1.5
+            "depth": 0.5
           },
           {
             "name": "foot_r",
             "parent": "torso",
             "joint": "hip_r",
-            "depth": 1.5
+            "depth": 0.5
           },
           {
             "name": "arm_l",
@@ -387,13 +385,13 @@
             "name": "foot_l",
             "parent": "torso",
             "joint": "hip_l",
-            "depth": 1.5
+            "depth": 0.5
           },
           {
             "name": "foot_r",
             "parent": "torso",
             "joint": "hip_r",
-            "depth": 1.5
+            "depth": 0.5
           },
           {
             "name": "arm_l",
@@ -430,13 +428,13 @@
             "name": "foot_l",
             "parent": "torso",
             "joint": "hip_l",
-            "depth": 1.5
+            "depth": 0.5
           },
           {
             "name": "foot_r",
             "parent": "torso",
             "joint": "hip_r",
-            "depth": 1.5
+            "depth": 0.5
           },
           {
             "name": "arm_l",
