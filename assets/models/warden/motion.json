@@ -8,8 +8,10 @@
   "weight": "heavy",
   "step": {
     "stride": 3,
+    "lift": 2,
     "swing": 1,
-    "bob": 0
+    "bob": 0,
+    "even": true
   },
   "gait": "walk",
   "stand": "stand",

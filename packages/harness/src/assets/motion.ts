@@ -115,7 +115,25 @@ export interface MotionSpec {
    * Frontier Veteran is drawn from it at twice the size, where the heavy
    * stride and bob read as a jolt on every step rather than as a march.
    */
-  readonly step?: Partial<Pick<Timing, "stride" | "lift" | "swing" | "bob">>;
+  readonly step?: Partial<Pick<Timing, "stride" | "lift" | "swing" | "bob">> & {
+    /**
+     * Carry each foot the same distance every frame: back along the ground,
+     * then lifted forward. A sine read at six frames holds a foot still at
+     * each end of its stride and then snaps it through the middle, which on
+     * a short cycle reads as the step being cut off and restarted.
+     */
+    readonly even?: boolean;
+  };
+}
+
+/**
+ * A foot's place along its stride, -1 to 1, on frame `k` of a loop of `n`:
+ * front at the start of the loop, straight back to the rear by half way, and
+ * straight forward again, so every frame moves it by the same step.
+ */
+function evenStride(k: number, n: number): number {
+  const u = (((k % n) + n) % n) / n;
+  return u < 0.5 ? 1 - 4 * u : 4 * u - 3;
 }
 
 const mul = ([x, y]: readonly [number, number], k: number): [number, number] => [Math.round(x * k), Math.round(y * k)];
@@ -207,15 +225,27 @@ function gaitOffsets(spec: MotionSpec, facing: Facing, i: number, n: number): Of
   // be given the bob back. The feet take it only when the body rises: a foot
   // pushed down as the body sinks is a foot through the floor.
   const bob = bobAt(i);
+  const even = spec.step?.even === true;
   for (const [p, sign] of [...withRole(spec, "foot_l").map((p) => [p, 1] as const), ...withRole(spec, "foot_r").map((p) => [p, -1] as const)]) {
-    const along = Math.round(sign * t.stride * short * Math.sin(phase(i)));
-    const lift = -Math.round(t.lift * short * Math.max(0, sign * Math.cos(phase(i))) ** 1.5);
+    let along: number, lift: number;
+    if (even) {
+      // The right foot is half a loop behind the left; lifted only while it
+      // travels forward, highest mid-swing.
+      const k = sign > 0 ? i : i + n / 2;
+      const u = (((k % n) + n) % n) / n;
+      along = Math.round(t.stride * short * evenStride(k, n));
+      lift = u > 0.5 ? -Math.round(t.lift * short * Math.sin((u - 0.5) * 2 * Math.PI)) : 0;
+    } else {
+      along = Math.round(sign * t.stride * short * Math.sin(phase(i)));
+      lift = -Math.round(t.lift * short * Math.max(0, sign * Math.cos(phase(i))) ** 1.5);
+    }
     out[p] = add(mul(fwd, along), [0, lift - Math.min(0, bob)]);
   }
   for (const p of withRole(spec, "body")) out[p] = [0, bob];
   for (const p of withRole(spec, "head")) out[p] = [0, bobAt(i - 1) - bob];
+  // An arm swings against the foot on its own side.
   for (const [p, sign] of [...withRole(spec, "arm_l").map((p) => [p, -1] as const), ...withRole(spec, "arm_r").map((p) => [p, 1] as const)])
-    out[p] = mul(fwd, Math.round(sign * t.swing * short * Math.sin(phase(i))));
+    out[p] = mul(fwd, Math.round(sign * t.swing * short * (even ? evenStride(i, n) : Math.sin(phase(i)))));
   return out;
 }
 
