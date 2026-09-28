@@ -51,10 +51,10 @@ function runDrop(w: World, maxSteps = 60 * 30): Watch {
     step(w, NO_INPUT);
     const p = w.player;
     for (const r of w.rifts)
-      if (r.rock && r.teleMs > 0 && Math.hypot(r.x - p.x, r.y - p.y) < r.width / 2 + PLAYER_RADIUS) watch.stoneOverPlayer = true;
+      if ((r.rock || r.bolt) && r.teleMs > 0 && Math.hypot(r.x - p.x, r.y - p.y) < r.width / 2 + PLAYER_RADIUS) watch.stoneOverPlayer = true;
     for (const ev of w.events) {
       if (ev.what === "audience_drop") { watch.kingAt = { x: ev.x, y: ev.y }; watch.playerAtDrop = { x: p.x, y: p.y }; }
-      if (ev.what === "rockfall")
+      if (ev.kind === "hazard_tick" && (ev.what === "rockfall" || ev.what === "lightning") && w.audience!.phase === "stones")
         for (const e of w.enemies)
           if (e.archetype !== "boss" && e.hp > 0 && Math.hypot(e.x - p.x, e.y - p.y) <= e.radius + PLAYER_RADIUS) watch.bodyTouching = true;
     }
@@ -100,6 +100,23 @@ describe("the drop-in: the roof gives", () => {
       expect(w.xp, seed).toBe(watch.xp);
       expect(w.enemies.filter((e) => e.archetype !== "boss"), seed).toHaveLength(0);
     }
+  });
+
+  it("clears the room all by stones or all by bolts, and both come up across runs", () => {
+    const seen = new Set<string>();
+    for (const seed of ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"]) {
+      const w = audienceWorld(seed);
+      let rocks = 0, bolts = 0;
+      while (w.audience!.phase !== "fight") {
+        step(w, NO_INPUT);
+        for (const ev of w.events)
+          if (ev.kind === "telegraph") { if (ev.what === "rock") rocks++; else if (ev.what === "bolt") bolts++; }
+      }
+      expect(rocks > 0 && bolts > 0, seed).toBe(false);
+      expect(w.audience!.bolts ? bolts : rocks, seed).toBeGreaterThan(0);
+      seen.add(w.audience!.bolts ? "bolts" : "stones");
+    }
+    expect([...seen].sort()).toEqual(["bolts", "stones"]);
   });
 
   it("brings the king down at least eight tiles from the player, hurting nobody", () => {

@@ -4513,8 +4513,12 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
         // a mark. Before the damage, so a detonation sees the body it is on.
         onHit(w, b, e, hookSim(w));
         // From where the shot came, a body-length back along its travel.
-        hurtEnemy(w, e, b.damage, unaware ? "sneak" : damageTag(w, b), { x: px - ux * 24, y: py - uy * 24 },
+        const { blocked } = hurtEnemy(w, e, b.damage, unaware ? "sneak" : damageTag(w, b), { x: px - ux * 24, y: py - uy * 24 },
           b.damage * poiseOfWeight(b.weight || 1));
+        // An enchant's wave is the sword's edge thrown, so it fills the rage
+        // gauge too — at a fraction of a blow's rate, since it pierces a crowd.
+        if (b.delivery === "wave" && !blocked)
+          gainRage(w, (e.hp <= 0 ? RAGE_PER_KILL : RAGE_PER_HIT) * WAVE_RAGE_MULT);
         if (e.hp <= 0) onKill(w, b, e, hookSim(w));
         w.stats.damageDealt += b.damage;
         // A shot that arrived: the numerator of "how often the player hits".
@@ -6227,6 +6231,8 @@ const AMBUSH_MULT = 2;
 /** Rage per connecting sword hit and per sword kill, in segments. */
 const RAGE_PER_HIT = 0.12;
 const RAGE_PER_KILL = 0.35;
+/** What an enchant's wave earns of that, per body it crosses (`stepPlayerBullets`). */
+const WAVE_RAGE_MULT = 0.4;
 
 function gainRage(w: World, amount: number): void {
   const p = w.player;

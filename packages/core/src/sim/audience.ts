@@ -9,7 +9,9 @@
  *    later waves are never called.
  * 2. **The stones**: each body gets a falling stone of its own, the meteor's
  *    rock, marked on it and landing `BOSS_METEOR_MARK_MS` later, a few a beat.
- *    No mark is drawn over the player. The stone kills the body under it, and
+ *    Or, on a coin flip as they begin, every one of them is a bolt of his
+ *    storm instead (`AudienceState.bolts`): the whole room one way, never
+ *    mixed. No mark is drawn over the player. The stone kills the body under it, and
  *    out of the bodies come the hearts: what the player is missing, pulled to
  *    them, and `CRASH_HEARTS_SPARE` more that wait on the floor.
  * 3. **The landing**: his mark far across the room (`KING_DROP_MIN_PX`), and he
@@ -78,6 +80,8 @@ export interface AudienceState {
   /** Bodies killed before the roof gave. */
   kills: number;
   stones: AudienceStone[];
+  /** Whether the room is cleared by bolts out of the sky rather than stones out of the roof: all of it, one way. */
+  bolts: boolean;
   /** Hearts still to come out of the bodies: the ones that fill the bar first, then the spare. */
   fillLeft: number;
   spareLeft: number;
@@ -86,7 +90,7 @@ export interface AudienceState {
 }
 
 export function makeAudience(): AudienceState {
-  return { phase: "setup", ms: 0, phaseAt: 0, kills: 0, stones: [], fillLeft: 0, spareLeft: 0, king: null };
+  return { phase: "setup", ms: 0, phaseAt: 0, kills: 0, stones: [], bolts: false, fillLeft: 0, spareLeft: 0, king: null };
 }
 
 /** Counts a body killed while the room is still pretending to be room 4. */
@@ -173,6 +177,8 @@ function holdBodies(w: World): void {
 
 function beginStones(w: World, a: AudienceState): void {
   to(a, "stones");
+  // Stones or bolts, the whole room the same way: a coin flip each audience.
+  a.bolts = w.rng.next() < 0.5;
   // The farthest first, so the room comes down toward the player and the ones beside them go last.
   const p = w.player;
   const bodies = w.enemies
@@ -219,8 +225,9 @@ function stepStones(w: World, a: AudienceState): void {
         s.y = at.y;
       }
       castRift(w, s.x, s.y, 0, 0, {
-        width: STONE_RADIUS * 2, teleMs: s.landAt - a.ms, rock: true,
-        // A rock is a rock, but the roof never takes the last of the bar.
+        width: STONE_RADIUS * 2, teleMs: s.landAt - a.ms,
+        ...(a.bolts ? { bolt: true } : { rock: true }),
+        // A rock is a rock and a bolt a bolt, but neither ever takes the last of the bar.
         damage: Math.min(STONE_DAMAGE, Math.max(0, p.hearts - STONE_DAMAGE)),
       });
     }

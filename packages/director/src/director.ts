@@ -16,7 +16,7 @@ import {
   allowedTensions, PLAYABLE_ARCHETYPES, FEATURES,
   assemblePortals, SCHOOL_OF,
   rampDensities, rampAnchors, rampSubspecies, rampElitePresence, rampFor, rampRoster,
-  keysLean, UNMEASURED, PORTAL_NEED_TEMPERATURE, PORTAL_TAIL_TEMPERATURE, NPC_MIN_NEED,
+  keysLean, UNMEASURED, PORTAL_NEED_TEMPERATURE, PORTAL_TAIL_TEMPERATURE, NPC_MIN_NEED, FOUNTAIN_MIN_NEED_HURT,
   buildFacts, NO_BUILD, enemy, isFixedFightRoom, audienceRoomFor, objectiveFor, isGuardianRoom, baseArchetype, audienceZones, biomeFor, BIOME_TEMPERATURE,
 } from "@jr/core";
 import type {
@@ -863,9 +863,12 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
           ? reweight(asked, (id) => id === "merchant" ? 1.5 : id === "smith" ? 0.4 : 1)
           : asked;
         // A room with no fight that the Director barely weighed leaves the
-        // ranking, so the spread tail cannot hand it a door (`NPC_MIN_NEED`).
+        // ranking, so the spread tail cannot hand it a door (`NPC_MIN_NEED`);
+        // the fountain's floor is lower for a player low on the bar.
+        const hurt = ctx.labels.health === "low" || ctx.labels.health === "critical";
+        const floor = (k: NpcKind) => k === "fountain" && hurt ? FOUNTAIN_MIN_NEED_HURT : NPC_MIN_NEED[k];
         const rankedNeed = restrictTo(leaned, Object.keys(leaned).filter((k) =>
-          !(k in NPC_MIN_NEED) || leaned[k]! >= NPC_MIN_NEED[k as NpcKind]));
+          !(k in NPC_MIN_NEED) || leaned[k]! >= floor(k as NpcKind)));
         const need = withTemperature(rankedNeed, PORTAL_NEED_TEMPERATURE);
         /*
          * **The first door sharp, the rest spread** (`PORTAL_TAIL_TEMPERATURE`).

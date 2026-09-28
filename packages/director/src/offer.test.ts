@@ -123,6 +123,39 @@ describe("the Director's portals (doc 003)", () => {
     expect(high).toBeGreaterThan(20);
   });
 
+  it("keeps a thinly weighed fountain on the ranking for a player low on the bar", async () => {
+    // Jev ranks a stat first and gives the fountain a sliver, as it did out of a guardian's room.
+    const lean = (fountain: number): Evaluator => async (req) => ({
+      answers: Object.fromEntries(Object.entries(req.questions).map(([name, question]) => {
+        const keys = Object.keys(question.criteria).filter((id) => id !== FALLBACK);
+        const p = (id: string) => name !== "portal_need" ? 1 / keys.length
+          : id === "fountain" ? fountain : id === "stat" ? 0.8 : 0.05;
+        const total = keys.reduce((a, id) => a + p(id), 0);
+        return [name, {
+          choice: keys[0]!, confidence: null,
+          probabilities: { ...Object.fromEntries(keys.map((id) => [id, p(id) / total])), [FALLBACK]: 0 },
+        }];
+      })),
+      usage: { input_tokens: null },
+    });
+    const fountainsOver = async (fountain: number, hearts: number) => {
+      let n = 0;
+      for (let seed = 0; seed < 40; seed++) {
+        const choices = portalChoices(run(11, { hurt: true }), new RngSource(`h${seed}`).stream("c"), 3);
+        const plan = await createDirector("jev", { evaluate: lean(fountain) })
+          .planPortals(ctx(11, { seed: `h${seed}`, hearts }), choices);
+        if (plan.doors.some((x) => x.npc === "fountain")) n++;
+      }
+      return n;
+    };
+    // 0.05 is under the ordinary floor: refused on a bar that is only scratched…
+    expect(await fountainsOver(0.05, 4)).toBe(0);
+    // …but kept for a player at half the bar or less.
+    expect(await fountainsOver(0.05, 2)).toBeGreaterThan(0);
+    // A near-zero answer is still refused, however hurt.
+    expect(await fountainsOver(0.005, 1)).toBe(0);
+  });
+
   /*
    * Doc 003's early economy, measured **over a run** rather than per offer,
    * because the cap is what a player actually meets: `NPC_OFFERS_MAX` bounds

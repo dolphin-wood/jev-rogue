@@ -9,7 +9,7 @@ import {
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
   moodTransform, tintRGBA, dashInvulnerable, MELEE, POISE_BREAK_MS, POISE_BREAK_STAGGER_MS, POISE_GUARD_MS, brakeFraction, ENEMIES,
-  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_MUSKET_SPREAD_MULT, GUARDIAN_CALL_MS, GUARDIAN_STANCE, GUARDIAN_BROKEN_MS, GUARDIAN_SINK_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, plated, showsPoise, breakStaggerMs, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
+  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_MUSKET_SPREAD_MULT, GUARDIAN_CALL_MS, GUARDIAN_STANCE, GUARDIAN_BROKEN_MS, GUARDIAN_SINK_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, plated, showsPoise, breakStaggerMs, seenPlayer, beamAim, BEAM_LOCK_MS, lineToWall, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, audienceRoomFor, RUN_GUARDIAN_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTextKey, affixFitsSpell, itemShape,
@@ -2253,6 +2253,9 @@ export class PlayScene extends Phaser.Scene {
       viewHalf: { x: this.scale.width / this.worldZoom() / 2, y: this.scale.height / this.worldZoom() / 2 },
     });
     this.world = arena;
+    // A fresh clock: the assist's beat on the old one starts over (see `enterRoom`).
+    this.autoCaster.reset();
+    this.autoTargetId = null;
     this.world.spells.forEach((slot, i) => {
       if (!slot) return;
       let next = slot;
@@ -2496,6 +2499,13 @@ export class PlayScene extends Phaser.Scene {
     // The room that is ending banks its play time before its world is thrown
     // away; the game-over card adds the live room's own elapsed to it.
     if (this.world) this.runMs += this.world.stats.elapsedMs;
+    /*
+     * The new world's clock starts at 0, and the assist's beat is a time on
+     * the old one: kept, the first auto-cast of a room waited out about as
+     * long as the last room had run. A new room starts the beat afresh.
+     */
+    this.autoCaster.reset();
+    this.autoTargetId = null;
     this.world = createWorld({
       room, encounter, staff, slots,
       /*
@@ -14082,6 +14092,21 @@ export class PlayScene extends Phaser.Scene {
         const uy = (aim.y - e.y) / d;
         const t = 1 - Math.min(1, e.telegraphMs / 700);
         drawAimLine(this.threatGfx, e.x, e.y, ux, uy, 420, aim.x, aim.y, t, tick, view);
+      }
+      /*
+       * **The watcher's lane.** Its beam has no travel, so the lane is the
+       * whole warning: drawn to the wall the beam will reach, tracking while it
+       * aims and then held still — and blinking — for `BEAM_LOCK_MS`, which is
+       * the beat to step off it.
+       */
+      if (e.archetype === "watcher" && e.telegraphMs > 0 && e.pending.length > 0) {
+        const aim = beamAim(w, e);
+        const a = Math.atan2(aim.y - e.y, aim.x - e.x);
+        const len = lineToWall(w, e.x, e.y, a, TILE_PX * 22);
+        const locked = e.telegraphMs <= BEAM_LOCK_MS;
+        const t = locked ? 1 : 0.5 * (1 - Math.min(1, (e.telegraphMs - BEAM_LOCK_MS) / 600));
+        drawAimLine(this.threatGfx, e.x, e.y, Math.cos(a), Math.sin(a), len,
+          e.x + Math.cos(a) * len, e.y + Math.sin(a) * len, t, tick, view);
       }
       /*
        * **The dashcut's line** (doc 020): where he will run, drawn for the
