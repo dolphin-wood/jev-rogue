@@ -18266,9 +18266,17 @@ function drawEnemy(
   img.x += feel.offX;
   img.y += feel.offY;
   img.setRotation(img.rotation + feel.tilt);
-  // Drawn at twice a warden's size, the Veteran's art pixels are large enough
-  // that an uneven one shows as a tear; hold it to whole screen pixels.
-  if (e.guardian) snapToScreenTexels(img, scene.cameras.main.zoom);
+  /*
+   * Drawn at twice a warden's size, the Veteran's art pixels are large enough
+   * that an uneven one shows as a tear, so it is held to whole screen pixels
+   * and never tilted: a lean of even a degree or two steps its outline under
+   * nearest sampling. Its lean, brake and ram are carried by the drawn frames
+   * and by where it is, not by turning the sprite.
+   */
+  if (e.guardian) {
+    img.setRotation(0);
+    snapToScreenTexels(img, scene.cameras.main.zoom);
+  }
 
   /*
    * **Calling the storm**: a blue glow off his whole outline, pulsing out
