@@ -212,7 +212,6 @@ export const EN = {
   "hud.bossTitle": "THE CRYPT KING",
   "hud.bossUnknown": "???",
   "hud.guardianTitle": "THE FRONTIER VETERAN",
-  "hud.objectiveHold": "HOLD OUT",
   "hud.objectiveDestroy": "DESTROY THE TURRETS",
   "hud.holdLeft": "Hold out {s}s",
   "hud.targetsLeft": "Turrets {n}/{total}",
