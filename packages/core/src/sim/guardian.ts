@@ -1,12 +1,12 @@
 /**
  * **The Frontier Veteran**: room 10's guardian (doc 024).
  *
- * The warden's body with a guardian's state: its armour, its blunderbuss and
- * its shield shove, and the tank's ram (`chooseMelee`). A head-on wall knocks
- * it out and breaks its armour (`guardianWallSlam`). It has no phases: an
+ * The warden's body with a guardian's state: a heavy body's poise, its
+ * blunderbuss and its shield shove, and the tank's ram (`chooseMelee`). A
+ * head-on wall knocks it out (`guardianWallSlam`). It has no phases: an
  * elite's fight is one fight. What it has beyond a warden is **the call**: it
- * raises its arm and the room's dead answer, a squad round it and half its
- * plate back on. The first call is its entrance, and it calls again whenever its
+ * raises its arm and the room's dead answer, a squad round it; nothing breaks
+ * it while its arm is up. The first call is its entrance, and it calls again whenever its
  * squad is down to one and the call has come round. It is not a new
  * archetype, so the warden's frames, death and renderer all hold; nothing
  * assembles it into an ordinary room.
@@ -39,8 +39,12 @@ export const GUARDIAN_FLAME = 0.6;
  * half, and at a warden's pace the spray alone cost about four hearts a fight.
  */
 export const GUARDIAN_SHOT_EVERY = 2;
-/** Armour it opens with and grows back with each call: until it breaks, nothing interrupts it. */
-export const GUARDIAN_ARMOUR = 60;
+/**
+ * Its poise (`Enemy.poise`): about four sword hits in a row at room 10 before
+ * one interrupts it, and none while it is still guarded after the last break.
+ * It cannot be held down; it can be broken by a burst, or knocked out on a wall.
+ */
+export const GUARDIAN_POISE = 60;
 /** How much larger it is than a warden, drawn and in body: not necessarily a whole number (doc 024). */
 export const GUARDIAN_SCALE = 2;
 /** What its death pays in experience: an ordinary room's take, at its top (`KING_AUDIENCE_XP`'s reasoning). */
@@ -62,12 +66,6 @@ export const GUARDIAN_CALL_MS = 1100;
 export const GUARDIAN_ENTRANCE_MS = 500;
 /** How long after one call before it may call again. */
 export const GUARDIAN_CALL_EVERY_MS = 20_000;
-/**
- * How much of its armour a call puts back, as a share of the whole: half, so
- * a call after a wall slam gives back a plate that breaks sooner, and the
- * player's opening is not wiped out by the dead answering.
- */
-export const GUARDIAN_CALL_REARM = 0.5;
 /** It calls again only when its squad is down to this many. */
 export const GUARDIAN_CALL_BELOW = 1;
 
@@ -87,7 +85,7 @@ export function makeGuardian(id: number, x: number, y: number, _roomIndex: numbe
   const e = makeEnemy(id, "warden", x, y, [], { power: GUARDIAN_POWER });
   e.guardian = { callMs: GUARDIAN_ENTRANCE_MS, calling: false, answer: entrance.slice(0, GUARDIAN_ENTRANCE_MAX), spots: [] };
   e.hp = e.maxHp = GUARDIAN_HP;
-  e.armour = e.maxArmour = GUARDIAN_ARMOUR;
+  e.poise = e.maxPoise = GUARDIAN_POISE;
   e.radius = Math.round(e.radius * GUARDIAN_SCALE);
   /*
    * The tank's pace, so its ram is the tank's ram: a charge runs at seven
@@ -109,8 +107,9 @@ export function guardianSquad(w: World, e: Enemy): number {
  * One step of what the guardian is beyond a warden: **the call**. With the
  * call come round, its squad thin and nothing else in hand, it plants and
  * raises its arm (`guardian_call`, a planted pose) with the marks of what is
- * coming on the floor; when the arm comes down they rise, and its plate is
- * back on. Its movement, shots and blows are the warden's.
+ * coming on the floor; when the arm comes down they rise. The call is never
+ * interrupted: its poise is guarded while the arm is up. Its movement, shots
+ * and blows are the warden's.
  */
 export function stepGuardian(w: World, e: Enemy, dtMs: number): void {
   const g = e.guardian;
@@ -131,15 +130,12 @@ export function stepGuardian(w: World, e: Enemy, dtMs: number): void {
   g.spots = bossSummonSpots(w, e, g.answer.length);
   e.pose = "guardian_call";
   e.poseMs = GUARDIAN_CALL_MS;
+  e.poiseGuardMs = Math.max(e.poiseGuardMs, GUARDIAN_CALL_MS);
   w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: "guardian_call" });
 }
 
-/** The dead answer: the bodies rise round it, and part of its plate grows back (`GUARDIAN_CALL_REARM`). */
+/** The dead answer: the bodies rise round it. */
 function answer(w: World, e: Enemy, who: readonly EnemyId[], spots: readonly { x: number; y: number }[]): void {
-  if (e.armour < e.maxArmour) {
-    e.armour = Math.min(e.maxArmour, e.armour + e.maxArmour * GUARDIAN_CALL_REARM);
-    w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: "guardian_rearm" });
-  }
   w.trauma = Math.min(1, w.trauma + 0.3);
   spots.forEach((s, i) => {
     const add = makeEnemy(w.nextEnemyId++, who[i]!, s.x, s.y, [], rampFor(w.roomIndex));

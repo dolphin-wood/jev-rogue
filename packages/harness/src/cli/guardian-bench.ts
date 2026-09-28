@@ -1,7 +1,7 @@
 /**
  * **The Frontier Veteran, measured on its own** (doc 024): its room at room 10's
  * ramp, a three-key build at level 6, eight seeds, one skill profile. Reports
- * each fight's end, the guardian's bar and armour at it, and what the hearts
+ * each fight's end, the guardian's bar and poise at it, and what the hearts
  * went to.
  *
  * `pnpm guardian-bench [profile]`
@@ -26,6 +26,6 @@ for (let s = 0; s < 8; s++) {
   if (r.cleared) won++;
   tot += r.ms;
   for (const [k, v] of Object.entries(log.bySource)) src2[k] = (src2[k] ?? 0) + v;
-  console.log(`seed ${s}: ${r.cleared ? "won" : "lost"} ${(r.ms / 1000).toFixed(0)}s  guardian hp ${Math.round(g0.hp)}/${g0.maxHp} armour ${Math.round(g0.armour)}  hearts ${w.player.hearts.toFixed(1)}`);
+  console.log(`seed ${s}: ${r.cleared ? "won" : "lost"} ${(r.ms / 1000).toFixed(0)}s  guardian hp ${Math.round(g0.hp)}/${g0.maxHp} poise ${Math.round(g0.poise)}  hearts ${w.player.hearts.toFixed(1)}`);
 }
 console.log(prof, `won ${won}/8 mean ${(tot / 8000).toFixed(0)}s`, JSON.stringify(src2));

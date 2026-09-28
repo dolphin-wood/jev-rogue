@@ -3,7 +3,7 @@ id: 024
 title: The Frontier Veteran
 status: proposed
 date: 2026-09-27
-summary: Room 10, the last fight of the flooded depth, is a guardian fight. The Frontier Veteran is the warden's body, drawn larger in a violet light, with the warden's armour and blunderbuss and the tank's ram. It has no phases. Its own move is the call. It raises its arm, marks show on the floor, and the dead rise round it, with half its armour back. Its entrance is the first call, which raises the room's own wave. After that it calls again whenever its squad is down to one and the call has come round. The ram knocks it out on a wall, which breaks its armour, and a wall is the fight's opening. The room is the first audience's bare arena, and its doors, reward, pacing and experience follow the audience room's. It stands where the opening view shows it, and its name is the small line over its bar. Code decides all of it; the Director still answers the door's reward.
+summary: Room 10, the last fight of the flooded depth, is a guardian fight. The Frontier Veteran is the warden's body, drawn larger in a violet light, with a heavy body's poise (doc 027), the warden's blunderbuss and the tank's ram. It has no phases. Its own move is the call. It raises its arm, marks show on the floor, and the dead rise round it; the call can't be broken. Its entrance is the first call, which raises the room's own wave. After that it calls again whenever its squad is down to one and the call has come round. The ram knocks it out on a wall, and a wall is the fight's opening; a burst of hits breaks its poise for a shorter one. The room is the first audience's bare arena, and its doors, reward, pacing and experience follow the audience room's. It stands where the opening view shows it, and its name is the small line over its bar. Code decides all of it; the Director still answers the door's reward.
 depends_on: [005, 013, 019, 022]
 ---
 
@@ -24,7 +24,7 @@ elite they are more ceremony than the fight carries.
 **The warden's body.** It already has every frame the fight needs: the windup,
 lunge and recovery its shield bash uses, which carry the ram too; the raise and
 release of its blunderbuss, whose raised arm is also its call; and an
-`idle_bare` drawing for when its armour is gone. It is drawn at
+`idle_bare` drawing for its knocked-out stagger. It is drawn at
 `GUARDIAN_SCALE` (2 for now, and it need not be a whole number) with its
 collision radius scaled to match. It is tinted violet, with a violet pool
 breathing under it and wisps rising round it, so it reads at a glance as more
@@ -44,12 +44,12 @@ already know it. Nothing assembles it into an ordinary room.
 | | |
 |---|---|
 | Bar | `GUARDIAN_HP`, and `GUARDIAN_POWER` on its blows (see "Measured") |
-| Armour | `GUARDIAN_ARMOUR` from the start. Until it breaks, nothing interrupts it |
+| Poise | `GUARDIAN_POISE` (doc 027): about four hits in a row before one interrupts it, whole again after a pause, and not broken twice running |
 | Blunderbuss | the warden's shot: raise, level, a wide spray, then a reload to stand in |
-| Ram | the tank's charge from mid range. **A head-on wall knocks it out and breaks its armour**: the fight's big opening, set up by standing with a wall behind you |
+| Ram | the tank's charge from mid range. **A head-on wall knocks it out**: the fight's big opening, set up by standing with a wall behind you |
 | Bash | the warden's shield shove, for a player standing on it |
 
-| Call | it plants and raises its arm for `GUARDIAN_CALL_MS`, a violet mark opening on the floor where each body will rise; then they rise, and **half its armour is back** (`GUARDIAN_CALL_REARM`) |
+| Call | it plants and raises its arm for `GUARDIAN_CALL_MS`, a violet mark opening on the floor where each body will rise; then they rise. **Its poise is guarded through the call**, so nothing interrupts it |
 
 **The call.** An old soldier who still commands the drowned dead calls them, and the call
 is both its entrance and its one move beyond a warden's.
@@ -61,10 +61,10 @@ is both its entrance and its one move beyond a warden's.
 - **Again.** It calls again once `GUARDIAN_CALL_EVERY_MS` has passed since the
   last call, and only when its squad is down to `GUARDIAN_CALL_BELOW`. The
   later squad is `GUARDIAN_SQUAD`.
-- **The rhythm.** Wall, broken armour, the window, then a call that puts
-  half the armour back, so the next wall breaks it again sooner. The call is planted and marked, so it is also a window: the
-  player can hit it, or get to the marks' side of the room first. It is not
-  invincible through the call, and the call can't be interrupted.
+- **The rhythm.** A wall for the long opening, a burst of hits for a shorter
+  one. The call is planted and marked, so it is also a window: the player can
+  hit it, or get to the marks' side of the room first. It is not invincible
+  through the call, and the call can't be interrupted.
 
 **Its squads die with it.** The fight is the guardian, and a room that ended
 on a rusher still standing would not have ended.

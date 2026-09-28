@@ -255,7 +255,7 @@ describe("doors promise more than a kind", () => {
 describe("the boss", () => {
   const boss = (w: World) => {
     const b = makeEnemy(1, "boss", 336, 150, []);
-    b.spawnFadeMs = 0; b.awake = true; b.alertMs = 0; b.armour = 0;
+    b.spawnFadeMs = 0; b.awake = true; b.alertMs = 0; b.poise = b.maxPoise = 0;
     w.enemies.push(b);
     return b;
   };

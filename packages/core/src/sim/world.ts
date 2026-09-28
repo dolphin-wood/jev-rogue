@@ -63,12 +63,12 @@ import type { Destructible } from "./props.ts";
 import type { SpellSlot } from "./spells.ts";
 import type { BulletEmission } from "../encounters/patterns.ts";
 import { turnToward } from "./aim.ts";
-import { ARM_TELE_MS, castArm, castRift, castRanged, castShockwave, dragStep, interruptToll, lineToWall, onExpansionDeath, shockwaveHits, spendWard, stepAttacks } from "./attacks.ts";
+import { ARM_TELE_MS, castArm, castRift, castRanged, castShockwave, dragStep, interruptToll, lineToWall, onExpansionDeath, shockwaveHits, stepAttacks } from "./attacks.ts";
 import type { AttackHooks } from "./attacks.ts";
 import { computeFlowField, tileOf } from "./flow.ts";
 import {
   anchored, bossStringHearts, hatchMinion, isActive, livingSummoners, makeEnemy, makeKing, kingFloorHp, stepEnemy, stagger, canStagger, midAttack, wake, dropToken,
-  dropFireToken, ARMOUR_BREAK_MS, SPAWN_FADE_MS, SPAWN_TELEGRAPH_MS, ENEMY_FREEZE_MS, STAGGER_MS,
+  dropFireToken, POISE_BREAK_MS, POISE_BREAK_STAGGER_MS, POISE_GUARD_MS, SPAWN_FADE_MS, SPAWN_TELEGRAPH_MS, ENEMY_FREEZE_MS, STAGGER_MS,
   ENEMY_BURN_MS, ENEMY_POISON_MS, ENEMY_BURN_SOURCES, ENEMY_POISON_STACKS, SHATTER_MULT,
   STATUS_BREADTH_MULT, statusBreadth,
   meleeSpec,
@@ -1408,8 +1408,8 @@ function resolveSwing(w: World, dtMs: number): void {
     // Being hit is the loudest way to be noticed, and it flinches a body that
     // is not already attacking (`swordStagger`).
     wake(w, e);
-    // Breaking its armour is the one blow that cancels what it had started.
-    if (broke) { stagger(w, e); e.staggerImmuneMs = SWORD_STAGGER_IMMUNE_MS; } else swordStagger(w, e);
+    // Breaking its poise is the one blow that cancels what it had started; the break staggered it already (`hurtEnemy`).
+    if (broke) e.staggerImmuneMs = SWORD_STAGGER_IMMUNE_MS; else swordStagger(w, e);
     impact(w, box.finisher ? HITSTOP_FINISH : HITSTOP_HIT, TRAUMA_HIT);
 
     // The loop the whole design turns on: the sword pays for the spells, so
@@ -1450,16 +1450,16 @@ function breakProps(w: World): void {
 const PROP_HIT_ID_BASE = -2;
 
 /**
- * Damage to an enemy, armour first.
+ * Damage to an enemy, and to its poise.
  *
- * Centralised because armour has to be honoured wherever damage comes from,
+ * Centralised because poise has to be honoured wherever damage comes from,
  * and it arrives from five places: the sword, player bullets, burning ground,
  * a lightning strike and the burn tick. Applying it at one of them and not the
  * others is how a rule becomes a suggestion.
  *
- * Returns whether the armour broke on this hit, which is its own moment: the
- * player has just earned the right to interrupt this body, and that has to be
- * announced rather than inferred from the body suddenly flinching.
+ * Returns whether the hit broke its poise (`Enemy.poise`), which is its own
+ * moment: the burst has knocked the body into a long stagger, and that has to
+ * be announced rather than inferred from the body suddenly flinching.
  */
 /**
  * `tag` says what dealt it, for the damage number's colour: an element
@@ -1513,27 +1513,35 @@ export function hurtEnemy(
    */
   if (amount > 0) interruptToll(w, e);
   if (amount > 0)
-    w.events.push({ kind: "damage", x: e.x, y: e.y - e.radius, what: `${e.armour > 0 ? "armour" : "hp"}${tag ? `:${tag}` : ""}`, amount });
-  if (e.armour > 0) {
-    e.armour -= amount;
-    // A ward's share of the armour is spent first, so a ringer still holding
-    // the line has to put it back (doc 005, the bellringer).
-    spendWard(e, amount);
-    if (e.armour > 0) return { broke: false };
-    // Overkill carries into health, so armour never converts a big hit into a
-    // small one by absorbing all of it.
-    const spill = -e.armour;
-    e.armour = 0;
-    e.hp -= spill;
-    e.armourBreakMs = ARMOUR_BREAK_MS;
-    // A break is worth more than the hit that caused it: the fight changes.
-    impact(w, HITSTOP_KILL, TRAUMA_KILL);
-    w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `armour_break:${e.archetype}` });
-    emit(w, e.x, e.y, "kill", 8);
-    return { broke: true };
-  }
+    w.events.push({ kind: "damage", x: e.x, y: e.y - e.radius, what: `hp${tag ? `:${tag}` : ""}`, amount });
   e.hp -= amount;
-  return { broke: false };
+  /*
+   * **Poise** (`Enemy.poise`): all of the damage is health, and the same
+   * damage wears the poise. A hit it holds through rings off it, so a player
+   * can see that the body took it and did not flinch; the hit that wears it
+   * through knocks it into a long stagger and cancels what it had started.
+   * After a break it cannot be broken again for a while (`POISE_GUARD_MS`).
+   */
+  if (amount <= 0 || e.maxPoise <= 0 || e.hp <= 0 || e.archetype === "boss") return { broke: false };
+  e.poiseIdleMs = 0;
+  if (e.poiseGuardMs > 0) {
+    w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_hold:${e.archetype}` });
+    return { broke: false };
+  }
+  e.poise -= amount;
+  if (e.poise > 0) {
+    w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_hold:${e.archetype}` });
+    return { broke: false };
+  }
+  e.poise = e.maxPoise;
+  e.poiseGuardMs = POISE_BREAK_STAGGER_MS + POISE_GUARD_MS;
+  e.poiseBreakMs = POISE_BREAK_MS;
+  stagger(w, e, POISE_BREAK_STAGGER_MS, true);
+  // A break is worth more than the hit that caused it: the fight changes.
+  impact(w, HITSTOP_KILL, TRAUMA_KILL);
+  w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_break:${e.archetype}` });
+  emit(w, e.x, e.y, "kill", 8);
+  return { broke: true };
 }
 
 function damageProp(w: World, p: Destructible, amount: number, bySword = false): void {
@@ -4865,7 +4873,7 @@ function resolveBodies(w: World): void {
        * point of a ram is that it does not stop for you.
        */
       // A charge, a body bolted to the floor, and the king all hold their ground.
-      const charging = (e.attack === "lunge" && e.armour > 0) || anchored(e) || e.archetype === "boss";
+      const charging = (e.attack === "lunge" && e.maxPoise > 0) || anchored(e) || e.archetype === "boss";
       const overlap = min - d;
       const nx = dx / d;
       const ny = dy / d;

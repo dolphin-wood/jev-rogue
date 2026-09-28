@@ -40,7 +40,7 @@ describe("affix table (doc 005)", () => {
      * between turns instead, which is the one cadence doc 019 lets move.
      */
     expect(AFFIXES.armored.hp_mult).toBe(1);
-    expect(AFFIXES.armored.armour).toBeGreaterThan(0);
+    expect(AFFIXES.armored.poise).toBeGreaterThan(0);
     expect(AFFIXES.swift.speed_mult).toBe(1);
     expect(AFFIXES.swift.rest_mult).toBeCloseTo(0.8, 6);
     // No affix may raise speed at all: the elite's own 1.15 is the whole of it.
@@ -64,10 +64,10 @@ describe("affix table (doc 005)", () => {
      * so what an elite *is* has one answer rather than two.
      */
     expect(affixStats(["armored", "swift"])).toEqual({
-      hp_mult: 2, speed_mult: 1.15, rest_mult: 0.68, armour: 18, damage_mult: 1.3,
+      hp_mult: 2, speed_mult: 1.15, rest_mult: 0.68, poise: 18, damage_mult: 1.3,
     });
     // A body with no affixes is untouched, which is most of the roster.
-    expect(affixStats([])).toEqual({ hp_mult: 1, speed_mult: 1, rest_mult: 1, armour: 0, damage_mult: 1 });
+    expect(affixStats([])).toEqual({ hp_mult: 1, speed_mult: 1, rest_mult: 1, poise: 0, damage_mult: 1 });
   });
 
   it("prices a capped affix for the share of the roster that carries it", () => {

@@ -8,7 +8,7 @@ import {
   GRID_W, GRID_H, TILE_PX, Tile, STEP_MS, MAX_HEARTS, HP_PER_HEART, ITEMS, SPELL_SLOTS, slotCost, runStaff, PLAYER_SPEED,
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
-  moodTransform, tintRGBA, dashInvulnerable, MELEE, ARMOUR_BREAK_MS, brakeFraction, ENEMIES,
+  moodTransform, tintRGBA, dashInvulnerable, MELEE, POISE_BREAK_MS, brakeFraction, ENEMIES,
   BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_CALL_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, audienceRoomFor, RUN_GUARDIAN_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
@@ -6286,6 +6286,11 @@ export class PlayScene extends Phaser.Scene {
   private drawLessons(dtMs: number): void {
     for (const [key, at] of this.teachAt) {
       if (this.taught.has(key) && at.ms > 400) at.ms = 400;
+      // The chain gone however it went — cut, its ringer or its ally dead — and its lesson goes with it, untaught.
+      if (key === "ward" && !this.world.tethers.some((t) => t.alive && t.kind === "ward")) {
+        this.teachAt.delete(key);
+        continue;
+      }
       at.ms -= dtMs;
       if (at.ms <= 0) { this.teachAt.delete(key); this.taught.add(key); continue; }
       const a = Math.min(1, at.ms / 400, (TEACH_MS - at.ms) / 200 + 0.001);
@@ -8189,14 +8194,15 @@ export class PlayScene extends Phaser.Scene {
           // A body braking into a wall, and a shot stopped by a ward, are not
           // blows landed: they get the world's chip rather than the sword's.
           if (what.startsWith("brake:") || what.startsWith("wall:") || what === "ward") { sfx.play("wall_hit"); break; }
-          if (what.startsWith("armour_break:")) { sfx.play("armour_break"); break; }
+          // Poise (`Enemy.poise`): the break is heard as the plate giving; a blow it held through rings off it.
+          if (what.startsWith("poise_break:")) { sfx.play("armour_break"); break; }
+          if (what.startsWith("poise_hold:")) { sfx.play("hit_armour", 1); break; }
           if (what.startsWith("prop:")) { sfx.play("hit_light", 0.9); break; }
           if (what === "tether_cut") { sfx.play("hit_light", 1.35); break; }
           if (what === "boss_immune") { sfx.play("hit_armour", 1.2); break; }
           const target = w.enemies.find((e) => Math.hypot(e.x - ev.x, e.y - ev.y) < e.radius + 8);
-          // Armour first: steel eating a blow is its own answer, and the
-          // player needs to hear that the damage did not land where they aimed.
-          if (target && target.armour > 0) { sfx.play("hit_armour", 1, target.id); break; }
+          // A blow the body held through is heard as the ring off it (above), not as a wound as well.
+          if (w.events.some((o) => o.kind === "enemy_hit" && o.what?.startsWith("poise_hold:") && Math.hypot(o.x - ev.x, o.y - ev.y) < 1)) break;
           sfx.play(this.hitWeight(ev.amount ?? 0), 1, target?.id);
           // A spell's landing is the weight hit plus its own tail, so what
           // was cast is heard on the body it hits rather than only as it
@@ -9055,6 +9061,9 @@ export class PlayScene extends Phaser.Scene {
         } else if (ev.kind === "bullet_spent") {
           // Spent in the air: it pinches out rather than vanishing.
           this.playFx("fizzle", ev.x, ev.y, 0, 50, 7.1);
+        } else if (ev.kind === "hazard_tick" && ev.what === "ward_heal") {
+          // A ward's healing (the bellringer's line): green motes rising off the body it holds.
+          this.burst(ev.x, ev.y - 6, 0x8fe8a0, 5, 70, -Math.PI / 2, 0.9, 0.7);
         } else if (ev.kind === "hazard_tick" && ev.what === "boss_summon") {
           // An add of the king's called up: a violet flare where it rises, under its own spawn rings.
           this.burst(ev.x, ev.y, BOSS_CALL_GLOW, 12, 220, undefined, Math.PI * 2, 0.8);
@@ -9062,6 +9071,14 @@ export class PlayScene extends Phaser.Scene {
         } else if (ev.kind === "enemy_hit" && ev.what === "boss_immune") {
           // The blow ringing off the roaring king: pale sparks, no wound.
           this.burst(ev.x, ev.y - 20, 0xd8d0ff, 5, 160, undefined, Math.PI * 2, 0.5);
+        } else if (ev.kind === "enemy_hit" && ev.what?.startsWith("poise_hold:")) {
+          // A blow held through: steel sparks off it, and no wound (`Enemy.poise`).
+          this.burst(ev.x, ev.y - 6, 0xcfe4ff, 6, 190, undefined, Math.PI * 2, 0.45);
+          this.ring(ev.x, ev.y - 6, 2, 12, 0xcfe4ff, 160, 1.5);
+        } else if (ev.kind === "enemy_hit" && ev.what?.startsWith("poise_break:")) {
+          // The break: a hard flash and a spray, bigger than a hit, less than a kill.
+          this.ring(ev.x, ev.y, 3, 34, SHIELD_BLUE, 260, 2.5);
+          this.burst(ev.x, ev.y, 0xe8f6ff, 12, 260, undefined, Math.PI * 2, 0.9);
         } else if (ev.kind === "enemy_hit" && ev.what === "tether_cut") {
           // The cut: the line breaks into sparks along its length.
           this.burst(ev.x, ev.y, 0xd8f4ff, 14, 260, undefined, Math.PI * 2, 0.7);
@@ -14648,7 +14665,7 @@ export class PlayScene extends Phaser.Scene {
           }
         }
       } else if (this.burrowTrail.has(e.id)) this.burrowTrail.delete(e.id);
-      if (e.wardArmour > 0)
+      if (e.wardHeal > 0)
         img(e.x, e.y - 2, `vfx_ward_aura_${(tick >> 3) % 3}`, 6.05)?.setDisplaySize(e.radius * 3.4, e.radius * 3.4).setAlpha(0.85);
       // Hurried by a bell: the cue goes on the body, never on the floor.
       if (e.hastedMs > 0) drawHasteCue(this.fxTopGfx, e, tick);
@@ -16338,11 +16355,6 @@ export class PlayScene extends Phaser.Scene {
       const floorHp = kingFloorHp(boss);
       const frac = Math.max(0, (boss.hp - floorHp) / Math.max(1, boss.maxHp - floorHp));
       this.sprites.rectangle(BX, BY, BW * frac, 7, boss.phase >= 3 ? 0xff5a3a : 0xd83a3a, 1).setOrigin(0, 0.5).setDepth(101);
-      if (boss.maxArmour > 0) {
-        this.sprites.rectangle(BX, BY - 7, BW, 3, 0x0f1c3a, 0.9).setOrigin(0, 0.5).setDepth(100.8);
-        this.sprites.rectangle(BX, BY - 7, BW * Math.max(0, boss.armour / boss.maxArmour), 3, SHIELD_BLUE, boss.armour > 0 ? 1 : 0.15).setOrigin(0, 0.5).setDepth(101);
-        this.sprites.add(shieldMark(this, this.atlas, this.uiTextureKey, BX - 7, BY - 7, 8).setDepth(102));
-      }
       // The marks are the script's (doc 022): the final's phase III at the half; none on the first audience's.
       for (const mark of boss.bossScript === "audience" ? [] : kingMarks(boss.bossScript))
         this.sprites.rectangle(BX + BW * mark, BY, 1, 9, 0xffe9a8, 0.8).setOrigin(0.5).setDepth(102);
@@ -16699,8 +16711,8 @@ function specialPose(w: World, e: Enemy): string | null {
     case "boss":
       // The call after the roar (`Enemy.bossSummonMs`): the storm's raise, the sword held up.
       if (e.bossSummonMs > 0) return "storm";
-      if (e.armourBreakMs > 0 || e.staggerMs > 0)
-        return e.armourBreakMs > 0 || e.staggerMs > STAGGER_MS * .5 ? "stagger1" : "stagger0";
+      if (e.poiseBreakMs > 0 || e.staggerMs > 0)
+        return e.poiseBreakMs > 0 || e.staggerMs > STAGGER_MS * .5 ? "stagger1" : "stagger0";
       /*
        * The Crypt King's poses (doc 020). A ground strike is the greatsword
        * raised through the telegraph and brought down on the commit — held
@@ -17233,8 +17245,8 @@ function drawEnemy(
   // Fire and poison gauges, as the player has them: filling on hits, the
   // status's clock once it runs.
   if (e.hp > 0 && e.spawnFadeMs <= 0 && (e.burnBuild > 0 || e.poisonBuild > 0 || e.chillBuild > 0)) {
-    // Above the armour bar when there is one (it sits at `overheadPx`).
-    const gy = e.y - overheadPx(e) - (e.maxArmour > 0 && e.armour > 0 ? 5 : 0);
+    // Above the Frontier Veteran's bar when it is that body (its bar sits at `overheadPx`).
+    const gy = e.y - overheadPx(e) - (e.guardian ? 16 : 0);
     const bars: [number, number][] = [];
     if (e.burnBuild > 0) bars.push([e.burnBuild, e.burnMs > 0 ? 0xffb050 : 0xc0602a]);
     if (e.poisonBuild > 0) bars.push([e.poisonBuild, e.poisonMs > 0 ? 0x9ff07a : 0x4f9a40]);
@@ -17350,34 +17362,13 @@ function drawEnemy(
   }
 
   /*
-   * Armour, as a bar over the head.
-   *
-   * It was a pulsing ring around the body, which stated *that something is
-   * different about this one* and nothing about how much was left or what it
-   * would take. A bar answers both, and it is the form every player already
-   * knows, so it needs no learning at all.
-   *
-   * It has to be visible before the player swings, because armour changes what
-   * swinging does: while it holds the body cannot be interrupted, and a player
-   * who does not know that reads an un-staggering enemy as a broken game.
+   * **A poise break** (`Enemy.poise`): a ring thrown off the body as the
+   * burst knocks it into its long stagger. There is no bar for poise; what a
+   * hit does is the whole of what the player is told, and a blow held through
+   * throws steel sparks instead (`poise_hold`, in the event effects).
    */
-  if (e.armour > 0 && e.spawnFadeMs <= 0) {
-    /*
-     * Blue, with a shield at its left end: a yellow bar over a head read as
-     * a second health bar, or as nothing. Shield blue is the one blue in the
-     * HUD vocabulary not already taken — ice is the pale cyan.
-     */
-    // The Frontier Veteran's plate sits over its health bar, as wide as it (doc 024).
-    const W = e.guardian ? GUARDIAN_BAR_W : Math.max(16, e.radius * 2.2);
-    const y = e.y + bob - overheadPx(e) - (e.guardian ? 6 : 0);
-    const back = group.rectangle(e.x - W / 2, y, W, 3, 0x0f1c3a, 0.9)
-      .setOrigin(0, 0.5).setDepth(9);
-    const fill = group.rectangle(
-      e.x - W / 2, y, W * (e.armour / Math.max(1, e.maxArmour)), 3, SHIELD_BLUE, 1,
-    ).setOrigin(0, 0.5).setDepth(10);
-    group.add(shieldMark(scene, atlas, textureKey, e.x - W / 2 - 4, y, 6));
-  } else if (e.armourBreakMs > 0) {
-    const t = e.armourBreakMs / ARMOUR_BREAK_MS;
+  if (e.poiseBreakMs > 0) {
+    const t = e.poiseBreakMs / POISE_BREAK_MS;
     const burst = group.circle(e.x, e.y + bob, e.radius + 3 + 18 * (1 - t), 0, 0);
     burst.setStrokeStyle(2, SHIELD_BLUE, t);
     burst.setDepth(8);

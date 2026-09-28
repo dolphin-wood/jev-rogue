@@ -51,7 +51,7 @@ export interface AttackHooks {
   playerInvulnerable(): boolean;
   /** Feeds the player's burn gauge, as standing in fire does. */
   burnPlayer(amount: number): void;
-  /** Staggers a body even if armour would refuse it: a cut tether knocks its ringer down. */
+  /** Staggers a body even if its poise would refuse it: a cut tether knocks its ringer down. */
   knockDown(e: Enemy, ms: number): void;
   /**
    * Hatches a brooder's coal into a body where it landed (doc 019).
@@ -354,43 +354,39 @@ function segmentDistance(px: number, py: number, x0: number, y0: number, x1: num
   return Math.hypot(px - (x0 + vx * t), py - (y0 + vy * t));
 }
 
-/** Armour a ward gives: a tank's worth (research §2.2). */
-export const WARD_ARMOUR = 18;
 /**
- * The line **does not trickle the shield back**; the toll does, all at once
- * (`toll`).
- *
- * It used to feed at 7.5 armour a second, which made the ringer's actual
- * move — the clap — redundant: the shield came back whether or not the bell
- * rang, so there was nothing to interrupt and nothing to time. Putting the
- * whole refill on the toll is what turns the ringer from a body with a
- * passive aura into a body with a **window**.
+ * **A ward heals** (research §2.2, reworked): the ally on a ringer's line
+ * regains this share of its health a second for as long as the line holds.
+ * It was armour, then poise; an unseen steadiness read as nothing at all,
+ * where health coming back is seen on the body and answered by the same
+ * things — cut the line, or kill the ringer first.
  */
+export const WARD_HEAL = 0.06;
+/**
+ * The toll: every ally on the ringer's lines regains this share of its health
+ * at once, with a pulse down the line to say so. The move the windup is for,
+ * and so the one worth interrupting (`interruptToll`).
+ */
+export const WARD_TOLL_HEAL = 0.3;
 /** Standing in a ward line this long cuts it: 20 frames. */
 const WARD_CUT_MS = 330;
 /** A cut line knocks its ringer down for a second: the cut is a reward, not a toll. */
 const WARD_CUT_STAGGER_MS = 1000;
 
-function grantWard(e: Enemy, amount: number): void {
-  const add = Math.max(0, amount - e.wardArmour);
-  e.wardArmour += add;
-  e.armour += add;
-  e.maxArmour = Math.max(e.maxArmour, e.armour);
-}
-
-/**
- * Damage taken out of armour comes out of the ward first, so a shield the
- * player has broken through is a shield the ringer has to pay for again.
- * Called from the one place armour is spent (`damageEnemy`).
- */
-export function spendWard(e: Enemy, amount: number): void {
-  if (e.wardArmour > 0) e.wardArmour = Math.max(0, e.wardArmour - amount);
+/** A ward takes hold of its ally: it heals from now on, at the best rate any line gives it. */
+function grantWard(e: Enemy, share: number): void {
+  e.wardHeal = Math.max(e.wardHeal, share);
 }
 
 function stripWard(e: Enemy): void {
-  if (e.wardArmour <= 0) return;
-  e.armour = Math.max(0, e.armour - e.wardArmour);
-  e.wardArmour = 0;
+  e.wardHeal = 0;
+}
+
+/** Health back to a body, capped at its bar, with the mark that says so every so often. */
+function healWarded(w: World, e: Enemy, amount: number, shown: boolean): void {
+  if (e.hp <= 0 || e.hp >= e.maxHp) return;
+  e.hp = Math.min(e.maxHp, e.hp + amount);
+  if (shown) w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "ward_heal" });
 }
 
 /** Whether a body already carries a ward from any tether. */
@@ -399,13 +395,13 @@ function warded(w: World, id: number): boolean {
 }
 
 /**
- * The bell rings: every ally still on one of this ringer's lines has its
- * shield put straight back to full, and a pulse of light is sent down the
- * line to say so (`Tether.pulseMs`; the shield pops full when it arrives).
+ * The bell rings: every ally still on one of this ringer's lines regains
+ * `WARD_TOLL_HEAL` of its health at once, and a pulse of light is sent down
+ * the line to say so (`Tether.pulseMs`).
  *
- * Instant rather than a faster feed, because the point is a **moment**: the
- * player who was three hits from breaking an ally has to see the three hits
- * given back, and a shield that creeps back up is a number nobody watches.
+ * All at once rather than a faster feed, because the point is a **moment**:
+ * the player who had an ally nearly dead has to see the hits given back, and
+ * health that creeps back up is a number nobody watches.
  * What the toll costs the player is measured in the windup it takes, not in
  * health, so the answer is the interrupt (`interruptToll`).
  */
@@ -414,7 +410,7 @@ function toll(w: World, e: Enemy): void {
     if (!t.alive || t.kind !== "ward" || t.from !== e.id || t.to < 0) continue;
     const ally = byId(w, t.to);
     if (!ally) continue;
-    grantWard(ally, WARD_ARMOUR);
+    healWarded(w, ally, ally.maxHp * WARD_TOLL_HEAL, true);
     t.pulseMs = TOLL_PULSE_MS;
   }
   w.hasteFields.push({
@@ -745,7 +741,7 @@ function finishPose(w: World, e: Enemy, seen: { x: number; y: number }): void {
       for (const o of w.enemies) {
         if (o === e || o.hp <= 0 || baseArchetype(o.archetype) === "bellringer") continue;
         if (dist2(o.x, o.y, e.x, e.y) > PEAL_RADIUS * PEAL_RADIUS) continue;
-        grantWard(o, WARD_ARMOUR * 0.7);
+        grantWard(o, WARD_HEAL * 0.7);
         tether(w, "ward", e.id, o.id, 0, 0, "live", PEAL_WARD_MS);
       }
       pose(e, "peal_release", 400);
@@ -760,7 +756,7 @@ function finishPose(w: World, e: Enemy, seen: { x: number; y: number }): void {
         .sort((a, b) => dist2(a.x, a.y, e.x, e.y) - dist2(b.x, b.y, e.x, e.y))[0];
       if (ally) {
         tether(w, "ward", e.id, ally.id, 0, 0, "hold", 0);
-        grantWard(ally, WARD_ARMOUR);
+        grantWard(ally, WARD_HEAL);
       }
       break;
     }
@@ -1196,7 +1192,7 @@ function stepTether(w: World, t: Tether, dtMs: number, hooks: AttackHooks): void
   const owner = byId(w, t.from);
   const ends = tetherEnds(w, t);
   if (!owner || !ends) {
-    // Either end gone: the line goes, and a ward takes its armour with it.
+    // Either end gone: the line goes, and a ward's healing with it.
     t.alive = false;
     if (t.kind === "ward" && t.to >= 0) { const b = byId(w, t.to); if (b) stripWard(b); }
     return;
@@ -1204,6 +1200,12 @@ function stepTether(w: World, t: Tether, dtMs: number, hooks: AttackHooks): void
   const onLine = segmentDistance(p.x, p.y, ends.x0, ends.y0, ends.x1, ends.y1) <= PLAYER_RADIUS + 4;
   switch (t.kind) {
     case "ward": {
+      // The ally heals while the line holds, marked twice a second.
+      const held = byId(w, t.to);
+      if (held) {
+        const now = w.stats.elapsedMs;
+        healWarded(w, held, held.maxHp * held.wardHeal * dtMs / 1000, Math.floor(now / 500) !== Math.floor((now - dtMs) / 500));
+      }
       if (t.phase === "live") {
         t.ms -= dtMs;
         if (t.ms <= 0) { t.alive = false; const b = byId(w, t.to); if (b) stripWard(b); }

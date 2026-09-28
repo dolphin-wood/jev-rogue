@@ -658,7 +658,7 @@ export interface Mine {
  * A taut line between two things (`tether`, research §3.3). Always two
  * visible endpoints, which is what tells it apart from a sight line.
  *
- * - `ward`: a support's line to an ally, which armours it; cut by standing in it.
+ * - `ward`: a support's line to an ally, which heals it; cut by standing in it.
  * - `hook`: a thrown chain — aimed along a drawn line, flying, then dragging.
  * - `chain`: an elite snarecaster's line anchored across the floor; crossing it costs.
  * - `beam`: an elite sentinel's sight line made real, for an instant.
@@ -1302,24 +1302,29 @@ export interface Enemy {
   /** How long it may still spend walking to that post before it simply stands. */
   relocateMs: number;
   /**
-   * Armour: an outer pool that absorbs damage and, while it lasts, makes the
-   * body immune to hit stun.
+   * **Poise**: how much of a beating it takes before a hit interrupts it.
+   * Hidden: there is no bar for it, only what a hit does — a hit it holds
+   * through rings off it (`poise_hold`), and the hit that breaks it knocks
+   * it into a long stagger (`poise_break`).
    *
-   * The first version of this was permanent immunity on one archetype, and
-   * that was wrong for a reason worth keeping: an enemy whose state the player
-   * cannot touch is an obstacle, not an opponent. The player could choose when
-   * the tank committed and nothing about how it ended.
+   * It replaced armour, an outer pool of health that had to be spent before
+   * the body could be interrupted, and was gone for good once spent: a heavy
+   * body was unstoppable for two hits and then interrupted by every hit after,
+   * so it could be held in stagger to its death. Poise comes back. It fills
+   * again once the body has gone `POISE_RECOVER_MS` unhit, and after a break
+   * the body cannot be broken again for `POISE_GUARD_MS`, so a heavy body is
+   * interrupted by a burst of hits, not held down by a stream of them.
    *
-   * Hades' answer is that armour is an **extra health bar** — immune while it
-   * holds, ordinary once it is gone — so the right to interrupt is something
-   * the player earns two hits into the fight rather than something the design
-   * withholds. It also gives the tank two phases out of one stat: unstoppable,
-   * then answerable.
+   * Zero for most bodies: any hit interrupts them, as it always did.
    */
-  armour: number;
-  maxArmour: number;
-  /** Counts down after the armour breaks, for the flash that sells it. */
-  armourBreakMs: number;
+  poise: number;
+  maxPoise: number;
+  /** Time since the last hit on its poise; at `POISE_RECOVER_MS` it fills again. */
+  poiseIdleMs: number;
+  /** After a break, the time left before it can be broken again. Hits land; they neither wear it nor interrupt. */
+  poiseGuardMs: number;
+  /** Counts down after a break, for the flash that sells it. */
+  poiseBreakMs: number;
   /**
    * Counts down while a charge is braking, in ms.
    *
@@ -1506,8 +1511,8 @@ export interface Enemy {
   moveMs: number;
   /** How many times the ranged attack has fired, for patterns that alternate (the rifter's cross). */
   casts: number;
-  /** Armour granted by a ward, on top of the body's own; removed when the ward goes. */
-  wardArmour: number;
+  /** A ward's healing on this body, as a share of its health a second; 0 when no ward holds it (`sim/attacks.ts`). */
+  wardHeal: number;
   /**
    * How long this body is still hurried by a bell's ringing (`HasteField`).
    *
@@ -1874,7 +1879,7 @@ export type WorldEventKind =
   | "player_hit" | "enemy_hit" | "enemy_killed" | "wave_spawned"
   | "room_cleared" | "shot" | "telegraph" | "hazard_tick" | "dash" | "pickup"
   | "reward_shown" | "reward_taken" | "portals_open" | "portal_entered"
-  /** Health or armour lost by a body, for damage numbers: `what` is hp, armour or dot:<kind>. */
+  /** Health lost by a body, for damage numbers: `what` is hp or dot:<kind>. */
   | "damage"
   /**
    * A shot stopped by a wall, where it struck: `what` is who fired it (an

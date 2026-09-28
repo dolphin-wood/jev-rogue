@@ -179,7 +179,7 @@ function fire(base: BaseItem): Result {
   w.enemies.push(dummy);
   const dx0 = dummy.x, dy0 = dummy.y;
 
-  const before = dummy.hp + dummy.armour;
+  const before = dummy.hp;
   let peak = 0;
   let spawned = 0;
   let live = 0;
@@ -268,7 +268,7 @@ function fire(base: BaseItem): Result {
       live = now;
       peak = Math.max(peak, now);
       // An enchant's own evidence is what its waves did, not the sword's blows.
-      if (shape0 === "enchant" ? w.stats.damageDealt - w.stats.swordDamage > 0 : dummy.hp + dummy.armour < before) hit = true;
+      if (shape0 === "enchant" ? w.stats.damageDealt - w.stats.swordDamage > 0 : dummy.hp < before) hit = true;
       for (const ev of w.events) if (ev.what) whats.add(`${ev.kind}:${ev.what}`);
       // The shot the stance was struck with, landing anyway.
       if (shape0 === "stance") throughGuard += w.events.filter((ev) => ev.kind === "player_hit" && ev.what === "bullet:shooter").length;
@@ -316,7 +316,7 @@ function fire(base: BaseItem): Result {
   }
   return {
     id: base.id, mana: base.mana,
-    spawned, damage: Math.round((before - (dummy.hp + dummy.armour)) * 10) / 10,
+    spawned, damage: Math.round((before - (dummy.hp)) * 10) / 10,
     peak, hitTarget: hit, notes,
   };
 }

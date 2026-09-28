@@ -690,21 +690,32 @@ const ENGAGE_DELAY_MS = 420;
 export const ALERT_MS = 320;
 
 /**
- * How much armour each archetype starts with, taken out of its health rather
- * than added to it: the tank is still 42 points to kill, but the first 18 of
- * them buy the right to interrupt it.
+ * **Poise by archetype** (`Enemy.poise`): the damage a burst of hits has to
+ * deal before one interrupts it. Only the heavy bodies have any; everything
+ * else is interrupted by any hit, as it always was. A sword hit is about 9 at
+ * the start of a run, so a tank takes three in a row and a warden two. Not the
+ * boss: nothing interrupts him (`canStagger`), and his weight is his health
+ * and the turns he takes (`chooseBossAct`).
  */
+// The breaker is the tank's subspecies and the fusilier the warden's: their bodies, their poise.
+const POISE: Partial<Record<EnemyId, number>> = { tank: 24, breaker: 24, warden: 16, fusilier: 16 };
+/** A body's poise: its own, doubled by an `armored` affix, or the affix's flat poise on a body with none. */
+function poiseOf(archetype: EnemyId, affixPoise: number): number {
+  const own = POISE[archetype] ?? 0;
+  if (affixPoise <= 0) return own;
+  return own > 0 ? own * 2 : affixPoise;
+}
+/** Unhit this long, a body's poise is whole again: a heavy body is broken by pressure, not by hits spread across a fight. */
+export const POISE_RECOVER_MS = 1500;
+/** The stagger a break knocks it into: longer than a hit's, the opening the burst was for. */
+export const POISE_BREAK_STAGGER_MS = 700;
 /**
- * Armour by archetype. Not the boss: nothing interrupts him (`canStagger`),
- * so a shield that only bought the right to interrupt bought nothing, and a
- * bar for it over his head was a second health bar that meant nothing. His
- * weight is his health and the turns he takes (`chooseBossAct`).
+ * After a break, how long before it can be broken again, counted from the
+ * end of the break's stagger: without it the next burst would break it again
+ * the moment it stood, and a heavy body could be held down to its death.
  */
-// The breaker is the tank's subspecies, its body and its health, and says it
-// is armoured; it had been left out, so it flinched where the tank did not.
-const ARMOUR: Partial<Record<EnemyId, number>> = { tank: 24, breaker: 24 };
+export const POISE_GUARD_MS = 1500;
 
-/** Whether hit stun applies. Armour is immunity, and armour can be broken. */
 /**
  * Whether this body is currently trying to back away from the player.
  *
@@ -722,13 +733,17 @@ export function midAttack(e: Enemy): boolean {
   return e.attack === "windup" || e.attack === "lunge" || e.telegraphMs > 0 || e.pending.length > 0;
 }
 
+/**
+ * Whether an ordinary hit interrupts it. A body with poise is interrupted
+ * only by the hit that breaks it (`hurtEnemy`, `stagger(…, force)`).
+ */
 export function canStagger(e: Enemy): boolean {
   // The king is never interrupted: every move he starts, he finishes, and the opening is the rest after it.
-  return e.archetype !== "boss" && e.armour <= 0;
+  return e.archetype !== "boss" && e.maxPoise <= 0;
 }
 
 /** How long the break flash runs. */
-export const ARMOUR_BREAK_MS = 260;
+export const POISE_BREAK_MS = 260;
 
 /**
  * A charge slamming into a wall should be felt, not merely seen. The world
@@ -783,8 +798,9 @@ function takeToken(world: World, e: Enemy): boolean {
  * Armoured bodies are exempt, which is the same rule Hades uses to stop a
  * heavy enemy being trivialised by mashing. See `canStagger`.
  */
-export function stagger(world: World, e: Enemy, ms = STAGGER_MS): void {
-  if (!canStagger(e)) return;
+export function stagger(world: World, e: Enemy, ms = STAGGER_MS, force = false): void {
+  if (!force && !canStagger(e)) return;
+  if (e.archetype === "boss") return;
   e.staggerMs = Math.max(e.staggerMs, ms);
   e.attack = "approach";
   e.attackMs = 0;
@@ -969,9 +985,11 @@ export function makeEnemy(
     staggerImmuneMs: 0,
     threatMs: 0,
     postX: x, postY: y, postMs: (id * 331) % 1200, relocateMs: 0,
-    armour: (ARMOUR[archetype] ?? 0) + stats.armour,
-    maxArmour: (ARMOUR[archetype] ?? 0) + stats.armour,
-    armourBreakMs: 0,
+    poise: poiseOf(archetype, stats.poise),
+    maxPoise: poiseOf(archetype, stats.poise),
+    poiseIdleMs: 0,
+    poiseGuardMs: 0,
+    poiseBreakMs: 0,
     brakeMs: 0,
     alertMs: 0,
     velX: 0,
@@ -1034,7 +1052,7 @@ export function makeEnemy(
     // Offset per body, so two of a kind do not use their second move together.
     moveMs: 2400 + ((id * 613) % 1800),
     casts: 0,
-    wardArmour: 0,
+    wardHeal: 0,
     delve: "surface",
     delveMs: 2500,
     delveX: 0,
@@ -2344,7 +2362,7 @@ function stepBossPhase(world: World, e: Enemy): void {
     e.swing.active = false;
     e.swing.trackingMs = 0;
     e.staggerMs = 0;
-    e.armourBreakMs = 0;
+    e.poiseBreakMs = 0;
     e.bossHooked = false;
     e.bossPlanMs = 0;
     e.velX = 0;
@@ -2854,7 +2872,13 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
     || e.telegraphMs > 0 || e.jukeMs > 0 ? 0 : e.threatMs + dtMs;
   if (e.postMs > 0) e.postMs -= dtMs;
   if (e.relocateMs > 0) e.relocateMs -= dtMs;
-  if (e.armourBreakMs > 0) e.armourBreakMs -= dtMs;
+  if (e.poiseBreakMs > 0) e.poiseBreakMs -= dtMs;
+  if (e.poiseGuardMs > 0) e.poiseGuardMs -= dtMs;
+  // Poise fills again once the body has gone a while unhit (`POISE_RECOVER_MS`).
+  if (e.maxPoise > 0 && e.poise < e.maxPoise) {
+    e.poiseIdleMs += dtMs;
+    if (e.poiseIdleMs >= POISE_RECOVER_MS) e.poise = e.maxPoise;
+  }
   /*
    * Braking: the velocity is shed gradually rather than being cut or coasting.
    * 0.94 per frame carries it about 52 px — a tile and a half — with the last
@@ -3288,15 +3312,12 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
         e.comboLeft = 0;
         impactShake(world, e);
         /*
-         * **The Frontier Veteran's plate breaks on the wall** (doc 024): a head-on
-         * slam is the fight's opening, until its next call puts the plate back.
+         * **The Frontier Veteran knocked out on the wall** (doc 024): the stun
+         * is the fight's opening, and it lands with a break's flash and sound.
          */
         if (e.guardian) {
-          if (e.armour > 0) {
-            e.armour = 0;
-            e.armourBreakMs = ARMOUR_BREAK_MS;
-            world.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `armour_break:${e.archetype}` });
-          }
+          e.poiseBreakMs = POISE_BREAK_MS;
+          world.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_break:${e.archetype}` });
         }
       }
     }
