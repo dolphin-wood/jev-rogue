@@ -23,7 +23,7 @@ import {
   HIT_FLASH_MS, BOSS_ROAR_MS, spellReady, castTiming, hasLineOfSight,
 } from "@jr/core";
 import type {
-  Bullet, Enemy, EnemyId, Shockwave, Input, ItemInstance, Mood, Offer, OfferCard, Portal,
+  Bullet, Enemy, EnemyId, Input, ItemInstance, Mood, Offer, OfferCard, Portal,
   PlayerMods, RewardCardKind, RoomPlan, RoomType, RunHistory, World, AttachedAffix,
   Element, Tension, RunContext, RunJournalEntry, Staff, SpellSlot, MeleeKind, MusicState,
 } from "@jr/core";
@@ -6163,39 +6163,6 @@ export class PlayScene extends Phaser.Scene {
     }
     this.heartEmbers = this.heartEmbers.filter((e) => e.ms < e.life);
     if (this.heartEmbers.length > HEART_EMBER_CAP) this.heartEmbers.splice(0, this.heartEmbers.length - HEART_EMBER_CAP);
-  }
-
-  /**
-   * **The king's ground ring, burning** (`Shockwave.king`): tongues of his
-   * fire stood along its leading edge, in his phase's colours, lower as the
-   * band runs out, shedding embers. One image a tongue and nothing else —
-   * the band's own additive edge is its light — at most
-   * `KING_RING_TONGUES_MAX` a ring, and only those on screen. On the edge the band hits with, so the
-   * fire is the line to read; a picture only — the band is the sim's.
-   */
-  private drawKingRingFire(s: Shockwave): void {
-    const sheet = `flametongue_p${this.heartPhase}`;
-    const info = this.fxSheets.get(sheet);
-    if (!info) return;
-    const view = this.teleView();
-    const r = s.inner + s.thickness;
-    const life = Math.max(0, Math.min(1, (s.maxRadius - s.inner) / (TILE_PX * 3)));
-    const n = Math.min(KING_RING_TONGUES_MAX, Math.max(12, Math.round((Math.PI * 2 * r) / KING_RING_TONGUE_PX)));
-    const tick = this.world.tick;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2;
-      const x = s.x + Math.cos(a) * r, y = s.y + Math.sin(a) * r;
-      if (x < view.x0 - 12 || x > view.x1 + 12 || y < view.y0 - 12 || y > view.y1 + 24) continue;
-      const h = ((i * 2654435761) >>> 0) / 4294967296;
-      const f = ((tick >> 2) + Math.floor(h * 4)) % info.origins.length;
-      const o = info.origins[f]!;
-      const k = (0.55 + 0.45 * h) * (0.4 + 0.6 * life);
-      this.sprites.image(x, y, FX_TEXTURE, `${sheet}_${f}`)
-        .setOrigin(o[0], o[1]).setScale(k * KING_RING_FLAME_SCALE, k * KING_RING_FLAME_SCALE * (0.8 + 0.35 * Math.sin(tick / 5 + i)))
-        .setDepth(bodyDepth(y, 0));
-      if (Math.random() < this.game.loop.delta / 2400)
-        this.heartEmbers.push({ x, y: y - 8 * k, vx: Math.cos(a) * 12 + (Math.random() - 0.5) * 10, vy: Math.sin(a) * 12 - 22, ms: 0, life: 300 + Math.random() * 250, phase: this.heartPhase });
-    }
   }
 
   /** One of the king's shots ending: a small burst of its fire, and a few embers thrown off it. */
@@ -14249,7 +14216,6 @@ export class PlayScene extends Phaser.Scene {
      * is unchanged, so the part that is on screen is identical either way.
      */
     drawShockwaves(this.soilGfx, this.ringGfx, w.shockwaves.filter((s) => s.facing === undefined), w.tick * STEP_MS, this.teleView());
-    for (const s of w.shockwaves) if (s.alive && s.king && s.chargeMs <= 0) this.drawKingRingFire(s);
     /*
      * The king's sword waves: the same crescent of energy the player's
      * enchant throws (`drawCrescentWave`), in the danger palette — a dark
@@ -18335,11 +18301,6 @@ const HEART_EMBER: readonly (readonly [number, number, number])[] = [
   [0xffe0a0, 0xe08a30, 0x8a3a8a],
   [0xffffff, 0xf8d8a8, 0xa87850],
 ];
-/** His ground ring's flames: one about every this many px of its edge, and no more than this many. */
-const KING_RING_TONGUE_PX = 14;
-/** How large a tongue is drawn: twice the sheet's own pixel, so it stands over the band's bright edge. */
-const KING_RING_FLAME_SCALE = 1;
-const KING_RING_TONGUES_MAX = 96;
 /** How long his palm takes to gather its fire back after a shot, ms. */
 const HEART_GATHER_MS = 450;
 /** A shot sheds an ember about this often, ms; and no more than this many are in the air. */

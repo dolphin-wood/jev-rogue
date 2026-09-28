@@ -292,38 +292,6 @@ function heartburst(name: string, ramp: readonly Rgb[], seed: number): FxSheet {
   return { name, frames, origin: [c0, c0] };
 }
 
-/**
- * One tongue of the king's fire standing on the floor (`flametongue_p1`..
- * `_p3`): what his ground ring burns with along its edge. A teardrop licking
- * up, origin at its foot; four frames of it rising, leaning and tearing.
- */
-function flametongue(name: string, ramp: readonly Rgb[], seed: number): FxSheet {
-  const R = rng(seed);
-  const w = 16, h = 30, ox = 8, oy = h - 3;
-  const frames: FxFrame[] = [];
-  for (let f = 0; f < 4; f++) {
-    const c = new Canvas(w, h);
-    const tall = 20 + [0, 3, 1, 4][f]!;
-    const lean = [0, 1.5, -1, 2][f]!;
-    for (let y = 0; y <= tall; y++) {
-      const t = y / tall; // 0 at the foot, 1 at the tip
-      const half = 5.5 * Math.sin(Math.PI * Math.min(1, 0.18 + t * 0.95)) * (1 - t * 0.55);
-      const cx = ox + lean * t * t + Math.sin(t * 6 + f * 1.9) * 1.2 * t;
-      for (let x = 0; x < w; x++) {
-        const d = Math.abs(x - cx) / Math.max(0.5, half);
-        if (d > 1) continue;
-        if (d > 0.75 && t > 0.6 && (x + y + f) % 2 === 0) continue;
-        const heat = (1 - t * 0.85) * (1 - d * 0.7);
-        c.put(x, oy - y, 1 + Math.min(4, Math.floor(heat * 5)));
-      }
-    }
-    // A spark torn off the tip.
-    if (f > 0) c.put(ox + lean + (R() - 0.5) * 4, oy - tall - 2 - R() * 3, 3);
-    frames.push(c.paint(ramp));
-  }
-  return { name, frames, origin: [ox, oy] };
-}
-
 /** Sparks and grit where a shot meets stone, facing right (back toward the shooter). */
 function wallHit(name: string, seed: number): FxSheet {
   const w = 26;
@@ -626,7 +594,6 @@ export function bakeSheets(opts: { blastLen: number; blastSpreadDeg: number }): 
     tracer("tracer_l", 22, 8),
     ...HEARTFIRE_RAMPS.map((ramp, i) => heartfire(`heartfire_p${i + 1}`, ramp, 91 + i)),
     ...HEARTFIRE_RAMPS.map((ramp, i) => heartburst(`heartburst_p${i + 1}`, ramp, 101 + i)),
-    ...HEARTFIRE_RAMPS.map((ramp, i) => flametongue(`flametongue_p${i + 1}`, ramp, 111 + i)),
     wallHit("hit_wall", 21),
     fizzle("fizzle"),
     hurtBurst("hit_player", 31),
