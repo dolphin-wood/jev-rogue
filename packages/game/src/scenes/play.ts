@@ -16752,24 +16752,47 @@ function bossFlip(w: World, e: Enemy): boolean {
  * coming back.
  */
 /**
- * How much larger to draw a king's frame so it is his idle's size. Several of
- * his action frames were delivered drawn smaller — a cut's windup at three
- * quarters, the cleave's raise and the dashcut at two thirds — so he shrank
- * into every attack and grew back out of it. The armour a frame shows
- * (`RecolourableAtlas.bodyArea`) is nearly the same in every pose, so its
- * root against the idle's is the drawing's scale. Only ever enlarged, not
- * for the few percent a pose hides behind an arm, and never past half again.
- * Art order B8 asks for the frames to be redrawn to one scale; this goes to
- * 1 by itself when they are.
+ * **How much to scale a king's frame so it is drawn at his phase's common
+ * size.** His frames were delivered at more than one scale: some cuts at two
+ * thirds (the cleave's raise, the dashcut), phase I's windup, commit and
+ * follow-through a tenth or more larger than the walk he came in on, and
+ * phase III's whole walk cycle a quarter larger than everything else it
+ * does, so he swelled and shrank from one move to the next. The armour a
+ * frame shows (`RecolourableAtlas.bodyArea`) is nearly the same in every
+ * pose, so its root against the phase's **median** frame is the drawing's
+ * scale: the size most of his frames already share, whichever frames are the
+ * odd ones out. It used to be the idle, enlarging only, which left every
+ * oversized frame as it was.
+ *
+ * Scaled both ways; not for the few percent a pose hides behind an arm
+ * (`BOSS_SCALE_DEADBAND`), and within `BOSS_SCALE_MIN`..`BOSS_SCALE_MAX`. Art
+ * order B8 asks for the frames to be redrawn to one scale; this goes to 1 by
+ * itself when they are.
  */
 function bossFrameScale(atlas: RecolourableAtlas, name: string): number {
-  const ref = /^boss_p\d/.exec(name)?.[0];
-  if (!ref || !atlas.has(`${ref}_idle0`) || !atlas.has(name)) return 1;
-  const s = Math.sqrt(atlas.bodyArea(`${ref}_idle0`) / Math.max(1, atlas.bodyArea(name)));
-  return s < BOSS_SCALE_DEADBAND ? 1 : Math.min(BOSS_SCALE_MAX, s);
+  const phase = /^boss_p\d/.exec(name)?.[0];
+  if (!phase || !atlas.has(name)) return 1;
+  const ref = bossCommonArea(atlas, phase);
+  if (ref <= 0) return 1;
+  const s = Math.sqrt(ref / Math.max(1, atlas.bodyArea(name)));
+  return Math.abs(s - 1) < BOSS_SCALE_DEADBAND ? 1 : Math.max(BOSS_SCALE_MIN, Math.min(BOSS_SCALE_MAX, s));
 }
-const BOSS_SCALE_DEADBAND = 1.12;
-const BOSS_SCALE_MAX = 1.45;
+const BOSS_SCALE_DEADBAND = 0.08;
+const BOSS_SCALE_MIN = 0.8;
+const BOSS_SCALE_MAX = 1.3;
+
+/** The median armour area of a phase's frames, cached per atlas: the size every frame of it is drawn to. */
+const bossCommonAreas = new WeakMap<RecolourableAtlas, Map<string, number>>();
+function bossCommonArea(atlas: RecolourableAtlas, phase: string): number {
+  let byPhase = bossCommonAreas.get(atlas);
+  if (!byPhase) bossCommonAreas.set(atlas, byPhase = new Map());
+  const hit = byPhase.get(phase);
+  if (hit !== undefined) return hit;
+  const areas = atlas.frameNames.filter((n) => n.startsWith(`${phase}_`)).map((n) => atlas.bodyArea(n)).sort((a, b) => a - b);
+  const area = areas.length > 0 ? areas[Math.floor(areas.length / 2)]! : 0;
+  byPhase.set(phase, area);
+  return area;
+}
 
 function bossBodyShift(atlas: RecolourableAtlas, name: string, flipX: boolean): number {
   if (!atlas.has(name)) return 0;
