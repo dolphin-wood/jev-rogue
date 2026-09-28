@@ -9,9 +9,10 @@ import { NO_INPUT } from "./types.ts";
 import type { Enemy, World } from "./types.ts";
 import { WORLD_H, WORLD_W } from "./collide.ts";
 import {
-  GUARDIAN_POISE, GUARDIAN_CALL_EVERY_MS, GUARDIAN_CALL_MS, GUARDIAN_ENTRANCE_MS, GUARDIAN_HEARTS, GUARDIAN_HP, GUARDIAN_SCALE, GUARDIAN_SQUAD, GUARDIAN_STAKES_TELE_MS, GUARDIAN_XP, makeGuardian,
+  GUARDIAN_POISE, GUARDIAN_CALL_EVERY_MS, GUARDIAN_CALL_MS, GUARDIAN_ENTRANCE_MS, GUARDIAN_HEARTS, GUARDIAN_HP, GUARDIAN_SCALE, GUARDIAN_SQUAD, GUARDIAN_STAKES_TELE_MS, GUARDIAN_VOLLEY_TELE_MS, GUARDIAN_XP, makeGuardian,
 } from "./guardian.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
+import { TILE_PX } from "../types.ts";
 import { plainInstance } from "../spells/index.ts";
 import { RngSource } from "../rng.ts";
 import { ENEMIES } from "../encounters/enemies.ts";
@@ -43,12 +44,10 @@ describe("the Frontier Veteran: the body", () => {
     expect(g.phase).toBe(1);
   });
 
-  it("rams from range and shoves on top of it", () => {
+  it("rams from range", () => {
     const g = makeGuardian(1, 100, 100, RUN_GUARDIAN_ROOM);
     g.closeIn = false;
     expect(meleeSpec(g)?.kind).toBe("charge");
-    g.closeIn = true;
-    expect(meleeSpec(g)?.kind).toBe("bash");
   });
 
   it("has no phases: low on its bar it is the body it was at the top", () => {
@@ -122,20 +121,74 @@ describe("the Frontier Veteran: the room", () => {
       g.x = 320; g.y = 200;
       w.player.x = near ? g.x + 50 : g.x + 200; w.player.y = g.y;
       g.guardian!.stakesMs = 0;
+      g.guardian!.volleyMs = 1e9;
       g.attack = "approach"; g.pose = ""; g.poseMs = 0; g.staggerMs = 0; g.plantMs = 0; g.attackCooldownMs = 1e9;
       w.rifts.length = 0;
       step(w, NO_INPUT);
       expect(g.pose, String(near)).toBe("guardian_stakes");
       const rifts = w.rifts.filter((r) => r.alive);
       if (near) {
-        expect(rifts).toHaveLength(1);
-        expect(rifts[0]!.length).toBe(0);
+        // The palisade: the player's Quake Ring in its hands, cells that hit the player.
+        expect(rifts).toHaveLength(0);
+        const cells = w.eruptions.filter((c) => c.alive && c.hostile);
+        expect(cells.length).toBeGreaterThan(8);
+        expect(Math.min(...cells.map((c) => c.delayMs))).toBeGreaterThanOrEqual(GUARDIAN_STAKES_TELE_MS - 20);
       } else {
         expect(rifts).toHaveLength(3);
         expect(rifts.every((r) => r.length > 0 && r.teleMs >= GUARDIAN_STAKES_TELE_MS - 20)).toBe(true);
       }
       expect(g.guardian!.stakesMs).toBeGreaterThan(0);
     }
+  });
+
+  it("hurts the player with its palisade, once however many stakes they stand in", () => {
+    const w = guardianWorld("palisade-hit");
+    const g = guardianOf(w);
+    const steps = (ms: number) => Math.ceil(ms / (1000 / 60));
+    for (let i = 0; i < steps(GUARDIAN_ENTRANCE_MS + GUARDIAN_CALL_MS) + 4; i++) step(w, NO_INPUT);
+    for (const e of w.enemies) if (e !== g) e.hp = 0;
+    g.x = 320; g.y = 200;
+    w.player.x = g.x + g.radius + 20; w.player.y = g.y;
+    w.player.hearts = 6;
+    (w as { invincible?: boolean }).invincible = false;
+    g.guardian!.stakesMs = 0; g.guardian!.volleyMs = 1e9;
+    g.attack = "approach"; g.pose = ""; g.poseMs = 0; g.staggerMs = 0; g.plantMs = 0; g.attackCooldownMs = 1e9; g.speed = 0;
+    let hits = 0;
+    for (let i = 0; i < steps(GUARDIAN_STAKES_TELE_MS + 800); i++) {
+      step(w, NO_INPUT);
+      hits += w.events.filter((ev) => ev.kind === "player_hit" && ev.what === "stakes").length;
+    }
+    expect(hits).toBe(1);
+  });
+
+  it("orders a volley: lines from wall to wall, drawn long before they fire, one near the player", () => {
+    const w = guardianWorld("volley");
+    const g = guardianOf(w);
+    const steps = (ms: number) => Math.ceil(ms / (1000 / 60));
+    for (let i = 0; i < steps(GUARDIAN_ENTRANCE_MS + GUARDIAN_CALL_MS) + 4; i++) step(w, NO_INPUT);
+    g.guardian!.volleyMs = 0;
+    g.attack = "approach"; g.pose = ""; g.poseMs = 0; g.staggerMs = 0; g.plantMs = 0; g.attackCooldownMs = 1e9;
+    w.rifts.length = 0;
+    step(w, NO_INPUT);
+    const lines = w.rifts.filter((r) => r.alive && r.beam);
+    expect(lines.length).toBeGreaterThanOrEqual(3);
+    expect(lines.every((r) => r.teleMs >= GUARDIAN_VOLLEY_TELE_MS - 20 && r.length > 64)).toBe(true);
+    const near = (r: (typeof lines)[number]): number => {
+      const vx = Math.cos(r.angle), vy = Math.sin(r.angle);
+      const t = Math.max(0, Math.min(r.length, (w.player.x - r.x) * vx + (w.player.y - r.y) * vy));
+      return Math.hypot(w.player.x - (r.x + vx * t), w.player.y - (r.y + vy * t));
+    };
+    expect(Math.min(...lines.map(near))).toBeLessThan(TILE_PX * 2);
+  });
+
+  it("sweeps and shoves by turns up close, and rams twice when the first finds no wall", () => {
+    const g = makeGuardian(1, 100, 100, RUN_GUARDIAN_ROOM);
+    g.closeIn = true;
+    const kinds = new Set<string>();
+    for (let i = 0; i < 4; i++) { g.casts = i; kinds.add(meleeSpec(g)!.kind); }
+    expect([...kinds].sort()).toEqual(["bash", "sweep"]);
+    g.guardian!.chainNext = true;
+    expect(meleeSpec(g)?.kind).toBe("charge");
   });
 
   it("leaves hearts that fly to the player when it falls", () => {

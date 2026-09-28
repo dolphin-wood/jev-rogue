@@ -809,6 +809,14 @@ const BOSS_VIEW_SPARE = 1;
  * floor it stands on; violet is in no body's palette and no telegraph's.
  */
 const GUARDIAN_TINT = 0xb48cff;
+/** The Frontier Veteran's volley lines: a pale warm line while they are drawn, a warm glow round the white bolt. */
+const VOLLEY_TELE = 0xffe2c8;
+const VOLLEY_GLOW = 0xffb488;
+/** How fast a volley line runs out of its wall, and how long its bolt takes to fade. */
+const VOLLEY_UNROLL_MS = 200;
+const VOLLEY_FADE_MS = 420;
+/** Its palisade's stakes: the player's Quake Ring, turned to its violet. */
+const GUARDIAN_STAKE_TINT = 0xc49cff;
 /** Its tint while staggered: its violet warmed toward the stagger's cast, so it is still itself. */
 const GUARDIAN_STAGGER_TINT = 0xe0a0e0;
 /** The Frontier Veteran's overhead bars, health and plate, px wide. */
@@ -8471,6 +8479,7 @@ export class PlayScene extends Phaser.Scene {
           // The Frontier Veteran's arm going up: the call heard before the dead answer (doc 024).
           if (ev.what === "guardian_call") sfx.play("cast_void", 0.6);
           if (ev.what === "guardian_stakes" || ev.what === "guardian_palisade") sfx.play("hit_heavy", 0.7);
+          if (ev.what === "guardian_volley") sfx.play("cast_void", 0.8);
           if (ev.what?.startsWith("boss_phase:")) {
             const next = Number(ev.what.slice("boss_phase:".length));
             const king = this.world.enemies.find((e) => e.archetype === "boss" && e.hp > 0);
@@ -8524,6 +8533,8 @@ export class PlayScene extends Phaser.Scene {
           else if (what === "ice") sfx.play("hazard_ice");
           else if (what === "poison") sfx.play("impact_venom", 0.85);
           else if (what === "rift" || what === "burst" || what === "rockfall") sfx.play("eruption_stone");
+          // A line of the Frontier Veteran's volley firing.
+          else if (what === "volley") sfx.play("impact_storm", 1.2);
           // The band setting off, and the bell landing.
           else if (what === "shockwave") sfx.play("eruption_stone", 0.9);
           else if (what === "toll") sfx.play("impact_storm", 0.8);
@@ -14428,9 +14439,11 @@ export class PlayScene extends Phaser.Scene {
     const g = this.eruptGfx;
     g.clear();
     const tick = this.world.tick;
-    const play = (x: number, y: number, name: string, alpha: number): void => {
+    const play = (x: number, y: number, name: string, alpha: number, tint?: number): void => {
       if (!this.atlas.has(name)) return;
-      this.sprites.image(x, y + ERUPTION_FOOT_PX, this.textureKey, name)
+      const img = this.sprites.image(x, y + ERUPTION_FOOT_PX, this.textureKey, name);
+      if (tint !== undefined) img.setTint(tint);
+      img
         .setOrigin(0.5, 1).setScale(1 / ART_SCALE)
         /*
          * In the body band, by the foot of the spike rather than over every
@@ -14448,7 +14461,8 @@ export class PlayScene extends Phaser.Scene {
         // Waiting: the floor cracking, dim and still. Then out, and down.
         const step = !c.fired ? (c.delayMs > 90 ? 0 : 1) : t < 0.62 ? 2 : 3;
         const alpha = c.fired ? 1 : 0.4 + 0.5 * Math.max(0, 1 - c.delayMs / 250);
-        play(c.x, c.y, `vfx_earth_spike_${variant}${step}`, alpha);
+        // An enemy's stakes (the Frontier Veteran's palisade) in its violet; the player's own in the stone's colour.
+        play(c.x, c.y, `vfx_earth_spike_${variant}${step}`, alpha, c.hostile ? GUARDIAN_STAKE_TINT : undefined);
         // The crack it leaves, pushed once, on the frame the spike gives way.
         const cross = ERUPTION_SHOW_MS * 0.62;
         if (c.fired && c.ageMs >= cross && c.ageMs - this.game.loop.delta < cross)
@@ -14672,6 +14686,46 @@ export class PlayScene extends Phaser.Scene {
     for (const r of w.rifts) {
       const ex = r.x + Math.cos(r.angle) * r.length;
       const ey = r.y + Math.sin(r.angle) * r.length;
+      /*
+       * **A line of the Frontier Veteran's volley** (doc 024): an emitter
+       * lit at the wall, and a thin pale line run out of it across the room
+       * in a flash (`VOLLEY_UNROLL_MS`), held and brightening as it comes due;
+       * then the bolt: the whole line lit at once, white on a warm glow, and
+       * gone like lightning (`VOLLEY_FADE_MS`, over the rift's scar).
+       */
+      if (r.beam) {
+        if (r.teleMs > 0) {
+          const k = 1 - r.teleMs / r.teleMaxMs;
+          const unroll = Math.min(1, (r.teleMaxMs - r.teleMs) / VOLLEY_UNROLL_MS);
+          this.hazardGfx.fillStyle(VOLLEY_GLOW, 0.5 + 0.4 * k);
+          this.hazardGfx.fillCircle(r.x, r.y, 2.5 + 1.5 * k);
+          const bx = r.x + Math.cos(r.angle) * r.length * unroll, by = r.y + Math.sin(r.angle) * r.length * unroll;
+          this.hazardGfx.lineStyle(1, VOLLEY_TELE, 0.25 + 0.55 * k);
+          this.hazardGfx.lineBetween(r.x, r.y, bx, by);
+          // The head of the line as it runs out: a spark leading it.
+          if (unroll < 1) {
+            this.hazardGfx.fillStyle(0xffffff, 0.8);
+            this.hazardGfx.fillCircle(bx, by, 1.5);
+          }
+          // Its last fifth, the width it will hit, faint either side.
+          if (k > 0.8) {
+            this.hazardGfx.lineStyle(r.width, VOLLEY_TELE, 0.08 + 0.4 * (k - 0.8));
+            this.hazardGfx.lineBetween(r.x, r.y, ex, ey);
+          }
+        } else {
+          // From the instant it fires: the damage's window, then the scar's first moments, as one fade.
+          const since = r.activeMs > 0 ? 230 - r.activeMs : 230 + (1500 - r.scarMs);
+          const t = Math.max(0, Math.min(1, since / VOLLEY_FADE_MS));
+          if (t < 1) {
+            const flicker = since < 60 ? 1.3 : 1;
+            this.hazardGfx.lineStyle(r.width * 2.2 * flicker * (1 - 0.5 * t), VOLLEY_GLOW, 0.45 * (1 - t));
+            this.hazardGfx.lineBetween(r.x, r.y, ex, ey);
+            this.hazardGfx.lineStyle(Math.max(1, r.width * 0.6 * flicker * (1 - 0.6 * t)), 0xffffff, 1 - t * t);
+            this.hazardGfx.lineBetween(r.x, r.y, ex, ey);
+          }
+        }
+        continue;
+      }
       /*
        * **A bolt of the king's storm**: marked as the turret's strike is — a
        * hard ring and a centre filling as it comes due — then the bolt out of
@@ -16972,7 +17026,7 @@ function specialPose(w: World, e: Enemy): string | null {
       // through the start of the reload while the smoke clears.
       if (e.pose === "musket_windup") return "windup";
       // The Frontier Veteran's call (doc 024): the arm up, as the gun is raised to load.
-      if (e.pose === "guardian_call") return "windup";
+      if (e.pose === "guardian_call" || e.pose === "guardian_order") return "windup";
       // The stakes (doc 024): the gun raised, then driven down as the ground erupts.
       if (e.pose === "guardian_stakes") return e.poseMs > 450 + 250 ? "windup" : "lunge";
       if (e.pose === "musket_fire" || e.pose === "musket_second") return "lunge";
