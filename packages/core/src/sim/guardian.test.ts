@@ -9,7 +9,7 @@ import { NO_INPUT } from "./types.ts";
 import type { Enemy, World } from "./types.ts";
 import { WORLD_H, WORLD_W } from "./collide.ts";
 import {
-  GUARDIAN_ARMOUR, GUARDIAN_CALL_EVERY_MS, GUARDIAN_CALL_MS, GUARDIAN_ENTRANCE_MS, GUARDIAN_HEARTS, GUARDIAN_HP, GUARDIAN_SCALE, GUARDIAN_SQUAD, GUARDIAN_XP, makeGuardian,
+  GUARDIAN_ARMOUR, GUARDIAN_CALL_EVERY_MS, GUARDIAN_CALL_REARM, GUARDIAN_CALL_MS, GUARDIAN_ENTRANCE_MS, GUARDIAN_HEARTS, GUARDIAN_HP, GUARDIAN_SCALE, GUARDIAN_SQUAD, GUARDIAN_XP, makeGuardian,
 } from "./guardian.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
 import { plainInstance } from "../spells/index.ts";
@@ -85,7 +85,7 @@ describe("the Drowned Warden: the room", () => {
     expect(w.enemies.filter((e) => e !== g && e.hp > 0).length).toBeGreaterThan(0);
   });
 
-  it("calls again when its squad is down and the call has come round, and the call puts its plate back", () => {
+  it("calls again when its squad is down and the call has come round, and the call puts half its plate back", () => {
     const w = guardianWorld("recall");
     const g = guardianOf(w);
     const steps = (ms: number) => Math.ceil(ms / (1000 / 60));
@@ -99,7 +99,7 @@ describe("the Drowned Warden: the room", () => {
       called = w.enemies.filter((e) => e !== g && e.hp > 0).length === GUARDIAN_SQUAD.length;
     }
     expect(called).toBe(true);
-    expect(g.armour).toBe(GUARDIAN_ARMOUR);
+    expect(g.armour).toBe(GUARDIAN_ARMOUR * GUARDIAN_CALL_REARM);
     expect(g.guardian!.callMs).toBeGreaterThan(GUARDIAN_CALL_EVERY_MS - 4000);
   });
 

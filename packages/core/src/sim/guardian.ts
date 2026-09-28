@@ -5,8 +5,8 @@
  * its shield shove, and the tank's ram (`chooseMelee`). A head-on wall knocks
  * it out and breaks its armour (`guardianWallSlam`). It has no phases: an
  * elite's fight is one fight. What it has beyond a warden is **the call**: it
- * raises its arm and the room's dead answer, a squad round it and its plate
- * back on. The first call is its entrance, and it calls again whenever its
+ * raises its arm and the room's dead answer, a squad round it and half its
+ * plate back on. The first call is its entrance, and it calls again whenever its
  * squad is down to one and the call has come round. It is not a new
  * archetype, so the warden's frames, death and renderer all hold; nothing
  * assembles it into an ordinary room.
@@ -62,6 +62,12 @@ export const GUARDIAN_CALL_MS = 1100;
 export const GUARDIAN_ENTRANCE_MS = 500;
 /** How long after one call before it may call again. */
 export const GUARDIAN_CALL_EVERY_MS = 20_000;
+/**
+ * How much of its armour a call puts back, as a share of the whole: half, so
+ * a call after a wall slam gives back a plate that breaks sooner, and the
+ * player's opening is not wiped out by the dead answering.
+ */
+export const GUARDIAN_CALL_REARM = 0.5;
 /** It calls again only when its squad is down to this many. */
 export const GUARDIAN_CALL_BELOW = 1;
 
@@ -128,10 +134,10 @@ export function stepGuardian(w: World, e: Enemy, dtMs: number): void {
   w.events.push({ kind: "telegraph", x: e.x, y: e.y, what: "guardian_call" });
 }
 
-/** The dead answer: the bodies rise round it, and its plate grows back. */
+/** The dead answer: the bodies rise round it, and part of its plate grows back (`GUARDIAN_CALL_REARM`). */
 function answer(w: World, e: Enemy, who: readonly EnemyId[], spots: readonly { x: number; y: number }[]): void {
   if (e.armour < e.maxArmour) {
-    e.armour = e.maxArmour;
+    e.armour = Math.min(e.maxArmour, e.armour + e.maxArmour * GUARDIAN_CALL_REARM);
     w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: "guardian_rearm" });
   }
   w.trauma = Math.min(1, w.trauma + 0.3);
