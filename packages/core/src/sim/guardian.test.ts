@@ -276,14 +276,14 @@ describe("the Frontier Veteran: the room", () => {
     expect(g.guardian!.calling).toBe(true);
     const before = w.enemies.length;
     let broke = false;
-    for (let i = 0; i < 20 && !broke; i++) broke = hurtEnemy(w, g, 40).broke && g.guardian!.brokenMs > 0;
+    for (let i = 0; i < 20 && !broke; i++) broke = hurtEnemy(w, g, 40, "", undefined, 40).broke && g.guardian!.brokenMs > 0;
     expect(broke).toBe(true);
     expect(g.stunMs).toBeGreaterThanOrEqual(GUARDIAN_BROKEN_MS - 1);
     expect(g.staggerMs).toBeGreaterThanOrEqual(GUARDIAN_BROKEN_MS - 1);
     expect(g.guardian!.calling).toBe(false);
     expect(g.guardian!.stance).toBe(0);
     const hp = g.hp;
-    hurtEnemy(w, g, 20);
+    hurtEnemy(w, g, 20, "", undefined, 20);
     expect(hp - g.hp).toBe(Math.floor(20 * GUARDIAN_BROKEN_TAKEN));
     // Nothing wears it while it is down, and it gets up when the window is over.
     expect(g.guardian!.stance).toBe(0);
@@ -293,16 +293,21 @@ describe("the Frontier Veteran: the room", () => {
     expect(w.enemies.length).toBe(before);
   });
 
-  it("is not stunned by a poise break: the break interrupts, the stars are a stun's", () => {
+  it("has no poise under its stance: short of the stance, no blow interrupts it, and each one fills the bar", () => {
     const w = guardianWorld("poise-stars");
     const g = guardianOf(w);
     const steps = (ms: number) => Math.ceil(ms / (1000 / 60));
     for (let i = 0; i < steps(GUARDIAN_CALL_MS) + 4; i++) step(w, NO_INPUT);
-    g.poiseGuardMs = 0; g.poise = g.maxPoise;
-    expect(hurtEnemy(w, g, g.maxPoise + 1).broke).toBe(true);
-    expect(g.staggerMs).toBeGreaterThan(0);
+    g.staggerMs = 0;
+    const blow = GUARDIAN_STANCE / 3;
+    expect(hurtEnemy(w, g, blow, "", undefined, blow).broke).toBe(false);
+    expect(hurtEnemy(w, g, blow, "", undefined, blow).broke).toBe(false);
+    expect(g.staggerMs).toBe(0);
     expect(g.stunMs).toBeLessThanOrEqual(0);
-    expect(g.guardian!.stance).toBeLessThan(GUARDIAN_STANCE);
+    expect(g.guardian!.stance).toBeCloseTo(blow * 2, 5);
+    // A tick is not a blow: a burn fills nothing.
+    hurtEnemy(w, g, blow, "fire");
+    expect(g.guardian!.stance).toBeCloseTo(blow * 2, 5);
   });
 
   it("drives its stakes: three lanes at a player at range, a ring round itself on a player close by", () => {

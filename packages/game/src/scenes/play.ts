@@ -8,7 +8,7 @@ import {
   GRID_W, GRID_H, TILE_PX, Tile, STEP_MS, MAX_HEARTS, HP_PER_HEART, ITEMS, SPELL_SLOTS, slotCost, runStaff, PLAYER_SPEED,
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
-  moodTransform, tintRGBA, dashInvulnerable, MELEE, POISE_BREAK_MS, brakeFraction, ENEMIES,
+  moodTransform, tintRGBA, dashInvulnerable, MELEE, POISE_BREAK_MS, POISE_BREAK_STAGGER_MS, POISE_GUARD_MS, brakeFraction, ENEMIES,
   BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_MUSKET_SPREAD_MULT, GUARDIAN_CALL_MS, GUARDIAN_STANCE, GUARDIAN_BROKEN_MS, GUARDIAN_SINK_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, audienceRoomFor, RUN_GUARDIAN_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
@@ -17962,15 +17962,42 @@ function drawEnemy(
 
   /*
    * **A poise break** (`Enemy.poise`): a ring thrown off the body as the
-   * burst knocks it into its long stagger. There is no bar for poise; what a
-   * hit does is the whole of what the player is told, and a blow held through
-   * throws steel sparks instead (`poise_hold`, in the event effects).
+   * burst knocks it into its long stagger. A plated body's blow held through
+   * throws steel sparks instead (`poise_hold`, in the event effects); every
+   * body's shows on its bar, below.
    */
   if (e.poiseBreakMs > 0) {
     const t = e.poiseBreakMs / POISE_BREAK_MS;
     const burst = group.circle(e.x, e.y + bob, e.radius + 3 + 18 * (1 - t), 0, 0);
     burst.setStrokeStyle(2, SHIELD_BLUE, t);
     burst.setDepth(8);
+  }
+
+  /*
+   * **The poise bar** (doc 027): a thin gold line under the feet, filling as
+   * blows wear the body's poise, the same bar and the same colour as the
+   * Frontier Veteran's stance, because it is the same thing — when it is full
+   * the next blow interrupts. Hidden while the poise is whole, so a room of
+   * untouched bodies is not a room of bars; it comes up with the first blow
+   * and goes when the poise has refilled. It flashes in its last quarter.
+   * After a break it is the guard, pale and draining: nothing will interrupt
+   * the body again until it is gone. Under the feet rather than over the
+   * head, where the damage numbers rise from, the status marks sit and the
+   * alert pops: over the head every blow's number was drawn across it.
+   */
+  if (!e.guardian && e.archetype !== "boss" && e.maxPoise > 0 && e.hp > 0 && e.spawnFadeMs <= 0
+    && (e.poise < e.maxPoise - 0.01 || e.poiseGuardMs > 0)) {
+    const W = Math.max(14, Math.round(e.radius * 1.8));
+    const y = e.y + e.radius + 4;
+    const guard = e.poiseGuardMs > 0;
+    const k = guard
+      ? Math.min(1, e.poiseGuardMs / (POISE_BREAK_STAGGER_MS + POISE_GUARD_MS))
+      : Math.min(1, 1 - e.poise / e.maxPoise);
+    const hot = !guard && k > 0.75;
+    const flash = hot ? 0.65 + 0.35 * Math.sin(scene.time.now / 90) : 1;
+    group.rectangle(e.x - W / 2 - 1, y, W + 2, 3, 0x0d0b1f, 0.8).setOrigin(0, 0.5).setDepth(9);
+    group.rectangle(e.x - W / 2, y, W * k, 1.6, guard ? 0xcfd6e8 : 0xf2b632, guard ? 0.7 : flash)
+      .setOrigin(0, 0.5).setDepth(10);
   }
 
   /*

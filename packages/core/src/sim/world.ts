@@ -53,7 +53,7 @@ import {
 import { COIN_VALUE, MANA_ORB, burstCoins, drop, makePickupPool, stepPickups } from "./pickups.ts";
 import { CHEST_GOLD } from "../run/chest.ts";
 import { audienceKill, makeAudience, stepAudience } from "./audience.ts";
-import { armGuardianIntroVolley, GUARDIAN_BREAK_STANCE, GUARDIAN_BROKEN_TAKEN, GUARDIAN_HEARTS, GUARDIAN_INTRO_MS, GUARDIAN_INTRO_NOTICE_MS, GUARDIAN_INTRO_PRE_MS, GUARDIAN_INTRO_RECOVERY_MS, GUARDIAN_OPENING_MAX, GUARDIAN_SINK_MS, GUARDIAN_STANCE, GUARDIAN_XP, makeGuardian, stepGuardian, wearStance } from "./guardian.ts";
+import { armGuardianIntroVolley, GUARDIAN_BROKEN_TAKEN, GUARDIAN_HEARTS, GUARDIAN_INTRO_MS, GUARDIAN_INTRO_NOTICE_MS, GUARDIAN_INTRO_PRE_MS, GUARDIAN_INTRO_RECOVERY_MS, GUARDIAN_OPENING_MAX, GUARDIAN_SINK_MS, GUARDIAN_STANCE, GUARDIAN_XP, makeGuardian, stepGuardian, wearStance } from "./guardian.ts";
 import { makeObjective, OBJECTIVE_ENTRY_GRACE_MS, placeTargets, stepObjective } from "./objective.ts";
 import {
   enteredPortal, makePortal, placeRewardNear, portalsBefore, raisePortals, stepPortals, stepReward,
@@ -71,7 +71,7 @@ import {
   dropFireToken, POISE_BREAK_MS, POISE_BREAK_STAGGER_MS, POISE_GUARD_MS, SPAWN_FADE_MS, SPAWN_TELEGRAPH_MS, ENEMY_FREEZE_MS, STAGGER_MS,
   ENEMY_BURN_MS, ENEMY_POISON_MS, ENEMY_BURN_SOURCES, ENEMY_POISON_STACKS, SHATTER_MULT,
   STATUS_BREADTH_MULT, statusBreadth, ALERT_MS,
-  meleeSpec,
+  meleeSpec, plated,
   spikeVolley, SPIKE_SIZE, release, bossPhase, BOSS_POWER,
   beginWindup, bossBehind, bossLevel, BOSS_ROAR_MS, BOSS_LINK_RECOVER_MS, BOSS_DASH_SLIDE, bossDashWake, bossTempo,
 } from "./enemy.ts";
@@ -140,6 +140,39 @@ function swordStagger(w: World, e: Enemy): void {
 
 /** A player's shot at least this heavy (`weight`) staggers what it hits, for `STAGGER_MS` times its weight. */
 const SPELL_STAGGER_WEIGHT = 1.2;
+
+/**
+ * **What a blow does to poise, as a share of its damage** (doc 027).
+ *
+ * Mass, not damage, is what makes a body stop: a stream of sparks can kill a
+ * rusher without ever making it flinch, and a stone shard stops it. The
+ * spell's own `weight` already says which it is — it decides how far a hit
+ * pushes and whether it staggered — so it decides this too:
+ *
+ * - **light** (under 1: sparks, darts, seekers, pellets, sprays): 0.1. They
+ *   wear a bar only as a side effect; a build of them has to reach the break
+ *   some other way, or not need it.
+ * - **the bolt's class** (1 to 1.2): 0.4.
+ * - **heavy** (1.2 and over: the cannon, the shard, the glacier spike, the
+ *   void orb, the quake): its weight itself, 1.2 to 2.4. A heavy spell cast on
+ *   a body in reach of the sword breaks what the sword alone would take two
+ *   or three blows to.
+ *
+ * The sword is `SWORD_POISE`. A tick of a burn, a cloud, lava or a doom
+ * mark's slow half is 0: a tick is not a blow.
+ */
+export function poiseOfWeight(weight: number): number {
+  if (weight >= SPELL_STAGGER_WEIGHT) return weight;
+  return weight >= 1 ? 0.4 : 0.1;
+}
+/** The sword's blow is all mass: its damage is its poise. The last of a run lands heavier, and a spin's blows lighter. */
+export const SWORD_POISE = 1;
+const SWORD_FINISHER_POISE = 1.5;
+const SPIN_POISE = 0.5;
+/** A dash's cut and a free strike are blades: the sword's own share. */
+const STRIKE_POISE = 1;
+/** What an effect a hit carries (a chain's arc, a mark's burst, a harvest) does to poise: a little. */
+const PROC_POISE = 0.2;
 
 /**
  * Impact freeze and camera trauma per event.
@@ -1508,7 +1541,8 @@ function resolveSwing(w: World, dtMs: number): void {
   for (const e of struck) {
     // A blow of the swing proper, not the spin's: the one kind of kill a streak counts.
     w.swordBlow = w.player.swingStretch === 1;
-    const { broke, blocked } = hurtEnemy(w, e, box.damage, e.awake ? "" : "sneak", w.player);
+    const swordPoise = w.player.swingStretch !== 1 ? SPIN_POISE : box.finisher ? SWORD_FINISHER_POISE : SWORD_POISE;
+    const { broke, blocked } = hurtEnemy(w, e, box.damage, e.awake ? "" : "sneak", w.player, box.damage * swordPoise);
     w.swordBlow = false;
     // Off the roaring king: no damage, no gauge, no mana — only the clang and a jolt.
     if (blocked) { impact(w, HITSTOP_HIT, TRAUMA_HIT); continue; }
@@ -1596,6 +1630,13 @@ const PROP_HIT_ID_BASE = -2;
  */
 export function hurtEnemy(
   w: World, e: Enemy, raw: number, tag = "", from?: { x: number; y: number },
+  /**
+   * What the blow does to the body's poise (doc 027), which is not what it
+   * does to its health: a sword blow or a heavy spell is mass, a spray of
+   * sparks is not. Every caller names it (`poiseOfWeight`, `SWORD_POISE`); a
+   * burn, a cloud or lava leaves it at 0, since a tick is not a blow.
+   */
+  poiseDamage = 0,
 ): { broke: boolean; blocked?: boolean } {
   // The king roaring cannot be hurt (`Enemy.bossRoarMs`): the blow rings off him.
   if (e.bossRoarMs > 0) {
@@ -1646,40 +1687,46 @@ export function hurtEnemy(
   if (amount > 0)
     w.events.push({ kind: "damage", x: e.x, y: e.y - e.radius, what: `hp${tag ? `:${tag}` : ""}`, amount });
   e.hp -= amount;
+  // The blow's weight, by what it hit through: what made the damage larger makes the blow heavier.
+  const poiseHit = amount > 0 ? poiseDamage * mult * w.dealtMult : 0;
   /*
-   * **The Frontier Veteran's stance** (doc 024): every hit wears it, and the
-   * one that wears it through puts it on its knees. It is the fight's big
-   * payoff, and it lands as one: held longer than a kill.
+   * **The Frontier Veteran's poise is its stance** (doc 024): the gold bar
+   * over its head, which the same blows fill, and whose break puts it on its
+   * knees. It is the fight's big payoff, and it lands as one: held longer than
+   * a kill. It has no second, smaller poise under it — the bar every body
+   * shows is the one that interrupts it.
    */
-  if (amount > 0 && e.guardian && e.hp > 0 && wearStance(w, e, amount)) {
-    impact(w, HITSTOP_CAP, TRAUMA_KILL);
-    emit(w, e.x, e.y, "kill", 14);
-    return { broke: true };
-  }
-  /*
-   * **Poise** (`Enemy.poise`): all of the damage is health, and the same
-   * damage wears the poise. A hit it holds through rings off it, so a player
-   * can see that the body took it and did not flinch; the hit that wears it
-   * through knocks it into a long stagger and cancels what it had started.
-   * After a break it cannot be broken again for a while (`POISE_GUARD_MS`).
-   */
-  if (amount <= 0 || e.maxPoise <= 0 || e.hp <= 0 || e.archetype === "boss") return { broke: false };
-  e.poiseIdleMs = 0;
-  if (e.poiseGuardMs > 0) {
-    w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_hold:${e.archetype}` });
+  if (e.guardian) {
+    if (poiseHit > 0 && e.hp > 0 && wearStance(w, e, poiseHit)) {
+      impact(w, HITSTOP_CAP, TRAUMA_KILL);
+      emit(w, e.x, e.y, "kill", 14);
+      return { broke: true };
+    }
     return { broke: false };
   }
-  e.poise -= amount;
+  /*
+   * **Poise** (`Enemy.poise`, doc 027): all of the damage is health, and the
+   * blow's weight (`poiseDamage`) wears the poise. A hit it holds through is
+   * shown on the body's bar, and rings off a plated body with sparks; the hit
+   * that wears it through knocks it into a long stagger and cancels what it
+   * had started. After a break it cannot be broken again for a while
+   * (`POISE_GUARD_MS`).
+   */
+  if (poiseHit <= 0 || e.maxPoise <= 0 || e.hp <= 0 || e.archetype === "boss") return { broke: false };
+  e.poiseIdleMs = 0;
+  if (e.poiseGuardMs > 0) {
+    if (plated(e)) w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_hold:${e.archetype}` });
+    return { broke: false };
+  }
+  e.poise -= poiseHit;
   if (e.poise > 0) {
-    w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_hold:${e.archetype}` });
+    if (plated(e)) w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_hold:${e.archetype}` });
     return { broke: false };
   }
   e.poise = e.maxPoise;
   e.poiseGuardMs = POISE_BREAK_STAGGER_MS + POISE_GUARD_MS;
   e.poiseBreakMs = POISE_BREAK_MS;
   stagger(w, e, POISE_BREAK_STAGGER_MS, true);
-  // On the Frontier Veteran a break also wears its stance: the burst counts twice.
-  if (e.guardian) wearStance(w, e, GUARDIAN_STANCE * GUARDIAN_BREAK_STANCE);
   // A break is worth more than the hit that caused it: the fight changes.
   impact(w, HITSTOP_KILL, TRAUMA_KILL);
   w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_break:${e.archetype}` });
@@ -4333,7 +4380,7 @@ function damageTag(_w: World, b: Bullet): string {
 function hookSim(w: World): HookSim {
   return {
     hurt: (e, amount) => {
-      hurtEnemy(w, e, amount);
+      hurtEnemy(w, e, amount, "", undefined, amount * PROC_POISE);
       // Counted like every other hit: a mark's detonation or a harvest burst is damage the player dealt.
       w.stats.damageDealt += amount;
       e.hitFlashMs = HIT_FLASH_MS;
@@ -4463,7 +4510,8 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
         // a mark. Before the damage, so a detonation sees the body it is on.
         onHit(w, b, e, hookSim(w));
         // From where the shot came, a body-length back along its travel.
-        hurtEnemy(w, e, b.damage, unaware ? "sneak" : damageTag(w, b), { x: px - ux * 24, y: py - uy * 24 });
+        hurtEnemy(w, e, b.damage, unaware ? "sneak" : damageTag(w, b), { x: px - ux * 24, y: py - uy * 24 },
+          b.damage * poiseOfWeight(b.weight || 1));
         if (e.hp <= 0) onKill(w, b, e, hookSim(w));
         w.stats.damageDealt += b.damage;
         // A shot that arrived: the numerator of "how often the player hits".
@@ -5591,7 +5639,7 @@ function stepDashStrike(w: World, dtMs: number): void {
         if (!isActive(e) || e.hp <= 0) continue;
         if (!circlesOverlap(s.x, s.y, s.radius, e.x, e.y, e.radius)) continue;
         wake(w, e);
-        hurtEnemy(w, e, s.damage, s.element !== "none" ? s.element : "", s);
+        hurtEnemy(w, e, s.damage, s.element !== "none" ? s.element : "", s, s.damage * STRIKE_POISE);
         w.stats.damageDealt += s.damage;
         applyElementsTo(e, s.powers, s.statusMult, s.proc);
         e.hitFlashMs = HIT_FLASH_MS;
@@ -5635,7 +5683,7 @@ function stepDashStrike(w: World, dtMs: number): void {
     // A body the run itself cut is not cut again by its wake: the wake is for the ground beside the run.
     p.strikeWake?.byPlayer?.hits.push(e.id);
     wake(w, e);
-    hurtEnemy(w, e, p.strikeDamage, p.strikeElement !== "none" ? p.strikeElement : "", p);
+    hurtEnemy(w, e, p.strikeDamage, p.strikeElement !== "none" ? p.strikeElement : "", p, p.strikeDamage * STRIKE_POISE);
     w.stats.damageDealt += p.strikeDamage;
     applyElementsTo(e, p.strikePowers, p.strikeStatusMult, p.strikeProc);
     e.hitFlashMs = HIT_FLASH_MS;
@@ -5723,7 +5771,7 @@ function stepPlayerWakes(w: World): void {
       if (!shockwaveHits(s, e.x, e.y, e.radius) || !hasLineOfSight(w.room.grid, s.x, s.y, e.x, e.y)) continue;
       cut.hits.push(e.id);
       wake(w, e);
-      hurtEnemy(w, e, cut.damage, cut.element !== "none" ? cut.element : "", s);
+      hurtEnemy(w, e, cut.damage, cut.element !== "none" ? cut.element : "", s, cut.damage * poiseOfWeight(cut.weight));
       w.stats.damageDealt += cut.damage;
       applyElementsTo(e, cut.powers, cut.statusMult, cut.proc);
       e.hitFlashMs = HIT_FLASH_MS;
@@ -5806,7 +5854,7 @@ function stepEruptions(w: World, dtMs: number): void {
         e.eruptionCastId = c.castId;
       }
       hit = true;
-      hurtEnemy(w, e, c.damage, c.element !== "none" ? c.element : "", { x: c.x, y: c.y });
+      hurtEnemy(w, e, c.damage, c.element !== "none" ? c.element : "", { x: c.x, y: c.y }, c.damage * poiseOfWeight(c.weight));
       w.stats.damageDealt += c.damage;
       applyElementsTo(e, c.powers, c.statusMult, c.proc);
       e.hitFlashMs = HIT_FLASH_MS;
@@ -5857,7 +5905,8 @@ function stepVortices(w: World, dtMs: number): void {
         moveSliding(w.room.grid, e, (dx / d) * strength * dt, (dy / d) * strength * dt, e.radius);
       }
       if (tick && d < v.radius * 0.75) {
-        hurtEnemy(w, e, v.damage, v.element !== "none" ? v.element : "");
+        // The maw's pull is a grind, not a blow; its collapse is the blow.
+        hurtEnemy(w, e, v.damage, v.element !== "none" ? v.element : "", undefined, v.damage * poiseOfWeight(0));
         w.stats.damageDealt += v.damage;
         applyElementsTo(e, v.powers, v.statusMult, v.proc);
         e.hitFlashMs = HIT_FLASH_MS;
@@ -5880,7 +5929,7 @@ function collapse(w: World, v: World["vortices"][number]): void {
     if (!isActive(e) || e.hp <= 0) continue;
     if (Math.hypot(e.x - v.x, e.y - v.y) > v.radius) continue;
     hit = true;
-    hurtEnemy(w, e, v.collapseDamage, v.element !== "none" ? v.element : "", v);
+    hurtEnemy(w, e, v.collapseDamage, v.element !== "none" ? v.element : "", v, v.collapseDamage * poiseOfWeight(SPELL_STAGGER_WEIGHT));
     w.stats.damageDealt += v.collapseDamage;
     applyElementsTo(e, v.powers, v.statusMult, v.proc);
     e.hitFlashMs = HIT_FLASH_MS;
@@ -5921,7 +5970,7 @@ function doomBurst(w: World, x: number, y: number, damage: number, radius: numbe
   for (const e of w.enemies) {
     if (!isActive(e) || e.hp <= 0) continue;
     if (Math.hypot(e.x - x, e.y - y) > radius + e.radius) continue;
-    hurtEnemy(w, e, damage, "dot:doom", { x, y });
+    hurtEnemy(w, e, damage, "dot:doom", { x, y }, damage * PROC_POISE);
     w.stats.damageDealt += damage;
     e.hitFlashMs = HIT_FLASH_MS;
     w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: e.archetype, amount: damage });
@@ -6299,7 +6348,7 @@ function answerStance(w: World, share: number): void {
     if (d > s.radius + e.radius) continue;
     hit = true;
     wake(w, e);
-    hurtEnemy(w, e, damage, s.element !== "none" ? s.element : "", p);
+    hurtEnemy(w, e, damage, s.element !== "none" ? s.element : "", p, damage * poiseOfWeight(s.weight));
     w.stats.damageDealt += damage;
     applyElementsTo(e, s.powers, s.statusMult, s.proc);
     e.hitFlashMs = HIT_FLASH_MS;

@@ -47,9 +47,9 @@ export const GUARDIAN_FLAME = 0.6;
  */
 export const GUARDIAN_SHOT_EVERY = 3.5;
 /**
- * Its poise (`Enemy.poise`): about four sword hits in a row at room 10 before
- * one interrupts it, and none while it is still guarded after the last break.
- * It cannot be held down; it can be broken by a burst, or knocked out on a wall.
+ * Its poise (`Enemy.poise`), which nothing wears: the Frontier Veteran's poise
+ * is its stance (`GUARDIAN_STANCE`, doc 027), the bar every body shows. The
+ * figure is kept so that no ordinary blow flinches it (`canStagger`).
  */
 export const GUARDIAN_POISE = 60;
 /** How much larger it is than a warden, drawn and in body: not necessarily a whole number (doc 024). */
@@ -169,21 +169,20 @@ export const GUARDIAN_VOLLEY_MS = GUARDIAN_VOLLEY_TELE_MS + (VOLLEY_LINES - 1) *
 /** How long its squad takes to sink out of sight. */
 export const GUARDIAN_SINK_MS = 400;
 /**
- * **Its stance** (架势): the fight's big opening beside the wall. Every hit
- * on it wears the stance, shown as a gold bar under its health; a poise
- * break wears `GUARDIAN_BREAK_STANCE` of it more and a wall
- * `GUARDIAN_WALL_STANCE`. Worn through, it is **broken**: on its knees for
- * `GUARDIAN_BROKEN_MS` with stars over its head, whatever it was doing
- * dropped (a call it was making goes unanswered), taking
- * `GUARDIAN_BROKEN_TAKEN` from every hit. A poise break interrupts; this is
- * what the pressure was for. Left alone for `STANCE_HOLD_MS` it steadies,
- * `STANCE_DRAIN` a second.
+ * **Its stance** (架势) **is its poise** (doc 027): the fight's big opening
+ * beside the wall. Every blow wears it by its weight, as any body's poise is
+ * worn (`poiseOfWeight`), shown as the gold bar under its health, and a wall
+ * wears `GUARDIAN_WALL_STANCE` of it. Worn through, it is **broken**: on its
+ * knees for `GUARDIAN_BROKEN_MS` with stars over its head, whatever it was
+ * doing dropped (a call it was making goes unanswered), taking
+ * `GUARDIAN_BROKEN_TAKEN` from every hit. Nothing short of that interrupts it:
+ * it has no smaller poise under the stance. Left alone for `STANCE_HOLD_MS`
+ * it steadies, `STANCE_DRAIN` a second.
  *
  * About 300 is eight seconds of a room-10 build's steady damage, so a
  * player who stays on it breaks it two or three times a fight.
  */
 export const GUARDIAN_STANCE = 300;
-export const GUARDIAN_BREAK_STANCE = 0.1;
 export const GUARDIAN_WALL_STANCE = 0.35;
 export const GUARDIAN_BROKEN_MS = 3200;
 export const GUARDIAN_BROKEN_TAKEN = 1.5;
@@ -300,7 +299,7 @@ export function guardianSquad(w: World, e: Enemy): number {
  * call come round, its squad thin and nothing else in hand, it plants and
  * raises its arm (`guardian_call`, a planted pose) with the marks of what is
  * coming on the floor; when the arm comes down they rise. The call is never
- * interrupted: its poise is guarded while the arm is up. Its movement, shots
+ * interrupted by a blow: only its stance broken drops it. Its movement, shots
  * and blows are the warden's.
  */
 export function stepGuardian(w: World, e: Enemy, dtMs: number): void {

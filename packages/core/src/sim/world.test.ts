@@ -1,7 +1,7 @@
 import { featureCells } from "../rooms/features.ts";
-import { ENTRY_GRACE_MS, canStagger, POISE_BREAK_STAGGER_MS, POISE_RECOVER_MS } from "./enemy.ts";
+import { ENTRY_GRACE_MS, canStagger, POISE_BREAK_STAGGER_MS, POISE_REGEN_DELAY_MS, POISE_REGEN_PER_S } from "./enemy.ts";
 import { describe, it, expect } from "vitest";
-import { createWorld, hurtEnemy, step, worldCleared, ELITE_HEAL_FRACTION, GRASS_CATCH_MS } from "./world.ts";
+import { createWorld, hurtEnemy, step, worldCleared, ELITE_HEAL_FRACTION, GRASS_CATCH_MS, poiseOfWeight, SWORD_POISE } from "./world.ts";
 import {
   PLAYER_RADIUS, PLAYER_SPEED, NO_INPUT, ENEMY_BULLET_CAP, INVULN_MS, MAX_HEARTS, HP_PER_HEART,
 } from "./types.ts";
@@ -1556,46 +1556,75 @@ describe("enemy behaviour", () => {
     expect(held).toBe(true);
   });
 
-  it("gives the breaker the tank's poise, its base", () => {
-    for (const id of ["tank", "breaker"] as const) {
-      const e = makeEnemy(1, id, 0, 0, []);
-      expect(e.maxPoise, id).toBe(24);
-      expect(canStagger(e), id).toBe(false);
-    }
+  it("gives every body poise by how long it announces its attacks, and scales it with the room", () => {
+    // At the ramp's scale 1: the quick blades, the long ones, the heavy, the gunners.
+    const at1 = (id: Parameters<typeof makeEnemy>[1]) => makeEnemy(1, id, 0, 0, []).maxPoise;
+    expect(at1("rusher")).toBe(12);
+    expect(at1("warden")).toBe(20);
+    expect(at1("tank")).toBe(28);
+    expect(at1("shooter")).toBe(8);
+    // A subspecies is its base body's: the breaker the tank's, the pinner the shooter's.
+    expect(at1("breaker")).toBe(at1("tank"));
+    expect(at1("pinner")).toBe(at1("shooter"));
+    // Nothing short of a break interrupts any of them.
+    for (const id of ["rusher", "shooter", "tank"] as const) expect(canStagger(makeEnemy(1, id, 0, 0, [])), id).toBe(false);
+    // The room scales it as it scales health, and the opening softens it.
+    expect(makeEnemy(1, "rusher", 0, 0, [], { hp: 2, poise: 1 }).maxPoise).toBe(24);
+    expect(makeEnemy(1, "rusher", 0, 0, [], { hp: 1.5, poise: 0.6 }).maxPoise).toBe(11);
+    // An armored elite doubles its body's.
+    expect(makeEnemy(1, "rusher", 0, 0, ["armored"]).maxPoise).toBe(24);
   });
 
-  it("breaks a heavy body's poise with a burst, and will not break it again straight after", () => {
+  it("breaks a body's poise with a burst of blows, not with ticks, and will not break it again straight after", () => {
     const w = world();
     const e = makeEnemy(1, "tank", 300, 200, []);
     e.spawnFadeMs = 0; e.awake = true; e.alertMs = 0;
     // Enough health to be hit through two breaks.
     e.hp = e.maxHp = 500;
     w.enemies.push(e);
-    // Two hits it holds through.
-    expect(hurtEnemy(w, e, 10).broke).toBe(false);
-    expect(hurtEnemy(w, e, 10).broke).toBe(false);
+    // A tick is not a blow: a burn wears nothing.
+    for (let i = 0; i < 10; i++) hurtEnemy(w, e, 10, "fire");
+    expect(e.poise).toBe(e.maxPoise);
+    // Two blows it holds through (28 against 10 each).
+    expect(hurtEnemy(w, e, 10, "", undefined, 10).broke).toBe(false);
+    expect(hurtEnemy(w, e, 10, "", undefined, 10).broke).toBe(false);
     expect(e.staggerMs).toBe(0);
     // The third breaks it: a long stagger, and whole again.
-    expect(hurtEnemy(w, e, 10).broke).toBe(true);
+    expect(hurtEnemy(w, e, 10, "", undefined, 10).broke).toBe(true);
     expect(e.staggerMs).toBeGreaterThanOrEqual(POISE_BREAK_STAGGER_MS);
     expect(e.poise).toBe(e.maxPoise);
     // Straight after, however hard it is hit, it is not broken again.
-    for (let i = 0; i < 6; i++) expect(hurtEnemy(w, e, 10).broke).toBe(false);
+    for (let i = 0; i < 6; i++) expect(hurtEnemy(w, e, 10, "", undefined, 10).broke).toBe(false);
     expect(e.poise).toBe(e.maxPoise);
     // Once the guard is out, it can be.
     e.poiseGuardMs = 0;
-    hurtEnemy(w, e, 10); hurtEnemy(w, e, 10);
-    expect(hurtEnemy(w, e, 10).broke).toBe(true);
+    hurtEnemy(w, e, 10, "", undefined, 10); hurtEnemy(w, e, 10, "", undefined, 10);
+    expect(hurtEnemy(w, e, 10, "", undefined, 10).broke).toBe(true);
   });
 
-  it("fills a heavy body's poise again once it has gone a while unhit", () => {
+  it("weighs a blow by its mass: a spark barely wears poise, a heavy spell more than the sword", () => {
+    expect(poiseOfWeight(0.4)).toBeLessThan(0.2);
+    expect(poiseOfWeight(1)).toBeLessThan(SWORD_POISE);
+    expect(poiseOfWeight(1.8)).toBeGreaterThan(SWORD_POISE);
+  });
+
+  it("fills a body's poise again slowly, and only once it has been left alone a while", () => {
     const w = world();
     const e = makeEnemy(1, "tank", 300, 200, []);
     e.spawnFadeMs = 0; e.awake = true; e.alertMs = 0; e.attackCooldownMs = 1e9;
     w.enemies.push(e);
-    hurtEnemy(w, e, 10);
+    hurtEnemy(w, e, 20, "", undefined, 20);
+    const worn = e.poise;
+    expect(worn).toBeLessThan(e.maxPoise);
+    const frames = (ms: number) => Math.ceil(ms / (1000 / 60));
+    // Nothing comes back while a dodge and the attack it answered play out.
+    for (let i = 0; i < frames(POISE_REGEN_DELAY_MS) - 5; i++) step(w, NO_INPUT);
+    expect(e.poise).toBe(worn);
+    // Then it climbs, and is not whole at once.
+    for (let i = 0; i < frames(300); i++) step(w, NO_INPUT);
+    expect(e.poise).toBeGreaterThan(worn);
     expect(e.poise).toBeLessThan(e.maxPoise);
-    for (let i = 0; i < Math.ceil(POISE_RECOVER_MS / (1000 / 60)) + 5; i++) step(w, NO_INPUT);
+    for (let i = 0; i < frames(1000 / POISE_REGEN_PER_S); i++) step(w, NO_INPUT);
     expect(e.poise).toBe(e.maxPoise);
   });
 

@@ -690,23 +690,79 @@ const ENGAGE_DELAY_MS = 420;
 export const ALERT_MS = 320;
 
 /**
- * **Poise by archetype** (`Enemy.poise`): the damage a burst of hits has to
- * deal before one interrupts it. Only the heavy bodies have any; everything
- * else is interrupted by any hit, as it always was. A sword hit is about 9 at
- * the start of a run, so a tank takes three in a row and a warden two. Not the
- * boss: nothing interrupts him (`canStagger`), and his weight is his health
- * and the turns he takes (`chooseBossAct`).
+ * **Poise by archetype** (`Enemy.poise`, doc 027): the poise damage a burst
+ * of hits has to deal before one interrupts it. **Every body has some**, and
+ * nothing short of the break interrupts it: a sword held down used to flinch
+ * every idle body in reach and push its next attack back, so the late run was
+ * a room of bodies waiting to be hit.
+ *
+ * **How much is set by how long its attacks are announced**, because poise is
+ * what lets a body finish an attack the player is standing in. A held sword
+ * lands about every 400 ms, so a body whose windup is `W` long is hit at most
+ * ⌈W / 400⌉ times before it commits; the poise covers that and a little more,
+ * and never so much that a body with a tell under a reaction's length cannot
+ * be stopped by anything the player has. Figures are at the ramp's scale 1;
+ * `poiseOf` multiplies them by the room's `hp` and `poise` (at room 8 a sword
+ * hit is about 15 and the ramp about ×1.85):
+ *
+ * | tier | bodies | tells | base | at room 8 |
+ * |---|---|---|---|---|
+ * | the quick blades | rusher, delver, burrower | 280–320 ms | 12 | 2 hits |
+ * | the long blades | lancer, warden, fusilier | 380–400 ms, the gun 950 | 18–20 | 3 hits |
+ * | the heavy | tank, breaker | 520–640 ms | 28 | 4 hits |
+ * | the gunners | shooter, turret, orbiter, sentinel, sower and theirs, the cinderlings | an aim of 320 ms | 8 | 1 hit |
+ * | the casters | summoner, bellringer, rifter, snarecaster and theirs | 620–900 ms | 12 | 2 hits |
+ *
+ * The gunners are the lowest: they keep their distance, and a sword that
+ * reaches one should break it. They are not zero, so a gunner the player
+ * stands on still gets its shot off inside the break's guard. Not the boss:
+ * nothing interrupts him (`canStagger`), and his weight is his health and the
+ * turns he takes (`chooseBossAct`). The Frontier Veteran's is its stance.
  */
-// The breaker is the tank's subspecies and the fusilier the warden's: their bodies, their poise.
-const POISE: Partial<Record<EnemyId, number>> = { tank: 24, breaker: 24, warden: 16, fusilier: 16 };
-/** A body's poise: its own, doubled by an `armored` affix, or the affix's flat poise on a body with none. */
-function poiseOf(archetype: EnemyId, affixPoise: number): number {
-  const own = POISE[archetype] ?? 0;
-  if (affixPoise <= 0) return own;
-  return own > 0 ? own * 2 : affixPoise;
+const POISE: Readonly<Record<string, number>> = {
+  rusher: 12, delver: 12, burrower: 12,
+  lancer: 18, warden: 20, fusilier: 20,
+  tank: 28, breaker: 28,
+  shooter: 8, turret: 8, orbiter: 8, sentinel: 8, sower: 8, cinderling: 8,
+  summoner: 12, bellringer: 12, rifter: 12, snarecaster: 12,
+};
+/** The poise a body's tier gives it, at the ramp's scale 1; a subspecies has its base body's unless it is named. */
+function tierPoise(archetype: EnemyId): number {
+  return POISE[archetype] ?? POISE[baseArchetype(archetype)] ?? 8;
 }
-/** Unhit this long, a body's poise is whole again: a heavy body is broken by pressure, not by hits spread across a fight. */
-export const POISE_RECOVER_MS = 1500;
+/**
+ * The bodies whose poise is **armour**: a blow they hold through rings off
+ * them with sparks and the armour sound (`poise_hold`). Every body has poise
+ * now, and a rusher that clanged like plate under every swing would be a
+ * rusher wearing plate; the rest show theirs on the bar alone.
+ */
+export function plated(e: Pick<Enemy, "archetype" | "affixes">): boolean {
+  const base = baseArchetype(e.archetype);
+  return base === "tank" || base === "warden" || e.affixes.includes("armored");
+}
+/**
+ * A body's poise: its tier's, scaled as its health is by the room (the
+ * player's damage grows over the run, and a figure that did not would be two
+ * hits in room 1 and a tap in room 14), softened in the opening rooms by
+ * `Ramp.poise`, and doubled by an `armored` affix.
+ */
+function poiseOf(archetype: EnemyId, affixPoise: number, scale: { readonly hp?: number; readonly poise?: number }): number {
+  const own = tierPoise(archetype) * (scale.hp ?? 1) * (scale.poise ?? 1);
+  return Math.round(affixPoise > 0 ? own * 2 : own);
+}
+/**
+ * **Poise recovers, slowly, and only once the body is left alone.**
+ *
+ * It used to be whole again the instant a body had gone 1.5 s unhit, so a
+ * player who dodged one attack lost every hit they had put into it — which
+ * punishes exactly the play the poise is there to ask for. Now nothing comes
+ * back for `POISE_REGEN_DELAY_MS`, which is longer than a dodge and the
+ * attack it answered, and then it refills at `POISE_REGEN_PER_S` of the bar a
+ * second: a player who steps out and back in keeps most of their work, and one
+ * who walks away for good finds it whole again.
+ */
+export const POISE_REGEN_DELAY_MS = 2000;
+export const POISE_REGEN_PER_S = 0.4;
 /**
  * **A break is an interrupt, not a stun.** The flinch it knocks the body into
  * is longer than an ordinary hit's (`STAGGER_MS`) and cancels what it had
@@ -944,7 +1000,7 @@ export function makeEnemy(
    * a body's numbers are fixed at the moment it is created and nothing can
    * change what it is worth halfway through a fight.
    */
-  scale: { readonly hp?: number; readonly power?: number } = {},
+  scale: { readonly hp?: number; readonly power?: number; readonly poise?: number } = {},
 ): Enemy {
   const def = ENEMIES[archetype];
   /*
@@ -1008,8 +1064,8 @@ export function makeEnemy(
     staggerImmuneMs: 0,
     threatMs: 0,
     postX: x, postY: y, postMs: (id * 331) % 1200, relocateMs: 0,
-    poise: poiseOf(archetype, stats.poise),
-    maxPoise: poiseOf(archetype, stats.poise),
+    poise: poiseOf(archetype, stats.poise, scale),
+    maxPoise: poiseOf(archetype, stats.poise, scale),
     poiseIdleMs: 0,
     poiseGuardMs: 0,
     poiseBreakMs: 0,
@@ -2989,10 +3045,11 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
   if (e.relocateMs > 0) e.relocateMs -= dtMs;
   if (e.poiseBreakMs > 0) e.poiseBreakMs -= dtMs;
   if (e.poiseGuardMs > 0) e.poiseGuardMs -= dtMs;
-  // Poise fills again once the body has gone a while unhit (`POISE_RECOVER_MS`).
+  // Poise fills again, slowly, once the body has gone a while unhit (`POISE_REGEN_DELAY_MS`).
   if (e.maxPoise > 0 && e.poise < e.maxPoise) {
     e.poiseIdleMs += dtMs;
-    if (e.poiseIdleMs >= POISE_RECOVER_MS) e.poise = e.maxPoise;
+    if (e.poiseIdleMs >= POISE_REGEN_DELAY_MS)
+      e.poise = Math.min(e.maxPoise, e.poise + e.maxPoise * POISE_REGEN_PER_S * (dtMs / 1000));
   }
   /*
    * Braking: an ordinary heavy body skids; the Veteran plants much harder.

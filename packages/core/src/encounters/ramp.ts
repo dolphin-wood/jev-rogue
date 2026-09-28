@@ -237,28 +237,36 @@ export interface Ramp {
    * would be tuning it by the back door.
    */
   readonly rate: number;
+  /**
+   * **How much of a body's poise it has here** (doc 027), on top of the room's
+   * `hp`, which it already follows. The opening rooms soften it as they
+   * soften the tells: a room-1 rusher is broken by two swings of a level-1
+   * sword, and the long tells there are what let a new player read what a
+   * blow held through means before it costs them. Whole from room 6.
+   */
+  readonly poise: number;
 }
 
 const STEPS: readonly (Ramp & { from: number })[] = [
   {
     from: 0, waves: 2, perWave: 5, climaxBonus: 2, alive: 4,
-    densities: ["sparse", "normal"], anchors: ["none"], elites: false, subspecies: false, tokens: 1, hurt: 0.8, aimSpreadDeg: 9, shotSpeed: 0.9, tell: 1.28, hp: 1.5, power: 1, rate: 1.35,
+    densities: ["sparse", "normal"], anchors: ["none"], elites: false, subspecies: false, tokens: 1, hurt: 0.8, aimSpreadDeg: 9, shotSpeed: 0.9, tell: 1.28, hp: 1.5, power: 1, rate: 1.35, poise: 0.6,
   },
   {
     from: 3, waves: 2, perWave: 5, climaxBonus: 3, alive: 5,
-    densities: ["sparse", "normal", "dense"], anchors: ["none", "tank"], elites: false, subspecies: true, tokens: 2, hurt: 0.8, aimSpreadDeg: 8, shotSpeed: 0.95, tell: 1.2, hp: 1.5, power: 1, rate: 1.35,
+    densities: ["sparse", "normal", "dense"], anchors: ["none", "tank"], elites: false, subspecies: true, tokens: 2, hurt: 0.8, aimSpreadDeg: 8, shotSpeed: 0.95, tell: 1.2, hp: 1.5, power: 1, rate: 1.35, poise: 0.8,
   },
   {
     from: 6, waves: 3, perWave: 5, climaxBonus: 1, alive: 6,
-    densities: ["sparse", "normal", "dense"], anchors: ["none", "tank", "summoner"], elites: true, subspecies: true, tokens: 2, hurt: 1, aimSpreadDeg: 6, shotSpeed: 1, tell: 1.12, hp: 1.75, power: 1.25, rate: 1.45,
+    densities: ["sparse", "normal", "dense"], anchors: ["none", "tank", "summoner"], elites: true, subspecies: true, tokens: 2, hurt: 1, aimSpreadDeg: 6, shotSpeed: 1, tell: 1.12, hp: 1.75, power: 1.25, rate: 1.45, poise: 1,
   },
   {
     from: 10, waves: 3, perWave: 6, climaxBonus: 1, alive: 6,
-    densities: ["sparse", "normal", "dense"], anchors: ["none", "tank", "summoner"], elites: true, subspecies: true, tokens: 3, hurt: 1, aimSpreadDeg: 4, shotSpeed: 1, tell: 1, hp: 1.95, power: 1.45, rate: 1.6,
+    densities: ["sparse", "normal", "dense"], anchors: ["none", "tank", "summoner"], elites: true, subspecies: true, tokens: 3, hurt: 1, aimSpreadDeg: 4, shotSpeed: 1, tell: 1, hp: 1.95, power: 1.45, rate: 1.6, poise: 1,
   },
   {
     from: 14, waves: 3, perWave: 6, climaxBonus: 2, alive: 6,
-    densities: ["sparse", "normal", "dense"], anchors: ["none", "tank", "summoner"], elites: true, subspecies: true, tokens: 3, hurt: 1, aimSpreadDeg: 4, shotSpeed: 1, tell: 1, hp: 2.2, power: 1.65, rate: 1.75,
+    densities: ["sparse", "normal", "dense"], anchors: ["none", "tank", "summoner"], elites: true, subspecies: true, tokens: 3, hurt: 1, aimSpreadDeg: 4, shotSpeed: 1, tell: 1, hp: 2.2, power: 1.65, rate: 1.75, poise: 1,
   },
   /*
    * **The boss room, which is the boss's fight and not the ramp's.**
@@ -272,7 +280,7 @@ const STEPS: readonly (Ramp & { from: number })[] = [
    */
   {
     from: 16, waves: 3, perWave: 6, climaxBonus: 2, alive: 6,
-    densities: ["sparse", "normal", "dense"], anchors: ["none", "tank", "summoner"], elites: true, subspecies: true, tokens: 2, hurt: 1, aimSpreadDeg: 4, shotSpeed: 1, tell: 1, hp: 2.2, power: 2.05, rate: 1,
+    densities: ["sparse", "normal", "dense"], anchors: ["none", "tank", "summoner"], elites: true, subspecies: true, tokens: 2, hurt: 1, aimSpreadDeg: 4, shotSpeed: 1, tell: 1, hp: 2.2, power: 2.05, rate: 1, poise: 1,
   },
 ];
 
@@ -285,7 +293,7 @@ const BOSS_FROM = 16;
  * **Every room a little harder than the last, not a step every few rooms.**
  * The rows above are anchors at the room each band starts in, and the figures
  * that are amounts — health, damage, cadence, tell, aim, shot speed, the hit's
- * cost, the turns a room has — run in a straight line from one anchor to the
+ * cost, poise, the turns a room has — run in a straight line from one anchor to the
  * next. As steps, rooms 6 to 9 were one room four times and room 10 a jump;
  * the player's build grows every room, so the fight should too. What is a
  * shape rather than an amount — how many beats, how big a beat, how many may
@@ -317,6 +325,7 @@ export function rampFor(roomIndex: number): Ramp {
     hp: lerp(s.hp, next.hp),
     power: lerp(s.power, next.power),
     rate: lerp(s.rate, next.rate),
+    poise: lerp(s.poise, next.poise),
   };
 }
 
