@@ -74,6 +74,34 @@ describe("the Frontier Veteran: the body", () => {
     expect(g.swing.reach).toBeCloseTo(TILE_PX * meleeSpec(g)!.reachTiles);
   });
 
+  it("makes the first ram a real hit and stops on the player", () => {
+    const w = guardianWorld("ram-first-hit");
+    const g = guardianOf(w);
+    w.invincible = false;
+    w.player.x = g.x + 120;
+    w.player.y = g.y;
+    g.pose = "";
+    g.poseMs = 0;
+    g.guardian!.introGraceMs = 0;
+    g.guardian!.callMs = 1e9;
+    g.guardian!.stakesMs = 1e9;
+    g.guardian!.volleyMs = 1e9;
+    g.attackCooldownMs = 1e9;
+    g.hasAttacked = false;
+    beginWindup(w, g, w.player, "charge");
+    g.attackMs = 40;
+    g.swing.trackingMs = 0;
+    const hearts = w.player.hearts;
+    for (let i = 0; i < 180 && w.player.hearts === hearts; i++) step(w, NO_INPUT);
+    expect(w.player.hearts).toBeCloseTo(hearts - 0.7, 5);
+    expect(w.player.stunMs).toBeGreaterThan(0);
+    expect(w.player.hurtX).toBeGreaterThan(0);
+    expect(Math.abs(w.player.hurtX)).toBeGreaterThan(Math.abs(w.player.hurtY) + 1);
+    expect(g.attack).not.toBe("lunge");
+    expect(g.velX).toBe(0);
+    expect(g.velY).toBe(0);
+  });
+
   it("keeps its gun turn off screen and outside the squad's firing budget", () => {
     const w = guardianWorld("own-fire-turn");
     const g = guardianOf(w);

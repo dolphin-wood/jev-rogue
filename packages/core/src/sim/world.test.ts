@@ -310,8 +310,7 @@ describe("the player taking damage", () => {
       const e = makeEnemy(id, "rusher", w.player.x - 20, w.player.y, []);
       e.spawnFadeMs = 0;
       e.awake = true;
-      // Past the free first attack, then the real entry action wound forward
-      // to one step short of the commit, where the blade goes live.
+      // Put the body one step short of the commit, where the blade goes live.
       e.hasAttacked = true;
       // A drive turn; see `chooseMelee`.
       e.casts = 1;
@@ -955,13 +954,7 @@ describe("enemy behaviour", () => {
     expect(fired).toBe(true);
   });
 
-  it("gives away the first attack of every body, at full strength", () => {
-    /*
-     * Lidén's "miss the first time". A player meeting an archetype has no way
-     * to know its reach, arc or rhythm, and the usual answer is to charge them
-     * a heart for finding out. This shows the whole attack and withholds only
-     * the damage — once, per body, per room.
-     */
+  it("makes the first attack of every body live", () => {
     const w = world();
     const e = makeEnemy(1, "rusher", w.player.x + 20, w.player.y, []);
     e.spawnFadeMs = 0;
@@ -979,17 +972,8 @@ describe("enemy behaviour", () => {
       step(w, NO_INPUT);
       for (const ev of w.events) if (ev.kind === "player_hit") causes.push(ev.what ?? "");
     }
-    // It connected — the blade was live and found the player — and cost nothing.
-    expect(causes).toContain("graze:rusher");
-    expect(w.player.hearts).toBe(before);
-
-    // The second one is real.
-    e.staggerMs = 0;
-    e.attackCooldownMs = 0;
-    e.casts = 1;
-    beginWindup(w, e, w.player);
-    e.attackMs = 1;
-    for (let n = 0; n < 30 && w.player.hearts === before; n++) step(w, NO_INPUT);
+    // The telegraph is the warning; the first committed hit is real.
+    expect(causes).toContain("melee:rusher");
     expect(w.player.hearts).toBeCloseTo(before - 0.7, 5);
   });
 

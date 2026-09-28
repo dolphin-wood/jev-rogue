@@ -5138,41 +5138,48 @@ function resolveEnemySwings(w: World): void {
     if (!isActive(e) || e.hp <= 0) continue;
     const box = e.swing;
     if (!box.active) continue;
+    const spec = meleeSpec(e);
+    const ram = spec !== null && spec.commitSpeed >= 3 && e.attack === "lunge";
+    const dashcut = e.archetype === "boss" && e.meleeKind === "dashcut" && e.attack === "lunge";
+    // Enemy movement is resolved after the attack clock. Keep a live lunge's
+    // hitbox on the body's final position for this step, rather than one frame
+    // behind at the windup origin (especially important for a long ram).
+    if (e.attack === "lunge") {
+      box.x = e.x;
+      box.y = e.y;
+    }
     // The king's sword breaks what it passes through (`BOSS_PROP_DAMAGE`), once a swing each.
     if (e.archetype === "boss") bossStrikesProps(w, (q) => sectorHits(box, q, q.radius), box.hitIds);
     // Dedup per swing, the same way the player's own arc does: one attack is
     // one hit however many frames the player spends inside it.
     if (box.hitIds.includes(PLAYER_HIT_ID)) continue;
-    if (!sectorHits(box, p, PLAYER_RADIUS)) continue;
+    // A committed charge is a body collision, not a directional sword arc:
+    // catching the player from the side or back must still stop the charge.
+    const chargeContact = (ram || dashcut) && circlesOverlap(e.x, e.y, e.radius, p.x, p.y, PLAYER_RADIUS);
+    if (!chargeContact && !sectorHits(box, p, PLAYER_RADIUS)) continue;
     box.hitIds.push(PLAYER_HIT_ID);
-    /*
-     * A zero-damage blade still connects, it just costs nothing. That is how
-     * an archetype's first attack in a room teaches its reach for free (see
-     * `Enemy.hasAttacked`) — the hit is marked as landed so the swing does not
-     * keep looking for a second victim, and the player is told it grazed them.
-     */
-    const dashcut = e.archetype === "boss" && e.meleeKind === "dashcut" && e.attack === "lunge";
+    // A deliberately zero-damage blade still connects and is marked once, so
+    // it cannot retrigger every frame. Normal melee specs are all live.
     if (box.damage <= 0) {
       w.events.push({ kind: "player_hit", x: e.x, y: e.y, what: `graze:${e.archetype}`, amount: 0 });
       if (dashcut) dashcutImpact(w, e);
       continue;
     }
-    /* Ordinary blades do not stun. A committed ram is the exception: the
+    /* Ordinary blades do not stun. A committed charge is the exception: the
      * impact stops the heavy body and briefly takes control of the player so
      * the hit reads as a collision, without launching them across the room. */
-    const spec = meleeSpec(e);
-    const ram = spec !== null && spec.commitSpeed >= 3 && e.attack === "lunge";
-    const before = p.hearts;
     /*
      * A ram shoves along **its own line of travel**, not away from the body's
      * centre: a player caught at the edge of the front went sideways, which
      * is not what being hit by a moving mass does to you.
      */
-    if (ram) hurtPlayer(w, p.x - e.lungeX, p.y - e.lungeY, `melee:${e.archetype}`, RAM_HIT_STUN_MS, box.damage);
+    if (ram || dashcut) hurtPlayer(w, p.x - e.lungeX, p.y - e.lungeY, `melee:${e.archetype}`, RAM_HIT_STUN_MS, box.damage);
     else hurtPlayer(w, e.x, e.y, `melee:${e.archetype}`, 0, box.damage);
 
-    if (dashcut) { if (p.hearts < before) dashcutImpact(w, e); }
-    else if (ram && p.hearts < before) ramImpact(w, e, spec);
+    if (dashcut) dashcutImpact(w, e);
+    // The charge must stop on contact even through player invulnerability or
+    // stance guard; the collision itself ends the committed movement.
+    else if (ram && spec) ramImpact(w, e, spec);
   }
 }
 
@@ -5197,9 +5204,11 @@ function dashcutImpact(w: World, e: Enemy): void {
   // Into the string's next blow at once, or the dashcut's own recovery when it was the whole turn.
   e.attackMs = e.bossString.length > 0 ? BOSS_LINK_RECOVER_MS : (meleeSpec(e)?.recoverMs ?? 0);
   e.swing.active = false;
-  e.velX = e.lungeX * BOSS_DASH_SLIDE;
-  e.velY = e.lungeY * BOSS_DASH_SLIDE;
-  e.brakeMs = meleeSpec(e)?.brakeMs ?? 0;
+  // A player collision ends the committed run immediately; the slide is only
+  // used when the dash reaches its natural endpoint without hitting anyone.
+  e.velX = 0;
+  e.velY = 0;
+  e.brakeMs = Math.min(meleeSpec(e)?.brakeMs ?? 0, RAM_BRAKE_FRAME_MS);
   w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `brake:${e.archetype}` });
   bossDashWake(w, e);
 }
@@ -5221,7 +5230,7 @@ function dashcutImpact(w: World, e: Enemy): void {
 const RAM_THROW_PX = 56;
 const RAM_THROW_MS = 220;
 /** A charge hit briefly takes control, but should not launch the player across the room. */
-const RAM_HIT_STUN_MS = 420;
+const RAM_HIT_STUN_MS = 600;
 /** The impact is an immediate stop; the short brake timer is only for the authored stop frame. */
 const RAM_BRAKE_FRAME_MS = 180;
 

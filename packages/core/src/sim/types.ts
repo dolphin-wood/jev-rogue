@@ -1572,22 +1572,7 @@ export interface Enemy {
   attackCooldownMs: number;
   /** Temporary global attack lock; movement and emergence continue while every attack family is held. */
   attackLockMs: number;
-  /**
-   * False until this body has committed to one attack in this room.
-   *
-   * **Its first attack does no damage.** Lars Lidén's rule from *Artificial
-   * Stupidity: The Art of Intentional Mistakes* — have the enemy "miss the
-   * first time", so the attack indicates its direction and timing without
-   * costing the player anything. The whole shape of the attack is shown at
-   * full strength; only the damage is withheld.
-   *
-   * It is the cheapest fairness there is. A player meeting an archetype for
-   * the first time cannot know its reach, its arc or its rhythm, and the
-   * genre's usual answer is to charge them a heart for finding out. This
-   * teaches the same thing for free, once, and never again — and because the
-   * body is committed and recovering either way, the free attack is also the
-   * player's first opening.
-   */
+  /** Whether this body has committed an attack in this room. Retained for run telemetry. */
   hasAttacked: boolean;
   /** Direction locked at the end of the windup, so a lunge can be dodged. */
   lungeX: number;

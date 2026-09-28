@@ -36,7 +36,7 @@ function audienceWorld(seed: string, hearts = 3, props = 6): World {
   return createWorld({
     room: room(seed), encounter, props, staff: { slots: 6, mana_max: 120 },
     slots: [plainInstance("magic_bolt"), null, null, null, null, null], hearts,
-    rng: new RngSource(seed).stream("world"), roomIndex: 5, audience: true,
+    rng: new RngSource(seed).stream("world"), roomIndex: 5, audience: true, invincible: true,
     viewHalf: { x: WORLD_W, y: WORLD_H },
   });
 }
@@ -72,7 +72,9 @@ describe("the drop-in: the roof gives", () => {
       expect(w.cleared).toBe(false);
     }
     expect(w.audience!.phase).toBe("setup");
-    for (let i = 0; i < 10; i++) step(w, NO_INPUT);
+    // A live first melee hit may spend a few frames in hitstop before the
+    // audience clock can advance.
+    for (let i = 0; i < 30 && w.audience!.phase === "setup"; i++) step(w, NO_INPUT);
     expect(w.audience!.phase).not.toBe("setup");
   });
 

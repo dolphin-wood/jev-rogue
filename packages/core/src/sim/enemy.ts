@@ -1722,6 +1722,11 @@ function advanceMelee(e: Enemy, world: World, dtMs: number): void {
     e.swing.active = false;
   } else if (e.attack === "lunge") {
     e.swing.trackingMs = 0;
+    // A travelling melee body carries its hitbox with it. Leaving the box at
+    // the windup origin made long charges visually pass through the player
+    // while the resolver kept testing empty space behind the body.
+    e.swing.x = e.x;
+    e.swing.y = e.y;
     // Where the blade is now, from how far through the commit window it is.
     advanceBox(e.swing, 1 - Math.max(0, e.attackMs) / spec.lungeMs);
   } else {
@@ -2022,6 +2027,9 @@ export function beginWindup(world: World, e: Enemy, target: { x: number; y: numb
     } else e.windupMs += untilGrid(e.bossFightMs + e.windupMs, BEAT_MS);
     e.bossBladeAt = e.bossFightMs + e.windupMs;
   }
+  // The Veteran's ram is a boss-level commitment. Give its tell a little more
+  // room so the line can finish, hold, and blink before the body commits.
+  if (e.guardian && e.meleeKind === "charge") e.windupMs += 160;
   e.attackMs = e.windupMs;
   if (!spec) return;
   // Armed inert, so the telegraph the renderer draws *is* the hitbox.
@@ -2031,6 +2039,14 @@ export function beginWindup(world: World, e: Enemy, target: { x: number; y: numb
     ? e.damageMult * bossStringHearts(e.bossStringN - 1 - e.bossString.length, e.bossStringN) / Math.max(0.01, spec.damage)
     : e.damageMult;
   armMeleeAttack(e.swing, spec, e.x, e.y, bossAim(e, v.x, v.y), e.strafe, mult);
+  // The Veteran's body is enlarged independently of the warden's attack art.
+  // ResolveBodies keeps the player just outside that enlarged disc before the
+  // swing resolver runs, so the ram's centre-based box must reach the body's
+  // own edge or a contact can be separated before it is tested.
+  if (e.guardian && spec.kind === "charge") {
+    e.swing.bladeReach = Math.max(e.swing.bladeReach, e.radius + 1);
+    e.swing.reach = Math.max(e.swing.reach, e.radius + 1);
+  }
   if (e.guardian && spec.kind !== "charge") {
     // Its doubled body used an ordinary body's weapon geometry, making the
     // large sweep and shield visibly pass through the player before hitting.
@@ -2039,12 +2055,10 @@ export function beginWindup(world: World, e: Enemy, target: { x: number; y: numb
   }
   // The opening cut sets which way the whole string is drawn (`Enemy.bossComboFlip`).
   if (e.archetype === "boss" && (!e.bossLinked || e.bossLinkedBlow === null)) e.bossComboFlip = e.swing.sweep < 0;
-  /*
-   * The first attack this body makes in the room does no damage. Lidén's
-   * "miss the first time": the shape, the reach and the rhythm are all shown
-   * at full strength, and the player is not charged a heart for learning them.
-   */
-  if (!e.hasAttacked) e.swing.damage = 0;
+  // Every committed melee attack is live, including the first one. The
+  // telegraph is the player's warning; a hidden no-damage opening only made a
+  // successful collision look broken and gave the first attack a different
+  // damage rule from every later one.
   e.hasAttacked = true;
 }
 

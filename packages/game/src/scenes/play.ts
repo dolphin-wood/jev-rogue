@@ -8463,8 +8463,18 @@ export class PlayScene extends Phaser.Scene {
           // A body braking into a wall, and a shot stopped by a ward, are not
           // blows landed: they get the world's chip rather than the sword's.
           if (what.startsWith("brake:") || what.startsWith("wall:") || what === "ward") { sfx.play("wall_hit"); break; }
-          // Poise (`Enemy.poise`): the break is heard as the plate giving; a blow it held through rings off it.
-          if (what.startsWith("poise_break:")) { sfx.play("armour_break"); break; }
+          // Poise (`Enemy.poise`): breaking it uses the ordinary hit sound.
+          // Regular damage already emits that sound below; the fallback is
+          // for breaks caused by a wall or another interrupt with no damage
+          // hit event of its own.
+          if (what.startsWith("poise_break:")) {
+            const hasRegularHit = w.events.some((o) =>
+              o.kind === "enemy_hit" && o.amount !== undefined && !o.what?.startsWith("poise_")
+                && Math.hypot(o.x - ev.x, o.y - ev.y) < 1,
+            );
+            if (!hasRegularHit) sfx.play("hit_enemy");
+            break;
+          }
           if (what.startsWith("poise_hold:")) { sfx.play("hit_armour", 1); break; }
           if (what.startsWith("prop:")) { sfx.play("hit_light", 0.9); break; }
           if (what === "tether_cut") { sfx.play("hit_light", 1.35); break; }
@@ -8722,6 +8732,9 @@ export class PlayScene extends Phaser.Scene {
       if (e.attack !== "windup") continue;
       winding.add(e.id);
       if (a.winding.has(e.id)) continue;
+      // The Veteran's long ram line is silent until the body actually commits;
+      // the launch sound is emitted by the lunge edge below.
+      if (e.guardian && e.meleeKind === "charge") continue;
       // The king's windups are seen, not heard: he is the one body the player is always watching (doc 020).
       if (e.archetype === "boss") continue;
       sfx.play(e.meleeKind && SLAM_KINDS.has(e.meleeKind) ? "tele_slam" : "tele_charge",
@@ -14092,8 +14105,10 @@ export class PlayScene extends Phaser.Scene {
          * and the line can never drift away from the real travel distance.
          */
         const fillEnd = windup * 0.42;
-        const holdEnd = windup * 0.55;
-        const blinkEnd = windup * 0.80;
+        // Leave a readable beat after the line reaches full distance before
+        // the two flashes announce the imminent launch.
+        const holdEnd = windup * 0.64;
+        const blinkEnd = windup * 0.88;
         let lineT = 1;
         let len = travel;
         let visible = true;
