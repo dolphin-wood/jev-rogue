@@ -9,7 +9,7 @@ import {
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
   moodTransform, tintRGBA, dashInvulnerable, MELEE, ARMOUR_BREAK_MS, brakeFraction, ENEMIES,
-  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_CALL_MS, hasChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
+  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_CALL_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, seenPlayer, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, audienceRoomFor, RUN_GUARDIAN_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTierKey, affixFitsSpell, itemShape,
@@ -785,6 +785,8 @@ const BOSS_VIEW_SPARE = 1;
  * floor it stands on; violet is in no body's palette and no telegraph's.
  */
 const GUARDIAN_TINT = 0xb48cff;
+/** Its tint while staggered: its violet warmed toward the stagger's cast, so it is still itself. */
+const GUARDIAN_STAGGER_TINT = 0xe0a0e0;
 /** The Drowned Warden's overhead bars, health and plate, px wide. */
 const GUARDIAN_BAR_W = 64;
 /** The level a depth's own sound sits at everywhere in it (`ambienceLevels`): under a brazier or a grate beside the player. */
@@ -1451,6 +1453,8 @@ export class PlayScene extends Phaser.Scene {
     tag: Phaser.GameObjects.Container | null;
   }[] = [];
   /** The offer screen. Null whenever there is nothing to choose. */
+  /** The chest's card (doc 026): what it holds, shown before it is taken. */
+  private chestUi: { objects: Phaser.GameObjects.GameObject[] } | null = null;
   private offerUi: {
     dim: Phaser.GameObjects.Rectangle;
     heading: Phaser.GameObjects.Text;
@@ -5009,7 +5013,7 @@ export class PlayScene extends Phaser.Scene {
 
   /** Whether any screen that stops the fight is up. */
   private get modalOpen(): boolean {
-    return !!(this.titleUi || this.intentUi || this.transitionUi || this.offerUi
+    return !!(this.titleUi || this.intentUi || this.transitionUi || this.offerUi || this.chestUi
       || this.pauseUi || this.staffUi || this.gameOverUi || this.victoryUi || this.hintsUi
       || this.inviteUi || this.soundUi);
   }
@@ -8754,16 +8758,17 @@ export class PlayScene extends Phaser.Scene {
     // and the game's is switched off; nothing here may read a key behind it.
     if (this.inviteUi) { /* see `showInvite` */ }
     else if (this.soundUi) this.readSoundKeys();
+    else if (this.chestUi) this.readChestKeys();
     else if (this.transitionUi?.phase === "ready") this.readTransitionKeys();
     else if (this.intentUi) { this.readIntentKeys(); this.drawIntentDemo(); }
     else if (this.titleUi) this.readTitleKeys();
     else if (this.pauseUi) this.readPauseKeys();
     else if (this.gameOverUi || this.victoryUi) { /* the cards' own key listeners answer; see showGameOver, showVictory */ }
-    else if (!this.staffUi && !this.offerUi && !this.transitionUi && this.keys.ESC && Phaser.Input.Keyboard.JustDown(this.keys.ESC)) this.showPause();
+    else if (!this.staffUi && !this.offerUi && !this.chestUi && !this.transitionUi && this.keys.ESC && Phaser.Input.Keyboard.JustDown(this.keys.ESC)) this.showPause();
     // Tab: the character screen, directly.
     // Not over a card that has ended the run: the run is over, and the
     // character screen is a thing to read while there is still a run.
-    if (!this.titleUi && !this.intentUi && !this.pauseUi && !this.offerUi && !this.gameOverUi && !this.victoryUi
+    if (!this.titleUi && !this.intentUi && !this.pauseUi && !this.offerUi && !this.chestUi && !this.gameOverUi && !this.victoryUi
       && this.keys.TAB && Phaser.Input.Keyboard.JustDown(this.keys.TAB)) {
       if (this.staffUi) this.hideStaff();
       else this.showStaff("view", null);
@@ -9107,7 +9112,6 @@ export class PlayScene extends Phaser.Scene {
           this.puffs.push({ x: ev.x, y: ev.y, ms: PUFF_MS, element: "none", scale: 1.7 });
         if (ev.kind === "reward_shown") this.buildRewardDrop();
         if (ev.kind === "telegraph" && ev.what === "chest_shown") this.buildChest(ev.x, ev.y);
-        if (ev.kind === "telegraph" && ev.what === "chest_opened") this.openChest();
       }
       if (this.world.stats.shotsFired > shotsBefore) this.castFlash();
       // Every sound of this step, in one place: see `playWorldSounds`.
@@ -10232,8 +10236,65 @@ export class PlayScene extends Phaser.Scene {
     this.sfx.play("reward_reveal");
   }
 
-  /** Touched: the lid up, the gold out (the world's), and the Director's stat taken into the run. */
-  private openChest(): void {
+  /**
+   * **The chest's card** (doc 026): the stat the Director put in it and the
+   * gold, on one card of the reward screen's look, taken with the interact
+   * key, Enter or a click. The fight is held while it is up, as the reward's
+   * screen holds it.
+   */
+  private showChestCard(): void {
+    const id = this.chestStat;
+    const card = id ? cardsFor(ITEMS, "stat", [id])[0] : undefined;
+    if (!id || !card) return;
+    const objects: Phaser.GameObjects.GameObject[] = [];
+    const cx = UI_W / 2, cy = UI_H / 2;
+    const W = 150, H = 170, PAD = 12;
+    objects.push(this.add.rectangle(cx, cy, UI_W, UI_H, 0x05040d, 0.6).setDepth(200).setInteractive());
+    objects.push(this.uiText(cx, cy - H / 2 - 20, t("chest.heading"), 16, "#ffe9a8").setOrigin(0.5).setDepth(202));
+    const panel = this.add.rectangle(cx, cy, W, H, 0x161334, 0.96).setStrokeStyle(1, 0xd8b060, 0.9).setDepth(200.5)
+      .setInteractive({ useHandCursor: true });
+    panel.on("pointerdown", () => this.takeChest());
+    objects.push(panel);
+    const top = cy - H / 2;
+    const iconFrame = [id === "vigour" ? "ui_heart_full" : "", `icon_stat_${id}`, id === "wrath" ? "icon_stat_keen_edge" : "", "prop_reward_stat_0", "prop_reward_affix_0"]
+      .find((n) => n && this.atlas.has(n)) ?? "prop_reward_affix_0";
+    const crisp = iconFrame.startsWith("icon_");
+    const icon = this.add.image(cx, top + PAD + 17, crisp ? this.crispTextureKey : this.uiTextureKey, iconFrame).setOrigin(0.5).setDepth(202);
+    if (crisp) icon.setScale(2 / TUNED); else icon.setDisplaySize(34, 34);
+    objects.push(icon);
+    const left = cx - W / 2 + PAD, wrap = (W - PAD * 2) * ZOOM;
+    const name = this.uiText(left, top + PAD + 40, contentName(id, card.label), 11, "#ffe9a8", { wordWrap: { width: wrap } }).setDepth(202);
+    objects.push(name);
+    const row = this.statRow(this.cardStatParts(card), wrap / ZOOM, 8, 202);
+    row.box.setPosition(left, name.y + name.displayHeight + 3);
+    objects.push(row.box);
+    const body = this.uiText(left, row.box.y + row.height + 6, contentDescription(id, card.description), 7, "#8792b5", { wordWrap: { width: wrap } })
+      .setDepth(202);
+    objects.push(body);
+    // The gold, as the merchant's price chip is drawn: a coin and a number, bottom right.
+    const gold = this.uiText(cx + W / 2 - PAD, top + H - 14, `+${CHEST_GOLD}`, 9, "#ffd45e").setOrigin(1, 0.5).setDepth(203);
+    objects.push(gold);
+    objects.push(this.add.image(gold.x - gold.displayWidth - 8, gold.y, this.uiTextureKey, "pickup_coin_0").setOrigin(0.5).setDisplaySize(10, 10).setDepth(203));
+    objects.push(this.keys_(cx, cy + H / 2 + 20, `[E] ${t("hint.take")}`, 9, "#e8e3d8", 202));
+    this.chestUi = { objects };
+    this.sfx.play("reward_reveal");
+  }
+
+  private readChestKeys(): void {
+    const k = this.keys;
+    const down = (key?: Phaser.Input.Keyboard.Key) => !!key && Phaser.Input.Keyboard.JustDown(key);
+    if (down(k.E) || down(k.ENTER) || down(k.SPACE)) this.takeChest();
+  }
+
+  /** Taken: the card goes, the lid comes up, the gold bursts out (the world's), and the stat goes into the run. */
+  private takeChest(): void {
+    if (!this.chestUi) return;
+    for (const o of this.chestUi.objects) o.destroy();
+    this.chestUi = null;
+    this.interactPressed = false;
+    const id = this.chestStat;
+    this.chestStat = null;
+    openChest(this.world);
     const g = this.chestGfx;
     if (g) {
       g.body.setFrame(safeFrame(this.atlas, "prop_chest_1", "prop_chest_0"));
@@ -10242,12 +10303,7 @@ export class PlayScene extends Phaser.Scene {
       this.tweens.add({ targets: g.glow, alpha: 0, duration: 900 });
     }
     this.sfx.play("clear");
-    const id = this.chestStat;
-    this.chestStat = null;
-    if (!id) return;
-    this.grantStat(id);
-    this.tookLabel = t("toast.chest", { stat: contentName(id, statById(id)?.name ?? id), gold: CHEST_GOLD, coin: "{coin}" });
-    this.tookMs = 2400;
+    if (id) this.grantStat(id);
   }
 
   private destroyChest(): void {
@@ -12046,7 +12102,15 @@ export class PlayScene extends Phaser.Scene {
       }
       return;
     }
-    if (drop && rewardInReach(drop, this.world.player)) {
+    if (this.chestStat && chestInReach(this.world) && this.world.chest) {
+      this.prompt.setVisible(true);
+      this.prompt.setText(t("prompt.openChest"));
+      this.promptAbove(this.world.chest.x, this.world.chest.y - TILE_PX * 1.6);
+      if (this.interactPressed && !this.offerUi && !this.chestUi) {
+        this.interactPressed = false;
+        this.showChestCard();
+      }
+    } else if (drop && rewardInReach(drop, this.world.player)) {
       this.prompt.setVisible(true);
       this.prompt.setText(t("prompt.open"));
       this.promptAbove(drop.x, this.topOf(this.rewardGfx?.badge ?? null, drop.y - TILE_PX * 2.1 + 10));
@@ -15467,7 +15531,7 @@ export class PlayScene extends Phaser.Scene {
      * room. The screen only ever opens in a cleared room, so nothing is lost
      * by holding the body still while it is up.
      */
-    if (this.offerUi) return NO_INPUT;
+    if (this.offerUi || this.chestUi) return NO_INPUT;
     // The walk into the throne hall is not theirs: in to the mark, facing him, and held there (`bossCine`).
     const cine = this.bossCine;
     if (cine && !cine.release) {
@@ -17408,7 +17472,8 @@ function drawEnemy(
     // Jittered against its own clock rather than at random, so it reads as one
     // body being rattled instead of as the sprite flickering.
     img.x += Math.sin(e.staggerMs * 0.9) * 1.6;
-    img.setTint(0xffc0b0);
+    // The stagger's warm cast; the Drowned Warden keeps its own light under it (doc 024).
+    img.setTint(e.guardian ? GUARDIAN_STAGGER_TINT : 0xffc0b0);
     /*
      * A long stagger is a knockdown, and it gets a mark of its own.
      *

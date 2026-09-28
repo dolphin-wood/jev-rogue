@@ -1,6 +1,6 @@
 /** A special room's chest (doc 026): where it stands, and what touching it pays. */
 import { describe, expect, it } from "vitest";
-import { createWorld, step } from "./world.ts";
+import { chestInReach, createWorld, openChest, step } from "./world.ts";
 import { NO_INPUT } from "./types.ts";
 import type { World } from "./types.ts";
 import { WORLD_H, WORLD_W } from "./collide.ts";
@@ -27,21 +27,26 @@ function chestWorld(seed: string, chest: boolean): World {
 }
 
 describe("the chest", () => {
-  it("stands beside the player once the room clears, off the reward's cell, and pays its gold on a touch", () => {
+  it("stands beside the reward once the room clears, and pays its gold when opened, not on a touch", () => {
     const w = chestWorld("c1", true);
     for (let i = 0; i < 5 && !w.cleared; i++) step(w, NO_INPUT);
     expect(w.cleared).toBe(true);
     const c = w.chest!;
     expect(c).toBeTruthy();
     expect(c.open).toBe(false);
-    if (w.rewardDrop) expect(Math.hypot(c.x - w.rewardDrop.x, c.y - w.rewardDrop.y)).toBeGreaterThan(20);
+    if (w.rewardDrop) {
+      const d = Math.hypot(c.x - w.rewardDrop.x, c.y - w.rewardDrop.y);
+      expect(d).toBeGreaterThan(20);
+      expect(d).toBeLessThan(80);
+    }
     const gold0 = w.gold;
     w.player.x = c.x; w.player.y = c.y;
-    let opened = false;
-    for (let i = 0; i < 60 * 3; i++) {
-      step(w, NO_INPUT);
-      if (w.events.some((ev) => ev.what === "chest_opened")) opened = true;
-    }
+    for (let i = 0; i < 30; i++) step(w, NO_INPUT);
+    expect(c.open).toBe(false);
+    expect(chestInReach(w)).toBe(true);
+    openChest(w);
+    const opened = w.events.some((ev) => ev.what === "chest_opened");
+    for (let i = 0; i < 60 * 3; i++) step(w, NO_INPUT);
     expect(opened).toBe(true);
     expect(c.open).toBe(true);
     expect(w.gold - gold0).toBe(CHEST_GOLD);

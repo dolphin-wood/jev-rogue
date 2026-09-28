@@ -3,7 +3,7 @@ id: 026
 title: The Special Room's Chest
 status: proposed
 date: 2026-09-28
-summary: A room that asked something other than "kill everything" leaves a chest beside its reward when it clears. That means the first audience, the guardian, and a hold or destroy room. Touching the chest opens it for CHEST_GOLD, a merchant's price for one stat card, and one stat upgrade. Code decides that there is a chest. The Director picks the stat from the stat door's own pool, in the room's round-1 request, with no extra call. The heal after the fixed fights is settled here too. The guardian leaves GUARDIAN_HEARTS hearts that fly to the player. The first audience needs none, because its spare hearts already come home when he leaves.
+summary: A room that asked something other than "kill everything" leaves a chest beside its reward when it clears. That means the first audience, the guardian, and a hold or destroy room. Pressing E at the chest shows a card of what it holds: CHEST_GOLD, a merchant's price for one stat card, and one stat upgrade. Code decides that there is a chest. The Director picks the stat from the stat door's own pool, in the room's round-1 request, with no extra call. The heal after the fixed fights is settled here too. The guardian leaves GUARDIAN_HEARTS hearts that fly to the player. The first audience needs none, because its spare hearts already come home when he leaves.
 depends_on: [002, 007, 013, 022, 024, 025]
 ---
 
@@ -22,8 +22,8 @@ and we already have its closed and open frames (`prop_chest_0`, `prop_chest_1`).
 | | |
 |---|---|
 | Which rooms | the first audience, the guardian (`isFixedFightRoom`), and any fight with an objective (`objectiveFor`, or one forced from the debug panel) |
-| Where | beside the player when the room clears, as the reward is, never on the reward's cell or next to it, never on a hazard (`placeChest`) |
-| How it opens | a touch, like a pickup. There is no prompt and nothing to choose |
+| Where | beside the reward, two tiles to one side, never on a hazard (`placeChest`); beside the player in a room with no reward |
+| How it opens | the interact key (E), as the reward does. A card shows the stat and the gold; the player takes it with E, Enter or a click, and the lid comes up. The fight is held while the card is up |
 | What it pays | `CHEST_GOLD` (20, one stat card at the merchant), bursting out and flying to the player, and **one stat upgrade** applied at once |
 | Doors | not held for it: a player may walk past it |
 

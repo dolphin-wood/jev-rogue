@@ -270,6 +270,8 @@ export const JA: Table = {
 
   /* ------------------------------- prompts ------------------------------ */
   "prompt.open": "[E] 開ける",
+  "prompt.openChest": "[E] 宝箱を開ける",
+  "chest.heading": "宝箱",
   "prompt.merchant": "[E] 商人",
   "prompt.soldOut": "売り切れ",
   "prompt.blacksmith": "[E] 鍛冶屋：呪文を強化",
@@ -302,7 +304,6 @@ export const JA: Table = {
   "toast.gaveUpReward": "報酬を放棄  +{gold} {coin}",
   "toast.onKey": "「{label}」→ {key}",
   "toast.toLv": "「{spell}」が Lv {level} になった",
-  "toast.chest": "宝箱：{stat}、{gold}{coin}",
   "toast.levelUp": "レベル {n}   HP +{hp} · 剣 {from} → {to}",
   "toast.alreadyMax": "「{label}」はもう Lv {max}：X 長押しで分解",
   "toast.atTopLevel": "「{label}」は最大レベル：+{gold} {coin}",

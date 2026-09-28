@@ -275,6 +275,8 @@ export const EN = {
 
   /* ------------------------------- prompts ------------------------------ */
   "prompt.open": "[E] Open",
+  "prompt.openChest": "[E] Open the chest",
+  "chest.heading": "Chest",
   "prompt.merchant": "[E] Merchant",
   "prompt.soldOut": "Sold out",
   "prompt.blacksmith": "[E] Blacksmith: upgrade a spell",
@@ -308,7 +310,6 @@ export const EN = {
   "toast.gaveUpReward": "Reward skipped  +{gold} {coin}",
   "toast.onKey": "{label} on {key}",
   "toast.toLv": "{spell} upgraded to Lv {level}",
-  "toast.chest": "Chest: {stat}, and {gold}{coin}",
   /* The auto level-up banner: the level, then what it gave. */
   "toast.levelUp": "LEVEL {n}   +{hp} health · sword {from} → {to}",
   "toast.alreadyMax": "{label} is already Lv {max}. Hold X to dismantle",

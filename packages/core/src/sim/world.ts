@@ -974,7 +974,6 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
 function stepExits(w: World, dtMs: number, interact: boolean): void {
   stepPortals(w.portals, dtMs);
   stepReward(w.rewardDrop, dtMs);
-  stepChest(w);
   if (!w.exited) {
     const through = enteredPortal(w.portals, w.player, interact);
     if (through) {
@@ -987,8 +986,9 @@ function stepExits(w: World, dtMs: number, interact: boolean): void {
 }
 
 /**
- * **The chest takes its ground** (doc 026): beside the player like the reward,
- * never on the reward's own cell or next to it, nor on a hazard.
+ * **The chest takes its ground** (doc 026): beside the reward, on the next
+ * free cell but one so the two are told apart, never on a hazard; beside the
+ * player when the room has no reward to stand by.
  */
 function placeChest(w: World): void {
   w.chestDue = false;
@@ -998,18 +998,40 @@ function placeChest(w: World): void {
     const rx = Math.floor(r.x / TILE_PX), ry = Math.floor(r.y / TILE_PX);
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) avoid.add((ry + dy) * GRID_W + rx + dx);
   }
-  const at = placeRewardNear(w.room.grid, "stat", w.player, avoid);
+  const at = r ? placeChestBy(w.room.grid, r, avoid) : placeRewardNear(w.room.grid, "stat", w.player, avoid);
   w.chest = { x: at.x, y: at.y, open: false };
   w.events.push({ kind: "telegraph", x: at.x, y: at.y, what: "chest_shown" });
 }
 
-/** How close the player comes for the chest to open: a touch, like a pickup. */
-const CHEST_REACH = TILE_PX * 0.9;
+/** The cell two tiles to one side of the reward, left or right, or the nearest free one to it. */
+function placeChestBy(grid: Uint8Array, r: { x: number; y: number }, avoid: Set<number>): { x: number; y: number } {
+  const rx = Math.floor(r.x / TILE_PX), ry = Math.floor(r.y / TILE_PX);
+  for (const [dx, dy] of [[2, 0], [-2, 0], [2, 1], [-2, 1], [2, -1], [-2, -1], [0, 2], [0, -2]] as const) {
+    const x = rx + dx, y = ry + dy;
+    if (x < 1 || y < 1 || x >= GRID_W - 1 || y >= GRID_H - 1) continue;
+    if (grid[y * GRID_W + x] !== Tile.Floor || avoid.has(y * GRID_W + x)) continue;
+    return { x: (x + 0.5) * TILE_PX, y: (y + 0.5) * TILE_PX };
+  }
+  return placeRewardNear(grid, "stat", r, avoid);
+}
 
-/** Touched, the chest opens: its gold bursts out, and the caller hands over its stat on `chest_opened`. */
-function stepChest(w: World): void {
+/** How close the player stands for the chest's prompt, and for the interact key to open it: the reward's reach. */
+export const CHEST_REACH = TILE_PX * 1.4;
+
+/** Whether the player stands close enough to open the chest. */
+export function chestInReach(w: World): boolean {
   const c = w.chest;
-  if (!c || c.open || Math.hypot(w.player.x - c.x, w.player.y - c.y) > CHEST_REACH) return;
+  return !!c && !c.open && Math.hypot(w.player.x - c.x, w.player.y - c.y) <= CHEST_REACH;
+}
+
+/**
+ * **The chest opens** (doc 026), when the player has taken what the card
+ * shows: its gold bursts out and flies home. Its stat is the caller's to
+ * hand over, since the run's modifiers are not the world's.
+ */
+export function openChest(w: World): void {
+  const c = w.chest;
+  if (!c || c.open) return;
   c.open = true;
   burstCoins(w.pickups, c.x, c.y, CHEST_GOLD, w.rng);
   for (const p of w.pickups) if (p.alive && p.kind === "coin") p.homing = true;
