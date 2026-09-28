@@ -320,6 +320,19 @@ describe("enchant (Crescent Edge)", () => {
     for (const e of bodies) expect(hurt(e)).toBeGreaterThan(0);
   });
 
+  it("fills the rage gauge, at less than the sword's own rate", () => {
+    const w = arena("crescent_edge", "rage");
+    // Past the sword's reach: only the wave touches them.
+    const bodies = [body(w, 70, 0), body(w, 90, 0)];
+    step(w, at(PX + 100, PY, { spell: 0 }));
+    expect(w.player.rage).toBe(0);
+    run(w, (i) => at(PX + 100, PY, { swing: i === 0 }), 40, bodies);
+    for (const e of bodies) expect(hurt(e)).toBeGreaterThan(0);
+    expect(w.player.rage).toBeGreaterThan(0);
+    // Two sword blows would have banked 0.24; two wave hits bank a fraction of it.
+    expect(w.player.rage).toBeLessThan(0.24);
+  });
+
   it("leaves as the swing's active window ends, from the arc the tip traced", () => {
     const w = arena("crescent_edge", "release");
     step(w, at(PX + 100, PY, { spell: 0 }));

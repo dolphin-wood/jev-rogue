@@ -51,7 +51,7 @@ export const PLAYER_TEXT: Readonly<Record<string, string>> = {
   leap_slam: "Leap at an enemy and land in a ring of broken ground. Invulnerable while airborne.",
   ball_lightning: "Releases a slow-drifting orb that shocks the nearest enemy in range several times a second. Several can be out at once; when at the limit, a new one replaces the oldest.",
   returning_edge: "Throws a spectral sword that slows, turns and flies back to you, hitting each enemy once on the way out and once on the way back.",
-  crescent_edge: "For a while, every sword swing also sends a crescent wave forward that pierces all enemies in range, hit or miss. Casting again resets the duration.",
+  crescent_edge: "For a while, every sword swing also sends a crescent wave forward that pierces all enemies in range, hit or miss. Its hits also build a little rage. Casting again resets the duration.",
   counter_stance: "Take a brief stance: you move slower and can't swing. The next hit that would land on you is cancelled and answered with a staggering spin slash. If nothing hits you, a weaker spin slash fires when the stance ends.",
   dash_slash: "Dash forward with your sword held out, striking every enemy in your path. Sword energy rolls out on both sides of the dash and strikes what it crosses. Invulnerable during the dash.",
   cinder_stride: "For a few seconds, each step leaves a patch of fire behind you. Standing still leaves nothing. Your own fire can't hurt you.",

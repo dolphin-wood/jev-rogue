@@ -50,7 +50,7 @@ export const ZH_CONTENT: ContentTable = {
   leap_slam: { name: "跃击", description: "跃向目标敌人，落地时震碎周围一圈地面。跃起期间无敌。" },
   ball_lightning: { name: "球状闪电", description: "放出一颗缓慢漂移的雷球，每秒数次电击范围内最近的敌人。可同时存在数颗，数量已满时新雷球会替换最早的一颗。" },
   returning_edge: { name: "回旋刃", description: "向前掷出一把灵体之剑，减速后折返，飞回你当前的位置。去程和回程各可命中每个敌人一次。" },
-  crescent_edge: { name: "新月剑气", description: "一段时间内，每次挥剑（无论是否命中）都会向前射出一道新月剑气，贯穿范围内的所有敌人。再次施放可重置持续时间。" },
+  crescent_edge: { name: "新月剑气", description: "一段时间内，每次挥剑（无论是否命中）都会向前射出一道新月剑气，贯穿范围内的所有敌人，命中时也会积攒少量怒气。再次施放可重置持续时间。" },
   counter_stance: { name: "反击架势", description: "进入短暂的反击架势，期间移动减慢且无法挥剑。抵消下一次命中你的攻击，并以回旋斩反击，使敌人踉跄。若期间未被击中，架势结束时会释放一次较弱的回旋斩。" },
   dash_slash: { name: "冲刺斩", description: "举剑向前冲刺，斩击沿途的每个敌人。冲刺路径两侧会依次展开剑气，斩击其扫过的敌人。冲刺期间无敌。" },
   cinder_stride: { name: "余烬步", description: "数秒内，你每走一步都会在身后留下一片火焰，站立不动时不会留下。你的火焰不会伤害你自己。" },
