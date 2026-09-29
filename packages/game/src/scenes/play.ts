@@ -12478,10 +12478,21 @@ export class PlayScene extends Phaser.Scene {
        * the border.
        */
       const footW = panelW - 24;
-      const footer = (str: string, colour: string, line = 0) =>
-        text(rightX, cy + 30 + shift + line * 9, str, 6.5, colour, {
+      /*
+       * Hung from its top under the rows, not centred on one line's height:
+       * a line the wrap breaks in two (a refusal in Chinese) grew up over
+       * the last affix row and down across the border. What runs past the
+       * panel's lower edge makes the panel taller (`shift`).
+       */
+      const footer = (str: string, colour: string, line = 0) => {
+        const top = cy + 26 + shift + line * 9;
+        const row = text(rightX, top, str, 6.5, colour, {
           align: "center", wordWrap: { width: footW * ZOOM },
-        }).setOrigin(0.5, 0.5);
+        }).setOrigin(0.5, 0);
+        const over = top + row.displayHeight + PAD_S - (cy + 44 + shift);
+        if (over > 0) shift += Math.ceil(over);
+        return row;
+      };
       if (ui.mode === "smith") {
         const price = SMITH_PRICE[lvl] ?? 0;
         if (lvl >= SPELL_LEVEL_MAX) footer(t("char.atHighestLevel"), "#6a7396");
