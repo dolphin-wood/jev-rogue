@@ -9,7 +9,7 @@ import {
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
   moodTransform, tintRGBA, dashInvulnerable, MELEE, POISE_BREAK_MS, POISE_BREAK_STAGGER_MS, POISE_GUARD_MS, brakeFraction, ENEMIES,
-  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_MUSKET_SPREAD_MULT, GUARDIAN_CALL_MS, GUARDIAN_STANCE, GUARDIAN_BROKEN_MS, GUARDIAN_SINK_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, DESTROY_TARGETS, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, plated, showsPoise, breakStaggerMs, seenPlayer, beamAim, BEAM_LOCK_MS, lineToWall, burstCoins, ERUPTION_SHOW_MS,
+  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_MUSKET_SPREAD_MULT, GUARDIAN_CALL_MS, GUARDIAN_STANCE, GUARDIAN_BROKEN_MS, GUARDIAN_SINK_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, plated, showsPoise, breakStaggerMs, seenPlayer, beamAim, BEAM_LOCK_MS, lineToWall, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, audienceRoomFor, RUN_GUARDIAN_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTextKey, affixFitsSpell, itemShape,
@@ -22,7 +22,7 @@ import {
   levelAt, withLevels, levelBonus, LEVEL_HP, swordAt,
   HIT_FLASH_MS, BOSS_ROAR_MS, spellReady, castTiming, hasLineOfSight,
 } from "@jr/core";
-import { HOLD_MS, SPELL_BUFFER_MS } from "@jr/core";
+import { SPELL_BUFFER_MS } from "@jr/core";
 import type {
   Bullet, Enemy, EnemyId, Input, ItemInstance, Mood, Offer, OfferCard, Portal,
   PlayerMods, RewardCardKind, RoomPlan, RoomType, RunHistory, World, AttachedAffix,
@@ -2740,14 +2740,15 @@ export class PlayScene extends Phaser.Scene {
      * guardian says nothing here: its name is the small line over its bar
      * (doc 024), and the first audience is meant to come unannounced.
      */
-    const objective = this.world.objective?.kind;
+    const objective = this.world.objective;
     this.clearHoldBrief();
     // A hold keeps its one-line explanation directly under the live clock;
-    // only destroy needs a separate room-opening brief.
-    if (objective === "hold") this.showHoldBrief(t("hud.briefHold", { s: HOLD_MS / 1000 }));
-    else if (objective === "destroy") this.time.delayedCall(400, () => {
+    // only destroy needs a separate room-opening brief. Both quote this room's
+    // own figures, which the depth sets (`holdMsFor`, `destroyTargetsFor`).
+    if (objective?.kind === "hold") this.showHoldBrief(t("hud.briefHold", { s: Math.round(objective.holdMs / 1000) }));
+    else if (objective?.kind === "destroy") this.time.delayedCall(400, () => {
       if (this.world.objective && !this.world.objective.done)
-        this.showRoomBrief(t("hud.objectiveDestroy"), t("hud.briefDestroy", { n: DESTROY_TARGETS }));
+        this.showRoomBrief(t("hud.objectiveDestroy"), t("hud.briefDestroy", { n: this.world.objective.targets }));
     });
 
     this.kingIntro = null;
@@ -18075,7 +18076,8 @@ export class PlayScene extends Phaser.Scene {
         const urgent = left <= 5;
         const x = UI_W / 2, y = HUD_TOP_Y + 8;
         const barW = 152;
-        const remaining = Math.max(0, HOLD_MS - obj.ms) / HOLD_MS;
+        // Against this room's own clock (`holdMsFor`): an early hold is shorter, and its bar starts full all the same.
+        const remaining = Math.max(0, obj.holdMs - obj.ms) / Math.max(1, obj.holdMs);
         this.ftext("objective", x, y - 2, t("hud.holdLeft", { s: left }), {
           fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(14, ZOOM) * ZOOM)}px`,
           color: urgent ? "#ff8877" : "#fff6d8", stroke: "#0d0b1f", strokeThickness: 4 * ZOOM,
@@ -18084,7 +18086,7 @@ export class PlayScene extends Phaser.Scene {
         this.sprites.rectangle(x, y + 12, barW * remaining, 3, urgent ? 0xff6a5a : 0xffd45e, 1).setDepth(101);
       } else {
         this.ftext("objective", UI_W / 2, UI_H - 52,
-          t("hud.targetsLeft", { n: targetsLeft(w), total: w.objective?.targets ?? DESTROY_TARGETS }), {
+          t("hud.targetsLeft", { n: targetsLeft(w), total: obj.targets }), {
             fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(9, ZOOM) * ZOOM)}px`, color: "#ffe9a8",
             stroke: "#0d0b1f", strokeThickness: 3 * ZOOM,
           }).setScale(1 / ZOOM).setOrigin(0.5).setDepth(102);
