@@ -1,10 +1,12 @@
 /**
  * **Room objectives** (doc 025): a fight with another way to end it.
  *
- * - **hold**: survive `HOLD_MS` while the room keeps sending bodies; when the
- *   time is up, whatever still stands falls.
- * - **destroy**: three turrets stand marked as targets, and the room keeps
- *   sending bodies until all three are down; then whatever still stands falls.
+ * - **hold**: survive the room's clock (`holdMsFor`, shorter early in the run)
+ *   while the room keeps sending bodies, or kill twice its roster once half
+ *   the clock has run; then whatever still stands falls.
+ * - **destroy**: three to five emplacements stand marked as targets, by depth
+ *   (`destroyTargetsFor`), and the room keeps sending bodies until all are
+ *   down; then whatever still stands falls.
  *
  * An objective is drawn by code from the run's seed, never promised on a door:
  * a door promises a reward and a difficulty (doc 003), and a room that asks

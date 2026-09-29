@@ -17966,7 +17966,7 @@ export class PlayScene extends Phaser.Scene {
         this.sprites.rectangle(x, y + 12, barW * remaining, 3, urgent ? 0xff6a5a : 0xffd45e, 1).setDepth(101);
       } else {
         this.ftext("objective", UI_W / 2, UI_H - 52,
-          t("hud.targetsLeft", { n: targetsLeft(w), total: DESTROY_TARGETS }), {
+          t("hud.targetsLeft", { n: targetsLeft(w), total: w.objective?.targets ?? DESTROY_TARGETS }), {
             fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(9, ZOOM) * ZOOM)}px`, color: "#ffe9a8",
             stroke: "#0d0b1f", strokeThickness: 3 * ZOOM,
           }).setScale(1 / ZOOM).setOrigin(0.5).setDepth(102);

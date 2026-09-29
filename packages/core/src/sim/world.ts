@@ -484,7 +484,7 @@ export function createWorld(input: CreateWorldOptions): World {
   // The room's objective (doc 025), with its own waves kept to send again.
   const objective = input.room.objective;
   if (objective) {
-    w.objective = makeObjective(objective, w.pendingWaves);
+    w.objective = makeObjective(objective, w.pendingWaves, w.roomIndex);
     if (objective === "destroy") placeTargets(w);
   }
   return w;
@@ -2789,6 +2789,8 @@ function turretMounts(w: World): [number, number][] {
 
 function onEnemyKilled(w: World, e: Enemy): void {
   audienceKill(w);
+  // A hold counts the kills that can meet it early (`HOLD_QUOTA`).
+  if (w.objective && !w.objective.done && !e.summoned) w.objective.kills++;
   /*
    * A `doom` mark outlives its body (doc 006): it still bursts, on its own
    * clock, where the body fell — which is what makes marking a pack and

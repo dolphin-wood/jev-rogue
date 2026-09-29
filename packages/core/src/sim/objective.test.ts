@@ -4,7 +4,9 @@ import { createWorld, step, worldCleared } from "./world.ts";
 import { NO_INPUT } from "./types.ts";
 import type { World } from "./types.ts";
 import { WORLD_H, WORLD_W } from "./collide.ts";
-import { DESTROY_TARGETS, HOLD_MS, OBJECTIVE_ENTRY_GRACE_MS, holdLeftS, targetsLeft } from "./objective.ts";
+import {
+  DESTROY_TARGETS, HOLD_MS, HOLD_MS_EARLY, OBJECTIVE_ENTRY_GRACE_MS, destroyTargetsFor, holdLeftS, holdMsFor, targetsLeft,
+} from "./objective.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
 import { plainInstance } from "../spells/index.ts";
 import { RngSource } from "../rng.ts";
@@ -42,10 +44,23 @@ describe("a hold", () => {
     expect(w.enemies.every((e) => e.attackLockMs === 0)).toBe(true);
   });
 
-  it("starts with forty-two seconds on its clock", () => {
+  it("runs shorter early in the run and forty-two seconds deep in it", () => {
+    expect(holdMsFor(3)).toBe(HOLD_MS_EARLY);
+    expect(holdMsFor(12)).toBe(HOLD_MS);
+    expect(holdMsFor(16)).toBe(HOLD_MS);
+    expect(holdMsFor(7)).toBeGreaterThan(HOLD_MS_EARLY);
+    expect(holdMsFor(7)).toBeLessThan(HOLD_MS);
     const w = objectiveWorld("hold", "h0");
-    expect(HOLD_MS).toBe(42_000);
-    expect(holdLeftS(w)).toBe(42);
+    expect(holdLeftS(w)).toBe(holdMsFor(7) / 1000);
+  });
+
+  it("is met early by killing twice its roster, once half its clock has run", () => {
+    const w = objectiveWorld("hold", "h-quota");
+    w.objective!.kills = w.objective!.quota;
+    run(w, holdMsFor(7) / 2 - 2000);
+    expect(w.objective!.done).toBe(false);
+    run(w, 3000);
+    expect(w.objective!.done).toBe(true);
   });
 
   it("is not clear while its clock runs, however empty, and keeps sending bodies", () => {
@@ -62,7 +77,7 @@ describe("a hold", () => {
   it("clears when the clock is up, and whatever stands falls", () => {
     const w = objectiveWorld("hold", "h2");
     // Hitstops hold the clock as they hold everything else, so give it room.
-    run(w, HOLD_MS + 6000);
+    run(w, holdMsFor(7) + 6000);
     expect(w.objective!.done).toBe(true);
     run(w, 1500);
     expect(w.enemies).toHaveLength(0);
@@ -71,10 +86,15 @@ describe("a hold", () => {
 });
 
 describe("a destroy room", () => {
+  it("stands fewer emplacements early in the run", () => {
+    expect(destroyTargetsFor(3)).toBe(3);
+    expect(destroyTargetsFor(16)).toBe(DESTROY_TARGETS);
+  });
+
   it("holds every target's attacks for the first three seconds", () => {
     const w = objectiveWorld("destroy", "d-grace");
     const targets = w.enemies.filter((e) => e.objectiveTarget);
-    expect(targets).toHaveLength(DESTROY_TARGETS);
+    expect(targets).toHaveLength(destroyTargetsFor(7));
     expect(targets.every((e) => e.attackLockMs === OBJECTIVE_ENTRY_GRACE_MS && e.telegraphMs === 0)).toBe(true);
     run(w, OBJECTIVE_ENTRY_GRACE_MS + 100);
     expect(targets.every((e) => e.attackLockMs === 0)).toBe(true);
@@ -82,7 +102,7 @@ describe("a destroy room", () => {
 
   it("stands its turrets, marked, and is not clear while one stands", () => {
     const w = objectiveWorld("destroy", "d1");
-    expect(targetsLeft(w)).toBe(DESTROY_TARGETS);
+    expect(targetsLeft(w)).toBe(destroyTargetsFor(7));
     for (const e of w.enemies) if (!e.objectiveTarget) e.hp = 0;
     run(w, 500);
     expect(worldCleared(w)).toBe(false);

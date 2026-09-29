@@ -3,7 +3,7 @@ id: 025
 title: Room Objectives
 status: proposed
 date: 2026-09-28
-summary: A quarter of ordinary fights from room 3 on end another way. In a hold room the player survives a set time while the room keeps sending its waves; when the time is up, whatever still stands falls. In a destroy room five marked emplacements of every kind, firing across the whole room, stand far from the door and from each other on the bare arena, and the room sends its waves again, a set number of times, until all three are down. Code draws the objective from the run's seed, never two rooms running and never in a fixed fight. A door never promises one; the room says it on entry.
+summary: A quarter of ordinary fights from room 3 on end another way. In a hold room the player survives a set time, shorter early in the run, or kills twice the room's roster, while the room keeps sending its waves; when it is met, whatever still stands falls. In a destroy room three to five marked emplacements of every kind, by depth, firing across the whole room, stand far from the door and from each other on the bare arena, and the room sends its waves again, a set number of times, until all are down. Code draws the objective from the run's seed, never two rooms running and never in a fixed fight. A door never promises one; the room says it on entry.
 depends_on: [002, 003, 014, 022]
 ---
 
@@ -19,13 +19,20 @@ the room rather than what the room looks like.
 
 | | Hold | Destroy |
 |---|---|---|
-| What ends it | `HOLD_MS` survived | the `DESTROY_TARGETS` (5) marked emplacements down |
+| What ends it | its clock survived (`holdMsFor`: 24 s at room 3, rising to 42 s by room 12), or twice the room's roster killed once half the clock has run | its marked emplacements down (`destroyTargetsFor`: three early, four in the middle, five deep) |
 | While it runs | the room's waves come again, `REFILL_GAP_MS` apart, without end | the same, at most `DESTROY_REFILLS` times, so the room can't be farmed |
 | When it's met | whatever still stands falls, paying nothing | the same |
 | On screen | a banner on entry, and the seconds left | a banner on entry, the turrets left, and a gold mark over each |
 
 A room with an objective is never clear before the objective is met, however
 empty it stands (`worldCleared`).
+
+**Both follow the run.** A fixed 42 s hold and five double-health emplacements
+were the longest rooms of the run against a starter build — a played log had
+the room-3 hold at 52 s — and the same deep in it, so each is drawn between an
+early and a full size by the room's depth. A hold also ends early for a build
+that clears the refills as they come: twice the room's own roster killed,
+once half the clock has run.
 
 **Destroy rooms are open.** They are built on the first audience's bare arena
 (`audience_arena`), so no wall hides the player from the turrets and no wall
@@ -37,8 +44,8 @@ allows from the door and from the others, with open floor round each.
 
 **They are every emplacement the roster has** (`DESTROY_KINDS`): the turret's
 lightning, the beacon's burning ground, the sentinel's lane and the watcher's
-line, each kind once before any twice, at `DESTROY_TARGET_HP` (2) times their
-ordinary health. **They fire across the whole room**, off the screen as well
+line, each kind once before any twice, at `destroyHpFor` times their ordinary
+health: 1.4 at room 3, rising to 2 by room 12. **They fire across the whole room**, off the screen as well
 as on it, and outside the room's fire budget: what they throw is read where it
 lands, so none of it comes from the dark, and there is nowhere to wait them
 out.

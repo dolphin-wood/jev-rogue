@@ -11,12 +11,37 @@ import type { EnemyId } from "../types.ts";
 import { rampFor } from "../encounters/ramp.ts";
 import type { RoomObjective } from "../run/objectives.ts";
 
-/** How long a hold lasts: long enough to make surviving, rather than clearing, the room's focus. */
+/**
+ * **How long a hold lasts**, by how deep the room is: long enough to make
+ * surviving, rather than clearing, the room's focus — 42 s once the run is
+ * deep, and less early on, where 42 s against a starter build was the
+ * longest room of the run by far. It also ends early for a player killing
+ * fast (`HOLD_QUOTA`), so the length follows the build as well as the floor.
+ */
 export const HOLD_MS = 42_000;
+export const HOLD_MS_EARLY = 24_000;
+/** The rooms the hold's length is drawn between: the first a hold can be, and where it reaches its full length. */
+const OBJECTIVE_EARLY_ROOM = 3;
+const OBJECTIVE_FULL_ROOM = 12;
+/**
+ * A hold is also met by killing this many times the room's own roster, once
+ * half its clock has run: a build that clears the refills as they come is
+ * not kept waiting on the timer.
+ */
+export const HOLD_QUOTA = 2;
+const depth = (roomIndex: number) =>
+  Math.max(0, Math.min(1, (roomIndex - OBJECTIVE_EARLY_ROOM) / (OBJECTIVE_FULL_ROOM - OBJECTIVE_EARLY_ROOM)));
+/** A hold's clock in room `roomIndex`, ms. */
+export function holdMsFor(roomIndex: number): number {
+  return Math.round(HOLD_MS_EARLY + (HOLD_MS - HOLD_MS_EARLY) * depth(roomIndex));
+}
 /** Time to read the objective, targets and arena before anything may attack. */
 export const OBJECTIVE_ENTRY_GRACE_MS = 3000;
-/** How many emplacements a destroy room stands. */
+/** How many emplacements a destroy room stands, at its deepest; three early, four in the middle (`destroyTargetsFor`). */
 export const DESTROY_TARGETS = 5;
+export function destroyTargetsFor(roomIndex: number): number {
+  return depth(roomIndex) < 0.34 ? 3 : depth(roomIndex) < 0.67 ? 4 : DESTROY_TARGETS;
+}
 /**
  * **What they are**: every kind of emplacement the roster has, so the room
  * asks four answers at once — step off the lightning's mark, stay off the
@@ -25,8 +50,12 @@ export const DESTROY_TARGETS = 5;
  * twice.
  */
 export const DESTROY_KINDS: readonly EnemyId[] = ["turret", "beacon", "sentinel", "watcher"];
-/** How much sturdier a target is than the same body in an ordinary room: each one is a thing to break, not a swing. */
+/** How much sturdier a target is than the same body in an ordinary room: each one is a thing to break, not a swing. Less early. */
 export const DESTROY_TARGET_HP = 2;
+const DESTROY_TARGET_HP_EARLY = 1.4;
+export function destroyHpFor(roomIndex: number): number {
+  return DESTROY_TARGET_HP_EARLY + (DESTROY_TARGET_HP - DESTROY_TARGET_HP_EARLY) * depth(roomIndex);
+}
 /** How soon after the room's waves are spent it sends them again. */
 const REFILL_GAP_MS = 4000;
 /**
@@ -45,10 +74,19 @@ export interface ObjectiveState {
   readonly waves: readonly PendingWave[];
   refills: number;
   done: boolean;
+  /** A hold's clock (`holdMsFor`), and the kills that meet it early (`HOLD_QUOTA`); a destroy room's emplacements. */
+  readonly holdMs: number;
+  readonly quota: number;
+  kills: number;
+  readonly targets: number;
 }
 
-export function makeObjective(kind: RoomObjective, waves: readonly PendingWave[]): ObjectiveState {
-  return { kind, ms: 0, waves: waves.map((wv) => ({ ...wv, spawns: wv.spawns.map((sp) => ({ ...sp })) })), refills: 0, done: false };
+export function makeObjective(kind: RoomObjective, waves: readonly PendingWave[], roomIndex: number): ObjectiveState {
+  const roster = waves.reduce((t, wv) => t + wv.spawns.length, 0);
+  return {
+    kind, ms: 0, waves: waves.map((wv) => ({ ...wv, spawns: wv.spawns.map((sp) => ({ ...sp })) })), refills: 0, done: false,
+    holdMs: holdMsFor(roomIndex), quota: Math.max(1, roster * HOLD_QUOTA), kills: 0, targets: destroyTargetsFor(roomIndex),
+  };
 }
 
 /** The turrets still standing in a destroy room. */
@@ -59,7 +97,7 @@ export function targetsLeft(w: World): number {
 /** Seconds a hold has left, rounded up; 0 once met. */
 export function holdLeftS(w: World): number {
   const o = w.objective;
-  return o && o.kind === "hold" && !o.done ? Math.ceil(Math.max(0, HOLD_MS - o.ms) / 1000) : 0;
+  return o && o.kind === "hold" && !o.done ? Math.ceil(Math.max(0, o.holdMs - o.ms) / 1000) : 0;
 }
 
 /**
@@ -78,7 +116,8 @@ export function placeTargets(w: World): void {
     .map(([x, y]) => ({ x: (x + 0.5) * TILE_PX, y: (y + 0.5) * TILE_PX }))
     .filter((c) => !w.props.some((q) => q.hp > 0 && Math.hypot(q.x - c.x, q.y - c.y) < TILE_PX * 1.2));
   const chosen: { x: number; y: number }[] = [];
-  for (let n = 0; n < DESTROY_TARGETS && cells.length > 0; n++) {
+  const count = w.objective?.targets ?? DESTROY_TARGETS;
+  for (let n = 0; n < count && cells.length > 0; n++) {
     let best = cells[0]!, bestD = -1;
     for (const c of cells) {
       const d = Math.min(Math.hypot(c.x - p.x, c.y - p.y), ...chosen.map((o) => Math.hypot(c.x - o.x, c.y - o.y) * 1.5));
@@ -95,7 +134,7 @@ export function placeTargets(w: World): void {
   chosen.forEach((at, i) => {
     const kind = kinds[i % kinds.length]!;
     const t = makeEnemy(w.nextEnemyId++, kind, at.x, at.y, [], rampFor(w.roomIndex));
-    t.hp = t.maxHp = Math.round(t.maxHp * DESTROY_TARGET_HP);
+    t.hp = t.maxHp = Math.round(t.maxHp * destroyHpFor(w.roomIndex));
     t.objectiveTarget = true;
     t.awake = true;
     t.attackLockMs = OBJECTIVE_ENTRY_GRACE_MS;
@@ -109,7 +148,9 @@ export function stepObjective(w: World, dtMs: number): void {
   const o = w.objective;
   if (!o || o.done) return;
   o.ms += dtMs;
-  const met = o.kind === "hold" ? o.ms >= HOLD_MS : targetsLeft(w) === 0;
+  const met = o.kind === "hold"
+    ? o.ms >= o.holdMs || (o.kills >= o.quota && o.ms >= o.holdMs / 2)
+    : targetsLeft(w) === 0;
   if (met) { finish(w, o); return; }
   // Spent: the room sends its waves again, a beat after the last.
   const mayRefill = o.kind === "hold" || o.refills < DESTROY_REFILLS;
