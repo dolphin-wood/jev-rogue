@@ -905,24 +905,6 @@ const ATTACKS: readonly BaseItem[] = [
     description:
       "Blizzard lays frost on the floor under the nearest body that slows everything standing in it and chills it toward a freeze until it melts.",
   },
-  {
-    id: "serpent_fang",
-    rarity: "uncommon",
-    tags: ["attack", "short", "poison", "melee"],
-    mana: 3,
-    params: {
-      /*
-       * Returning Edge's throw with a venom on it: out and back through the
-       * pack, poisoning each body once each way, a little lighter so the
-       * poison can be part of what it is worth.
-       */
-      shape: "boomerang", damage: 3.0, speed: 340, return_speed: 380, reach: 100, radius: 8, count: 1, spread: 0,
-      lifetime: 2.5, pierce: 0, element: "poison", element_power: 1.0, seek: 0, curve: 0, weight: 0.9,
-      windup_ms: 60, recover_ms: 140, move_scale: 0.7, cooldown_scale: 2,
-    },
-    description:
-      "Serpent Fang throws a curved fang ahead that turns and comes back to the caster, cutting and poisoning each body once on the way out and once on the way back.",
-  },
 
   {
     id: "storm_totem",

@@ -75,7 +75,6 @@ export const SPELL_LOOK: Readonly<Record<string, SpellLook>> = {
   contagion: { core: 0xe8ffd4, glow: 0x4fbf3a, shape: "glob" },
   ball_lightning: { core: 0xffffff, glow: 0x9ad2ff, shape: "ball" },
   returning_edge: { core: 0xe6fff4, glow: 0x7fe8c0, shape: "edge" },
-  serpent_fang: { core: 0xecffd8, glow: 0x5fd64a, shape: "edge" },
   storm_totem: { core: 0xfffbe0, glow: 0xffe066, shape: "ball" },
   blade_storm: { core: 0xf4f0ff, glow: 0xb9a7ff, shape: "blade" },
   blade_recall: { core: 0xf4f0ff, glow: 0xb9a7ff, shape: "blade" },

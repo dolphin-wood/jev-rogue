@@ -10,13 +10,12 @@ import { BASE_ITEMS, ITEMS, STYLE_START, plainInstance } from "./items.ts";
  * eight spells on doc 006's newer options (mana darts, arcane cannon, doom
  * sigil, frozen orb, contagion, meteor, quake ring, leap slam) and the six
  * on its newer shapes (ball lightning, returning edge, crescent edge, counter
- * stance, cinder stride, toxic cloud), Dash Slash, and a second spell on four
- * shapes that had one (blizzard, serpent fang, storm totem),
- * and four on machinery of their own (blade storm, blade rift, mortar, void
- * ray). Every item is a self-contained spell: nothing in the pool modifies
+ * stance, cinder stride, toxic cloud), Dash Slash, a second spell on two
+ * shapes that had one (blizzard, storm totem), and five on machinery of their
+ * own (blade storm, blade recall, blade rift, mortar, void ray). Every item is a self-contained spell: nothing in the pool modifies
  * another.
  */
-const ATTACKS = 48;
+const ATTACKS = 47;
 
 describe("base items (doc 013 and doc 010)", () => {
   it("ships exactly the forty-seven attacks", () => {

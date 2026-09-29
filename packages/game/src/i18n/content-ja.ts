@@ -54,7 +54,6 @@ export const JA_CONTENT: ContentTable = {
   cinder_stride: { name: "シンダーストライド", description: "数秒間、歩いた跡に火が残る。自分は燃えない。" },
   toxic_cloud: { name: "トキシッククラウド", description: "いちばん近い敵の足元に毒の霧を広げ、中にいる敵を毒で侵して足を遅くする。" },
   blizzard: { name: "ブリザード", description: "一番近い敵の足元に霜を広げ、中にいる敵を鈍らせながら凍結へと冷やしていく。" },
-  serpent_fang: { name: "サーペントファング", description: "曲がった牙を投げ、飛んだ先で折り返して手元に戻る。行きと帰りで一度ずつ敵を切って毒を与える。" },
   storm_totem: { name: "ストームトーテム", description: "そばに雷のトーテムを立て、届く範囲で一番近い敵を毎秒数回打つ。同時に二本まで。" },
   blade_recall: { name: "呼び戻しの刃", description: "剣が当たるたびに敵に霊刃を一本残す。最大六本。押すと全ての刃が抜けて手元へ飛び戻り、刺さっていた敵と途中の全てを斬る。" },
   blade_storm: { name: "ブレードストーム", description: "周りを回る刃の輪に霊刃を一本足す。刃が増えるほど輪は広く速くなり、六本目で全ての刃が外へ飛び、近くの敵を貫く。" },

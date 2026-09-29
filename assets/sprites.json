@@ -11964,560 +11964,554 @@
       "w": 16,
       "h": 16
     },
-    "icon_serpent_fang": {
+    "icon_storm_totem": {
       "x": 400,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_storm_totem": {
+    "icon_blade_storm": {
       "x": 416,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_blade_storm": {
+    "icon_blade_recall": {
       "x": 432,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_blade_recall": {
+    "icon_blade_rift": {
       "x": 448,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_blade_rift": {
+    "icon_mortar": {
       "x": 464,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_mortar": {
+    "icon_void_ray": {
       "x": 480,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_void_ray": {
+    "icon_affix_fork": {
       "x": 496,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_fork": {
+    "icon_affix_chain": {
       "x": 512,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_chain": {
+    "icon_affix_brand": {
       "x": 528,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_brand": {
+    "icon_affix_harvest": {
       "x": 544,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_harvest": {
+    "icon_affix_echo": {
       "x": 560,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_echo": {
+    "icon_affix_bloom": {
       "x": 576,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_bloom": {
+    "icon_affix_shatter": {
       "x": 592,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_shatter": {
+    "icon_affix_repeat": {
       "x": 608,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_repeat": {
+    "icon_affix_scatter": {
       "x": 624,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_scatter": {
+    "icon_affix_ward": {
       "x": 640,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_ward": {
+    "icon_affix_retort": {
       "x": 656,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_retort": {
+    "icon_affix_slipstream": {
       "x": 672,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_slipstream": {
+    "icon_affix_resonance": {
       "x": 688,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_resonance": {
+    "icon_affix_momentum": {
       "x": 704,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_momentum": {
+    "icon_affix_undertow": {
       "x": 720,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_undertow": {
+    "icon_affix_finale": {
       "x": 736,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_finale": {
+    "icon_affix_repulse": {
       "x": 752,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_repulse": {
+    "icon_affix_parting": {
       "x": 768,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_parting": {
+    "icon_affix_aftershock": {
       "x": 784,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_aftershock": {
+    "icon_affix_whirl": {
       "x": 800,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_whirl": {
+    "icon_affix_spillover": {
       "x": 816,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_spillover": {
+    "icon_affix_drag": {
       "x": 832,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_drag": {
+    "icon_affix_lodestar": {
       "x": 848,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_lodestar": {
+    "icon_affix_intercept": {
       "x": 864,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_intercept": {
+    "icon_affix_cull": {
       "x": 880,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_cull": {
+    "icon_affix_overload": {
       "x": 896,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_overload": {
+    "icon_affix_slam": {
       "x": 912,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_slam": {
+    "icon_affix_afterimage": {
       "x": 928,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_afterimage": {
+    "icon_affix_kindle": {
       "x": 944,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_kindle": {
+    "icon_affix_rime": {
       "x": 960,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_rime": {
+    "icon_affix_blight": {
       "x": 976,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_blight": {
+    "icon_affix_pierce": {
       "x": 992,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_pierce": {
+    "icon_affix_seek": {
       "x": 1008,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_seek": {
+    "icon_affix_ricochet": {
       "x": 1024,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_ricochet": {
+    "icon_affix_haste": {
       "x": 1040,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_affix_haste": {
+    "icon_stat_fleet": {
       "x": 1056,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_stat_fleet": {
+    "icon_stat_second_wind": {
       "x": 1072,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_stat_second_wind": {
+    "icon_stat_long_stride": {
       "x": 1088,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_stat_long_stride": {
+    "icon_stat_vigour": {
       "x": 1104,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_stat_vigour": {
+    "icon_stat_steady_nerve": {
       "x": 1120,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_stat_steady_nerve": {
+    "icon_stat_deep_well": {
       "x": 1136,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_stat_deep_well": {
+    "icon_stat_quickening": {
       "x": 1152,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_stat_quickening": {
+    "icon_stat_leeching_edge": {
       "x": 1168,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_stat_leeching_edge": {
+    "icon_stat_keen_edge": {
       "x": 1184,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_stat_keen_edge": {
+    "icon_stat_long_reach": {
       "x": 1200,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_stat_long_reach": {
+    "icon_stat_swift_hand": {
       "x": 1216,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_stat_swift_hand": {
+    "icon_stat_wrath": {
       "x": 1232,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_stat_wrath": {
+    "icon_school_flame": {
       "x": 1248,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_school_flame": {
+    "icon_school_frost": {
       "x": 1264,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_school_frost": {
+    "icon_school_venom": {
       "x": 1280,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_school_venom": {
+    "icon_school_storm": {
       "x": 1296,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_school_storm": {
+    "icon_school_void": {
       "x": 1312,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_school_void": {
+    "icon_school_spirit": {
       "x": 1328,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_school_spirit": {
+    "icon_school_stone": {
       "x": 1344,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_school_stone": {
+    "icon_reward_stat": {
       "x": 1360,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_reward_stat": {
+    "icon_reward_spell": {
       "x": 1376,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_reward_spell": {
+    "icon_reward_affix": {
       "x": 1392,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_reward_affix": {
+    "icon_reward_gold": {
       "x": 1408,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "icon_reward_gold": {
+    "ui_elite_badge": {
       "x": 1424,
       "y": 5696,
       "w": 16,
       "h": 16
     },
-    "ui_elite_badge": {
-      "x": 1440,
-      "y": 5696,
-      "w": 16,
-      "h": 16
-    },
     "vfx_earth_crack_0": {
-      "x": 1456,
+      "x": 1440,
       "y": 5696,
       "w": 32,
       "h": 16
     },
     "vfx_earth_crack_1": {
-      "x": 1488,
+      "x": 1472,
       "y": 5696,
       "w": 32,
       "h": 16
     },
     "vfx_arc_seg_0": {
-      "x": 1520,
+      "x": 1504,
       "y": 5696,
       "w": 32,
       "h": 16
     },
     "vfx_arc_seg_1": {
-      "x": 1552,
+      "x": 1536,
       "y": 5696,
       "w": 32,
       "h": 16
     },
     "vfx_arc_seg_2": {
-      "x": 1584,
+      "x": 1568,
       "y": 5696,
       "w": 32,
       "h": 16
     },
     "vfx_arc_seg_3": {
-      "x": 1616,
+      "x": 1600,
       "y": 5696,
       "w": 32,
       "h": 16
     },
     "vfx_arc_cap_0": {
-      "x": 1648,
+      "x": 1632,
       "y": 5696,
       "w": 16,
       "h": 16
     },
     "vfx_contagion_glob_0": {
-      "x": 1664,
+      "x": 1648,
       "y": 5696,
       "w": 16,
       "h": 16
     },
     "vfx_arc_cap_1": {
-      "x": 1680,
+      "x": 1664,
       "y": 5696,
       "w": 16,
       "h": 16
     },
     "vfx_contagion_glob_1": {
-      "x": 1696,
+      "x": 1680,
       "y": 5696,
       "w": 16,
       "h": 16
     },
     "vfx_brand_mark": {
-      "x": 1712,
+      "x": 1696,
       "y": 5696,
       "w": 16,
       "h": 16
     },
     "icon_npc_merchant": {
-      "x": 1728,
+      "x": 1712,
       "y": 5696,
       "w": 16,
       "h": 16
     },
     "icon_npc_smith": {
-      "x": 1744,
+      "x": 1728,
       "y": 5696,
       "w": 16,
       "h": 16
     },
     "icon_action_attack": {
-      "x": 1760,
+      "x": 1744,
       "y": 5696,
       "w": 16,
       "h": 16
     },
     "icon_action_spin": {
-      "x": 1776,
+      "x": 1760,
       "y": 5696,
       "w": 16,
       "h": 16
     },
     "icon_action_dodge": {
-      "x": 1792,
+      "x": 1776,
       "y": 5696,
       "w": 16,
       "h": 16
     },
     "icon_npc_fountain": {
-      "x": 1808,
+      "x": 1792,
       "y": 5696,
       "w": 16,
       "h": 16
     },
     "icon_status_burn": {
-      "x": 1824,
+      "x": 1808,
       "y": 5696,
       "w": 16,
       "h": 16
     },
     "icon_status_poison": {
-      "x": 1840,
+      "x": 1824,
       "y": 5696,
       "w": 16,
       "h": 16
     },
     "icon_status_chill": {
-      "x": 1856,
+      "x": 1840,
       "y": 5696,
       "w": 16,
       "h": 16
     },
     "icon_status_freeze": {
-      "x": 1872,
+      "x": 1856,
       "y": 5696,
       "w": 16,
       "h": 16
     },
     "icon_status_stun": {
-      "x": 1888,
+      "x": 1872,
       "y": 5696,
       "w": 16,
       "h": 16
     },
     "icon_status_stagger": {
-      "x": 1904,
+      "x": 1888,
       "y": 5696,
       "w": 16,
       "h": 16
     },
     "icon_status_alert": {
-      "x": 1920,
+      "x": 1904,
       "y": 5696,
       "w": 16,
       "h": 16
     },
     "ui_shield": {
-      "x": 1936,
+      "x": 1920,
       "y": 5696,
       "w": 16,
       "h": 16
     },
     "vfx_spike_bone": {
-      "x": 1952,
+      "x": 1936,
       "y": 5696,
       "w": 16,
       "h": 6
     },
     "vfx_spike_gold": {
-      "x": 1968,
+      "x": 1952,
       "y": 5696,
       "w": 16,
       "h": 6

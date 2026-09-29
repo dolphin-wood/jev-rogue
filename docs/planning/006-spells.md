@@ -178,7 +178,7 @@ roster's standard status), `speed`, `windup_ms`, `recover_ms`, `move_scale`,
 
 ## The roster
 
-Forty-eight spells. ★ marks each style's starter. A spell appears under every
+Forty-seven spells. ★ marks each style's starter. A spell appears under every
 style it is tagged with; its first row is its primary style.
 
 ### Barrage (`spam`)
@@ -255,7 +255,6 @@ style it is tagged with; its first row is its primary style.
 | Spirit Blades `spirit_blades` | spirit | common | orbit | three blades circling the caster for a while |
 | Returning Edge `returning_edge` | spirit | common | boomerang | a spectral sword thrown ahead that comes back, cutting on both passes |
 | Counter Stance `counter_stance` | spirit | uncommon | stance | a short guard that cancels the next hit and answers with a spin slash |
-| Serpent Fang `serpent_fang` | venom | uncommon | boomerang | a fang thrown out and back that poisons each body it cuts on both passes |
 | Dash Slash `dash_slash` | spirit | uncommon | dash + wake | a run through the bodies ahead whose wake cuts those to either side |
 | Blade Storm `blade_storm` | spirit | rare | orbit + `stack_max` | each cast adds a blade to a ring round the caster that widens and quickens; the sixth flings them all out at nearby bodies (also Barrage) |
 | Blade Recall `blade_recall` | spirit | uncommon | boomerang + `lodge_max` | each sword blow leaves a blade in the body struck, up to six; the press calls them all home through everything between |
@@ -295,7 +294,7 @@ card.
 |---|---|
 | flame | ember_dart, cinder_burst, wildfire_field, flame_pillars, cinder_geysers, meteor, cinder_stride |
 | frost | frost_needle, glacier_spike, frost_nova, frozen_orb, blizzard |
-| venom | venom_spit, plague_bloom, toxic_cloud, contagion, serpent_fang |
+| venom | venom_spit, plague_bloom, toxic_cloud, contagion |
 | storm | shock_arc, spark_spray, arc_lance, seeker_swarm, ball_lightning, storm_totem |
 | void | magic_bolt, void_orb, void_maw, mana_darts, arcane_cannon, doom_sigil, void_ray |
 | spirit | spirit_blades, spirit_ally, blink_strike, returning_edge, crescent_edge, counter_stance, dash_slash, blade_storm, blade_recall, blade_rift |
