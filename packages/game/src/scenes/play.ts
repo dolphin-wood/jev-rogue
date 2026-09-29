@@ -11270,7 +11270,8 @@ export class PlayScene extends Phaser.Scene {
      * font down, and stop as soon as it fits.
      */
     const wrap = (CARD_W - PAD * 2) * ZOOM;
-    const build = (cardH: number) => cards.map((card) => {
+    // `fitFrom`: the first of `BODY_FITS` a card may try, so a row can be set in one size (below).
+    const build = (cardH: number, fitFrom = 0) => cards.map((card) => {
       /*
        * **Left-aligned**, all three blocks. Centred, a wrapped line started
        * somewhere different every row and the eye had to hunt for each one;
@@ -11310,14 +11311,16 @@ export class PlayScene extends Phaser.Scene {
       // the stat line was drawn over its second one.
       const nameH = Math.max(NAME_H, Math.ceil(name.height / ZOOM));
       const slotted = this.cardSlotAffixes(card);
-      const bodyTop = PAD + ICON_PX + 6 + nameH + 2 + statH + 6 + (slotted ? SLOT_ROW : 0);
+      const bodyTop = PAD + ICON_PX + 6 + nameH + 2 + statH + 6;
+      // The slots stand at the card's foot (below), so the row of cards lines them up whatever each one's numbers take.
+      const slotRoom = slotted ? SLOT_ROW : 0;
       /*
        * The room the rules text has: from under the stat line to above the
        * lower corner brackets. It was measured to the padding, and the
        * brackets are taller than the padding, so a long description fitted
        * the card by this arithmetic and still ran through the bracket art.
        */
-      const bodyRoom = cardH - bodyTop - CARD_FOOT;
+      const bodyRoom = cardH - bodyTop - CARD_FOOT - slotRoom;
 
       let body!: Phaser.GameObjects.Text;
       /*
@@ -11330,7 +11333,9 @@ export class PlayScene extends Phaser.Scene {
        * still missing.
        */
       const prose = contentDescription(card.itemId ?? "", card.description);
-      for (const [mult, lead] of BODY_FITS) {
+      let fit = fitFrom;
+      for (; fit < BODY_FITS.length; fit++) {
+        const [mult, lead] = BODY_FITS[fit]!;
         body?.destroy();
         const px = nativePx(mult);
         // `lead` is a fraction of the glyph height, not a fixed gap: the
@@ -11342,6 +11347,7 @@ export class PlayScene extends Phaser.Scene {
         }).setOrigin(0, 0).setScale(1 / ZOOM).setDepth(202);
         if (body.height / ZOOM <= bodyRoom) break;
       }
+      fit = Math.min(fit, BODY_FITS.length - 1);
       /*
        * Still too long at the font's own size: **cut the copy, never the
        * type**. Below 12 px the face resamples and the card becomes the one
@@ -11349,7 +11355,7 @@ export class PlayScene extends Phaser.Scene {
        * to cut at, so the trim is per character there.
        */
       // The card height this text needs at the smallest fit, uncut (see `CARD_H_MAX`).
-      const needed = Math.ceil(bodyTop + body.height / ZOOM + CARD_FOOT);
+      const needed = Math.ceil(bodyTop + body.height / ZOOM + CARD_FOOT + slotRoom);
       const cut = body.height / ZOOM > bodyRoom;
       if (cut) {
         const spaced = prose.includes(" ");
@@ -11357,10 +11363,11 @@ export class PlayScene extends Phaser.Scene {
         const join = spaced ? " " : "";
         while (parts.length > 4 && body.height / ZOOM > bodyRoom) {
           parts.pop();
-          body.setText(wrapText(`${parts.join(join)}…`, wrap / ZOOM, nativePx(1), letterSpacing()));
+          // Wrapped at the size it is set in: wrapped at another, the lines ran out of the card.
+          body.setText(wrapText(`${parts.join(join)}…`, wrap / ZOOM, nativePx(BODY_FITS[fit]![0]), letterSpacing()));
         }
       }
-      return { name, stats, body, bodyTop, nameH, statH, slotted, needed, cut };
+      return { name, stats, body, bodyTop, nameH, slotted, needed, cut, fit };
     });
     /*
      * **The row grows before the copy is cut.** At the fixed height eight
@@ -11379,11 +11386,22 @@ export class PlayScene extends Phaser.Scene {
       cardH = Math.min(CARD_H_MAX, Math.max(...texts.map((x) => x.needed)));
       texts = build(cardH);
     }
+    /*
+     * **One size for the row.** Each card took the largest size its own text
+     * fitted, so a short description stood a size above its neighbours and
+     * the three read as three different kinds of card. The row is set again
+     * in the smallest any of them needed.
+     */
+    const rowFit = Math.max(...texts.map((x) => x.fit));
+    if (texts.some((x) => x.fit !== rowFit)) {
+      for (const x of texts) { x.name.destroy(); x.stats.destroy(); x.body.destroy(); }
+      texts = build(cardH, rowFit);
+    }
     const top = cy - cardH / 2;
 
     const built = cards.map((card, i) => {
       const x = cx + (i - (cards.length - 1) / 2) * SPREAD;
-      const { name, stats, body, bodyTop, nameH, statH, slotted } = texts[i]!;
+      const { name, stats, body, bodyTop, nameH, slotted } = texts[i]!;
 
       /*
        * A spell card shows **its own icon**, not the generic kind.
@@ -11465,10 +11483,12 @@ export class PlayScene extends Phaser.Scene {
        * **The affix slots**, on a spell card: one square a slot, holding the
        * icon of what the spell will carry once taken — the affix a strong
        * door's spell comes with, or on an upgrade the held key's own, which
-       * stay — and empty squares for the room it has left.
+       * stay — and empty squares for the room it has left. At the card's
+       * foot, just above the corner brackets: under the numbers they sat as
+       * low as each card's numbers ran, and a row of three stepped.
        */
       if (slotted) {
-        const sy = top + PAD + ICON_PX + 6 + nameH + 2 + statH + 4 + SLOT_PX / 2;
+        const sy = top + cardH - CARD_FOOT - SLOT_PX / 2 - 2;
         for (let k = 0; k < AFFIX_SLOTS; k++) {
           const sx = left + SLOT_PX / 2 + k * (SLOT_PX + 3);
           const id = slotted[k];
