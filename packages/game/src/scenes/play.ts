@@ -26,7 +26,7 @@ import { HOLD_MS, SPELL_BUFFER_MS } from "@jr/core";
 import type {
   Bullet, Enemy, EnemyId, Input, ItemInstance, Mood, Offer, OfferCard, Portal,
   PlayerMods, RewardCardKind, RoomPlan, RoomType, RunHistory, World, AttachedAffix,
-  Element, Tension, RunContext, RunJournalEntry, Staff, SpellSlot, MeleeKind, MusicState,
+  Element, Tension, RunContext, RunJournalEntry, Staff, SpellSlot, MeleeKind, MusicState, EliteAffix,
 } from "@jr/core";
 import { createDirector, createEvaluator, EvaluatorError } from "@jr/director";
 import type {
@@ -45,6 +45,7 @@ import {
   measureOf, observedLabels, UNMEASURED, type HeldSpell, type RoomMeasure,
   SMITH_PRICE, MERCHANT_PRICE, FOUNTAIN_HEAL_FRACTION, fountainDrink, fountainWouldHeal, fountainWanted,
   ARCHETYPES, STYLE_CARDS, observedFigures, journalDoor,
+  ELITE_AFFIX_IDS, wake, rampFor, circleHitsWall,
 } from "@jr/core";
 import type { BaseItem, CardNeeds, DoorOffer, NpcKind, OfferPromise, RoomStage, RunShape, WorldEvent } from "@jr/core";
 import {
@@ -2212,12 +2213,16 @@ export class PlayScene extends Phaser.Scene {
      */
     this.sfx.setStyle(soundStyle());
     (window as unknown as { __scene?: PlayScene }).__scene = this;
+    (window as unknown as { __lab?: LabApi }).__lab = this.labApi();
     // `?lab=boss`: straight into the boss lab, with no title and no invite.
     if (new URLSearchParams(location.search).get("lab") === "boss")
       void this.enterRoom(1).then(() => { this.debug.showBossLab(); this.enterBossLab(); });
     // `?lab=audience`: straight into room 5, the king's first audience (doc 022), to watch the roof give.
     else if (new URLSearchParams(location.search).get("lab") === "audience")
       void this.enterRoom(1).then(() => { this.hideTitle(); void this.enterRoom(this.audienceRoom); });
+    // `?lab=fight`: straight into a fight, past the sound, the title and the style (`enterFightLab`).
+    else if (new URLSearchParams(location.search).get("lab") === "fight")
+      void this.enterRoom(1).then(() => this.enterFightLab());
     // `?lab=spells`: straight into the spell lab's arena, likewise.
     else if (this.spellLab) void this.enterRoom(1).then(() => { this.debug.showSpellLab(); this.spellLab?.start(); });
     else void this.enterRoom(1).then(() => {
@@ -2225,6 +2230,90 @@ export class PlayScene extends Phaser.Scene {
       if (soundUnchosen()) this.showSoundChoice();
       void this.settleInvite();
     });
+  }
+
+  /**
+   * **The fight lab** (`?lab=fight`): a run begun with no menus, for looking at
+   * something in a fight without clicking through to it. `style=` picks the
+   * style (the first one otherwise) and `room=` the room it opens in (1).
+   * `foes=` replaces the room's bodies and waves with a comma list of its own,
+   * each with its elite affixes after colons, standing awake around the
+   * player: `?lab=fight&foes=tank,tank:armored`. Nothing is remembered, so
+   * a normal visit still asks for the sound and shows the key guide.
+   */
+  private async enterFightLab(): Promise<void> {
+    const q = new URLSearchParams(location.search);
+    this.hideTitle();
+    const style = STYLES.find((s) => s.id === q.get("style")) ?? STYLES[0]!;
+    this.intent = { preset: style.id };
+    this.rerollsThisRun = 0;
+    this.director = this.buildDirector();
+    playtestLog.startRun({ director: directorArm(), style: style.id });
+    this.slots = [];
+    this.owned = [];
+    const room = Math.max(1, Math.floor(Number(q.get("room"))) || 1);
+    await this.enterRoom(room, MAX_HEARTS + this.liveMods().maxHearts);
+    const foes = (q.get("foes") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    if (foes.length === 0) return;
+    const w = this.world;
+    w.enemies.length = 0;
+    w.pendingWaves = [];
+    let placed = 0;
+    for (const spec of foes) {
+      const [id = "", ...tags] = spec.split(":");
+      if (!(ENEMY_IDS as readonly string[]).includes(id)) { console.warn(`?foes: no body "${id}"`); continue; }
+      const affixes = tags.filter((a): a is EliteAffix => (ELITE_AFFIX_IDS as readonly string[]).includes(a));
+      const e = makeEnemy(w.nextEnemyId++, id as EnemyId, w.player.x, w.player.y, affixes, rampFor(room));
+      const at = fightLabSpot(w, e.radius, placed++);
+      e.x = at.x;
+      e.y = at.y;
+      e.spawnFadeMs = 0;
+      wake(w, e);
+      w.enemies.push(e);
+    }
+  }
+
+  /**
+   * **`window.__lab`**: the handles the debug harness (`pnpm dbg`,
+   * `packages/harness/src/cli/dbg.ts`) drives a scene with. Small and
+   * stable on purpose — a script says `__lab.freeze()` rather than reaching
+   * into the scene's private fields — and everything it returns is plain data.
+   */
+  private labApi(): LabApi {
+    const frames = (n: number): Promise<void> => new Promise((done) => {
+      let left = Math.max(1, n);
+      const tick = (): void => { if (--left <= 0) done(); else requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
+    });
+    const body = (i: number): Enemy => {
+      const e = this.world?.enemies[i];
+      if (!e) throw new Error(`__lab: no body ${i} (the room has ${this.world?.enemies.length ?? 0})`);
+      return e;
+    };
+    return {
+      ready: () => !!this.world && !this.entering && !this.modalOpen,
+      freeze: (on = true) => this.setLabSpeed(on ? 0 : 1),
+      advance: async (steps = 1) => { this.labSteps += Math.max(0, Math.floor(steps)); await frames(2); },
+      frames,
+      invincible: (on = true) => { this.invincible = on; this.world.invincible = on; },
+      world: () => this.world,
+      bodies: () => this.world.enemies.map((e, i) => ({
+        i, id: e.id, archetype: e.archetype, x: Math.round(e.x), y: Math.round(e.y), radius: e.radius,
+        hp: e.hp, maxHp: e.maxHp, poise: e.poise, maxPoise: e.maxPoise, affixes: [...e.affixes], awake: e.awake,
+      })),
+      player: () => ({ x: Math.round(this.world.player.x), y: Math.round(this.world.player.y), hearts: this.world.player.hearts }),
+      place: (i, x, y) => { const e = body(i); e.x = x; e.y = y; e.vx = 0; e.vy = 0; },
+      set: (i, patch) => { Object.assign(body(i), patch); },
+      movePlayer: (x, y) => { this.world.player.x = x; this.world.player.y = y; },
+      toScreen: (x, y, w, h) => {
+        const cam = this.cameras.main;
+        const rect = this.game.canvas.getBoundingClientRect();
+        const k = rect.width / this.game.scale.width;
+        const sx = (px: number): number => rect.left + (cam.x + (px - cam.worldView.x) * cam.zoom) * k;
+        const sy = (py: number): number => rect.top + (cam.y + (py - cam.worldView.y) * cam.zoom) * k;
+        return { x: sx(x), y: sy(y), w: w * cam.zoom * k, h: h * cam.zoom * k };
+      },
+    };
   }
 
   /** The boss lab's start: the boss room, the boss held, the player invincible (not remembered). */
@@ -18391,7 +18480,12 @@ function drawEnemy(
     && showsPoise(e)
     && (e.poise < e.maxPoise - 0.01 || e.poiseGuardMs > 0)) {
     const W = Math.max(14, Math.round(e.radius * 1.8));
-    const y = e.y + e.radius + 4;
+    // Under the drawn feet, not the collision circle: a plated body's legs
+    // reach well below its radius, and the line was drawn across its shins.
+    // Measured on the standing frame, so a stride does not bounce the bar.
+    const stand = name.replace(/_([nsw])_.*$/, "_$1_idle0");
+    const feet = (atlas.contentBottom(atlas.has(stand) ? stand : name) - atlas.frame(name).h / 2) * base;
+    const y = e.y + Math.max(e.radius, feet) + 3;
     const guard = e.poiseGuardMs > 0;
     const k = guard
       ? Math.min(1, e.poiseGuardMs / (breakStaggerMs(e) + POISE_GUARD_MS))
@@ -18399,8 +18493,11 @@ function drawEnemy(
     const hot = !guard && k > 0.75;
     const flash = hot ? 0.65 + 0.35 * Math.sin(scene.time.now / 90) : 1;
     // No frame round it: the line alone, so a room of worn bodies is a few gold strokes, not a row of boxes.
+    // Sorted among the bodies as a foot line at its own height, not over all of
+    // them: a body standing in front of it covers it, instead of wearing it
+    // across its own chest.
     group.rectangle(e.x - W / 2, y, W * k, 1.6, guard ? 0xcfd6e8 : 0xf2b632, guard ? 0.7 : flash)
-      .setOrigin(0, 0.5).setDepth(10);
+      .setOrigin(0, 0.5).setDepth(bodyDepth(y, e.id));
   }
 
   /*
@@ -20329,6 +20426,50 @@ function floorFrame(x: number, y: number, drains: ReadonlySet<number>): string {
  * drawings are about that size; the Crypt King stands far taller than the
  * circle he fights on, so his sit over his crown rather than on his chest.
  */
+/** What `window.__lab` offers the debug harness; see `PlayScene.labApi`. */
+interface LabApi {
+  /** A room is up and nothing modal is over it. */
+  ready(): boolean;
+  /** Stops the simulation (and its tweens) where it is, or lets it run again. */
+  freeze(on?: boolean): void;
+  /** Runs this many simulation steps while frozen, and resolves once they are drawn. */
+  advance(steps?: number): Promise<void>;
+  /** Resolves after this many drawn frames. */
+  frames(n: number): Promise<void>;
+  invincible(on?: boolean): void;
+  /** The live world, for a script that needs more than the handles below. */
+  world(): World;
+  bodies(): {
+    i: number; id: number; archetype: string; x: number; y: number; radius: number;
+    hp: number; maxHp: number; poise: number; maxPoise: number; affixes: string[]; awake: boolean;
+  }[];
+  player(): { x: number; y: number; hearts: number };
+  place(i: number, x: number, y: number): void;
+  set(i: number, patch: Partial<Enemy>): void;
+  movePlayer(x: number, y: number): void;
+  /** A world rectangle in page CSS pixels, for cropping a screenshot to it. */
+  toScreen(x: number, y: number, w: number, h: number): { x: number; y: number; w: number; h: number };
+}
+
+/**
+ * Where the fight lab stands its `n`th foe: on the first open floor round the
+ * player, a ring at a time from its right, far enough off that it does not
+ * start in reach of the sword.
+ */
+function fightLabSpot(w: World, r: number, n: number): { x: number; y: number } {
+  let seen = 0;
+  for (let ring = 72; ring <= 240; ring += 28) {
+    for (let k = 0; k < 12; k++) {
+      const a = (k % 2 ? -1 : 1) * Math.ceil(k / 2) * (Math.PI / 6);
+      const x = w.player.x + Math.cos(a) * ring;
+      const y = w.player.y + Math.sin(a) * ring;
+      if (circleHitsWall(w.room.grid, x, y, r + 2)) continue;
+      if (seen++ === n) return { x, y };
+    }
+  }
+  return { x: w.player.x + 72, y: w.player.y };
+}
+
 function overheadPx(e: { archetype: string; radius: number; guardian?: unknown }): number {
   // The Frontier Veteran is drawn at `GUARDIAN_SCALE` from its feet. Leave a
   // deliberate margin above the scaled head so the bar and title never sit on
