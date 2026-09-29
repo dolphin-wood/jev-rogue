@@ -4240,7 +4240,13 @@ function applyElementsTo(e: Enemy, powers: ElementPowers, mult = 1, proc = 1, hi
  * hit fills it by its damage against a light spell's hit, never less than a
  * hit's share and at most the whole gauge in one.
  */
-const HEFT_DAMAGE = 6;
+/*
+ * A light spell's hit as it lands (Magic Bolt, Frost Needle: about 12.6,
+ * after the pool's scale). Set at 6 — the figure before the scale — it made
+ * twenty-nine spells of forty-seven heavy and froze a body in one Glacier
+ * Spike, which read in play as every body gone brittle.
+ */
+const HEFT_DAMAGE = 14;
 function heftOf(hitDamage: number): number {
   return Math.max(1, Math.min(1 / ENEMY_BUILD_PER_HIT, hitDamage / HEFT_DAMAGE));
 }

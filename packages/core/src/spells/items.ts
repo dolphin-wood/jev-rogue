@@ -652,7 +652,7 @@ const ATTACKS: readonly BaseItem[] = [
        * rock sets what it lands on burning in one blow (a heavy hit fills the
        * gauge by its weight), so the burn is a good part of the figure.
        */
-      damage: 12, speed: 0, radius: 34, count: 1, spread: 0, lifetime: 0.4, pierce: 0, element: "fire",
+      damage: 16, speed: 0, radius: 34, count: 1, spread: 0, lifetime: 0.4, pierce: 0, element: "fire",
       element_power: 0.4, seek: 0, curve: 0, weight: 2.2, shape: "eruption", eruption: "fire", pattern: "scatter",
       reach: 5, area: 0, delay_ms: 0, telegraph_ms: 700, burn_ms: 500, windup_ms: 250, recover_ms: 300,
       move_scale: 0.5, cooldown_scale: 4,
