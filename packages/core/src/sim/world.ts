@@ -4525,6 +4525,13 @@ function slipstream(w: World): void {
  */
 function lobLand(w: World, b: Bullet): void {
   const sim = hookSim(w);
+  /*
+   * Held alive while it lands. It has already run out, and a `chain` copy
+   * released off the first body it lands on took the first free slot in the
+   * pool — this shell's own — and reset it, so every body after the first
+   * was struck by a spent copy's scrap at no radius.
+   */
+  b.alive = true;
   w.events.push({ kind: "eruption", x: b.x, y: b.y, what: "mortar" });
   impact(w, HITSTOP_HIT, TRAUMA_HIT * 1.4);
   let struck = 0;
@@ -4548,6 +4555,7 @@ function lobLand(w: World, b: Bullet): void {
     struck++;
   }
   if (struck > 0) w.stats.shotHits++;
+  b.alive = false;
 }
 
 /**

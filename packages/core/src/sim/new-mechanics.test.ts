@@ -194,6 +194,15 @@ describe("Mortar", () => {
     expect(beside.hp).toBeLessThan(beside.maxHp);
   });
 
+  it("lands its whole damage on every body in reach when it chains", () => {
+    const w = world("mortar", ["chain"]);
+    const pack = [body(w, 150, 0), body(w, 150, 20), body(w, 150, -20), body(w, 165, 8)];
+    run(w, 90, (t) => (t === 0 ? { ...aimRight, spell: 0 } : aimRight));
+    const full = ITEMS.get("mortar")!.params["damage"] as number;
+    // Each body the shell came down on took the landing, not a chained copy's scrap.
+    for (const e of pack) expect(e.maxHp - e.hp).toBeGreaterThanOrEqual(full * 0.5);
+  });
+
   it("strikes nothing on the way", () => {
     const w = world("mortar");
     // Under the flight, a little off the aim: the shell seeks the body on it.
