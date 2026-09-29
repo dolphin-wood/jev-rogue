@@ -13,7 +13,7 @@ import { attachAffix } from "./spells.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
 import { plainInstance } from "../spells/index.ts";
 import { ITEMS } from "../spells/items.ts";
-import { SPELL_AFFIXES, affixFitsSpell } from "../spells/affixes.ts";
+import { EXPANSE_RADIUS, SPELL_AFFIXES, affixFitsSpell } from "../spells/affixes.ts";
 import { RngSource } from "../rng.ts";
 import { GRID_W, GRID_H, Tile } from "../types.ts";
 
@@ -70,6 +70,11 @@ describe("pairs that fitted and made the spell worse", () => {
     for (const a of ["retort", "slipstream", "parting", "ward"]) expect(fits(a, "counter_stance"), a).toBe(false);
   });
 
+  it("casts a run with a wake (Dash Slash) free nowhere: it would be a standing cut", () => {
+    for (const a of ["slipstream", "retort", "resonance", "parting", "whirl"]) expect(fits(a, "dash_slash"), a).toBe(false);
+    expect(fits("resonance", "blink_strike")).toBe(true);
+  });
+
   it("puts no element on a pillar, and no second recall after the blades are home", () => {
     for (const a of ["kindle", "rime", "blight"]) expect(fits(a, "stone_ward"), a).toBe(false);
     expect(fits("repeat", "blade_recall")).toBe(false);
@@ -77,7 +82,7 @@ describe("pairs that fitted and made the spell worse", () => {
 
   it("keeps casting behind on a dash away for the spells pressed up close", () => {
     for (const i of ITEMS.values())
-      expect(fits("parting", i.id), i.id).toBe(!(i.tags ?? []).includes("long") && i.params["shape"] !== "stance");
+      expect(fits("parting", i.id), i.id).toBe(!(i.tags ?? []).includes("long") && i.params["shape"] !== "stance" && !(Number(i.params["wake_reach"] ?? 0) > 0));
   });
 });
 
@@ -125,3 +130,51 @@ describe("a doom mark bursts as the spell's hit", () => {
     expect(beside.poisonMs + beside.poisonBuild).toBeGreaterThan(0);
   });
 });
+
+describe("expanse makes the spell's area larger, whatever its shape", () => {
+  /** The area figure one cast of each shape leaves in the world, read the moment it is there. */
+  const AREA: readonly [string, (w: World) => number | undefined][] = [
+    ["magic_bolt", (w) => w.playerBullets.find((b) => b.alive)?.radius],
+    ["spirit_blades", (w) => w.playerBullets.find((b) => b.alive && b.orbitMs > 0)?.radius],
+    ["wildfire_field", (w) => w.fires.find((f) => f.alive)?.radius],
+    ["void_maw", (w) => w.vortices.find((v) => v.alive)?.radius],
+    ["earth_spikes", (w) => w.eruptions.find((c) => c.alive)?.radius],
+    ["returning_edge", (w) => w.playerBullets.find((b) => b.alive && b.delivery === "boomerang")?.radius],
+    ["ball_lightning", (w) => w.orbs.find((o) => o.alive)?.zapReach],
+    ["mortar", (w) => w.playerBullets.find((b) => b.alive && b.delivery === "lob")?.lobRadius],
+    ["void_ray", (w) => w.beams.find((b) => b.alive)?.width],
+    ["cinder_stride", (w) => w.player.trail?.patch.radius],
+    ["counter_stance", (w) => w.player.stance?.radius],
+    ["blink_strike", (w) => (w.player.strikeRadius > 0 ? w.player.strikeRadius : undefined)],
+  ];
+  const areaOf = (spell: string, read: (w: World) => number | undefined, affixes: readonly string[]) => {
+    const w = world(spell, affixes);
+    body(w, 110, 0);
+    for (let t = 0; t < 40; t++) {
+      w.player.mana = w.staff.mana_max;
+      step(w, t === 0 ? { ...aim, spell: 0 } : aim);
+      const a = read(w);
+      if (a !== undefined && a > 0) return a;
+    }
+    return 0;
+  };
+
+  for (const [spell, read] of AREA)
+    it(`on ${spell}`, () => {
+      expect(fits("expanse", spell)).toBe(true);
+      const bare = areaOf(spell, read, []);
+      expect(bare).toBeGreaterThan(0);
+      expect(areaOf(spell, read, ["expanse"])).toBeCloseTo(bare * EXPANSE_RADIUS, 0);
+    });
+
+  it("keeps a ring of blades at arm's length: its blades are larger, not further out", () => {
+    const ring = (affixes: readonly string[]) => {
+      const w = world("spirit_blades", affixes);
+      step(w, { ...aim, spell: 0 });
+      for (let t = 0; t < 10; t++) step(w, aim);
+      return w.playerBullets.find((b) => b.alive && b.orbitMs > 0)!.orbitRadius;
+    };
+    expect(ring(["expanse"])).toBe(ring([]));
+  });
+});
+

@@ -160,8 +160,8 @@ roster's standard status), `speed`, `windup_ms`, `recover_ms`, `move_scale`,
   hit: the hit and kill affixes fire there, and those that act on a shot's
   flight (`pierce`, `seek`, `ricochet`, `shatter`, `fork`) are not dealt to it.
 - **`stack_max` (orbit).** A recast adds its blades to the ring instead of
-  replacing it and renews every blade, up to `stack_max`, past which the oldest
-  go; the ring is re-spaced evenly each time and widens and quickens by
+  replacing it, up to `stack_max`, past which the oldest go; each blade keeps
+  its own `lifetime` from the cast that made it, so a ring not pressed thins; the ring is re-spaced evenly each time and widens and quickens by
   `orbit_grow` px and `spin_grow` °/s a blade. With `burst_speed`, the cast
   that fills the ring bursts it `burst_ms` later: each blade leaves the circle
   outward and curls onto a body within `burst_reach` (the one the fewest

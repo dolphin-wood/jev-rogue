@@ -74,6 +74,7 @@ export const JA_CONTENT: ContentTable = {
   retort: { name: "リベンジ", description: "ダメージを受けると、攻撃してきた敵へこの呪文を撃ち返す（マナ消費なし）。" },
   slipstream: { name: "スリップストリーム", description: "ダッシュで敵をすり抜けるとき、ついでに攻撃する。" },
   pierce: { name: "ピアース", description: "弾が敵を貫いて飛び続ける。" },
+  expanse: { name: "エクスパンス", description: "呪文の及ぶ範囲が三分の一ほど広がる。弾も地面も刃の輪も射程も。" },
   seek: { name: "シーク", description: "弾が一番近い敵へ曲がる。" },
   ricochet: { name: "リコシェ", description: "弾が壁で跳ね返り、部屋に戻ってくる。" },
   kindle: { name: "キンドル", description: "元の属性はそのままに、当てると燃焼も溜まる。もともと炎の呪文なら燃え上がりが速くなる。異なる属性を二つ抱えた敵は、受けるダメージがすべて増える。" },

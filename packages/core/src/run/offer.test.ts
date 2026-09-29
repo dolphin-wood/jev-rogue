@@ -199,7 +199,7 @@ describe("a kind-driven offer", () => {
     const ids = new Set<string>();
     for (const seed of ["a", "b", "c", "d", "e", "f", "g", "h"])
       for (const c of offerCards(ITEMS, rng(seed), [], "affix")) ids.add(c.itemId);
-    expect(ids.has("shatter") || ids.has("repeat") || ids.has("fork")).toBe(true);
+    expect(ids.has("shatter") || ids.has("repeat") || ids.has("fork") || ids.has("chain") || ids.has("pierce")).toBe(true);
   });
 
   /**

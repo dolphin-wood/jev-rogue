@@ -352,7 +352,7 @@ export function spellBehaviour(item: BaseItem | undefined, level = 1): string {
         bits.push(`${count} blades spin in place on the floor ${num("anchor_reach")} px ahead, or under the body it seeks, for ${num("lifetime") ?? 0} s`,
           `${round1(damage)} damage a pass`, "the ring stays where it was set when the player moves");
       else if ((num("stack_max") ?? 0) > 0)
-        bits.push(`each cast adds ${count === 1 ? "a blade" : `${count} blades`} to a ring orbiting the player and renews the ring for ${num("lifetime") ?? 0} s, up to ${num("stack_max")} blades`,
+        bits.push(`each cast adds ${count === 1 ? "a blade" : `${count} blades`} to a ring orbiting the player, each lasting ${num("lifetime") ?? 0} s from its own cast, up to ${num("stack_max")} blades`,
           `${round1(damage)} damage a pass`, ...((num("burst_speed") ?? 0) > 0
             ? [`the ring widens and speeds up with each blade; the cast that fills it flings every blade out onto nearby bodies for ${round1(damage * (num("burst_scale") ?? 1))} damage each, piercing, and the next cast starts a new ring`]
             : []));

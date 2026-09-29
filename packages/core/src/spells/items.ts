@@ -947,7 +947,7 @@ const ATTACKS: readonly BaseItem[] = [
        * cheap key pressed again and again to build to a release — where
        * Spirit Blades is a ring that is simply there.
        */
-      shape: "orbit", damage: 2.2, speed: 0, radius: 5, count: 1, spread: 0, lifetime: 4, stack_max: 6,
+      shape: "orbit", damage: 2.2, speed: 0, radius: 5, count: 1, spread: 0, lifetime: 6, stack_max: 6,
       orbit_radius: 22, orbit_grow: 6, spin: 280, spin_grow: 45,
       burst_ms: 280, burst_speed: 320, burst_reach: 150, burst_scale: 1.8,
       pierce: 0, element: "none", seek: 0, curve: 0, weight: 0.5,

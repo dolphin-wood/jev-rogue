@@ -1,0 +1,18 @@
+# Expanse
+1=#5a3a12 2=#a8742a 3=#f0c060 4=#fff3cc
+.oooo......oooo.
+o4333o....o3334o
+o32oo......oo23o
+o3o...oooo...o3o
+o3o..o3333o..o3o
+.o..o34oo43o..o.
+...o34o..o43o...
+...o3o....o3o...
+...o3o....o3o...
+...o34o..o43o...
+.o..o34oo43o..o.
+o3o..o3333o..o3o
+o3o...oooo...o3o
+o32oo......oo23o
+o4333o....o3334o
+.oooo......oooo.

@@ -475,8 +475,10 @@ export function fireUnit(
      */
     /*
      * **A stacking ring** (`stack_max`, Blade Storm) is the exception: each
-     * cast adds its blades to the ring and renews every one, up to the cap,
-     * past which the oldest go. The ring is re-spaced evenly each time, so
+     * cast adds its blades to the ring, up to the cap, past which the oldest
+     * go, and **each blade keeps its own time**: a press is one more blade,
+     * not the whole ring renewed, so a ring stops growing and thins out the
+     * moment the key stops being pressed. The ring is re-spaced evenly each time, so
      * it reads as one ring growing rather than as blades piling up, and it
      * widens and quickens with each blade (`orbit_grow`, `spin_grow`).
      *
@@ -495,7 +497,8 @@ export function fireUnit(
     } else for (const b of ring) b.alive = false;
     const total = kept.length + count;
     const grown = stackMax > 0 ? Math.max(0, total - 1) : 0;
-    const orbitRadius = (num(base.params, "orbit_radius", 40) + grown * num(base.params, "orbit_grow", 0)) * mods.radiusMult;
+    // The ring's reach is its own: a larger spell (`expanse`) has larger blades, and a ring pushed out would leave the bodies at arm's length.
+    const orbitRadius = num(base.params, "orbit_radius", 40) + grown * num(base.params, "orbit_grow", 0);
     const spin = num(base.params, "spin", 300) + grown * num(base.params, "spin_grow", 0);
     const burstSpeed = num(base.params, "burst_speed", 0);
     const bursts = stackMax > 0 && burstSpeed > 0 && total >= stackMax;
@@ -522,8 +525,6 @@ export function fireUnit(
       b.burstDamage = burstDamage;
     };
     kept.forEach((b, k) => {
-      b.orbitMs = lifetime * 1000;
-      b.lifeMs = lifetime * 1000;
       b.orbitAngle = start + (k / total) * Math.PI * 2;
       arm(b);
     });
@@ -593,7 +594,7 @@ export function fireUnit(
     const ground = clonePowers(powers);
     ground[kind] = mods.elements[kind];
     lightFire(world, spot.x, spot.y, "player", {
-      radius: radius * mods.radiusMult, lifeMs: lifetime * 1000, damage, statusMult, powers: ground, proc, element: kind,
+      radius, lifeMs: lifetime * 1000, damage, statusMult, powers: ground, proc, element: kind,
     });
     shots.push({ x: spot.x, y: spot.y, family: base.id });
     return;
@@ -730,7 +731,7 @@ export function fireUnit(
     // to arrive before it strikes.
     orb.zapClockMs = zapMs * 0.5;
     orb.zapMs = zapMs;
-    orb.zapReach = num(base.params, "zap_reach", 90);
+    orb.zapReach = num(base.params, "zap_reach", 90) * mods.radiusMult;
     orb.zapCount = Math.max(1, Math.round(num(base.params, "zap_count", 1)));
     orb.damage = damage;
     orb.element = element;
@@ -782,7 +783,7 @@ export function fireUnit(
     const p = world.player;
     const ms = num(base.params, "enchant_ms", 5000);
     p.enchant = {
-      ms, maxMs: ms, damage, radius, speed: Math.max(1, speed), reachPx: num(base.params, "wave_reach", 90),
+      ms, maxMs: ms, damage, radius, speed: Math.max(1, speed), reachPx: num(base.params, "wave_reach", 90) * mods.radiusMult,
       weight, element, elementPower: powers[element as "fire"] ?? 0, powers: clonePowers(powers), proc, statusMult,
       affixes: mods.affixes, spellIndex: mods.spellIndex, manaSpent: mods.manaSpent,
     };
@@ -804,7 +805,7 @@ export function fireUnit(
     p.swingMs = 0;
     world.swing.active = false;
     p.stance = {
-      ms, maxMs: ms, damage, radius: num(base.params, "answer_radius", 56),
+      ms, maxMs: ms, damage, radius: num(base.params, "answer_radius", 56) * mods.radiusMult,
       expireShare: Math.max(0, Math.min(1, num(base.params, "expire_share", 0.4))),
       moveScale: num(base.params, "move_scale", 0.5), weight: Math.max(weight, STANCE_WEIGHT),
       element, powers: clonePowers(powers), proc, statusMult, spellIndex: mods.spellIndex,
@@ -884,7 +885,7 @@ export function fireUnit(
      * stretch at a time as the player passes (`layWake`) — each body it
      * crosses is cut once by the wake, at `wake_share` of the run's cut.
      */
-    const wakeReach = land > 0 ? 0 : num(base.params, "wake_reach", 0);
+    const wakeReach = land > 0 ? 0 : num(base.params, "wake_reach", 0) * mods.radiusMult;
     p.strikeWake = wakeReach > 0 ? startWake(from.x, from.y, dir.x, dir.y, {
       stepPx: num(base.params, "wake_step", 10), reachPx: wakeReach, inner: PLAYER_RADIUS,
       thick: num(base.params, "wake_thick", 12), speed: num(base.params, "wake_speed", 240), damage: 0,
@@ -1002,7 +1003,7 @@ export function fireUnit(
       if (reach < full) reach = Math.max(0, reach - TILE_PX / 2);
     }
     const centre = mark ? { x: mark.x, y: mark.y } : { x: from.x + dir.x * reach, y: from.y + dir.y * reach };
-    const area = num(base.params, "area", 1.6) * TILE_PX;
+    const area = num(base.params, "area", 1.6) * TILE_PX * mods.radiusMult;
     for (let i = 0; i < count; i++) {
       let x = from.x + Math.cos(angle0) * (lineFirst + i * stepPx), y = from.y + Math.sin(angle0) * (lineFirst + i * stepPx);
       let wait = i * delay;
@@ -1034,7 +1035,7 @@ export function fireUnit(
     slot.alive = true;
     slot.x = spot.x;
     slot.y = spot.y;
-    slot.radius = radius * mods.radiusMult;
+    slot.radius = radius;
     slot.lifeMs = lifetime * 1000;
     slot.maxLifeMs = slot.lifeMs;
     slot.pull = num(base.params, "pull", 140);
@@ -1121,7 +1122,7 @@ export function fireUnit(
       slot.alive = true;
       slot.x = pillar.x;
       slot.y = pillar.y;
-      slot.radius = PILLAR_SHOCK_RADIUS;
+      slot.radius = PILLAR_SHOCK_RADIUS * mods.radiusMult;
       slot.lifeMs = 250;
       slot.maxLifeMs = 250;
       slot.pull = -420;

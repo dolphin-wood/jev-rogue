@@ -476,6 +476,7 @@ dead draw dressed as a choice is worse than a smaller pool.
 | Repeat | cast | bolt, eruption, boomerang |
 | Scatter | cast | bolt, field, pillar, vortex, dash, eruption, boomerang |
 | Repulse, Aftershock | cast | any spell; an aftershock bursts for a share of one of the spell's own hits, so it is as heavy as the spell |
+| Expanse | cast | any spell but a companion: everything the spell covers is a third larger — a shot's size, a field's, a pull's, a landing, a line, a beam's width, a ring's blades (not its reach, which would leave the bodies at arm's length), a guard's answer, a run's wake, an orb's strike, a pillar's shove |
 | Kindle, Rime, Blight | cast | any spell but a pillar, which strikes nothing to put an element on |
 | Ward, Retort, Slipstream | cast / hurt / dash | any spell but a stance: cast free, a guard puts the sword away where it stands, and a ward's rune eats the hit the guard is up to answer |
 | Parting Shot | dash | the same, and not a beam or any spell tagged `long`: casting behind on a dash away is a close-quarters answer |
@@ -484,7 +485,9 @@ dead draw dressed as a choice is worse than a smaller pool.
 
 Beside the shape lists, a few pairs are kept apart because the review
 (`pnpm spell-bench matrix`, every spell against every affix it takes)
-measured them making the spell worse: no `fork` or `seek` on a spell that
+measured them making the spell worse: no free cast on a run with a wake (Dash
+Slash), which would be a standing cut with no run, no wake and none of the
+run's affixes; no `fork` or `seek` on a spell that
 passes through bodies (the split ends the pass; the curl turns a line onto one
 body), none of a shot's flight on a lob, and no `repeat`, `retort`,
 `slipstream` or `scatter` on a recall, which finds its blades already home.
@@ -520,7 +523,7 @@ Four things the composition of the pool is doing deliberately:
   repeat. What sizes the pool is how many affix cards a run meets — measured
   on the Jev arm, about seventeen, against the thirteen a build could be dealt
   when the pool held twenty-two — and a pool smaller than that is a run that
-  sees all of it, and the next run seeing the same. The pool is thirty-four,
+  sees all of it, and the next run seeing the same. The pool is thirty-five,
   and **every shape gets a share of it**: fourteen of the first twenty-two
   hung on a projectile's hooks, so a staff of ground, a run or a guard drew
   the same six any-shape cards, three of them the infusions, on every

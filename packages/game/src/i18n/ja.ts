@@ -519,6 +519,7 @@ export const JA: Table = {
   "affixtier.retort": "被弾すると撃ち返す",
   "affixtier.slipstream": "ダッシュで敵をすり抜けると詠唱",
   "affixtier.pierce": "敵1体を貫く",
+  "affixtier.expanse": "範囲が広がる",
   "affixtier.seek": "敵を追尾する",
   "affixtier.ricochet": "壁で1回跳ね返る",
   "affixtier.kindle": "当てた敵を燃やす",

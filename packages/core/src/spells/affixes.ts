@@ -92,6 +92,9 @@ import type { BaseItem, Element } from "../types.ts";
 export type SpellShape =
   | "bolt" | "orbit" | "field" | "pillar" | "dash" | "vortex" | "summon" | "eruption"
   | "boomerang" | "orb" | "trail" | "enchant" | "stance" | "beam";
+/** How much larger `expanse` makes a spell's area, as a multiple of its radius. */
+export const EXPANSE_RADIUS = 1.35;
+
 export const SPELL_SHAPES: readonly SpellShape[] = [
   "bolt", "orbit", "field", "pillar", "dash", "vortex", "summon", "eruption",
   "boomerang", "orb", "trail", "enchant", "stance", "beam",
@@ -417,6 +420,18 @@ BASE_AFFIXES.push(
     effect: { kind: "shape", pierce: 1 },
     text: "passes through one body",
     description: "The shot keeps going through the bodies it hits.",
+  },
+  {
+    /*
+     * `expanse`: the spell's area, whatever its shape makes of it — a shot's
+     * size, a field's or a pull's reach, a ring's span, a landing, a line, a
+     * guard's answer, a run's wake, an orb's strike. The one affix that makes
+     * the spell itself bigger rather than casting it again.
+     */
+    id: "expanse", name: "Expanse", hook: "cast", shapes: SPELL_SHAPES.filter((s) => s !== "summon"), element: null,
+    effect: { kind: "shape", radius: EXPANSE_RADIUS },
+    text: "a larger area",
+    description: "Everything the spell covers is a third larger: its shots, its ground, its ring, its reach.",
   },
   {
     id: "seek", name: "Seek", hook: "cast", shapes: ["bolt"], element: null,
@@ -845,6 +860,8 @@ const RUN_AFFIXES: ReadonlySet<string> = new Set(["momentum", "undertow", "final
  */
 const STRENGTH_FLOOR: Readonly<Record<string, 2 | 3>> = {
   repeat: 3, chain: 3, brand: 3, haste: 3,
+  // More of the room from one cast: a rare card.
+  expanse: 2,
   scatter: 2, resonance: 2, fork: 2,
   momentum: 2, undertow: 2, finale: 2,
   // A second landing and three free casts a spin: both multiply what one press or one spin is worth.
@@ -916,8 +933,13 @@ export function affixFitsSpell(
    * answer to the sides.
    */
   if (affix.id === "scatter" && Number(item?.params["wake_reach"] ?? 0) > 0) return false;
-  // And for the same reason no `slipstream`: a dash through a body cast it as that cut at the body, and nothing more.
-  if (affix.id === "slipstream" && Number(item?.params["wake_reach"] ?? 0) > 0) return false;
+  /*
+   * And for the same reason none of the free casts: a dash through a body,
+   * a hit taken, a dash away, the fifth sword blow and a spin each cast it as
+   * that cut at a body, standing still, with no run, no wake, and none of the
+   * run's own affixes — a stab where the card promises a charge.
+   */
+  if (WAKE_DEAD.includes(affix.id) && Number(item?.params["wake_reach"] ?? 0) > 0) return false;
   /*
    * **An affix a spell already is, is no affix.** Each of these was a pick
    * that changed nothing and took a slot:
@@ -968,6 +990,9 @@ export function affixFitsSpell(
   if ((item?.tags ?? []).includes("long") && affix.id === "parting") return false;
   return true;
 }
+
+/** The free casts a run with a wake (Dash Slash) would be only a standing cut for. */
+const WAKE_DEAD: readonly string[] = ["slipstream", "retort", "resonance", "parting", "whirl"];
 
 /** The free casts a recall has nothing to answer with, and a recast that finds the blades already home. */
 const RECALL_DEAD: readonly string[] = ["retort", "slipstream", "scatter", "repeat"];

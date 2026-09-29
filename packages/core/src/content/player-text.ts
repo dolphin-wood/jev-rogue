@@ -77,6 +77,7 @@ export const PLAYER_TEXT: Readonly<Record<string, string>> = {
   retort: "When you take damage, casts this spell at the attacker at no mana cost.",
   slipstream: "Dashing through an enemy casts this spell at it.",
   pierce: "The shot passes through enemies it hits.",
+  expanse: "Everything the spell covers is a third larger: its shots, its ground, its ring, its reach.",
   seek: "The shot curves toward the nearest enemy.",
   ricochet: "The shot bounces off walls.",
   kindle: "This spell deals fire: its hits build up burn.",

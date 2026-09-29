@@ -411,6 +411,8 @@ function observable(a: SpellAffix, bare: Seen, withIt: Seen): boolean {
       if (e.pierce) return withIt.damage > bare.damage;
       if (e.homing) return withIt.damage > bare.damage;
       if (e.bounce) return withIt.airborne > bare.airborne;
+      // Larger: more of the group reached, or reached more often.
+      if (e.radius) return withIt.damage > bare.damage;
       return false;
   }
 }
@@ -425,6 +427,8 @@ function bare(spell: string, scenario: Scenario, alongside: readonly string[] = 
 
 describe("every affix does something on every shape it lists", () => {
   for (const a of SPELL_AFFIXES) {
+    // A larger area is not a damage figure on every shape: `expanse` is measured by the sizes it makes (affix-review.test.ts).
+    if (a.id === "expanse") continue;
     for (const shape of a.shapes) {
       const spell = RUN_REPRESENTATIVE[a.id] ?? REPRESENTATIVE[shape];
       it(`${a.id} on ${shape} (${spell})`, () => {

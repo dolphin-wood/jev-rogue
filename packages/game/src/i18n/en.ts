@@ -527,6 +527,7 @@ export const EN = {
   "affixtier.retort": "being hit fires back",
   "affixtier.slipstream": "dashing through a body casts",
   "affixtier.pierce": "passes through one body",
+  "affixtier.expanse": "a larger area",
   "affixtier.seek": "hunts bodies down",
   "affixtier.ricochet": "bounces once off walls",
   "affixtier.kindle": "burns what it hits",

@@ -805,7 +805,7 @@ const GAP_SPELL_TAGS: Readonly<Record<string, readonly string[]>> = {
 const GAP_AFFIXES: Readonly<Record<string, readonly string[]>> = {
   damage: ["brand", "fork", "pierce", "kindle", "blight", "harvest", "aftershock", "cull", "overload"],
   cast_frequency: ["haste", "repeat", "resonance", "whirl", "parting", "afterimage"],
-  mana: [], accuracy: ["seek", "chain", "scatter", "lodestar"],
+  mana: [], accuracy: ["seek", "chain", "scatter", "lodestar", "expanse"],
 };
 const GAP_FAMILIES: Readonly<Record<string, readonly string[]>> = {
   damage: ["sword"], cast_frequency: ["mana"], mana: ["mana"], accuracy: ["movement"],
@@ -917,7 +917,7 @@ export interface CardPool {
 const AFFIX_STYLE: Readonly<Record<string, readonly string[]>> = {
   spam: ["repeat", "fork", "seek", "ricochet", "parting", "overload", "intercept", "afterimage"],
   nuke: ["haste", "shatter", "fork", "brand", "rime", "aftershock", "repulse", "cull", "lodestar"],
-  area: ["scatter", "chain", "harvest", "pierce", "aftershock", "lodestar", "slam", "afterimage"],
+  area: ["scatter", "chain", "harvest", "pierce", "aftershock", "lodestar", "slam", "afterimage", "expanse"],
   dot: ["kindle", "blight", "bloom", "brand", "spillover", "parting"],
   melee: ["resonance", "retort", "slipstream", "ward", "momentum", "undertow", "finale", "whirl", "drag", "repulse", "intercept", "slam"],
 };

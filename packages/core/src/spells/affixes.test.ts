@@ -83,7 +83,7 @@ describe("the affix pool", () => {
     // to change with it, and a test is the only thing that will say so.
     expect(SPELL_AFFIXES.map(spellAffixIcon).sort()).toEqual([
       "icon_affix_afterimage", "icon_affix_aftershock", "icon_affix_blight", "icon_affix_bloom", "icon_affix_brand",
-      "icon_affix_chain", "icon_affix_cull", "icon_affix_drag", "icon_affix_finale", "icon_affix_fork",
+      "icon_affix_chain", "icon_affix_cull", "icon_affix_drag", "icon_affix_expanse", "icon_affix_finale", "icon_affix_fork",
       "icon_affix_harvest", "icon_affix_haste", "icon_affix_intercept", "icon_affix_kindle", "icon_affix_lodestar",
       "icon_affix_momentum", "icon_affix_overload", "icon_affix_parting", "icon_affix_pierce", "icon_affix_repeat",
       "icon_affix_repulse", "icon_affix_resonance", "icon_affix_retort", "icon_affix_ricochet", "icon_affix_rime",
