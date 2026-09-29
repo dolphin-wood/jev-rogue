@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { PlayScene, DPR, VIEW_W, VIEW_H, worldZoom, presentScale } from "./scenes/play.ts";
 import { BootScene } from "./scenes/boot.ts";
 import { installCheapArcs } from "./scenes/graphics-arcs.ts";
+import { autoHideCursor } from "./cursor.ts";
 import { BASE_PALETTE } from "@jr/core";
 
 /**
@@ -20,6 +21,8 @@ function canvasSize(): { css: [number, number]; px: [number, number]; shown: num
 }
 
 installCheapArcs();
+// The pointer hides while the game is played and comes back when the mouse moves (`cursor.ts`).
+autoHideCursor();
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
