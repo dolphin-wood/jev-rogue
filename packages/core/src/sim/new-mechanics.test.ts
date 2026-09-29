@@ -138,6 +138,21 @@ describe("Blade Recall", () => {
     expect(w.playerBullets.some((b) => b.alive && b.delivery === "boomerang")).toBe(false);
   });
 
+  it("calls its blades home by itself on the blow that fills it, without the key", () => {
+    const w = world("blade_recall");
+    const e = body(w, 22, 0);
+    let flew = false;
+    for (let t = 0; t < 600 && !flew; t++) {
+      w.player.mana = w.staff.mana_max;
+      step(w, { ...aimRight, swing: true });
+      w.player.hearts = 6;
+      if (w.playerBullets.some((b) => b.alive && b.delivery === "boomerang")) flew = true;
+    }
+    expect(flew).toBe(true);
+    expect(w.lodged.length).toBeLessThan(6);
+    expect(e.hp).toBeLessThan(e.maxHp);
+  });
+
   it("is loaded by the sword's own blows", () => {
     const w = world("blade_recall");
     body(w, 22, 0);

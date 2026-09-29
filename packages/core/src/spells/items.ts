@@ -972,7 +972,7 @@ const ATTACKS: readonly BaseItem[] = [
       windup_ms: 60, recover_ms: 140, move_scale: 0.8,
     },
     description:
-      "Blade Recall leaves a spectral blade in each body the sword strikes, up to six; the press rips every blade free and flies it back to the caster, cutting the body it was in and everything on the way.",
+      "Blade Recall leaves a spectral blade in each body the sword strikes; at six, or on the press, every blade rips free and flies back to the caster, cutting the body it was in and all on the way.",
   },
   {
     id: "blade_rift",
