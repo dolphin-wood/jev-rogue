@@ -619,6 +619,12 @@ export function stepSpells(
     p.chargeKey = key;
     p.chargeMs = 0;
     p.castMoveScale = moveScale(slot.item.base);
+    // Standing to charge is standing in the open: the shield takes the first of what comes (`chargeShield`).
+    if (p.chargeShieldOwed) {
+      p.chargeShieldOwed = false;
+      p.chargeShield = CHARGE_SHIELD_HEARTS;
+      world.events.push({ kind: "spell", x: p.x, y: p.y, what: "charge_shield" });
+    }
     return { shots: [], refused: null };
   }
 
@@ -771,7 +777,19 @@ export function cancelCharge(p: World["player"]): void {
   if (p.chargeKey >= 0) p.chargeVoid = p.chargeKey;
   p.chargeKey = -1;
   p.chargeMs = 0;
+  // Unpaid, so the next charge raises none (`chargeShieldOwed`).
+  p.chargeShield = 0;
 }
+
+/**
+ * **What a charge's shield holds**, in hearts: about one ordinary body's
+ * blow, a shot or two, and short of what the king's sword does. Enough that a
+ * second of charging is not a second as a target; not so much that holding a
+ * charge is a way to stand in a fight.
+ */
+export const CHARGE_SHIELD_HEARTS = 1;
+/** Cover after a hit the shield took whole: long enough that one volley's bullets do not all land on it in a frame. */
+export const CHARGE_SHIELD_GUARD_MS = 250;
 
 /** How far through its charge the held key is, 0 to 1; 0 when nothing is held. */
 export function chargeShare(world: World, items: ItemRegistry): number {
@@ -795,9 +813,12 @@ function releaseCharge(world: World, items: ItemRegistry, slot: SpellSlot, at: n
   const share = chargeShare(world, items);
   p.chargeKey = -1;
   p.chargeMs = 0;
+  p.chargeShield = 0;
   const cost = slotCost(slot, items, world.staff);
   if (p.mana < cost) return { shots: [], refused: "mana" };
   p.mana -= cost;
+  // Paid: the next charge raises a shield again.
+  p.chargeShieldOwed = true;
   tallyCast(world, slot, cost);
   slot.cooldownMs = slotCooldownMs(slot, items, cost);
   return release(world, items, slot, at, cost, { charge: share });

@@ -91,6 +91,21 @@ roster's standard status), `speed`, `windup_ms`, `recover_ms`, `move_scale`,
   damage and size scale from a fraction at a tap to the full figure at a full
   charge. Mana is paid on release. A dash cancels the charge and costs nothing.
   A full charge staggers.
+  - **The charge's shield.** Standing to charge is standing in the open, so a
+    charge raises a shield round the caster as it starts. The shield holds
+    `CHARGE_SHIELD_HEARTS` (one heart): about one ordinary body's blow, and
+    short of the king's sword.
+  - A hit the shield holds whole costs nothing. No heart is lost, the caster
+    is not shoved or stunned, and the charge is still held. The hit that breaks
+    the shield lands with what was left over, stun and all.
+  - The shield goes with the charge: when it is released, dashed out or
+    stunned out.
+  - Only a charge that was released **and paid for** raises a shield on the
+    next charge. A dash-cancel costs nothing, so without this rule "charge,
+    take a hit, dash, charge again" would give a free shield every time.
+  - It is drawn as a faint bubble of the spell's own light with a single rim.
+    A hit it holds ripples the bubble. Its breaking is a white flash, a ring
+    blown out and shards flung off, with the frost's shatter as its sound.
 - **`doom` (bolt).** A hit marks the body; `doom` ms later the mark bursts for
   the spell's `doom_damage` in a small radius. A marked body cannot be marked
   again until its mark bursts. The delayed burst is the spell's payoff, so the

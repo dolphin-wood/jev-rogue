@@ -1854,6 +1854,19 @@ export interface Player {
   chargeKey: number;
   chargeMs: number;
   /**
+   * **The charge's shield** (doc 006), in hearts: raised as a charge starts
+   * (`CHARGE_SHIELD_HEARTS`), it takes hits before the bar does, and it goes
+   * with the charge — released, dashed out, stunned out. 0 for none.
+   */
+  chargeShield: number;
+  /**
+   * Whether the next charge raises a shield. Spent by the charge that raises
+   * one, and owed again only by a charge that is **released and paid**: a
+   * charge dashed out costs nothing, and without this a hold, a hit and a
+   * dash over and over was a free shield each time.
+   */
+  chargeShieldOwed: boolean;
+  /**
    * The key whose charge was put out (a dash, a stun), ignored until it comes
    * up; -1 for none. Without it the key still held through the dash started
    * a fresh charge on the next step, and letting go then fired a tap the

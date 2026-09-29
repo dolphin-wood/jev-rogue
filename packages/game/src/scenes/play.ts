@@ -53,7 +53,7 @@ import {
   BOSS_POWER,
   withLevel, levelDamageMult, dismantleValue, baseStrength, affixStrengthFloor, spellDetail, offerStatParts, slotStatParts, statusForecast, SPELL_DAMAGE_SCALE, rarityOf, STAT_UPGRADES, statById, SPELL_LEVEL_MAX, SCHOOL_COLOUR, schoolOf, spellSound, shapeEventSound, offerCards,
   slotCooldownMs, DASH_COOLDOWN_MS, DASH_MS,
-  chargeShare, chargesOf, bankOf, chargeIntervalMs, chargeMsOf, lodgeMaxOf, DASH_SPEED, acquire,
+  chargeShare, chargesOf, bankOf, chargeIntervalMs, chargeMsOf, lodgeMaxOf, DASH_SPEED, acquire, CHARGE_SHIELD_HEARTS,
 } from "@jr/core";
 import { DebugPanel, playtestLog } from "../debug-panel.ts";
 import type { DebugSnapshot, FloorGrain } from "../debug-panel.ts";
@@ -635,6 +635,8 @@ const BOSS_CHAIN_LINK_PITCH_PX = 7;
 const BOSS_PLACED_SWORD = false;
 /** How long his crescent lasts into the recovery, fading, ms. */
 const BOSS_CRESCENT_TAIL_MS = 200;
+/** The charge's shield round the body, px: a little wider than the body, so it reads as round it. */
+const CHARGE_SHIELD_PX = 14;
 
 /** The king's floor shadow, centred under his feet. */
 function bossShadowOffset(atlas: RecolourableAtlas, shadowFrame: string): number {
@@ -8245,6 +8247,35 @@ export class PlayScene extends Phaser.Scene {
         this.burst(cx, cy, look.glow, 8, 180, a, 1.6, 0.9);
         break;
       }
+      case "charge_shield": {
+        // The shield going up round the charging body: its light drawn in from all round.
+        const look = this.chargeLook();
+        this.burst(p.x, p.y - BODY_LIFT, look.glow, 8, 70, undefined, Math.PI * 2, 0.6, -20);
+        break;
+      }
+      case "charge_shield_hit": {
+        // A blow the shield held: a pale ripple over it and a few motes thrown back the way the blow came.
+        const look = this.chargeLook();
+        const a = Math.atan2(ev.y - p.y, ev.x - p.x);
+        this.ring(p.x, p.y - BODY_LIFT, CHARGE_SHIELD_PX - 3, CHARGE_SHIELD_PX + 3, look.core, 160, 1.5);
+        this.burst(p.x + Math.cos(a) * CHARGE_SHIELD_PX, p.y - BODY_LIFT + Math.sin(a) * CHARGE_SHIELD_PX, 0xffffff, 5, 150, a, 1.2, 0.6);
+        break;
+      }
+      case "charge_shield_break": {
+        /*
+         * **The shield breaking**: a white flash where it stood, the bubble
+         * blown out as a ring, and shards of it flung off all round — the
+         * brittle thing going, loud enough to be seen mid-fight, because the
+         * next blow is the player's to take.
+         */
+        const look = this.chargeLook();
+        const cy = p.y - BODY_LIFT;
+        this.impacts.push({ x: p.x, y: cy, ms: IMPACT_MS * 1.3, scale: 1.8, color: 0xffffff });
+        this.ring(p.x, cy, CHARGE_SHIELD_PX, CHARGE_SHIELD_PX + 16, look.core, 260, 2);
+        this.burst(p.x, cy, look.glow, 14, 200, undefined, Math.PI * 2, 0.8);
+        for (let k = 0; k < 8; k++) this.shards.push({ x: p.x, y: cy, a: (k / 8) * Math.PI * 2 + Math.random() * 0.4, ms: 0 });
+        break;
+      }
       case "stance_answer": {
         const i = this.keyOfShape("stance");
         const slot = i >= 0 ? w.spells[i] : null;
@@ -8642,6 +8673,13 @@ export class PlayScene extends Phaser.Scene {
    * white on the hand — the look of "let go now", repeated in the key's own
    * charge bar on the HUD. No glow disc.
    */
+  /** The light of the spell being charged, for its shield: the charging key's own, else the cannon's. */
+  private chargeLook(): { glow: number; core: number } {
+    const w = this.world;
+    const slot = w.player.chargeKey >= 0 ? w.spells[w.player.chargeKey] : null;
+    return spellLookOf(slot?.item.base ?? "arcane_cannon", "none");
+  }
+
   private drawChargeGather(): void {
     const w = this.world;
     const p = w.player;
@@ -8653,6 +8691,21 @@ export class PlayScene extends Phaser.Scene {
     const s = chargeShare(w, ITEMS);
     const g = this.fxTopGfx;
     const full = s >= 1;
+    /*
+     * **The charge's shield** (`Player.chargeShield`): a faint bubble of the
+     * spell's light round the body, one thin rim over a fill barely there, as
+     * bright as there is shield left. The player's own light and a single
+     * rim, never a warning's hatch or its reds.
+     */
+    if (p.chargeShield > 0) {
+      const left = Math.min(1, p.chargeShield / CHARGE_SHIELD_HEARTS);
+      const cy = p.y - BODY_LIFT;
+      const shimmer = 0.85 + 0.15 * Math.sin(w.tick / 5);
+      g.fillStyle(look.glow, 0.1 * left * shimmer);
+      g.fillCircle(p.x, cy, CHARGE_SHIELD_PX);
+      g.lineStyle(1, look.core, (0.35 + 0.4 * left) * shimmer);
+      g.strokeCircle(p.x, cy, CHARGE_SHIELD_PX);
+    }
     if (full && !this.chargeFull) this.burst(hand.x, hand.y, 0xffffff, 8, 130, undefined, Math.PI * 2, 0.7);
     this.chargeFull = full;
     // The off-hand flame swells with it (`flare`); round it, motes drawn in, pixel-sized, quicker as it fills.

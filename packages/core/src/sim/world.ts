@@ -42,7 +42,7 @@ import {
 } from "./affix-hooks.ts";
 import type { HookSim } from "./affix-hooks.ts";
 import {
-  SPELL_SLOTS, MANA_REGEN_FRACTION_PER_S, makeSpell, stepSpells, stepEchoes, ENEMY_BUILD_PER_HIT, cancelCharge, endChannel,
+  SPELL_SLOTS, MANA_REGEN_FRACTION_PER_S, CHARGE_SHIELD_GUARD_MS, makeSpell, stepSpells, stepEchoes, ENEMY_BUILD_PER_HIT, cancelCharge, endChannel,
   freeCastScope,
 } from "./spells.ts";
 import { featureCells, spikesOut } from "../rooms/features.ts";
@@ -654,7 +654,7 @@ function buildWorld(input: CreateWorldOptions): World {
       invulnMs: 0,
       mana: o.staff.mana_max,
       castPending: -1, castWindupMs: 0, castCost: 0, castRecoverMs: 0, castMoveScale: 1,
-      chargeKey: -1, chargeMs: 0, chargeVoid: -1, channelKey: -1, landing: null,
+      chargeKey: -1, chargeMs: 0, chargeShield: 0, chargeShieldOwed: true, chargeVoid: -1, channelKey: -1, landing: null,
       aim: { x: start.x + 1, y: start.y },
       facing: 0,
       dashMs: 0, dashIframeMs: 0, dashCooldownMs: 0, dashX: 0, dashY: 0,
@@ -6729,12 +6729,34 @@ function hurtPlayer(
     answerStance(w, 1);
     return;
   }
+  let owed = wholeHp(hearts * w.takenMult * rampFor(w.roomIndex).hurt);
+  /*
+   * **A charge's shield takes the hit first** (`Player.chargeShield`). A hit
+   * it holds whole costs nothing and breaks nothing: no heart, no shove, no
+   * stun, the charge still held, a moment's cover. The hit that breaks it
+   * lands with what was left over, as any hit would, stun and all.
+   */
+  if (p.chargeShield > 0 && p.chargeKey >= 0 && owed > 0) {
+    const held = Math.min(p.chargeShield, owed);
+    // In whole HP, as the bar is, but not `wholeHp`'s least of one: an emptied shield is empty.
+    p.chargeShield = Math.round((p.chargeShield - held) * HP_PER_HEART) / HP_PER_HEART;
+    owed = Math.round((owed - held) * HP_PER_HEART) / HP_PER_HEART;
+    if (p.chargeShield <= 0) {
+      p.chargeShield = 0;
+      w.events.push({ kind: "spell", x: p.x, y: p.y, what: "charge_shield_break" });
+    }
+    if (owed <= 0) {
+      p.invulnMs = Math.max(p.invulnMs, CHARGE_SHIELD_GUARD_MS);
+      if (p.chargeShield > 0) w.events.push({ kind: "spell", x, y, what: "charge_shield_hit" });
+      return;
+    }
+  }
   // Always shorter than the invulnerability it arrives with, so a stun is
   // never a window in which the player is hit again. See `Player.stunMs`.
   if (stunMs > 0) p.stunMs = Math.min(stunMs, INVULN_MS - 120);
   // Invincible still takes the hit — the shove, the frames, the number shown —
   // just not the health.
-  const due = Math.min(p.hearts, wholeHp(hearts * w.takenMult * rampFor(w.roomIndex).hurt));
+  const due = Math.min(p.hearts, owed);
   const taken = w.invincible ? 0 : due;
   p.hearts = Math.max(0, p.hearts - taken);
   // The floor of the bar this room, for the close calls the briefing reports.
