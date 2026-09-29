@@ -959,6 +959,8 @@ interface RoomSoFar {
  * under the point and the gold orb this far above it, where strikes leave from.
  */
 const TOTEM_CENTRE_DROP = -6;
+/** How far above its landing point Mortar's impact is drawn: the painting's debris pile sits low in its frame. */
+const MORTAR_IMPACT_LIFT = 14;
 const TOTEM_ORB_LIFT = 17;
 
 export class PlayScene extends Phaser.Scene {
@@ -8034,7 +8036,8 @@ export class PlayScene extends Phaser.Scene {
       // A mortar's shell coming down: the landing's dust, and stone thrown up round it.
       else if (ev.kind === "eruption" && ev.what === "mortar") {
         this.landingAt(ev.x, ev.y);
-        this.burst(ev.x, ev.y - 2, 0xd8c8a8, 14, 190, -Math.PI / 2, Math.PI * 1.4, 1.1, 300);
+        this.playSpell("vfx_stone_impact", ev.x, ev.y - MORTAR_IMPACT_LIFT, 4, 1000 / 12, 7.1);
+        this.burst(ev.x, ev.y - 2, 0xc5b7a3, 10, 170, -Math.PI / 2, Math.PI * 1.4, 1.1, 300);
       }
       // `aftershock`: the ground under the body going off — dust, and grit thrown up off it.
       else if (ev.kind === "eruption" && ev.what === "aftershock") {
@@ -8313,6 +8316,24 @@ export class PlayScene extends Phaser.Scene {
    * skirt of dust thrown all round, grit and stone chips; the rings of
    * broken ground are the spikes' own. No flash disc and no ring line.
    */
+  /**
+   * **A thrown stone**: Stone Shard's chunk or Mortar's shell, a painted rock
+   * tumbling through its four frames — turned the way it flies — shedding
+   * grit behind it. False when the atlas has no stone, so the drawn rock
+   * stands in.
+   */
+  private drawRockShot(b: Bullet, look: SpellLook, y: number, tick: number): boolean {
+    const name = b.delivery === "lob" ? "vfx_stone_shell" : "vfx_stone_chunk";
+    const frame = `${name}_${Math.floor(tick / 5 + (b.originX & 3)) % 4}`;
+    const image = this.spellSprite(frame, b.x, y, 7.2);
+    if (!image) return false;
+    image.setFlipX(b.vx < 0);
+    if (Math.random() < 0.35)
+      this.shed({ x: b.x - Math.sign(b.vx) * 4, y, vx: (Math.random() - 0.5) * 20, vy: (Math.random() - 0.5) * 14, ms: 0,
+        life: 220 + Math.random() * 120, size: 1 + Math.random() * 0.8, colour: Math.random() < 0.5 ? 0x8a7a66 : look.glow, gravity: 24 });
+    return true;
+  }
+
   private spellSprite(name: string, x: number, y: number, depth: number, scale = 1, rotation = 0): Phaser.GameObjects.Image | null {
     if (!this.atlas.has(name)) return null;
     const image = this.sprites.image(x, y, this.uiTextureKey, name)
@@ -17056,11 +17077,14 @@ export class PlayScene extends Phaser.Scene {
        */
       if (b.delivery === "lob") {
         const up = Math.min(1, b.lift / 38);
-        this.fxGfx.fillStyle(0x0d0b1f, 0.35 - 0.15 * up);
-        this.fxGfx.fillEllipse(b.x, b.y + 2, b.radius * (2.6 - up), b.radius * (1.3 - 0.5 * up));
-        drawProjectile(this.fxGfx, this.projGfx, { ...b, y: b.y - b.lift }, look, w.tick, (sp) => this.shed(sp));
+        // On the solid layer: the glow layer adds light, and a shadow added as light is not seen.
+        this.projGfx.fillStyle(0x0d0b1f, 0.4 - 0.15 * up);
+        this.projGfx.fillEllipse(b.x, b.y + 2, b.radius * (2.6 - up), b.radius * (1.3 - 0.5 * up));
+        if (!this.drawRockShot(b, look, b.y - b.lift, w.tick))
+          drawProjectile(this.fxGfx, this.projGfx, { ...b, y: b.y - b.lift }, look, w.tick, (sp) => this.shed(sp));
         continue;
       }
+      if (look.shape === "rock" && this.drawRockShot(b, look, b.y, w.tick)) continue;
       if (look.shape === "lightning") {
         /*
          * No sprite at all. The bolt is the line it has travelled: from where

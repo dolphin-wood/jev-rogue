@@ -13,3 +13,9 @@ those paintings into exact atlas frame sizes, reduce their shading to the
 school palette, and harden alpha. `pnpm assets:art` packs the resulting
 `vfx_*.png` frames. The source sheets and normalization are retained so the
 frames can be rebuilt without a generation service.
+
+The stone school's sprites are made by `node scripts/draw-stone-art.mjs`: the
+tumbling chunk (`vfx_stone_chunk_*`, Stone Shard) and shell
+(`vfx_stone_shell_*`, Mortar) are drawn there, and the shell's landing
+(`vfx_stone_impact_*`) is the meteor impact draft reduced to the stone palette,
+its fire turned to dust.

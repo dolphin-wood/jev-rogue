@@ -475,6 +475,11 @@ export const MANIFEST: FrameSpec[] = (() => {
     for (let i = 0; i < (phase === "launch" ? 2 : 4); i++) out.push(frame(`vfx_crescent_wave_${phase}_${i}`, "s256", false, false, [96, 192]));
   for (let i = 0; i < 4; i++) {
     out.push(frame(`vfx_meteor_rock_${i}`, "s32"));
+    // The stone school's rock, tumbling: Stone Shard's chunk at 12 world px, Mortar's shell at 16.
+    out.push(frame(`vfx_stone_chunk_${i}`, "s32", false, false, [24, 24]));
+    out.push(frame(`vfx_stone_shell_${i}`, "s32"));
+    // Mortar's landing: the meteor's impact painting in the stone palette, the fire turned to dust.
+    out.push(frame(`vfx_stone_impact_${i}`, "s256", false, false, [128, 128]));
     out.push(frame(`vfx_frost_orb_${i}`, "s32"));
     // Half again the size it was drawn at: at 16 px it read as a spark, not as the orb the spell is.
     out.push(frame(`vfx_ball_lightning_${i}`, "s64", true, false, [48, 48]));

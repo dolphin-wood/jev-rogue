@@ -123,6 +123,20 @@ describe("Blade Rift", () => {
 });
 
 describe("Mortar", () => {
+  it("comes down on the body it seeks, not at a fixed reach", () => {
+    const w = world("mortar");
+    const e = body(w, 110, 30);
+    let landed: { x: number; y: number } | null = null;
+    for (let t = 0; t < 90 && !landed; t++) {
+      w.player.mana = w.staff.mana_max;
+      step(w, t === 0 ? { ...aimRight, spell: 0 } : aimRight);
+      const ev = w.events.find((v) => v.kind === "eruption" && v.what === "mortar");
+      if (ev) landed = { x: ev.x, y: ev.y };
+    }
+    expect(landed).not.toBeNull();
+    expect(Math.hypot(landed!.x - e.x, landed!.y - e.y)).toBeLessThan(8);
+  });
+
   it("flies over a wall and lands on the bodies beyond it", () => {
     // A wall column between the caster and the bodies: a shot would stop on it.
     const wallGx = Math.floor((PX + 60) / TILE_PX);
@@ -136,7 +150,8 @@ describe("Mortar", () => {
 
   it("strikes nothing on the way", () => {
     const w = world("mortar");
-    const between = body(w, 60, 0);
+    // Under the flight, a little off the aim: the shell seeks the body on it.
+    const between = body(w, 70, 16);
     const target = body(w, 150, 0);
     let lifted = 0;
     for (let t = 0; t < 90; t++) {

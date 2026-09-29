@@ -351,7 +351,9 @@ export function fireUnit(
    * aim, and handed out one per projectile, a spray covers bodies and a single
    * shot still goes to the one the player meant.
    */
-  const marks = !free && (seek > 0 || shape !== "bolt") ? seekTargets(world, from.x, from.y, aim.x, aim.y) : [];
+  // A lob is put somewhere too — on the body it seeks — though its shape is a bolt's.
+  const lobbed = num(base.params, "lob", 0) > 0;
+  const marks = !free && (seek > 0 || shape !== "bolt" || lobbed) ? seekTargets(world, from.x, from.y, aim.x, aim.y) : [];
   /*
    * Where a shape that is **put somewhere** goes — a field, a pull, a pillar,
    * the ground going off: for a free cast, the body (or the point) it was

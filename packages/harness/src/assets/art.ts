@@ -1427,7 +1427,7 @@ export function deliveredFrame(spec: FrameSpec): PNG {
   }
   // Spell effects are painted at their final atlas dimensions; keep the
   // authored origin intact (especially the crescent's leading-edge anchor).
-  if (/^vfx_(?:crescent_wave|meteor_rock|meteor_impact|frost_orb|ball_lightning|storm_totem|arc_seg|arc_cap|doom_rune|doom_burst|vortex|guard_answer|contagion_glob|landing_dust|gas_puff)/.test(spec.name)) {
+  if (/^vfx_(?:crescent_wave|meteor_rock|meteor_impact|stone_chunk|stone_shell|stone_impact|frost_orb|ball_lightning|storm_totem|arc_seg|arc_cap|doom_rune|doom_burst|vortex|guard_answer|contagion_glob|landing_dust|gas_puff)/.test(spec.name)) {
     const file = join(SOURCE_DIR, `spells/${spec.name}.png`);
     const image = PNG.sync.read(readFileSync(file));
     if (image.width !== (spec.width ?? SIZE[spec.size]) || image.height !== (spec.height ?? SIZE[spec.size]))
