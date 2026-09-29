@@ -623,6 +623,7 @@ export function stepSpells(
   }
 
   p.mana -= cost;
+  tallyCast(world, slot, cost);
   /*
    * A `charges` press looses the whole bank for one cast's cost, and the
    * bank, not a cooldown, is what says when the key is back: the charge rate
@@ -735,6 +736,13 @@ function refillBanks(world: World, items: ItemRegistry, dtMs: number): void {
  * so does anything that takes the hands away — a stun, a key emptied under
  * it. The cooldown does not start either, because nothing was cast.
  */
+/** A press that cast, and what it paid, by spell id (`WorldStats.castsBy`, `manaBy`). */
+export function tallyCast(world: World, slot: SpellSlot, mana: number): void {
+  const id = slot.item.base;
+  world.stats.castsBy[id] = (world.stats.castsBy[id] ?? 0) + 1;
+  world.stats.manaBy[id] = (world.stats.manaBy[id] ?? 0) + mana;
+}
+
 /** Puts out the beam being channelled, if any: the key came up, a dash, a stun. */
 export function endChannel(world: World): void {
   const p = world.player;
@@ -775,6 +783,7 @@ function releaseCharge(world: World, items: ItemRegistry, slot: SpellSlot, at: n
   const cost = slotCost(slot, items, world.staff);
   if (p.mana < cost) return { shots: [], refused: "mana" };
   p.mana -= cost;
+  tallyCast(world, slot, cost);
   slot.cooldownMs = slotCooldownMs(slot, items, cost);
   return release(world, items, slot, at, cost, { charge: share });
 }

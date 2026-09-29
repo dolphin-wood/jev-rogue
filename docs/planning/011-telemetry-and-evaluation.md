@@ -463,6 +463,17 @@ in `localStorage` (every access wrapped, so a private window costs a log and not
 a session) and exported from the debug sidebar's tools tab, as JSON to the
 clipboard or a download. Nothing about the in-game UI changes.
 
+Beside those, each room carries **what balance is read from**, written by one
+`RoomWatch` (`sim/room-watch.ts`) that the recorder and the harness both call
+every step: the build it was fought with (each key's spell, level and affixes,
+and the stats off their base), health in and out, damage dealt by what dealt
+it (`WorldStats.dealtBy`: `spell:<id>`, `sword`, `spin`, `affix:<id>` for an
+affix's burst, copy or split, `dot:burn`, `ground:<kind>`, a doom's burst), casts
+and mana by spell, kill times by archetype (an elite apart), and how many burns,
+poisons, freezes and shatters took hold. They are a few numbers a room and stay
+in memory for the session: storage keeps only the lean record a reload needs,
+and the export carries everything.
+
 **`pnpm play:calibrate <log.json> [seeds] [arm]`** lays a real log beside each
 profile on the same room indices and prints the gap: room time and HP lost per
 index, each profile as a percentage of the real session, and the share of damage

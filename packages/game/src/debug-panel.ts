@@ -21,8 +21,8 @@
  * default, so a player who never asks for it never sees it.
  */
 
-import { ENEMY_IDS } from "@jr/core";
-import type { World } from "@jr/core";
+import { ENEMY_IDS, RoomWatch } from "@jr/core";
+import type { RoomBalance, World } from "@jr/core";
 import { BossLabPanel } from "./boss-lab.ts";
 import type { BossLabActions, BossLabFrame } from "./boss-lab.ts";
 import { SpellLabPanel } from "./spell-lab.ts";
@@ -99,7 +99,29 @@ export interface PlaytestRoom {
   offers?: { label: string; ids: readonly string[] }[];
   /** The card taken, if one was. */
   picked?: string;
+  /*
+   * **What balance is read from** (doc 011). Each is a few numbers a room —
+   * never an event list — and none is written to storage (`flush`): they
+   * live for the session and leave with the export.
+   */
+  /** What `RoomWatch` read off the room (`sim/room-watch.ts`), the harness's rooms carrying the same. */
+  build?: RoomBalance["build"];
+  hp?: RoomBalance["hp"];
+  dealtBy?: RoomBalance["dealtBy"];
+  castsBy?: RoomBalance["castsBy"];
+  manaBy?: RoomBalance["manaBy"];
+  killTime?: RoomBalance["killTime"];
+  statuses?: RoomBalance["statuses"];
 }
+
+/** The fields that stay in memory only: `flush` writes a room to storage without them. */
+const SESSION_ONLY = ["build", "hp", "dealtBy", "castsBy", "manaBy", "killTime", "statuses"] as const;
+const lean = (r: PlaytestRoom): PlaytestRoom => {
+  const out = { ...r };
+  for (const k of SESSION_ONLY) delete out[k];
+  return out;
+};
+
 
 /**
  * One Director answer, as the log keeps it. `purpose` is the request it came
@@ -171,6 +193,8 @@ export class PlaytestRecorder {
   private seed = "";
   /** The player state this recorder last saw, for counting the starts of things. */
   private was = { swingMs: 0, dashMs: 0, shotsFired: 0 };
+  /** The room in progress's balance watch (`RoomWatch`), closed into its record by `flush`. */
+  private watch = new RoomWatch();
 
   constructor() {
     try {
@@ -194,6 +218,7 @@ export class PlaytestRecorder {
       castPresses: 0, castRefusedMana: 0, manaShortMs: 0,
     };
     this.was = { swingMs: 0, dashMs: 0, shotsFired: 0 };
+    this.watch = new RoomWatch();
     for (const add of this.pending.get(index) ?? []) add(this.live);
     this.pending.clear();
   }
@@ -237,6 +262,7 @@ export class PlaytestRecorder {
     const r = this.live;
     if (!r) return;
     const p = w.player;
+    this.watch.sample(w, dtMs);
     r.ms += dtMs;
     if (this.was.swingMs <= 0 && p.swingMs > 0) r.swings++;
     if (this.was.dashMs <= 0 && p.dashMs > 0) r.dashes++;
@@ -279,11 +305,15 @@ export class PlaytestRecorder {
   flush(): void {
     if (!this.live) return;
     this.live.ms = Math.round(this.live.ms);
+    const balance = this.watch.result();
+    if (balance) Object.assign(this.live, balance);
+    this.watch = new RoomWatch();
     // A room no step was simulated in — the title's backdrop, replaced the moment a run starts — is not a room played.
     if (this.live.ms > 0) this.rooms.push(this.live);
     this.live = null;
     if (this.rooms.length > LOG_LIMIT) this.rooms = this.rooms.slice(-LOG_LIMIT);
-    try { localStorage.setItem(LOG_KEY, JSON.stringify(this.rooms)); } catch { /* the session still records */ }
+    // The balance fields stay in memory: storage keeps the lean record a reload needs.
+    try { localStorage.setItem(LOG_KEY, JSON.stringify(this.rooms.map(lean))); } catch { /* the session still records */ }
   }
 
   /** The log as the calibration command reads it. */

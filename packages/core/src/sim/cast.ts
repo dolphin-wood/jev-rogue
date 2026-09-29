@@ -870,6 +870,7 @@ export function fireUnit(
     // A leap is in the air: it cuts nothing on the way, and its damage is
     // the ring it lands in.
     p.strikeDamage = land > 0 ? 0 : damage;
+    p.strikeSpell = mods.spellIndex;
     p.strikeRadius = radius;
     p.strikeElement = element;
     p.strikeElementPower = powers[element as "fire"] ?? 0;

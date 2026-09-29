@@ -70,7 +70,8 @@ export function effectOf(a: AttachedAffix): AffixEffect | null {
  * hurt a body, and cast the spell again.
  */
 export interface HookSim {
-  hurt(e: Enemy, amount: number): void;
+  /** Hurts a body for an affix; `source` names it in the damage tally (`affix:<source>`). */
+  hurt(e: Enemy, amount: number, source?: string): void;
   /**
    * Casts the spell in slot `spellIndex`, free, from `origin` at `target`.
    *
@@ -317,7 +318,7 @@ export function stepSlams(w: World, dtMs: number, sim: HookSim): void {
     const ux = e.knockX / v, uy = e.knockY / v;
     if (!circleHitsWall(w.room.grid, e.x + ux * 3, e.y + uy * 3, e.radius)) continue;
     e.slamMs = 0;
-    sim.hurt(e, e.slamImpact);
+    sim.hurt(e, e.slamImpact, "slam");
     sim.stagger(e, SLAM_WEIGHT);
     e.knockX = 0;
     e.knockY = 0;
@@ -504,6 +505,8 @@ export function onHit(w: World, b: Bullet, e: Enemy, sim: HookSim): void {
         // Carries the parent's hit list, so a copy never comes back to the
         // body it just left.
         child.hitIds = [...b.hitIds, e.id];
+        // A chained copy's damage is the affix's (`World.dealer`).
+        child.from = "affix:chain";
         child.split = 0;
         child.pierce = 0;
         child.bounce = 0;
@@ -621,7 +624,7 @@ function burst(
   for (const o of w.enemies) {
     if (o.hp <= 0 || o.spawnFadeMs > 0) continue;
     if (Math.hypot(o.x - x, o.y - y) > radius + o.radius) continue;
-    sim.hurt(o, damage);
+    sim.hurt(o, damage, what);
   }
   w.events.push({ kind: "enemy_hit", x, y, what, amount: damage });
 }

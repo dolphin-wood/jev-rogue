@@ -1938,6 +1938,8 @@ export interface Player {
    */
   strikeMs: number;
   strikeDamage: number;
+  /** The key whose dash this is, for the damage tally (`World.dealer`). */
+  strikeSpell: number;
   strikeRadius: number;
   /** The elements the dash cuts with, and the build behind it; see `Vortex`. */
   strikeElement: Element;
@@ -2252,6 +2254,18 @@ export interface WorldStats {
    * most wants to know about.
    */
   heartsLow: number;
+  /**
+   * **Damage dealt, by what dealt it** (doc 011), so a room's figure can be
+   * read against the build that made it: `spell:<id>` for a spell's own hits,
+   * `sword` and `spin`, `affix:<id>` for what an affix burst or copied,
+   * `dot:burn` and `dot:poison` for the statuses' ticks, `ground:<kind>` for
+   * fire, cloud, frost and lava underfoot, and `other` for anything unnamed.
+   * One number a source, never an event list, so a long room costs nothing.
+   */
+  dealtBy: Record<string, number>;
+  /** Presses that cast, and the mana they spent, by spell id (a channel's drain included). */
+  castsBy: Record<string, number>;
+  manaBy: Record<string, number>;
 }
 
 export interface World {
@@ -2507,6 +2521,13 @@ export interface World {
   nextEruptionCast: number;
   /** The spell key held last step, so a press is counted when it goes down (`castPresses`). */
   lastSpellKey: number | null;
+  /**
+   * What the blow about to land is, for `stats.dealtBy`: set by each site
+   * that deals damage immediately before it calls `hurtEnemy`, so a hook
+   * that fires in between (an affix burst off a bullet's hit) cannot leave
+   * its name on the bullet's damage.
+   */
+  dealer: string;
   cleared: boolean;
   /**
    * Impact freeze, in ms. While positive the whole simulation holds still.

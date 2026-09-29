@@ -1,4 +1,4 @@
-import { liveCount } from "@jr/core";
+import { liveCount, RoomWatch } from "@jr/core";
 /**
  * Plays a whole run headless: the Director plans, the reference player fights,
  * and the result is the same simulation the browser runs. This is what makes
@@ -1069,6 +1069,8 @@ export function fight(
 ): { cleared: boolean; heartsLost: number; ms: number; enemiesKilled: number } {
   let killed = 0;
   let ms = 0;
+  // What balance is read from, the same watch the browser's recorder keeps (`RoomWatch`).
+  const watch = new RoomWatch();
   let peakBullets = 0;
   let bulletSum = 0;
   let samples = 0;
@@ -1125,6 +1127,7 @@ export function fight(
     }
     const readyBefore = world.spells.map((sl) => (sl ? [sl.cooldownMs, sl.bank ?? -1, world.player.chargeKey] : null));
     step(world, input);
+    watch.sample(world, STEP_MS);
     if (before <= 0 && world.player.swingMs > 0) swings++;
     world.spells.forEach((sl, i) => {
       const was = readyBefore[i];
@@ -1346,6 +1349,8 @@ export function fight(
     use.soloKills += killed;
     use.soloHearts += world.stats.heartsLost;
   }
+  const balance = watch.result();
+  if (log && balance) Object.assign(log, balance);
   return { cleared, heartsLost: world.stats.heartsLost, ms, enemiesKilled: killed };
 }
 

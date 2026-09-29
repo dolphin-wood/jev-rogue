@@ -661,7 +661,7 @@ function buildWorld(input: CreateWorldOptions): World {
       hurtX: 0, hurtY: 0, hurtMs: 0,
       burnBuild: 0, poisonBuild: 0, burnFedMs: 0, poisonFedMs: 0, burnMs: 0, poisonMs: 0, dotTickMs: 0,
       rage: Math.max(0, Math.min(o.mods?.rageMax ?? Infinity, o.rage ?? 0)), swingStretch: 1, spinTurn: 0, spinBufferMs: 0, spellBuffer: -1, spellBufferMs: 0,
-      strikeMs: 0, strikeDamage: 0, strikeRadius: 0,
+      strikeMs: 0, strikeDamage: 0, strikeSpell: -1, strikeRadius: 0,
       strikeElement: "none" as const, strikeElementPower: 1, strikePowers: noPowers(), strikeProc: 1, strikeStatusMult: 1, strikeHits: [], strikeWake: null,
       stunMs: 0, dragMs: 0, dragX: 0, dragY: 0, slipMs: 0, slideX: 0, slideY: 0,
       swingMs: 0, swingFacing: 0, swung: false, chainMs: 0, swingRun: 0, swingBreathMs: 0,
@@ -704,11 +704,13 @@ function buildWorld(input: CreateWorldOptions): World {
       castPresses: 0, castRefusedMana: 0, manaBelowKeyMs: 0, shotHits: 0, swordDamage: 0,
       hurtByRanged: 0, hurtByMelee: 0, hurtByHazard: 0,
       hurtByEnemy: {}, heartsLow: o.hearts ?? 0,
+      dealtBy: {}, castsBy: {}, manaBy: {},
     },
     rng: o.rng,
     nextEnemyId: 1,
     nextEruptionCast: 1,
     lastSpellKey: null,
+    dealer: "other",
     lastWaveMs: -Infinity,
     cleared: false,
     // Charged, so the first step onto a hazard is paid for at once.
@@ -1578,6 +1580,7 @@ function resolveSwing(w: World, dtMs: number): void {
     // A blow of the swing proper, not the spin's: the one kind of kill a streak counts.
     w.swordBlow = w.player.swingStretch === 1;
     const swordPoise = w.player.swingStretch !== 1 ? SPIN_POISE : box.finisher ? SWORD_FINISHER_POISE : SWORD_POISE;
+    w.dealer = w.player.swingStretch === 1 ? "sword" : "spin";
     const { broke, blocked } = hurtEnemy(w, e, box.damage, e.awake ? "" : "sneak", w.player, box.damage * swordPoise);
     w.swordBlow = false;
     // Off the roaring king: no damage, no gauge, no mana — only the clang and a jolt.
@@ -1723,6 +1726,7 @@ export function hurtEnemy(
   if (amount > 0) interruptToll(w, e);
   if (amount > 0)
     w.events.push({ kind: "damage", x: e.x, y: e.y - e.radius, what: `hp${tag ? `:${tag}` : ""}`, amount });
+  if (amount > 0) w.stats.dealtBy[w.dealer] = (w.stats.dealtBy[w.dealer] ?? 0) + Math.min(amount, Math.max(0, e.hp));
   e.hp -= amount;
   // The blow's weight, by what it hit through: what made the damage larger makes the blow heavier.
   const poiseHit = amount > 0 ? poiseDamage * mult * w.dealtMult : 0;
@@ -1900,7 +1904,8 @@ function resolveFires(w: World, dtMs: number): void {
       }
       continue;
     }
-    hurtEnemy(w, e, damage, "fire");
+  w.dealer = "ground:fire";
+  hurtEnemy(w, e, damage, "fire");
     /*
      * **The player's burning ground builds the burn gauge**, a share of a
      * hit's worth each tick. It only dealt its tick, so a body stood in a
@@ -1973,6 +1978,7 @@ function poisonCloudTick(
 ): void {
   if (e.groundPoisonMs > 0) return;
   e.groundPoisonMs = CLOUD_TICK_MS;
+  w.dealer = "ground:poison";
   hurtEnemy(w, e, damage, "poison");
   applyElementTo(e, "poison", CLOUD_POISON_POWER + powers.poison * proc, statusMult);
   if (powers.fire > 0) applyElementTo(e, "fire", powers.fire * proc, statusMult);
@@ -1992,6 +1998,7 @@ function frostTick(
 ): void {
   if (e.groundChillMs > 0) return;
   e.groundChillMs = CLOUD_TICK_MS;
+  w.dealer = "ground:ice";
   hurtEnemy(w, e, damage, "ice");
   applyElementTo(e, "ice", CLOUD_POISON_POWER + powers.ice * proc, statusMult);
   if (powers.fire > 0) applyElementTo(e, "fire", powers.fire * proc, statusMult);
@@ -2031,7 +2038,8 @@ function resolveStrikes(w: World, dtMs: number): void {
     for (const other of w.enemies) {
       if (other.hp <= 0 || other.spawnFadeMs > 0) continue;
       if (!strikeHits(s, other.x, other.y, other.radius)) continue;
-      hurtEnemy(w, other, FIRE_ENEMY_DAMAGE * 2);
+        w.dealer = "ground:fire";
+        hurtEnemy(w, other, FIRE_ENEMY_DAMAGE * 2);
       other.hitFlashMs = HIT_FLASH_MS;
       w.stats.damageDealt += FIRE_ENEMY_DAMAGE * 2;
       if (other.hp <= 0) onEnemyKilled(w, other);
@@ -4394,7 +4402,7 @@ const SPLIT_REACH_PX = 270;
 /** A shard's size, and its weight, of the parent's. */
 const SPLIT_SIZE = 0.7;
 
-function splitBullets(w: World, dead: readonly Bullet[]): void {
+function splitBullets(w: World, dead: readonly Bullet[], source: (b: Bullet) => string = () => "affix:fork"): void {
   for (const b of dead) {
     const n = b.split | 0;
     if (n <= 0) continue;
@@ -4409,6 +4417,8 @@ function splitBullets(w: World, dead: readonly Bullet[]): void {
       // thing coming apart rather than as a fresh volley.
       const t = n === 1 ? 0 : (i / (n - 1)) * 2 - 1;
       const angle = heading + t * spread;
+      // A piece of a split is the affix's damage, not the spell's (`World.dealer`).
+      child.from = source(parent);
       child.alive = true;
       child.x = parent.x;
       child.y = parent.y;
@@ -4457,6 +4467,12 @@ function splitBullets(w: World, dead: readonly Bullet[]): void {
  */
 
 /** What a player shot's damage number is coloured by: its element, else its spell's school. */
+/** A key's spell as a damage source (`World.dealer`): `spell:<id>`, or `other` for a key that is empty now. */
+function spellSource(w: World, spellIndex: number): string {
+  const base = spellIndex >= 0 ? w.spells[spellIndex]?.item.base : undefined;
+  return base ? `spell:${base}` : "other";
+}
+
 function damageTag(_w: World, b: Bullet): string {
   // Only the three elements are coloured; lightning is not an element.
   return b.element && b.element !== "none" ? b.element : "";
@@ -4464,7 +4480,8 @@ function damageTag(_w: World, b: Bullet): string {
 
 function hookSim(w: World): HookSim {
   return {
-    hurt: (e, amount) => {
+    hurt: (e, amount, source) => {
+      w.dealer = source ? `affix:${source}` : "affix";
       hurtEnemy(w, e, amount, "", undefined, amount * PROC_POISE);
       // Counted like every other hit: a mark's detonation or a harvest burst is damage the player dealt.
       w.stats.damageDealt += amount;
@@ -4563,6 +4580,7 @@ function lobLand(w: World, b: Bullet): void {
     if (d > b.lobRadius + e.radius) continue;
     wake(w, e);
     onHit(w, b, e, sim);
+    w.dealer = b.from || spellSource(w, b.spellIndex);
     const { blocked } = hurtEnemy(w, e, b.damage, damageTag(w, b), { x: b.x, y: b.y }, b.damage * poiseOfWeight(b.weight || 1));
     if (!blocked) applyElement(e, b);
     if (e.hp <= 0) onKill(w, b, e, sim);
@@ -4601,6 +4619,8 @@ function stepBeams(w: World, dtMs: number): void {
        */
       if (beam.drain > 0) {
         p.mana -= beam.drain * (dtMs / 1000);
+        const id = w.spells[beam.spellIndex]?.item.base;
+        if (id) w.stats.manaBy[id] = (w.stats.manaBy[id] ?? 0) + beam.drain * (dtMs / 1000);
         if (p.mana <= 0) { p.mana = 0; beam.alive = false; p.channelKey = -1; continue; }
       }
       /*
@@ -4643,6 +4663,7 @@ function stepBeams(w: World, dtMs: number): void {
       const d = Math.hypot(e.x - (beam.x0 + lx * t), e.y - (beam.y0 + ly * t));
       if (d > beam.width + e.radius) continue;
       wake(w, e);
+      w.dealer = spellSource(w, beam.spellIndex);
       const { blocked } = hurtEnemy(w, e, beam.damage, beam.element !== "none" ? beam.element : "", { x: beam.x0, y: beam.y0 },
         beam.damage * poiseOfWeight(beam.weight));
       if (!blocked) applyElementsTo(e, beam.powers, beam.statusMult, beam.proc, beam.damage);
@@ -4840,6 +4861,7 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
         // a mark. Before the damage, so a detonation sees the body it is on.
         onHit(w, b, e, hookSim(w));
         // From where the shot came, a body-length back along its travel.
+        w.dealer = b.from || spellSource(w, b.spellIndex);
         const { blocked } = hurtEnemy(w, e, b.damage, unaware ? "sneak" : damageTag(w, b), { x: px - ux * 24, y: py - uy * 24 },
           b.damage * poiseOfWeight(b.weight || 1));
         // An enchant's wave is the sword's edge thrown, so it fills the rage
@@ -4854,6 +4876,7 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
         if (cull > 0 && !blocked && e.hp > 0 && e.hp <= e.maxHp * cull && e.archetype !== "boss" && !e.guardian) {
           w.events.push({ kind: "damage", x: e.x, y: e.y - e.radius, what: "hp:cull", amount: Math.ceil(e.hp) });
           w.stats.damageDealt += e.hp;
+          w.stats.dealtBy["affix:cull"] = (w.stats.dealtBy["affix:cull"] ?? 0) + e.hp;
           e.hp = 0;
         }
         if (e.hp <= 0) onKill(w, b, e, hookSim(w));
@@ -4967,7 +4990,7 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
   for (const b of [...expired, ...hitWall]) burstShards(w, b);
   for (const b of hitWall)
     w.events.push({ kind: "bullet_wall", x: b.x, y: b.y, what: `player:${b.element}`, facing: Math.atan2(b.vy, b.vx) });
-  splitBullets(w, [...expired, ...hitWall]);
+  splitBullets(w, [...expired, ...hitWall], (b) => (hitWall.includes(b) ? "affix:shatter" : "affix:fork"));
 }
 
 /**
@@ -5882,7 +5905,8 @@ function stepLava(w: World, dtMs: number): void {
     e.lavaMs += dtMs;
     if (e.lavaMs < LAVA_ENEMY_TICK_MS) continue;
     e.lavaMs = 0;
-    hurtEnemy(w, e, LAVA_ENEMY_DAMAGE, "lava");
+      w.dealer = "ground:lava";
+      hurtEnemy(w, e, LAVA_ENEMY_DAMAGE, "lava");
   }
 }
 
@@ -6015,6 +6039,7 @@ function stepDashStrike(w: World, dtMs: number): void {
         if (!isActive(e) || e.hp <= 0) continue;
         if (!circlesOverlap(s.x, s.y, s.radius, e.x, e.y, e.radius)) continue;
         wake(w, e);
+        w.dealer = spellSource(w, s.spellIndex);
         hurtEnemy(w, e, s.damage, s.element !== "none" ? s.element : "", s, s.damage * STRIKE_POISE);
         w.stats.damageDealt += s.damage;
         applyElementsTo(e, s.powers, s.statusMult, s.proc, s.damage);
@@ -6059,6 +6084,7 @@ function stepDashStrike(w: World, dtMs: number): void {
     // A body the run itself cut is not cut again by its wake: the wake is for the ground beside the run.
     p.strikeWake?.byPlayer?.hits.push(e.id);
     wake(w, e);
+    w.dealer = spellSource(w, p.strikeSpell);
     hurtEnemy(w, e, p.strikeDamage, p.strikeElement !== "none" ? p.strikeElement : "", p, p.strikeDamage * STRIKE_POISE);
     w.stats.damageDealt += p.strikeDamage;
     applyElementsTo(e, p.strikePowers, p.strikeStatusMult, p.strikeProc, p.strikeDamage);
@@ -6147,6 +6173,7 @@ function stepPlayerWakes(w: World): void {
       if (!shockwaveHits(s, e.x, e.y, e.radius) || !hasLineOfSight(w.room.grid, s.x, s.y, e.x, e.y)) continue;
       cut.hits.push(e.id);
       wake(w, e);
+      w.dealer = spellSource(w, cut.spellIndex);
       hurtEnemy(w, e, cut.damage, cut.element !== "none" ? cut.element : "", s, cut.damage * poiseOfWeight(cut.weight));
       w.stats.damageDealt += cut.damage;
       applyElementsTo(e, cut.powers, cut.statusMult, cut.proc, cut.damage);
@@ -6230,6 +6257,7 @@ function stepEruptions(w: World, dtMs: number): void {
         e.eruptionCastId = c.castId;
       }
       hit = true;
+      w.dealer = spellSource(w, c.spellIndex);
       hurtEnemy(w, e, c.damage, c.element !== "none" ? c.element : "", { x: c.x, y: c.y }, c.damage * poiseOfWeight(c.weight));
       w.stats.damageDealt += c.damage;
       applyElementsTo(e, c.powers, c.statusMult, c.proc, c.damage);
@@ -6282,6 +6310,7 @@ function stepVortices(w: World, dtMs: number): void {
       }
       if (tick && d < v.radius * 0.75) {
         // The maw's pull is a grind, not a blow; its collapse is the blow.
+        w.dealer = spellSource(w, v.spellIndex);
         hurtEnemy(w, e, v.damage, v.element !== "none" ? v.element : "", undefined, v.damage * poiseOfWeight(0));
         w.stats.damageDealt += v.damage;
         applyElementsTo(e, v.powers, v.statusMult, v.proc, v.damage);
@@ -6305,6 +6334,7 @@ function collapse(w: World, v: World["vortices"][number]): void {
     if (!isActive(e) || e.hp <= 0) continue;
     if (Math.hypot(e.x - v.x, e.y - v.y) > v.radius) continue;
     hit = true;
+    w.dealer = spellSource(w, v.spellIndex);
     hurtEnemy(w, e, v.collapseDamage, v.element !== "none" ? v.element : "", v, v.collapseDamage * poiseOfWeight(SPELL_STAGGER_WEIGHT));
     w.stats.damageDealt += v.collapseDamage;
     applyElementsTo(e, v.powers, v.statusMult, v.proc, v.collapseDamage);
@@ -6372,6 +6402,7 @@ function doomBurst(
       onHit(w, hit, e, sim);
       hit.hitIds.push(e.id);
     }
+    w.dealer = tag === "aftershock" ? "affix:aftershock" : spellIndex >= 0 ? `${spellSource(w, spellIndex)}:doom` : "doom";
     hurtEnemy(w, e, damage, tag, { x, y }, damage * PROC_POISE);
     if (hit && carry) {
       applyElementsTo(e, carry.powers, carry.statusMult, carry.proc, damage);
@@ -6757,6 +6788,7 @@ function answerStance(w: World, share: number): void {
     if (d > s.radius + e.radius) continue;
     hit = true;
     wake(w, e);
+    w.dealer = spellSource(w, s.spellIndex);
     hurtEnemy(w, e, damage, s.element !== "none" ? s.element : "", p, damage * poiseOfWeight(s.weight));
     w.stats.damageDealt += damage;
     applyElementsTo(e, s.powers, s.statusMult, s.proc, damage);

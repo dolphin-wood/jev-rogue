@@ -16,6 +16,8 @@
  * somebody says about their session should use their units.
  */
 
+import type { RoomBalance } from "@jr/core";
+
 /** A heart is ten HP, as the HUD draws it. */
 export const HP_PER_HEART = 10;
 
@@ -57,6 +59,19 @@ export interface RoomLog {
   readonly castPresses?: number;
   readonly castRefusedMana?: number;
   readonly manaShortMs?: number;
+  /*
+   * **What balance is read from**, as `RoomWatch` (`sim/room-watch.ts`)
+   * writes it in both logs: the build, health in and out, damage dealt by
+   * source, casts and mana by spell, kill times by archetype, statuses.
+   * Optional, for logs exported before they existed.
+   */
+  readonly build?: RoomBalance["build"];
+  readonly hp?: RoomBalance["hp"];
+  readonly dealtBy?: RoomBalance["dealtBy"];
+  readonly castsBy?: RoomBalance["castsBy"];
+  readonly manaBy?: RoomBalance["manaBy"];
+  readonly killTime?: RoomBalance["killTime"];
+  readonly statuses?: RoomBalance["statuses"];
 }
 
 export interface PlaytestLog {

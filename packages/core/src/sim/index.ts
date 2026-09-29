@@ -9,6 +9,7 @@ export * from "./world.ts";
 export * from "./melee.ts";
 export * from "./spells.ts";
 export * from "./recall.ts";
+export * from "./room-watch.ts";
 export * from "./props.ts";
 export * from "./pickups.ts";
 export * from "./fire.ts";

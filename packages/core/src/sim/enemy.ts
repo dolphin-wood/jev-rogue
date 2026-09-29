@@ -3043,6 +3043,8 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
       const tick = Math.max(1, Math.floor(e.dotShown * world.dealtMult));
       e.hp -= tick;
       world.stats.damageDealt += tick;
+      const dot = e.burnMs > 0 ? "dot:burn" : "dot:poison";
+      world.stats.dealtBy[dot] = (world.stats.dealtBy[dot] ?? 0) + tick;
       world.events.push({ kind: "damage", x: e.x, y: e.y - e.radius, what: e.burnMs > 0 ? "dot:burn" : "dot:poison", amount: tick });
       e.dotShown = Math.max(0, e.dotShown - tick / Math.max(0.01, world.dealtMult));
     }
@@ -3057,6 +3059,7 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
       if (rest > 0) {
         e.hp -= rest;
         world.stats.damageDealt += rest;
+        world.stats.dealtBy["dot:burn"] = (world.stats.dealtBy["dot:burn"] ?? 0) + rest;
         world.events.push({ kind: "damage", x: e.x, y: e.y - e.radius, what: "dot:burn", amount: rest });
       }
       e.dotShown = 0;
