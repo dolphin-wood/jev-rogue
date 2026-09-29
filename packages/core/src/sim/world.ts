@@ -1479,9 +1479,7 @@ function stepPlayer(w: World, input: Input, dtMs: number): void {
     // A dash is the player's own commitment, and short: the press waits it
     // out rather than running down under it.
     if (p.dashMs <= 0) p.spinBufferMs = Math.max(0, p.spinBufferMs - dtMs);
-    // Whirling, the blade is already out and turning: the swing waits for the spin to end.
-    const whirling = p.channelKey >= 0 && w.beams.some((b) => b.alive && b.channel && b.ring > 0);
-    if (input.swing && !stunned && !whirling) {
+    if (input.swing && !stunned) {
       if (input.autoMeleeAim && canSwing(p)) {
         const facing = autoMeleeFacing(w);
         if (facing !== null) p.facing = facing;
@@ -4561,39 +4559,6 @@ function stepBeams(w: World, dtMs: number): void {
       if (beam.channel && p.channelKey === beam.spellIndex) p.channelKey = -1;
       continue;
     }
-    /*
-     * A whirl turns round the caster, pays its drain while held, and ends
-     * when the bar is dry; it hurts what stands inside its ring, walls or no.
-     */
-    if (beam.ring > 0) {
-      beam.x0 = beam.x1 = p.x;
-      beam.y0 = beam.y1 = p.y;
-      beam.angle += (WHIRL_DEG_PER_S * Math.PI / 180) * (dtMs / 1000);
-      if (beam.channel && beam.drain > 0) {
-        p.mana -= beam.drain * (dtMs / 1000);
-        if (p.mana <= 0) { p.mana = 0; beam.alive = false; p.channelKey = -1; continue; }
-      }
-      beam.clockMs -= dtMs;
-      if (beam.clockMs > 0) continue;
-      beam.clockMs += beam.tickMs;
-      for (const e of w.enemies) {
-        if (!isActive(e) || e.hp <= 0) continue;
-        const dx = e.x - p.x, dy = e.y - p.y;
-        const d = Math.hypot(dx, dy);
-        if (d > beam.ring + e.radius) continue;
-        wake(w, e);
-        const { blocked } = hurtEnemy(w, e, beam.damage, beam.element !== "none" ? beam.element : "", { x: p.x, y: p.y },
-          beam.damage * poiseOfWeight(beam.weight));
-        if (!blocked) applyElementsTo(e, beam.powers, beam.statusMult, beam.proc);
-        w.stats.damageDealt += beam.damage;
-        e.hitFlashMs = HIT_FLASH_MS;
-        // Thrown a little outward, round the way the blade turns: the ring clears as it cuts.
-        const push = (WHIRL_PUSH * (beam.weight || 1)) / Math.max(1, e.radius / 10);
-        e.knockX += (dx / (d || 1)) * push;
-        e.knockY += (dy / (d || 1)) * push;
-      }
-      continue;
-    }
     if (beam.channel) {
       const dir = { x: p.aim.x - p.x, y: p.aim.y - p.y };
       const len = Math.hypot(dir.x, dir.y) || 1;
@@ -4627,14 +4592,6 @@ function stepBeams(w: World, dtMs: number): void {
     }
   }
 }
-
-/**
- * How fast a whirl's blade turns round the caster, for the eye — slower than
- * the rage spin's, a sweep that can be followed round rather than a blur —
- * and how hard each cut shoves a body out.
- */
-const WHIRL_DEG_PER_S = 480;
-const WHIRL_PUSH = 40;
 
 /** How often an orbiting blade may hit the same body: about twice a second. */
 const ORBIT_REHIT_MS = 450;

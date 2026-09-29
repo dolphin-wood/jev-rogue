@@ -969,27 +969,6 @@ const ATTACKS: readonly BaseItem[] = [
       "Blade Storm adds a spectral blade to a ring circling the caster that grows wider and faster with each; the sixth flings every blade outward, cutting through all in its path.",
   },
   {
-    id: "whirlwind",
-    rarity: "uncommon",
-    tags: ["attack", "short", "none", "melee", "area"],
-    mana: 1,
-    params: {
-      /*
-       * `beam` with `whirl_radius`: channelled round the caster instead of
-       * along the aim. Held, the caster spins with the blade out, cutting
-       * every body within the ring each tick, walking slowly and swinging
-       * nothing else; the bar pays `drain_per_s` for as long as it turns, so
-       * the spin lasts as long as the bar does. Walked into the crowd, not
-       * thrown at it.
-       */
-      shape: "beam", damage: 2.3, speed: 0, radius: 0, count: 1, spread: 0, lifetime: 6, reach: 0, tick_ms: 200,
-      whirl_radius: 46, drain_per_s: 10, pierce: 0, element: "none", seek: 0, curve: 0, weight: 0.6, flash_ms: 400,
-      windup_ms: 0, recover_ms: 180, move_scale: 0.6, cooldown_scale: 1,
-    },
-    description:
-      "Whirlwind is held: for as long as its key stays down, the caster spins with the blade out, cutting every body close around them several times a second while they walk slowly. It drains mana for as long as it turns.",
-  },
-  {
     id: "blade_recall",
     rarity: "uncommon",
     tags: ["attack", "short", "none", "melee"],

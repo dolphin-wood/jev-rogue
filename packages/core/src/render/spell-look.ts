@@ -78,7 +78,6 @@ export const SPELL_LOOK: Readonly<Record<string, SpellLook>> = {
   serpent_fang: { core: 0xecffd8, glow: 0x5fd64a, shape: "edge" },
   storm_totem: { core: 0xfffbe0, glow: 0xffe066, shape: "ball" },
   blade_storm: { core: 0xf4f0ff, glow: 0xb9a7ff, shape: "blade" },
-  whirlwind: { core: 0xf4f0ff, glow: 0xb9a7ff, shape: "blade" },
   blade_recall: { core: 0xf4f0ff, glow: 0xb9a7ff, shape: "blade" },
   blade_rift: { core: 0xf0fffb, glow: 0x9ff0e0, shape: "blade" },
   mortar: { core: 0xe9dcc4, glow: 0xb08a58, shape: "rock" },

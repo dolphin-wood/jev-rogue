@@ -82,8 +82,6 @@ export function autoCastReach(params: Readonly<Record<string, number | string>>)
     case "summon": reach = n("reach", 200); break;
     // Fire left under the feet: worth laying only with a body close.
     case "trail": reach = 3 * TILE_PX; break;
-    // A line to its reach, or a whirl to its ring (never pressed by the assist, but it has a reach).
-    case "beam": reach = n("whirl_radius") > 0 ? n("whirl_radius") : n("reach", 200); break;
     default: reach = n("speed") * n("lifetime", 1.2) + radius;
   }
   return Math.min(AUTO_CAST_MAX_REACH_PX, reach);
@@ -91,8 +89,7 @@ export function autoCastReach(params: Readonly<Record<string, number | string>>)
 
 /**
  * **Whether a spell may ever press itself.** Only one that casts on a tap:
- * a `charge` spell is a hold, a `beam` a channel held on its key, and a
- * `stance` a guard, all the player's call;
+ * a `charge` spell is a hold and a `stance` a guard, both the player's call;
  * and never a `dash` — Blink Strike, Leap Slam, Dash Slash — which moves the
  * body: the game throwing the player across the room is the one thing an
  * assist must not do.

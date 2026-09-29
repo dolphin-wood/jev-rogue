@@ -148,12 +148,6 @@ roster's standard status), `speed`, `windup_ms`, `recover_ms`, `move_scale`,
   meanwhile, and the key coming up, another key, a dash or a stun puts it
   out. It fires none of the projectile hooks. Cast free by an affix it is a
   `flash_ms` flash at the body the affix names.
-- **`whirl_radius` (beam).** A ring round the caster instead of a line:
-  held, the caster spins with the blade out, hurting every body within
-  `whirl_radius` each `tick_ms`, walls or no, and cannot swing meanwhile. With
-  `drain_per_s` the bar pays that much a second for as long as it turns, and
-  the spin ends when the bar is dry; the press still costs the key's own rank.
-  The assist never presses a channel: its press is a tap.
 - **`lob` (bolt).** The shell flies in an arc over every body and wall to the
   body it seeks, or the aim's point at `reach`, for `lob` seconds, and lands
   for its whole damage on every body within `lob_radius`. Its landing is its
@@ -184,7 +178,7 @@ roster's standard status), `speed`, `windup_ms`, `recover_ms`, `move_scale`,
 
 ## The roster
 
-Forty-nine spells. ★ marks each style's starter. A spell appears under every
+Forty-eight spells. ★ marks each style's starter. A spell appears under every
 style it is tagged with; its first row is its primary style.
 
 ### Barrage (`spam`)
@@ -264,7 +258,6 @@ style it is tagged with; its first row is its primary style.
 | Serpent Fang `serpent_fang` | venom | uncommon | boomerang | a fang thrown out and back that poisons each body it cuts on both passes |
 | Dash Slash `dash_slash` | spirit | uncommon | dash + wake | a run through the bodies ahead whose wake cuts those to either side |
 | Blade Storm `blade_storm` | spirit | rare | orbit + `stack_max` | each cast adds a blade to a ring round the caster that widens and quickens; the sixth flings them all out at nearby bodies (also Barrage) |
-| Whirlwind `whirlwind` | spirit | uncommon | beam + `whirl_radius` | held: the caster spins with the blade out, cutting every body close round them; drains mana while it turns (also Crowd) |
 | Blade Recall `blade_recall` | spirit | uncommon | boomerang + `lodge_max` | each sword blow leaves a blade in the body struck, up to six; the press calls them all home through everything between |
 | Blade Rift `blade_rift` | spirit | uncommon | orbit + `anchor_reach` | a whirl of three blades set spinning on the floor ahead, cutting what stands in it (also Crowd) |
 | Stone Ward `stone_ward` | stone | common | pillar | a pillar between the caster and what they face that blocks bodies and shots |
@@ -305,7 +298,7 @@ card.
 | venom | venom_spit, plague_bloom, toxic_cloud, contagion, serpent_fang |
 | storm | shock_arc, spark_spray, arc_lance, seeker_swarm, ball_lightning, storm_totem |
 | void | magic_bolt, void_orb, void_maw, mana_darts, arcane_cannon, doom_sigil, void_ray |
-| spirit | spirit_blades, spirit_ally, blink_strike, returning_edge, crescent_edge, counter_stance, dash_slash, blade_storm, blade_recall, whirlwind, blade_rift |
+| spirit | spirit_blades, spirit_ally, blink_strike, returning_edge, crescent_edge, counter_stance, dash_slash, blade_storm, blade_recall, blade_rift |
 | stone | stone_shard, stone_ward, scatter_shot, fault_line, earth_spikes, quake_ring, leap_slam, mortar |
 
 `STYLE_SCHOOLS` (`run/doors.ts`), the schools a style's door may promise, is

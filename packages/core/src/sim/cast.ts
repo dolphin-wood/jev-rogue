@@ -420,7 +420,7 @@ export function fireUnit(
       const fresh = {
         alive: false, x0: 0, y0: 0, x1: 0, y1: 0, reach: 0, width: 0, damage: 0, tickMs: 0, clockMs: 0,
         lifeMs: 0, maxLifeMs: 0, channel: false, element: "none" as Element, powers: noPowers(), proc: 1,
-        statusMult: 1, weight: 1, spellIndex: -1, ring: 0, angle: 0, drain: 0,
+        statusMult: 1, weight: 1, spellIndex: -1,
       };
       world.beams.push(fresh);
       return fresh;
@@ -443,18 +443,8 @@ export function fireUnit(
     beam.statusMult = statusMult;
     beam.weight = weight;
     beam.spellIndex = mods.spellIndex;
-    /*
-     * **A whirl** (`whirl_radius`, Whirlwind): the caster spinning with the
-     * blade out, hurting every body within the ring each tick for as long as
-     * the key is held and the bar pays `drain_per_s`. Cast free, one short
-     * turn round the caster.
-     */
-    beam.ring = num(base.params, "whirl_radius", 0) * mods.radiusMult;
-    beam.angle = world.player.facing;
-    beam.drain = free ? 0 : num(base.params, "drain_per_s", 0);
-    if (beam.ring > 0) { beam.x0 = beam.x1 = world.player.x; beam.y0 = beam.y1 = world.player.y; }
     if (!free && mods.spellIndex >= 0) world.player.channelKey = mods.spellIndex;
-    world.events.push({ kind: "spell", x: from.x, y: from.y, what: beam.ring > 0 ? "whirl" : "beam" });
+    world.events.push({ kind: "spell", x: from.x, y: from.y, what: "beam" });
     shots.push({ x: beam.x1, y: beam.y1, family: base.id });
     return;
   }

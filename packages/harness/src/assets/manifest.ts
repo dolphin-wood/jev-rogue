@@ -432,7 +432,7 @@ export const MANIFEST: FrameSpec[] = (() => {
   for (const id of ["ball_lightning", "returning_edge", "crescent_edge", "counter_stance", "cinder_stride", "toxic_cloud", "dash_slash"])
     out.push(frame(`icon_${id}`, "s32", true, false, [16, 16]));
   // And the second spells of four shapes.
-  for (const id of ["blizzard", "serpent_fang", "storm_totem", "blade_storm", "blade_recall", "whirlwind", "blade_rift", "mortar", "void_ray"])
+  for (const id of ["blizzard", "serpent_fang", "storm_totem", "blade_storm", "blade_recall", "blade_rift", "mortar", "void_ray"])
     out.push(frame(`icon_${id}`, "s32", true, false, [16, 16]));
   for (const id of [
     "fork", "chain", "brand", "harvest", "echo", "bloom", "shatter",

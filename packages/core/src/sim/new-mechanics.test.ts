@@ -101,36 +101,6 @@ describe("Blade Storm", () => {
   });
 });
 
-describe("Whirlwind", () => {
-  it("cuts every body inside its ring while held, and none beyond it", () => {
-    const w = world("whirlwind");
-    const near = [body(w, 30, 0), body(w, -30, 10), body(w, 0, -34)];
-    const far = body(w, 120, 0);
-    run(w, 30, () => ({ ...aimRight, spell: 0 }));
-    for (const e of near) expect(e.hp).toBeLessThan(e.maxHp);
-    expect(far.hp).toBe(far.maxHp);
-  });
-
-  it("drains the bar while it turns, ends when the bar is dry, and stops the sword meanwhile", () => {
-    const w = world("whirlwind");
-    body(w, 22, 0);
-    w.player.mana = 12;
-    // The spin under way first; then the sword pressed as well, every step.
-    run(w, 3, () => ({ ...aimRight, spell: 0 }));
-    w.player.mana = 12;
-    let swung = false;
-    for (let t = 0; t < 180; t++) {
-      step(w, { ...aimRight, spell: 0, swing: true });
-      w.player.hearts = 6;
-      if (w.player.channelKey >= 0 && w.player.swingMs > 0) swung = true;
-      if (w.player.channelKey < 0) break;
-    }
-    expect(swung).toBe(false);
-    expect(w.player.channelKey).toBe(-1);
-    expect(w.player.mana).toBeLessThan(1);
-  });
-});
-
 describe("Blade Recall", () => {
   it("does nothing, and spends nothing, with no blade out", () => {
     const w = world("blade_recall");

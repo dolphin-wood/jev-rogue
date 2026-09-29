@@ -254,12 +254,7 @@ export function offerStatParts(item: BaseItem, level = 1): StatPart[] {
     else if (item.params.element === "ice") push("frost ground", "trait", "stat.fieldIce");
     else push("burning ground", "trait", "stat.field");
   }
-  if (shape === "beam") {
-    const drain = num(item.params, "drain_per_s", 0);
-    if (Number(item.params.whirl_radius ?? 0) > 0) push("hold to spin", "trait", "stat.whirl");
-    else push("hold to channel", "trait", "stat.beam");
-    if (drain > 0) push(`${drain} mana/s held`, "trait", "stat.drain", { n: drain });
-  }
+  if (shape === "beam") push("hold to channel", "trait", "stat.beam");
   if (Number(item.params.lob ?? 0) > 0) push("lobbed over walls", "trait", "stat.lob");
   /*
    * The newer shapes (doc 006), each by the one fact the damage figure beside
