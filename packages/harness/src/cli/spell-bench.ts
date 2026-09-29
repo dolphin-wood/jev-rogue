@@ -42,6 +42,7 @@
  * Run: `pnpm spell-bench` (add `quick` to skip the upgrade ladder while
  * tuning base numbers; the ladder assertions are then not checked).
  */
+import { mkdirSync, writeFileSync } from "node:fs";
 import {
   createWorld, step, makeEnemy, generateRoom, toRoomPlan, runStaff, plainInstance,
   RngSource, NO_INPUT, ITEMS, STEP_MS, GRID_W, GRID_H, TILE_PX, Tile, STYLE_START, attachAffix,
@@ -534,6 +535,35 @@ function ladder(item: BaseItem, targets: readonly [number, number][]): {
     if (dps > stacked.dps) stacked = { name: `${a}+${b}`, dps, affixes };
   }
   return { best, stacked };
+}
+
+/* ------------------------------ the affix matrix -------------------------- */
+
+/**
+ * `pnpm spell-bench matrix`: every spell against every affix it can take, one
+ * at a time at level one, each as a multiple of the bare spell's damage on
+ * its own station's single body and pack. Written to `local/affix-matrix.json`
+ * for review; the gates below do not read it. An affix that acts on
+ * something other than damage — a ward, a shove, a step of speed — reads as
+ * about x1 here, which is its nature, not a fault.
+ */
+if (process.argv.slice(2).includes("matrix")) {
+  const out: { spell: string; shape: string; affix: string; single: number; pack: number }[] = [];
+  for (const i of ITEMS.values()) {
+    const near = close(i);
+    const one = near ? closeSingle : single;
+    const many = near ? closePack : pack;
+    const bareOne = run(i.id, one).dps, bareMany = run(i.id, many).dps;
+    for (const a of SPELL_AFFIXES) {
+      if (!affixFitsSpell(a, i, [])) continue;
+      const s1 = run(i.id, one, [[a.id, 1]]).dps, s2 = run(i.id, many, [[a.id, 1]]).dps;
+      out.push({ spell: i.id, shape: itemShape(i), affix: a.id, single: bareOne > 0 ? s1 / bareOne : 0, pack: bareMany > 0 ? s2 / bareMany : 0 });
+    }
+    console.log(`${i.id}: ${out.filter((r) => r.spell === i.id).map((r) => `${r.affix} ${r.single.toFixed(2)}/${r.pack.toFixed(2)}`).join("  ")}`);
+  }
+  mkdirSync("local", { recursive: true });
+  writeFileSync("local/affix-matrix.json", JSON.stringify(out, null, 1));
+  process.exit(0);
 }
 
 /* --------------------------------- the pool ------------------------------- */

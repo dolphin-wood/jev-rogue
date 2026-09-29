@@ -732,7 +732,7 @@ const ATTACKS: readonly BaseItem[] = [
        * Measured at the far station: it is thrown, and it drifts into reach
        * of a body across the room on its own.
        */
-      shape: "orb", damage: 2.45, speed: 45, radius: 7, count: 1, spread: 0, lifetime: 3.6, pierce: 0,
+      shape: "orb", damage: 2.2, speed: 45, radius: 7, count: 1, spread: 0, lifetime: 3.6, pierce: 0,
       element: "none", seek: 0, curve: 0, weight: 0.3, zap_ms: 350, zap_reach: 90, max_alive: 3,
       windup_ms: 60, recover_ms: 160, move_scale: 0.8,
     },
@@ -909,22 +909,23 @@ const ATTACKS: readonly BaseItem[] = [
   {
     id: "storm_totem",
     rarity: "uncommon",
-    tags: ["attack", "mid", "none", "spam"],
+    tags: ["attack", "mid", "none", "spam", "area"],
     mana: 4,
     params: {
       /*
        * An orb that does not drift, and does not pick one body: set down
        * beside the caster, it gathers its charge and discharges at the
        * nearest `zap_count` bodies in its reach at once, a slow heavy beat,
-       * so it is a thing to fight a crowd round. Ball Lightning is the
-       * orb sent off to spark at one body several times a second. Two at most.
+       * so it is a thing to fight a crowd round and weaker than Ball
+       * Lightning on a lone body, which is the orb sent off to spark at one
+       * body several times a second. Two at most.
        */
-      shape: "orb", damage: 7, speed: 0, radius: 8, count: 1, spread: 0, lifetime: 5, pierce: 0,
-      element: "none", seek: 0, curve: 0, weight: 0.3, zap_ms: 1100, zap_count: 4, zap_reach: 150, max_alive: 2, place_px: 30,
+      shape: "orb", damage: 4.5, speed: 0, radius: 8, count: 1, spread: 0, lifetime: 4, pierce: 0,
+      element: "none", seek: 0, curve: 0, weight: 0.3, zap_ms: 1000, zap_count: 3, zap_reach: 150, max_alive: 2, place_px: 30,
       windup_ms: 80, recover_ms: 160, move_scale: 0.8,
     },
     description:
-      "Storm Totem sets a crackling totem down beside the caster that gathers its charge and discharges at up to four bodies within its reach at once, about once a second, until it fades; two can stand at once.",
+      "Storm Totem sets a crackling totem down beside the caster that gathers its charge and discharges at up to three bodies within its reach at once, once a second, until it fades; two can stand at once.",
   },
   /*
    * **The four the roster had no machinery for** (spell-roster-survey 1.1-1.5):

@@ -197,7 +197,7 @@ style it is tagged with; its first row is its primary style.
 | Spirit Ally `spirit_ally` | spirit | rare | summon | a companion that follows and shoots the nearest body for a while |
 | Mana Darts `mana_darts` | void | uncommon | bolt + `charges` | banks darts while the key rests; a press looses all of them |
 | Ball Lightning `ball_lightning` | storm | uncommon | orb | a slow orb that strikes the nearest body in reach several times a second; several can be out at once |
-| Storm Totem `storm_totem` | storm | uncommon | orb (still) | a totem set down beside the caster that charges and discharges at up to four bodies in its reach at once (`zap_count`); two at most |
+| Storm Totem `storm_totem` | storm | uncommon | orb (still) | a totem set down beside the caster that charges and discharges at up to three bodies in its reach at once (`zap_count`); two at most (also Crowd) |
 | Blade Storm `blade_storm` | spirit | rare | orbit + `stack_max` | see Blade |
 
 ### Heavy (`nuke`)
@@ -233,6 +233,7 @@ style it is tagged with; its first row is its primary style.
 | Flame Pillars `flame_pillars` | flame | uncommon | eruption (line) | see Affliction |
 | Cinder Burst `cinder_burst` | flame | uncommon | bolt | see Affliction |
 | Blizzard `blizzard` | frost | uncommon | field (ice) | frost under the nearest body that slows what stands in it and chills it toward a freeze |
+| Storm Totem `storm_totem` | storm | uncommon | orb (still) | see Barrage |
 | Mortar `mortar` | stone | rare | bolt + `lob` | see Heavy |
 | Blade Rift `blade_rift` | spirit | uncommon | orbit + `anchor_reach` | see Blade |
 

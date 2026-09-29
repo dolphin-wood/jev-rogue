@@ -31,14 +31,14 @@ import {
 } from "./collide.ts";
 import {
   autoMeleeFacing, beginSwing, canSwing, cancelSwing, makeSwingBox, manaPerHit, sectorHits, snapFacing,
-  stepStrike, stepSwing, strikeHits, swingMoveScale, beginSpin, SPIN_RAGE,
+  stepStrike, stepSwing, strikeHits, swingMoveScale, beginSpin, SPIN_RAGE, bladeAngle, SWING_ACTIVE_MS, SWING_WINDUP_MS,
 } from "./melee.ts";
 import { CLOUD_TICK_MS, FIRE_ENEMY_DAMAGE, FIRE_TICK_MS, GROUND_STATUS_POWER, lightFire, makeFirePool, makeScorchPool, scorch, stepFires, stepScorches } from "./fire.ts";
 import { eruptRing, fireUnit, PROC_MIN } from "./cast.ts";
 import { stepBoomerangs, stepEnchant, stepOrbs, stepTrail, stepWaves, waveCentre, waveHits } from "./shapes.ts";
 import {
   afterimageOf, cullShare, dragPull, effectOf, intercepts, nearestWithin, onDashStart, onDashThrough, stepSlams, onExpire, onHit, onHurt, onKill, onSpin, stepWards,
-  wallSplitCount, wardStops,
+  wallSplitCount, wardStops, whirlTargets,
 } from "./affix-hooks.ts";
 import type { HookSim } from "./affix-hooks.ts";
 import {
@@ -691,6 +691,7 @@ function buildWorld(input: CreateWorldOptions): World {
     affixPlaced: {},
     dealtMult: o.dealtMult ?? 1,
     resonance: [],
+    spinRays: [],
     lodged: [],
     takenMult: o.takenMult ?? 1,
     invincible: o.invincible ?? false,
@@ -1467,7 +1468,13 @@ function stepPlayer(w: World, input: Input, dtMs: number): void {
    */
   if (input.spin) p.spinBufferMs = SPIN_BUFFER_MS;
   const spun = p.spinBufferMs > 0 && !stunned && beginSpin(p, w);
-  if (spun) { p.spinBufferMs = 0; onSpin(w, hookSim(w)); }
+  if (spun) {
+    p.spinBufferMs = 0;
+    // A beam's spin cast is its rays in turn (`queueSpinRays`); every other spell's, at the bodies.
+    const beams = beamSpells(w);
+    onSpin(w, hookSim(w), (i) => beams[i] === true);
+    queueSpinRays(w);
+  }
   else {
     /*
      * A press with no charge banked is **said**, not dropped in silence: the
@@ -4616,6 +4623,42 @@ function stepBeams(w: World, dtMs: number): void {
   }
 }
 
+/**
+ * **A spin fires a beam's rays one after another** (`whirl` on a `beam`): not
+ * at the bodies, as it casts every other spell, but a flash along the blade
+ * as it points at each moment, spaced evenly over the turning, so the rays
+ * come out of the spin in turn and the room round the caster is raked.
+ */
+const beamSpells = (w: World) => w.spells.map((s) => String(ITEMS.get(s?.item.base ?? "")?.params["shape"] ?? "") === "beam");
+
+function queueSpinRays(w: World): void {
+  const beams = beamSpells(w);
+  w.spells.forEach((slot, i) => {
+    if (!slot || !beams[i]) return;
+    const n = whirlTargets(slot);
+    if (n <= 0) return;
+    const turning = SWING_ACTIVE_MS * w.player.swingStretch;
+    w.spinRays.push({ spellIndex: i, left: n, clockMs: SWING_WINDUP_MS * w.player.swingStretch, everyMs: turning / n });
+  });
+}
+
+function stepSpinRays(w: World, dtMs: number): void {
+  if (w.spinRays.length === 0) return;
+  const p = w.player;
+  if (p.swingMs <= 0 || p.swingStretch <= 1) { w.spinRays.length = 0; return; }
+  const sim = hookSim(w);
+  for (const r of w.spinRays) {
+    r.clockMs -= dtMs;
+    while (r.clockMs <= 0 && r.left > 0) {
+      const a = bladeAngle(w.swing, p);
+      sim.fire(r.spellIndex, p, { x: p.x + Math.cos(a) * 100, y: p.y + Math.sin(a) * 100 });
+      r.left--;
+      r.clockMs += r.everyMs;
+    }
+  }
+  w.spinRays = w.spinRays.filter((r) => r.left > 0);
+}
+
 /** How fast a channelled line turns onto the body it follows. */
 const BEAM_TURN_DEG_PER_S = 200;
 
@@ -4708,6 +4751,8 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
 
   // The blades the sword left follow their bodies (`recall.ts`).
   stepLodged(w, dtMs);
+  // A spin's beam rays, one at a time along the blade (`stepSpinRays`).
+  stepSpinRays(w, dtMs);
   // The thrown blades fly out and home on their own path; see `stepBoomerangs`.
   stepBoomerangs(w, dtMs);
   // An enchant's waves fly forward as arcs, over whatever the room holds; see `stepWaves`.

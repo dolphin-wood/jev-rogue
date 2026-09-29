@@ -16930,7 +16930,7 @@ export class PlayScene extends Phaser.Scene {
   /**
    * **How long a key's last cast is still running**, in ms, for the spells
    * a recast renews rather than adds to: an enchant on the sword, a trail
-   * underfoot, a ring of orbiting blades, a companion. Zero for everything
+   * underfoot, a ring of orbiting blades (not one that grows), a companion. Zero for everything
    * else, and for a key whose effect has run out.
    */
   private keyRunningMs(key: number): number {
@@ -16939,7 +16939,13 @@ export class PlayScene extends Phaser.Scene {
     let ms = 0;
     if (p.enchant?.spellIndex === key) ms = Math.max(ms, p.enchant.ms);
     if (p.trail?.spellIndex === key) ms = Math.max(ms, p.trail.ms);
-    for (const b of w.playerBullets) if (b.alive && b.orbitMs > 0 && b.spellIndex === key) ms = Math.max(ms, b.orbitMs);
+    /*
+     * A ring a recast renews is running; one a recast grows (`stack_max`,
+     * Blade Storm) is not — it is built by pressing again, and a ring held
+     * back as running never got past its first blade.
+     */
+    const stacks = Number(ITEMS.get(w.spells[key]?.item.base ?? "")?.params["stack_max"] ?? 0) > 0;
+    if (!stacks) for (const b of w.playerBullets) if (b.alive && b.orbitMs > 0 && b.spellIndex === key) ms = Math.max(ms, b.orbitMs);
     for (const pet of w.pets) if (pet.alive && pet.spellIndex === key) ms = Math.max(ms, pet.lifeMs);
     return Math.max(0, ms);
   }

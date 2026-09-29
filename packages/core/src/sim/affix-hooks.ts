@@ -343,13 +343,19 @@ export const AFTERSHOCK_PER_MANA = 0.6;
  * The sword's spin started. Any spell with `whirl` is cast, free, at the
  * nearest bodies — one cast a body, as `retort` casts at the one that hit.
  */
-export function onSpin(w: World, sim: HookSim): void {
+export function onSpin(w: World, sim: HookSim, skip: (spellIndex: number) => boolean = () => false): void {
   w.spells.forEach((slot, i) => {
-    if (!slot) return;
+    if (!slot || skip(i)) return;
     const r = find(at(slot.affixes, "spin"), "whirl");
     if (!r || r.kind !== "whirl") return;
     for (const t of nearestN(w, w.player.x, w.player.y, r.targets)) sim.fire(i, w.player, t);
   });
+}
+
+/** How many casts a key's `whirl` makes of a spin, or 0 for a key without it. */
+export function whirlTargets(slot: SpellSlot): number {
+  const r = find(at(slot.affixes, "spin"), "whirl");
+  return r && r.kind === "whirl" ? r.targets : 0;
 }
 
 /**
@@ -501,13 +507,15 @@ export function onHit(w: World, b: Bullet, e: Enemy, sim: HookSim): void {
   armSlam(b.affixes, e);
 
   /*
-   * `overload`: the hit's damage charges the body, a pellet's by its proc
-   * share like any on-hit trigger; at the charge, lightning strikes it and
-   * what stands beside it, and the charge starts again.
+   * `overload`: the hit's damage charges the body — the damage itself, not
+   * cut by the proc share as a trigger is, since the damage already is the
+   * rate: cut again, the spells that hit most often, whose affix this is,
+   * charged slowest of all. At the charge, lightning strikes it and what
+   * stands beside it, and the charge starts again.
    */
   const over = find(hits, "overload");
   if (over && over.kind === "overload") {
-    e.overload += b.damage * Math.min(1, b.proc || 1);
+    e.overload += b.damage;
     if (e.overload >= over.charge) {
       e.overload = 0;
       burst(w, e.x, e.y, over.radiusPx, over.strike, sim, "overload");

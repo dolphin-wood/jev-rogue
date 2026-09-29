@@ -2427,6 +2427,11 @@ export interface World {
 
   /** Sword hits counted toward each spell's `resonance` cast. */
   resonance: number[];
+  /**
+   * A spin's rays still to come (`whirl` on a `beam`): one flash at a time
+   * along the blade, every `everyMs`, until `left` run out or the spin ends.
+   */
+  spinRays: { spellIndex: number; left: number; clockMs: number; everyMs: number }[];
   /** The blades the sword has left in bodies for a `lodge_max` key to recall (`recall.ts`). */
   lodged: LodgedBlade[];
   /**
