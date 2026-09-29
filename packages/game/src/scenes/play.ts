@@ -86,7 +86,7 @@ import type { ProjectileLook } from "./projectiles.ts";
 import { drawArms, drawHasteCue, drawShockwaves, drawTollPulse } from "./ground.ts";
 import type { ViewBox } from "./ground.ts";
 import {
-  ART_SCALE, TELE_HOT, TELE_RIM, drawAimLine, drawBlastRing, drawFlameCone, drawLeapMark,
+  ART_SCALE, TELE_HOT, TELE_RIM, TELE_WAVE, drawAimLine, drawBlastRing, drawFlameCone, drawLeapMark,
   drawQuakeTell, drawRiftBurst, drawRiftCircle, drawRingTell, drawSectorTell, drawWaveTell, CUT_PALETTE, WAVE_PALETTE,
   drawSlamTell, drawStrikeMark, TELE_ROCK,
 } from "./telegraph.ts";
@@ -19009,7 +19009,8 @@ function drawEnemy(
     // Against this body's own windup, which its tempo and jitter set (doc 005).
     const t = 1 - e.attackMs / Math.max(1, e.windupMs);
     const ring = group.circle(e.x, e.y, e.radius + 22 * (1 - t), 0, 0);
-    ring.setStrokeStyle(2, 0xff6a6a, 0.85);
+    // In the wave's violet for the king's sweep, as its sector is (`WAVE_PALETTE`): the whole tell one colour.
+    ring.setStrokeStyle(2, e.archetype === "boss" && e.meleeKind === "greatsweep" ? TELE_WAVE : 0xff6a6a, 0.85);
     ring.setDepth(5);
   }
 
