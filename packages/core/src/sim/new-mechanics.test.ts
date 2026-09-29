@@ -111,14 +111,15 @@ describe("Blade Recall", () => {
     expect(w.playerBullets.some((b) => b.alive)).toBe(false);
   });
 
-  it("keeps one blade out per blow, up to six, and one outlives its body where it fell", () => {
+  it("keeps one blade out per blow, up to its most, and one outlives its body where it fell", () => {
     const w = world("blade_recall");
     const e = body(w, 30, 0);
-    for (let n = 0; n < 8; n++) lodgeBlades(w, e);
-    expect(w.lodged.length).toBe(6);
+    const most = Number(ITEMS.get("blade_recall")!.params["lodge_max"]);
+    for (let n = 0; n < most + 2; n++) lodgeBlades(w, e);
+    expect(w.lodged.length).toBe(most);
     e.hp = 0;
     run(w, 2, () => aimRight);
-    expect(w.lodged.length).toBe(6);
+    expect(w.lodged.length).toBe(most);
     expect(w.lodged.every((b) => b.enemyId === -1)).toBe(true);
   });
 

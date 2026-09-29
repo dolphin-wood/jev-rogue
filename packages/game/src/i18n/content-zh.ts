@@ -57,7 +57,7 @@ export const ZH_CONTENT: ContentTable = {
   toxic_cloud: { name: "毒雾", description: "在最近的敌人脚下释放一团毒雾，使其中的敌人中毒并减速。" },
   blizzard: { name: "暴风雪", description: "在最近的敌人脚下铺开一片冰霜，减速其中的敌人，并不断累积冰冻。" },
   storm_totem: { name: "风暴图腾", description: "在身边立起一根雷电图腾，蓄能后同时电击射程内最多三个敌人，直到消散；最多同时存在两根。" },
-  blade_recall: { name: "御剑", description: "剑每命中一次，就在敌人身上留下一把灵剑，最多六把；按键时所有灵剑一齐拔出飞回你手中，斩过所在的敌人和途中一切。" },
+  blade_recall: { name: "御剑", description: "剑每命中一次，就在敌人身上留下一把灵剑，最多十把；按键时所有灵剑一齐拔出飞回你手中，斩过所在的敌人和途中一切。" },
   blade_storm: { name: "剑刃风暴", description: "在环绕你的刀环上加一把灵刃，刀越多环越大、转得越快；第六把时整圈刀刃向外飞出，扑向附近的敌人并贯穿。" },
   blade_rift: { name: "刀锋裂隙", description: "在前方地面撕开一团三把灵刃组成的旋涡，原地旋转，切割站在里面的每个敌人，直到闭合。" },
   mortar: { name: "迫击", description: "越过一切把石弹抛向最近的敌人，落地爆开。敌人可以提前走开。" },

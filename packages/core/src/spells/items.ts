@@ -963,16 +963,16 @@ const ATTACKS: readonly BaseItem[] = [
     params: {
       /*
        * `lodge_max`: loaded by the sword, not the bar (`recall.ts`). Every
-       * connecting blow leaves a spectral blade in the body, up to six out at
+       * connecting blow leaves a spectral blade in the body, up to ten out at
        * once, and the press rips them all free and flies them home through
        * everything between. Swing, swing, swing, then call them back.
        */
       shape: "boomerang", damage: 4.6, speed: 360, return_speed: 520, radius: 6, count: 1, spread: 0,
-      lifetime: 2, lodge_max: 6, lodge_ms: 8000, pierce: 0, element: "none", seek: 0, curve: 0, weight: 0.8,
+      lifetime: 2, lodge_max: 10, lodge_ms: 15000, pierce: 0, element: "none", seek: 0, curve: 0, weight: 0.8,
       windup_ms: 60, recover_ms: 140, move_scale: 0.8,
     },
     description:
-      "Blade Recall leaves a spectral blade in each body the sword strikes, up to six; the press rips every blade free and flies it back to the caster, cutting the body it was in and everything on the way.",
+      "Blade Recall leaves a spectral blade in each body the sword strikes, up to ten; the press rips every blade free and flies it back to the caster, cutting the body it was in and everything on the way.",
   },
   {
     id: "blade_rift",

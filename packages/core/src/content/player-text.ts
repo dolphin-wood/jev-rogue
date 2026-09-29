@@ -58,7 +58,7 @@ export const PLAYER_TEXT: Readonly<Record<string, string>> = {
   toxic_cloud: "Releases a cloud of poison under the nearest enemy that poisons and slows enemies inside it.",
   blizzard: "Lays frost under the nearest enemy that slows enemies inside it and builds toward freezing them.",
   storm_totem: "Sets a totem beside you that charges up and zaps up to three enemies in reach at once. Up to two totems.",
-  blade_recall: "Each sword hit leaves a blade in the foe, up to six; press to call them all back through everything.",
+  blade_recall: "Each sword hit leaves a blade in the foe, up to ten; press to call them all back through everything.",
   blade_storm: "Adds a blade to a ring circling you that grows wider and faster; the sixth flings every blade out at nearby foes.",
   blade_rift: "Opens a whirl of blades on the floor ahead that spins in place, cutting anything standing in it.",
   mortar: "Lobs a shell over everything to the nearest enemy, bursting where it lands. Enemies can walk out.",
