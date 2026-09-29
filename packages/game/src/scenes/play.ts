@@ -18269,7 +18269,12 @@ function drawEnemy(
     && showsPoise(e)
     && (e.poise < e.maxPoise - 0.01 || e.poiseGuardMs > 0)) {
     const W = Math.max(14, Math.round(e.radius * 1.8));
-    const y = e.y + e.radius + 4;
+    // Under the drawn feet, not the collision circle: a plated body's legs
+    // reach well below its radius, and the line was drawn across its shins.
+    // Measured on the standing frame, so a stride does not bounce the bar.
+    const stand = name.replace(/_([nsw])_.*$/, "_$1_idle0");
+    const feet = (atlas.contentBottom(atlas.has(stand) ? stand : name) - atlas.frame(name).h / 2) * base;
+    const y = e.y + Math.max(e.radius, feet) + 3;
     const guard = e.poiseGuardMs > 0;
     const k = guard
       ? Math.min(1, e.poiseGuardMs / (breakStaggerMs(e) + POISE_GUARD_MS))
@@ -18304,7 +18309,7 @@ function drawEnemy(
     const flash = hot ? 0.65 + 0.35 * Math.sin(scene.time.now / (g.brokenMs > 0 ? 60 : 90)) : 1;
     group.rectangle(e.x - W / 2 - 1, y + 4, W + 2, 3, 0x0d0b1f, 0.9).setOrigin(0, 0.5).setDepth(9);
     group.rectangle(e.x - W / 2, y + 4, W * sk, 1.6, g.brokenMs > 0 ? 0xfff2c0 : 0xf2b632, flash)
-      .setOrigin(0, 0.5).setDepth(10);
+      .setOrigin(0, 0.5).setDepth(bodyDepth(y, e.id));
     label?.(`guardian:name:${e.id}`, e.x, y - 6, t("hud.guardianTitle"), {
       fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(6, ZOOM) * ZOOM)}px`, color: "#e8c8ff",
       stroke: "#0d0b1f", strokeThickness: 2 * ZOOM,
@@ -18366,6 +18371,9 @@ function drawEnemy(
   if (e.brakeMs > 0) {
     const t = brakeFraction(e);
     // The lean is the pose now (see `enemyPose`), so this is only the last of
+    // Sorted among the bodies as a foot line at its own height, not over all of
+    // them: a body standing in front of it covers it, instead of wearing it
+    // across its own chest.
     // it — a small tip that eases out as the skid ends.
     img.setRotation(-e.lungeX * 0.12 * t * (flipX ? -1 : 1));
     for (let i = 0; i < 3; i++) {
