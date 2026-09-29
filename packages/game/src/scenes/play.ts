@@ -261,8 +261,8 @@ function shownHp(hearts: number): number {
 const HIT_FLASH_FILL = 0xd2c6cc;
 /** How strong the king's hit wash starts, added over him (`drawEnemy`'s boss flash). */
 const BOSS_FLASH_ALPHA = 0.35;
-/** His sword wave: his cape's violet, as its tell is drawn (`TELE_WAVE`), so a wave is never read as the red of a cut. */
-const KING_WAVE = { lip: 0x0e0a24, aura: 0x8f78ff, mid: mix(0x8f78ff, 0xd6ccff, 0.6), core: 0xf6f2ff } as const;
+/** His sword wave: his armour's gold, as its tell is drawn (`TELE_WAVE`), so a wave is never read as the red of a cut. */
+const KING_WAVE = { lip: 0x1f1204, aura: 0xffb81c, mid: mix(0xffb81c, 0xfff3a8, 0.6), core: 0xfffbea } as const;
 const WAVE_FLASH_PX = 10;
 /** How thick the crescent starts, as a fraction of its full thickness. */
 const SWING_MIN_WIDTH = 0.3;
@@ -14934,14 +14934,18 @@ export class PlayScene extends Phaser.Scene {
         const next = bossSlamNext(e);
         if (next?.last) {
           const r = e.phase >= 3 ? Math.max(6, next.radius * next.t) : next.radius + 60 * next.t;
-          drawSlamTell(this.threatGfx, e.x, e.y, 0, r, next.t, tick, view);
+          // It throws the band (`bossShock`), so it is told in the wave's gold, with the band's rings running out.
+          drawSlamTell(this.threatGfx, e.x, e.y, 0, r, next.t, tick, view, WAVE_PALETTE);
+          drawWaveTell(this.threatGfx, e.x, e.y, r, 0, Math.PI, next.t, tick, view);
         }
       }
       // The fall's landing in the middle: only once the stones have all come down (`BOSS_METEOR_LAND_TELL_MS`).
       // Not as he leaves the first audience (doc 022): that rise comes down nowhere, so it marks nothing.
       if (e.archetype === "boss" && e.bossCast === "meteor" && !e.bossLeaving && e.bossCastMs > 0 && e.bossCastMs <= BOSS_METEOR_LAND_TELL_MS) {
         const t = 1 - e.bossCastMs / BOSS_METEOR_LAND_TELL_MS;
-        drawLeapMark(this.threatGfx, e.bossTargetX, e.bossTargetY, BOSS_METEOR_LAND_PX, 0, t, tick, view);
+        // The landing throws the band (`bossShock`): the wave's gold, and its rings running out.
+        drawLeapMark(this.threatGfx, e.bossTargetX, e.bossTargetY, BOSS_METEOR_LAND_PX, 0, t, tick, view, { palette: WAVE_PALETTE });
+        drawWaveTell(this.threatGfx, e.bossTargetX, e.bossTargetY, BOSS_METEOR_LAND_PX, 0, Math.PI, t, tick, view);
       }
       if (e.archetype === "boss" && e.bossCast === "leap" && e.bossCastMs > 0) {
         /*
@@ -14958,7 +14962,9 @@ export class PlayScene extends Phaser.Scene {
          */
         // While he hunts the mark follows the player, empty; once it stops, its clock fills to the landing.
         const t = Math.max(0, 1 - e.bossCastMs / BOSS_LEAP_LOCK_MS);
-        drawLeapMark(this.threatGfx, e.bossTargetX, e.bossTargetY, BOSS_LEAP_RADIUS, 0, t, tick, view, { clock: t > 0 });
+        drawLeapMark(this.threatGfx, e.bossTargetX, e.bossTargetY, BOSS_LEAP_RADIUS, 0, t, tick, view, { clock: t > 0, palette: WAVE_PALETTE });
+        // The landing throws the band (`bossShock`), in the wave's gold with its rings running out.
+        drawWaveTell(this.threatGfx, e.bossTargetX, e.bossTargetY, BOSS_LEAP_RADIUS, 0, Math.PI, t, tick, view);
         // The landing's band is born at the mark's own edge, so the mark is all there is to read.
       }
       /*
@@ -15129,7 +15135,7 @@ export class PlayScene extends Phaser.Scene {
          * same reason: an open sector reads as a smear.
          */
         // The king's sweep throws its arc on past the blade (`enemy.ts`, the sword wave), so its tell is the wave's
-        // violet and runs on past the sector; his slash, alike in the sector, throws none and stays red.
+        // gold and runs on past the sector; his slash, alike in the sector, throws none and stays red.
         const throws = e.archetype === "boss" && e.meleeKind === "greatsweep";
         drawSectorTell(this.threatGfx, e.x, e.y, box.reach, box.facing, half, t, tick, view, throws ? WAVE_PALETTE : CUT_PALETTE);
         if (throws) drawWaveTell(this.threatGfx, e.x, e.y, box.reach, box.facing, half, t, tick, view);
@@ -15632,7 +15638,7 @@ export class PlayScene extends Phaser.Scene {
     /*
      * The king's sword waves: the same crescent of energy the player's
      * enchant throws (`drawCrescentWave`), in his own palette — a dark lip,
-     * violet light, a pale core (`KING_WAVE`) — never the player's colours,
+     * gold light, a pale core (`KING_WAVE`) — never the player's colours,
      * and not the red of his cuts, so a wave is told from a blade at a glance. Its leading edge is the wave's leading edge and it is no
      * deeper than the band that hits; it sheds embers behind it, and as it
      * runs out it dissolves from the tips inward. Drawing only: the band's
@@ -15671,7 +15677,7 @@ export class PlayScene extends Phaser.Scene {
      * at a time, and are drawn as what they are — one edge each side, opening
      * out behind the run (`drawWakeRibbon`), never a row of separate blades.
      * The player's is in the light of the spell that laid it; the king's in
-     * his wave's violet (`KING_WAVE`). Each stretch fades over its last tile of roll.
+     * his wave's gold (`KING_WAVE`). Each stretch fades over its last tile of roll.
      */
     // One ribbon per wake and side: the two sides of a run roll out on opposite facings.
     const wakes = new Map<string, { facing: number; player: number; elements: string[]; stretches: WakeStretch[] }>();
@@ -19062,7 +19068,7 @@ function drawEnemy(
     // Against this body's own windup, which its tempo and jitter set (doc 005).
     const t = 1 - e.attackMs / Math.max(1, e.windupMs);
     const ring = group.circle(e.x, e.y, e.radius + 22 * (1 - t), 0, 0);
-    // In the wave's violet for the king's sweep, as its sector is (`WAVE_PALETTE`): the whole tell one colour.
+    // In the wave's gold for the king's sweep, as its sector is (`WAVE_PALETTE`): the whole tell one colour.
     ring.setStrokeStyle(2, e.archetype === "boss" && e.meleeKind === "greatsweep" ? TELE_WAVE : 0xff6a6a, 0.85);
     ring.setDepth(5);
   }

@@ -27,8 +27,9 @@ export interface Pen {
 }
 
 /** The boss's ground shockwave: the broken stone, and its leading edge. */
-export const SHOCK_COLOUR = 0xffb066;
-export const SHOCK_CORE = 0xfff0d0;
+// The band's leading edge in the king's wave gold (`TELE_WAVE`): what runs along his floor is one colour.
+export const SHOCK_COLOUR = 0xffc21a;
+export const SHOCK_CORE = 0xfff6c8;
 /** A bell's hurry, and the light a toll sends down a ward line. */
 export const HASTE_COLOUR = 0xffd98a;
 const PULSE_CORE = 0xfff6e0;

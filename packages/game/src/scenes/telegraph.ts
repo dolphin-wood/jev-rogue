@@ -106,15 +106,18 @@ export const TELE_MARK = 0x9ad8ff;
 /** A stone out of the roof's mark (the king's fall into phase III): earth, where the storm's is sky. */
 export const TELE_ROCK = 0xd8b060;
 /**
- * The king's sword wave, and the tell for a cut that throws one: his cape's
- * violet, as the wave itself is drawn (`KING_WAVE`). Not the red of a cut, so
- * "the blade" and "what it throws" are two colours before either lands; well
- * off the enemy-bullet magenta (`PROTECTED_HUE_DEG`), the lightning's sky
- * and the safe white.
+ * **What the king throws along the floor**: his sword wave, the band his slam
+ * and his landings send out, and the tell of every move that throws one. The
+ * gold of his armour's trim, as the wave and the band's edge are drawn
+ * (`KING_WAVE`, `SHOCK_COLOUR`). Not the red of a blow, so "where the blow
+ * lands" and "what runs on from it" are two colours before either comes; and
+ * the brightest hue on his dark stone and the audience's earth alike. Violet
+ * was tried and sank into the hall's floor and carpet, and it is the Frontier
+ * Veteran's own colour besides.
  */
-export const TELE_WAVE = 0x8f78ff;
+export const TELE_WAVE = 0xffc21a;
 /** The wave tell in its last third. */
-export const TELE_WAVE_HOT = 0xd6ccff;
+export const TELE_WAVE_HOT = 0xfff3a8;
 
 /* ------------------------------------------------------------------ *\
    Clocks
@@ -520,6 +523,7 @@ export function teleWarnDisc(
  */
 export function drawSlamTell(
   pen: Pen, x: number, y: number, safe: number, r: number, t: number, tick: number, view: ViewBox,
+  palette: SectorPalette = CUT_PALETTE,
 ): void {
   /*
    * **The safe circle is left bare**, and the hazard hatch is an annulus
@@ -534,7 +538,7 @@ export function drawSlamTell(
    */
   const level = 0.25 + 0.5 * Math.min(1, t);
   const inner = safe + RIM_PX * P;
-  teleArea(pen, TELE_FILL, 0.55, level, view, y - r, y + r, (ry) => {
+  teleArea(pen, palette.fill, 0.55, level, view, y - r, y + r, (ry) => {
     const dy = ry - y;
     const rr = r - INSET;
     if (Math.abs(dy) >= rr) return null;
@@ -543,7 +547,7 @@ export function drawSlamTell(
   }, (px, py) => Math.hypot(px - x, py - y) >= inner);
   teleRing(pen, x, y, r - RIM_PX * P, TELE_LINER, 0.85, view, { thick: LINER_PX });
   const hot = t > 0.66;
-  teleRing(pen, x, y, r, t > 0.8 && !blink(tick, 2) ? TELE_FLASH : hot ? TELE_HOT : TELE_RIM, 1, view,
+  teleRing(pen, x, y, r, t > 0.8 && !blink(tick, 2) ? TELE_FLASH : hot ? palette.hot : palette.rim, 1, view,
     { thick: hot ? RIM_PX + 1 : RIM_PX });
   /*
    * The safe edge: solid, so it reads as a boundary, with its liner on the
@@ -567,20 +571,21 @@ export function drawSlamTell(
  */
 export function drawLeapMark(
   pen: Pen, x: number, y: number, r: number, safe: number, t: number, tick: number,
-  view: ViewBox, opts: { clock?: boolean } = {},
+  view: ViewBox, opts: { clock?: boolean; palette?: SectorPalette } = {},
 ): void {
+  const palette = opts.palette ?? CUT_PALETTE;
   // The whole mark, hatched at a quarter: this ground is spoken for.
-  teleDisc(pen, x, y, r - INSET, TELE_FILL, 0.5, 0.25, view);
+  teleDisc(pen, x, y, r - INSET, palette.fill, 0.5, 0.25, view);
   // And the part of the clock that has run, solid.
-  teleDisc(pen, x, y, Math.max(0, r * t - INSET), TELE_FILL, 0.65, Math.min(1, 0.5 + 0.5 * t), view);
+  teleDisc(pen, x, y, Math.max(0, r * t - INSET), palette.fill, 0.65, Math.min(1, 0.5 + 0.5 * t), view);
   teleRing(pen, x, y, r - RIM_PX * P, TELE_LINER, 0.9, view, { thick: LINER_PX });
-  teleRing(pen, x, y, r, t > 0.8 && !blink(tick, 2) ? TELE_FLASH : TELE_HOT, 1, view,
+  teleRing(pen, x, y, r, t > 0.8 && !blink(tick, 2) ? TELE_FLASH : palette.hot, 1, view,
     { thick: RIM_PX + 1 });
   if (safe > 0 && safe < r)
     teleRing(pen, x, y, safe, TELE_SAFE, 0.7, view, { dash: { segs: 10, phase: march(tick) & 1 } });
   if (opts.clock === false) return;
   const r0 = r + 22 * (1 - t);
-  teleTicks(pen, x, y, r0, r0 + 8, 4, Math.PI / 4, TELE_HOT, 0.4 + 0.6 * t, view);
+  teleTicks(pen, x, y, r0, r0 + 8, 4, Math.PI / 4, palette.hot, 0.4 + 0.6 * t, view);
 }
 
 /**
@@ -698,8 +703,8 @@ export function drawSectorTell(
 export interface SectorPalette { readonly fill: number; readonly rim: number; readonly hot: number }
 /** A cut's: the warning band's red. */
 export const CUT_PALETTE: SectorPalette = { fill: TELE_FILL, rim: TELE_RIM, hot: TELE_HOT };
-/** A cut that throws a wave (the king's greatsweep): the whole tell in the wave's violet. */
-export const WAVE_PALETTE: SectorPalette = { fill: 0x7a5cf0, rim: TELE_WAVE, hot: TELE_WAVE_HOT };
+/** A move that throws a wave (the king's greatsweep, his slam): the whole tell in the wave's gold. */
+export const WAVE_PALETTE: SectorPalette = { fill: 0xf0a800, rim: TELE_WAVE, hot: TELE_WAVE_HOT };
 
 /**
  * **A cut that throws a wave** (the king's greatsweep, doc 020): past the
@@ -707,9 +712,10 @@ export const WAVE_PALETTE: SectorPalette = { fill: 0x7a5cf0, rim: TELE_WAVE, hot
  * **outward** from the rim and fading as they go. A plain cut and a cut that
  * throws have the same sector, so without this the player cannot tell until
  * the wave is already on the floor whether stepping out of reach is enough.
- * In the wave's own violet (`TELE_WAVE`), as the sweep's own sector is
- * (`WAVE_PALETTE`): a cut that throws is violet, a cut that does not is red,
- * told apart by colour first and by these arcs second.
+ * In the wave's gold (`TELE_WAVE`), as the move's own tell is
+ * (`WAVE_PALETTE`): a blow that throws is gold, a blow that does not is red,
+ * told apart by colour first and by these arcs second. With `half` at π the
+ * arcs are whole rings, the slam's band.
  */
 export function drawWaveTell(
   pen: Pen, x: number, y: number, reach: number, facing: number, half: number,

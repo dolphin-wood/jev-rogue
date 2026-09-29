@@ -155,14 +155,19 @@ has lost its time.
   (the plates the current boss sheds, now pauldrons, a helm, a breastplate),
   the crown remaining on the skull through both changes, the room shaking, the
   court's dead rising at the edge. It resolves on a bar line.
-- **The wave is violet, the cut is red.** The greatsweep throws a sword wave
-  and the greatslash throws none, and both cut the same sector. So the
-  greatsweep's whole tell is violet (`WAVE_PALETTE`) where the slash's is
-  red, and past its sector dashed violet arcs run outward (`drawWaveTell`,
-  `TELE_WAVE`). The wave itself is drawn in
-  the same violet (`KING_WAVE`), his cape's colour, not the red of his cuts.
-  The player tells "step out of reach" from "leave the arc or dash it" before
-  the blow lands.
+- **What runs along the floor is gold; a blow is red.** The greatsweep throws
+  a sword wave and the greatslash throws none, and both cut the same sector.
+  So the greatsweep's whole tell is gold (`WAVE_PALETTE`) where the slash's is
+  red, and past its sector dashed gold arcs run outward (`drawWaveTell`,
+  `TELE_WAVE`). The slam, the leap and the fall's landing all throw the
+  band. So the slam's struck ground and both landing marks are told in the
+  same gold, with whole rings running out.
+  - The wave itself (`KING_WAVE`) and the band's leading edge
+    (`SHOCK_COLOUR`) are drawn in the same gold, his armour's trim.
+  - The player tells "step out of reach" from "leave the arc, jump the band or
+    dash it" before the blow lands.
+  - Violet was tried first. It sank into the hall's floor and carpet, and it
+    is the Frontier Veteran's colour (doc 024).
 - **The death.** He goes down on one knee on the sword, the core gutters out,
   the crown falls and rolls. The music stops on a final cadence rather than
   fading.
