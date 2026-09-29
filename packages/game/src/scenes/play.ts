@@ -6998,15 +6998,84 @@ export class PlayScene extends Phaser.Scene {
     this.floorSpells = this.floorSpells.filter((x) => x !== f);
   }
 
-  /** "Lv 1 → 2" on a spell card the player already holds, since taking it levels that spell. */
-  private upgradeNote(card: OfferCard): string {
-    if (card.kind !== "spell" || !card.itemId || !this.world) return "";
-    const at = this.heldIndex(card.itemId);
-    if (at < 0) return "";
-    const level = this.spellLevels[at] ?? 1;
-    return level >= SPELL_LEVEL_MAX
-      ? `${t("card.heldAtLv", { n: level })}  `
-      : `${t("card.upgradeLv", { from: level, to: Math.min(SPELL_LEVEL_MAX, level + (card.grade ?? 1)) })}  `;
+  /**
+   * **A card's facts, laid out to be compared** — the way the genre's reward
+   * cards do it (Brotato's weapons, Dead Cells' gear, an ARPG tooltip): the
+   * card's effect in a sentence first where it has one (an affix's, a stat's);
+   * the traits as one line of tags; then one row a figure, what it is on the
+   * left and the figure on the right in its own colour, so three cards are
+   * read across row by row. A rule parts all of it from the prose.
+   *
+   * A part is a row where the tables give it a name and a figure
+   * (`rowlabel.*`, `rowvalue.*`), a tag where it is a trait with neither, and
+   * a sentence otherwise. On an upgrade the level it reaches is the first row.
+   */
+  private cardFacts(card: OfferCard, width: number): { box: Phaser.GameObjects.Container; height: number } {
+    const box = this.add.container(0, 0).setDepth(202);
+    const px = 7;
+    const size = bodyPx(px, ZOOM);
+    const rowH = Math.ceil(size) + 3;
+    const style = (color: string): Phaser.Types.GameObjects.Text.TextStyle => ({
+      fontFamily: fontFamily(), fontSize: `${Math.round(size * ZOOM)}px`, color,
+    });
+    const named = (args: Readonly<Record<string, string | number>> | undefined): Record<string, string | number> =>
+      Object.fromEntries(Object.entries(args ?? {}).map(([k, v]) =>
+        [k, k === "affix" && typeof v === "string" ? contentName(v, spellAffixById(v)?.name ?? v) : v]));
+    type Row = { label: string; value: string; tone: string };
+    const rows: Row[] = [];
+    const tags: string[] = [];
+    const sentences: (StatText & { readonly tone?: string })[] = [];
+    // The level an upgrade reaches, or that it cannot rise further.
+    if (card.kind === "spell" && card.itemId && this.world && this.heldIndex(card.itemId) >= 0) {
+      const level = this.spellLevels[this.heldIndex(card.itemId)] ?? 1;
+      rows.push(level >= SPELL_LEVEL_MAX
+        ? { label: t("rowlabel.card.heldAtLv"), value: t("rowvalue.card.heldAtLv", { n: level }), tone: "grade" }
+        : {
+          label: t("rowlabel.card.upgradeLv"),
+          value: t("rowvalue.card.upgradeLv", { from: level, to: Math.min(SPELL_LEVEL_MAX, level + (card.grade ?? 1)) }),
+          tone: "grade",
+        });
+    }
+    for (const part of this.cardStatParts(card)) {
+      const key = part.key ?? "";
+      const label = key ? t(`rowlabel.${key}` as StringKey) : "";
+      if (key && label !== `rowlabel.${key}`) {
+        rows.push({ label, value: t(`rowvalue.${key}` as StringKey, named(part.args)), tone: part.tone ?? "" });
+      } else if (part.tone === "trait") tags.push(localizeStat(part));
+      else sentences.push(part);
+    }
+    let y = 0;
+    const rule = (): void => {
+      box.add(this.add.rectangle(0, y + 1, width, 1, 0x2a2750, 1).setOrigin(0, 0.5));
+      y += 5;
+    };
+    // What the card does in a sentence first — an affix's effect, a stat's gain — as its headline.
+    if (sentences.length > 0) {
+      const row = this.statRow(sentences, width, 8, 202);
+      row.box.setPosition(0, y);
+      box.add(row.box);
+      y += Math.ceil(row.height);
+    }
+    if (tags.length > 0) {
+      const tagT = this.add.text(0, y, wrapText(tags.join(" · "), width, size, 0), style(TONE_COLOUR.trait ?? "#c9cfe8"))
+        .setOrigin(0, 0).setScale(1 / ZOOM).setLineSpacing(Math.round(size * lineLead() * ZOOM));
+      box.add(tagT);
+      y += Math.ceil(tagT.height / ZOOM) + 3;
+    }
+    if (rows.length > 0) {
+      if (tags.length > 0 || sentences.length > 0) rule();
+      for (const r of rows) {
+        const l = this.add.text(0, y, r.label, style("#8792b5")).setOrigin(0, 0).setScale(1 / ZOOM);
+        const v = this.add.text(width, y, r.value, style(TONE_COLOUR[r.tone] ?? "#f5a623")).setOrigin(1, 0).setScale(1 / ZOOM);
+        box.add([l, v]);
+        // A figure too long to share the row takes the next one, still on the right.
+        if (l.width / ZOOM + 6 + v.width / ZOOM > width) { y += rowH; v.setY(y); }
+        y += rowH;
+      }
+    }
+    // And a rule under it all, before the prose.
+    if (y > 0) { y += 1; rule(); }
+    return { box, height: y };
   }
 
   /**
@@ -11214,7 +11283,12 @@ export class PlayScene extends Phaser.Scene {
      * its contents is worse than no frame, because it reads as a separate
      * object sitting behind them.
      */
-    const CARD_W = 128;
+    /*
+     * Wide enough for a figure's name and its figure on one row
+     * ("wake  sword ×1.18"), and for a Chinese description to run seven or
+     * eight characters more a line than it did at 128.
+     */
+    const CARD_W = 156;
     /**
      * Fixed, and generous enough that the fit almost never has to step down:
      * it holds the longest description in the current pool at full size.
@@ -11231,7 +11305,9 @@ export class PlayScene extends Phaser.Scene {
     const PAD = 12;
     /** The height of the lower corner brackets, which text must not cross. */
     const CARD_FOOT = 22;
-    const ICON_PX = 34;
+    /** The header: the icon at the left, the name beside it (`HEAD_TOP` under the kind and rarity tags). */
+    const HEAD_TOP = 19;
+    const HEAD_H = 32;
     /** A spell card's row of affix slots, at its foot (`cardSlotAffixes`), with air above and below it. */
     const SLOT_PX = 16;
     const SLOT_AIR = 7;
@@ -11278,10 +11354,11 @@ export class PlayScene extends Phaser.Scene {
        * somewhere different every row and the eye had to hunt for each one;
        * a card is read, and reading wants one left edge.
        */
+      // Beside the icon, so it wraps in what the icon leaves of the row.
       const name = this.add.text(0, 0, contentName(card.itemId ?? "", card.label), {
         fontFamily: fontFamily(), fontSize: `${Math.round(fontPx(9, ZOOM) * ZOOM)}px`, color: "#e8e3d8",
-        align: "left", wordWrap: { width: wrap },
-      }).setOrigin(0, 0).setScale(1 / ZOOM).setDepth(202);
+        align: "left", wordWrap: { width: wrap - (HEAD_H + 6) * ZOOM },
+      }).setOrigin(0, 0.5).setScale(1 / ZOOM).setDepth(202);
 
       /*
        * The numbers, in the pickup gold, above the prose.
@@ -11301,18 +11378,14 @@ export class PlayScene extends Phaser.Scene {
        * an affix's tier text wraps to three at this width, and the body was
        * drawn on top of it.
        */
-      const note = this.upgradeNote(card).trim();
-      const row = this.statRow([
-        ...(note ? [{ text: note, tone: "grade" }] : []),
-        ...this.cardStatParts(card),
-      ], wrap / ZOOM, 8, 202);
-      const stats = row.box;
-      const statH = Math.max(STAT_H, Math.ceil(row.height));
-      // The name's measured height too: a long name wraps to two lines and
-      // the stat line was drawn over its second one.
+      const facts = this.cardFacts(card, wrap / ZOOM);
+      const stats = facts.box;
+      const statH = Math.max(STAT_H, Math.ceil(facts.height));
+      // The name's measured height too: a long name wraps to two lines beside the icon.
       const nameH = Math.max(NAME_H, Math.ceil(name.height / ZOOM));
+      const headH = Math.max(HEAD_H, nameH);
       const slotted = this.cardSlotAffixes(card);
-      const bodyTop = PAD + ICON_PX + 6 + nameH + 2 + statH + 6;
+      const bodyTop = HEAD_TOP + headH + 5 + statH + 5;
       // The slots stand at the card's foot (below), so the row of cards lines them up whatever each one's numbers take.
       const slotRoom = slotted ? SLOT_ROW : 0;
       /*
@@ -11364,8 +11437,11 @@ export class PlayScene extends Phaser.Scene {
         const join = spaced ? " " : "";
         while (parts.length > 4 && body.height / ZOOM > bodyRoom) {
           parts.pop();
+          // A cut that ends a sentence needs no ellipsis: "…strikes what it crosses." is whole.
+          const kept = parts.join(join);
+          const whole = /[.!?。！？]$/.test(kept);
           // Wrapped at the size it is set in: wrapped at another, the lines ran out of the card.
-          body.setText(wrapText(`${parts.join(join)}…`, wrap / ZOOM, nativePx(BODY_FITS[fit]![0]), letterSpacing()));
+          body.setText(wrapText(whole ? kept : `${kept}…`, wrap / ZOOM, nativePx(BODY_FITS[fit]![0]), letterSpacing()));
         }
       }
       return { name, stats, body, bodyTop, nameH, slotted, needed, cut, fit };
@@ -11464,14 +11540,15 @@ export class PlayScene extends Phaser.Scene {
 
       // A 16 px icon at twice its tuned size; the kind art is smooth and scales as before.
       const crisp = iconFrame.startsWith("icon_");
+      const left = x - CARD_W / 2 + PAD;
+      const headH = Math.max(HEAD_H, nameH);
       const icon = this.add.image(
-        x, top + PAD + ICON_PX / 2, crisp ? this.crispTextureKey : this.uiTextureKey, iconFrame,
+        left + HEAD_H / 2, top + HEAD_TOP + headH / 2, crisp ? this.crispTextureKey : this.uiTextureKey, iconFrame,
       ).setOrigin(0.5).setDepth(202);
       if (crisp) icon.setScale(2 / TUNED);
-      else icon.setDisplaySize(ICON_PX, ICON_PX);
-      const left = x - CARD_W / 2 + PAD;
-      name.setPosition(left, top + PAD + ICON_PX + 6);
-      stats.setPosition(left, top + PAD + ICON_PX + 6 + nameH + 2);
+      else icon.setDisplaySize(HEAD_H - 4, HEAD_H - 4);
+      name.setPosition(left + HEAD_H + 6, top + HEAD_TOP + headH / 2);
+      stats.setPosition(left, top + HEAD_TOP + headH + 5);
       body.setPosition(left, top + bodyTop);
       /*
        * **The price, as a coin and a number in the bottom-right corner**, on
