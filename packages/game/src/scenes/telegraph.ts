@@ -105,6 +105,16 @@ export const TELE_SAFE = 0xffffff;
 export const TELE_MARK = 0x9ad8ff;
 /** A stone out of the roof's mark (the king's fall into phase III): earth, where the storm's is sky. */
 export const TELE_ROCK = 0xd8b060;
+/**
+ * The king's sword wave, and the tell for a cut that throws one: his cape's
+ * violet, as the wave itself is drawn (`KING_WAVE`). Not the red of a cut, so
+ * "the blade" and "what it throws" are two colours before either lands; well
+ * off the enemy-bullet magenta (`PROTECTED_HUE_DEG`), the lightning's sky
+ * and the safe white.
+ */
+export const TELE_WAVE = 0x8f78ff;
+/** The wave tell in its last third. */
+export const TELE_WAVE_HOT = 0xd6ccff;
 
 /* ------------------------------------------------------------------ *\
    Clocks
@@ -682,6 +692,32 @@ export function drawSectorTell(
     teleEdge(pen, x, y, facing + s * half, s, RIM_PX * P * 2, reach - RIM_PX * P,
       hot ? TELE_HOT : TELE_RIM, 0.75 + 0.25 * t, view,
       { on: 5, off: 5, phase: march(tick) * 2 });
+}
+
+/**
+ * **A cut that throws a wave** (the king's greatsweep, doc 020): past the
+ * cut's own sector, the arc its wave will travel on, as dashed arcs running
+ * **outward** from the rim and fading as they go. A plain cut and a cut that
+ * throws have the same sector, so without this the player cannot tell until
+ * the wave is already on the floor whether stepping out of reach is enough.
+ * In the wave's own violet (`TELE_WAVE`), not the cut's red, so the blade
+ * and what it throws are told apart by colour first and by shape second.
+ */
+export function drawWaveTell(
+  pen: Pen, x: number, y: number, reach: number, facing: number, half: number,
+  t: number, tick: number, view: ViewBox,
+): void {
+  const arc = { facing, half };
+  const step = 18;
+  const phase = (tick % 30) / 30;
+  const colour = t > 0.66 ? TELE_WAVE_HOT : TELE_WAVE;
+  for (let k = 0; k < 3; k++) {
+    const out = k + phase;
+    const r = reach + 6 + step * out;
+    const a = (0.6 + 0.4 * Math.min(1, t)) * (1 - out / 3.4);
+    teleRing(pen, x, y, r - (RIM_PX + 1) * P, TELE_LINER, a * 0.8, view, { arc, thick: LINER_PX });
+    teleRing(pen, x, y, r, colour, a, view, { arc, thick: RIM_PX + 1, dash: { segs: 40, phase: 0 } });
+  }
 }
 
 /**

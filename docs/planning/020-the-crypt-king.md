@@ -155,6 +155,13 @@ has lost its time.
   (the plates the current boss sheds, now pauldrons, a helm, a breastplate),
   the crown remaining on the skull through both changes, the room shaking, the
   court's dead rising at the edge. It resolves on a bar line.
+- **The wave is violet, the cut is red.** The greatsweep throws a sword wave
+  and the greatslash throws none, and both cut the same sector. So the
+  greatsweep's windup also draws, past the red sector, dashed violet arcs
+  running outward (`drawWaveTell`, `TELE_WAVE`). The wave itself is drawn in
+  the same violet (`KING_WAVE`), his cape's colour, not the red of his cuts.
+  The player tells "step out of reach" from "leave the arc or dash it" before
+  the blow lands.
 - **The death.** He goes down on one knee on the sword, the core gutters out,
   the crown falls and rolls. The music stops on a final cadence rather than
   fading.

@@ -87,7 +87,7 @@ import { drawArms, drawHasteCue, drawShockwaves, drawTollPulse } from "./ground.
 import type { ViewBox } from "./ground.ts";
 import {
   ART_SCALE, TELE_HOT, TELE_RIM, drawAimLine, drawBlastRing, drawFlameCone, drawLeapMark,
-  drawQuakeTell, drawRiftBurst, drawRiftCircle, drawRingTell, drawSectorTell,
+  drawQuakeTell, drawRiftBurst, drawRiftCircle, drawRingTell, drawSectorTell, drawWaveTell,
   drawSlamTell, drawStrikeMark, TELE_ROCK,
 } from "./telegraph.ts";
 import { BAR_MS, BEAT_MS, BOSS_PALM_PX, BOSS_PHASES, BOSS_SLAM_STOMP_PX, BOSS_METEOR_LAND_PX, BOSS_METEOR_LAND_TELL_MS, MELEE_ATTACKS, RUN_BOSS_ROOM, bossMusicPhase, bossSlamNext, bossTempo, forceBossBlade, propState, queueBossMove } from "@jr/core";
@@ -261,7 +261,8 @@ function shownHp(hearts: number): number {
 const HIT_FLASH_FILL = 0xd2c6cc;
 /** How strong the king's hit wash starts, added over him (`drawEnemy`'s boss flash). */
 const BOSS_FLASH_ALPHA = 0.35;
-const KING_WAVE = { lip: 0x1a0806, aura: 0xe8344a, mid: mix(0xe8344a, 0xffb070, 0.6), core: 0xfff0d8 } as const;
+/** His sword wave: his cape's violet, as its tell is drawn (`TELE_WAVE`), so a wave is never read as the red of a cut. */
+const KING_WAVE = { lip: 0x0e0a24, aura: 0x8f78ff, mid: mix(0x8f78ff, 0xd6ccff, 0.6), core: 0xf6f2ff } as const;
 const WAVE_FLASH_PX = 10;
 /** How thick the crescent starts, as a fraction of its full thickness. */
 const SWING_MIN_WIDTH = 0.3;
@@ -15075,6 +15076,8 @@ export class PlayScene extends Phaser.Scene {
          * same reason: an open sector reads as a smear.
          */
         drawSectorTell(this.threatGfx, e.x, e.y, box.reach, box.facing, half, t, tick, view);
+        // The king's sweep throws its arc on past the blade (`enemy.ts`, the sword wave); his slash, alike in the sector, throws none.
+        if (e.archetype === "boss" && e.meleeKind === "greatsweep") drawWaveTell(this.threatGfx, e.x, e.y, box.reach, box.facing, half, t, tick, view);
         // The tank's greatsword, raised: the tell for the chop is the blade
         // going up, and it comes down along the wedge below it.
         if (e.meleeKind === "cleave") this.drawGreatsword(e, box.facing, -Math.PI / 2 + Math.cos(box.facing) * 0.35, 0.8 + 0.2 * t);
@@ -15573,9 +15576,9 @@ export class PlayScene extends Phaser.Scene {
     drawShockwaves(this.soilGfx, this.ringGfx, w.shockwaves.filter((s) => s.facing === undefined), w.tick * STEP_MS, this.teleView());
     /*
      * The king's sword waves: the same crescent of energy the player's
-     * enchant throws (`drawCrescentWave`), in the danger palette — a dark
-     * lip, red light, a hot core — never the player's colours, so it reads
-     * as a threat. Its leading edge is the wave's leading edge and it is no
+     * enchant throws (`drawCrescentWave`), in his own palette — a dark lip,
+     * violet light, a pale core (`KING_WAVE`) — never the player's colours,
+     * and not the red of his cuts, so a wave is told from a blade at a glance. Its leading edge is the wave's leading edge and it is no
      * deeper than the band that hits; it sheds embers behind it, and as it
      * runs out it dissolves from the tips inward. Drawing only: the band's
      * geometry and timing are the simulation's.
@@ -15613,7 +15616,7 @@ export class PlayScene extends Phaser.Scene {
      * at a time, and are drawn as what they are — one edge each side, opening
      * out behind the run (`drawWakeRibbon`), never a row of separate blades.
      * The player's is in the light of the spell that laid it; the king's in
-     * the danger palette. Each stretch fades over its last tile of roll.
+     * his wave's violet (`KING_WAVE`). Each stretch fades over its last tile of roll.
      */
     // One ribbon per wake and side: the two sides of a run roll out on opposite facings.
     const wakes = new Map<string, { facing: number; player: number; elements: string[]; stretches: WakeStretch[] }>();
