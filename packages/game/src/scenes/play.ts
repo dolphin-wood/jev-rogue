@@ -111,7 +111,7 @@ import { layoutDecisionTable, maxScrollFor } from "../ui/plan-table.ts";
 import { questionAsked, questionBase, questionName } from "../ui/question-names.ts";
 import type { TableRow } from "../ui/plan-table.ts";
 import type { AtlasJson } from "../assets/atlas.ts";
-import { LEGACY_HINTS, seenHintsOf, withShown } from "../seen-hints.ts";
+import { seenHintsOf, withShown } from "../seen-hints.ts";
 import { autoRecallDue, AUTO_CAST_MAX_REACH_PX, AUTO_CAST_MODES, AUTO_CAST_RESERVE, AutoCaster, autoCastable, autoCastAnyReach, autoCastModeOf, autoCastReach, type AutoCastKey, type AutoCastMode } from "../auto-cast.ts";
 import { freshRerollPool, rerollPrice } from "../offer-reroll.ts";
 
@@ -5398,7 +5398,7 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private seenHints(): Set<string> {
-    try { return seenHintsOf(localStorage.getItem(SEEN_HINTS_KEY), localStorage.getItem(SEEN_CONTROLS_KEY)); } catch { return new Set(LEGACY_HINTS); }
+    try { return seenHintsOf(localStorage.getItem(SEEN_HINTS_KEY)); } catch { return new Set(this.hintGroups().flatMap(([, rows]) => rows.map(([id]) => id)).concat("assists")); }
   }
 
   private markHintsSeen(ids: Iterable<string>): void {
@@ -19971,7 +19971,7 @@ const ROOM_PARAMS_KEY = "jr-room-params";
 const SLAM_KINDS = new Set<MeleeKind>(["slam", "cleave", "bash", "whirlwind", "sweep", "greatsweep", "greatcleave"]);
 
 const SOUND_KEY = "jr.sound";
-/** The one flag the key guide was, before each row had its own: read, never written (`seen-hints.ts`). */
+/** The one flag the key guide was, before each row had its own: no longer read, only cleared (`seen-hints.ts`). */
 const SEEN_CONTROLS_KEY = "jr.seenControls";
 /** The ids of the key guide's rows a player has been shown. */
 const SEEN_HINTS_KEY = "jr.seenHints";
