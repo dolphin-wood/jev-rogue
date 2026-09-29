@@ -66,7 +66,7 @@ not others"). Parameters listed under a shape are read only by that shape.
 | `summon` | one companion that follows and fires on its own clock; a recast renews it | `interval`, `reach` |
 | `eruption` | ground cells that burst after a beat, in a line, a scatter or a ring | `pattern` (`line`, `scatter`, `ring`), `step`, `first`, `delay_ms`, `reach`, `area`, `burn_ms`; optional `telegraph_ms` (below) |
 | `boomerang` | a thrown blade that flies out, slows, and returns to the caster | `reach`, `return_speed`; optional `lodge_max` (below) |
-| `orb` | a sphere, drifting or at `speed` 0 set down beside the caster, that strikes the nearest body in reach on its own clock | `zap_ms`, `zap_reach`, `max_alive`; `place_px`, how far from the caster it starts |
+| `orb` | a sphere, drifting or at `speed` 0 set down beside the caster, that strikes the nearest body in reach on its own clock | `zap_ms`, `zap_reach`, `max_alive`; `place_px`, how far from the caster it starts; `zap_count`, how many of the nearest bodies one discharge strikes (default 1) |
 | `trail` | for a while, the ground the caster walks over catches | `trail_ms`, `drop_px`, `patch_ms` |
 | `enchant` | for a while, every sword swing also throws a wave | `enchant_ms`, `wave_reach` |
 | `stance` | a short guard; a hit taken during it is cancelled and answered | `stance_ms`, `answer_radius`, `expire_share` |
@@ -193,7 +193,7 @@ style it is tagged with; its first row is its primary style.
 | Spirit Ally `spirit_ally` | spirit | rare | summon | a companion that follows and shoots the nearest body for a while |
 | Mana Darts `mana_darts` | void | uncommon | bolt + `charges` | banks darts while the key rests; a press looses all of them |
 | Ball Lightning `ball_lightning` | storm | uncommon | orb | a slow orb that strikes the nearest body in reach several times a second; several can be out at once |
-| Storm Totem `storm_totem` | storm | uncommon | orb (still) | a totem set down beside the caster that strikes the nearest body in a wide reach; two at most |
+| Storm Totem `storm_totem` | storm | uncommon | orb (still) | a totem set down beside the caster that charges and discharges at up to four bodies in its reach at once (`zap_count`); two at most |
 | Blade Storm `blade_storm` | spirit | rare | orbit + `stack_max` | see Blade |
 
 ### Heavy (`nuke`)

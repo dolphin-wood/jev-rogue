@@ -62,57 +62,64 @@ export function stepOrbs(w: World, dtMs: number): void {
     if (moved.blockedY) o.vy = 0;
     o.zapClockMs = Math.max(0, o.zapClockMs - dtMs);
     if (o.zapClockMs > 0) continue;
-    let best: Enemy | null = null;
-    let bestD = Infinity;
+    /*
+     * The nearest `zapCount` bodies in reach and in sight, one bolt each: a
+     * lone orb picks one, a totem discharges at the crowd round it.
+     */
+    const inReach: { e: Enemy; d: number }[] = [];
     for (const e of w.enemies) {
       if (!striking(e)) continue;
       const d = Math.hypot(e.x - o.x, e.y - o.y);
-      if (d > o.zapReach + e.radius || d >= bestD) continue;
+      if (d > o.zapReach + e.radius) continue;
       if (!hasLineOfSight(w.room.grid, o.x, o.y, e.x, e.y)) continue;
-      best = e;
-      bestD = d;
+      inReach.push({ e, d });
     }
-    if (!best) continue;
+    if (inReach.length === 0) continue;
+    inReach.sort((p, q) => p.d - q.d);
     o.zapClockMs = o.zapMs;
-    o.lastTargetId = best.id;
-    const b = acquire(w.playerBullets, true);
-    if (!b) continue;
-    const dir = normalise(best.x - o.x, best.y - o.y);
-    b.delivery = "strike";
-    b.x = best.x;
-    b.y = best.y;
-    // Where the blow came from, so it is drawn from the orb to the body.
-    b.originX = o.x;
-    b.originY = o.y;
-    b.vx = dir.x * STRIKE_SPEED;
-    b.vy = dir.y * STRIKE_SPEED;
-    b.radius = 3;
-    b.damage = o.damage;
-    b.lifeMs = STRIKE_LIFE_MS;
-    b.targetId = best.id;
-    b.pierce = 0;
-    // A strike never splits, bounces or homes: `fork`, `ricochet` and `seek`
-    // do not list the orb, and a strike that split would be one affix
-    // turned into a shard for every blow of every orb.
-    b.split = 0;
-    b.bounce = 0;
-    b.homing = 0;
-    b.weight = STRIKE_WEIGHT;
-    b.affixes = o.affixes;
-    b.spellIndex = o.spellIndex;
-    b.manaSpent = o.manaSpent;
-    b.arcLeft = arcJumps(o.affixes);
-    b.element = o.element;
-    b.elementPower = o.elementPower;
-    copyPowers(b.powers, o.powers);
-    b.proc = o.proc;
-    b.statusMult = o.statusMult;
-    /*
-     * Not counted in `shotsFired`: that figure is the casts the player made
-     * (the playtest log and the renderer's cast flash both read it), and a
-     * strike is the orb's, several a second, long after the press.
-     */
-    w.events.push({ kind: "spell", x: o.x, y: o.y, what: "orb_strike", amount: best.id, facing: Math.atan2(dir.y, dir.x) });
+    o.lastTargetId = inReach[0]!.e.id;
+    const struck = inReach.slice(0, o.zapCount);
+    o.lastTargetIds = struck.map((s) => s.e.id);
+    for (const { e: best } of struck) {
+      const b = acquire(w.playerBullets, true);
+      if (!b) break;
+      const dir = normalise(best.x - o.x, best.y - o.y);
+      b.delivery = "strike";
+      b.x = best.x;
+      b.y = best.y;
+      // Where the blow came from, so it is drawn from the orb to the body.
+      b.originX = o.x;
+      b.originY = o.y;
+      b.vx = dir.x * STRIKE_SPEED;
+      b.vy = dir.y * STRIKE_SPEED;
+      b.radius = 3;
+      b.damage = o.damage;
+      b.lifeMs = STRIKE_LIFE_MS;
+      b.targetId = best.id;
+      b.pierce = 0;
+      // A strike never splits, bounces or homes: `fork`, `ricochet` and `seek`
+      // do not list the orb, and a strike that split would be one affix
+      // turned into a shard for every blow of every orb.
+      b.split = 0;
+      b.bounce = 0;
+      b.homing = 0;
+      b.weight = STRIKE_WEIGHT;
+      b.affixes = o.affixes;
+      b.spellIndex = o.spellIndex;
+      b.manaSpent = o.manaSpent;
+      b.arcLeft = arcJumps(o.affixes);
+      b.element = o.element;
+      b.elementPower = o.elementPower;
+      copyPowers(b.powers, o.powers);
+      b.proc = o.proc;
+      b.statusMult = o.statusMult;
+      /*
+       * Not counted in `shotsFired`: that figure is the casts the player made
+       * (the playtest log and the renderer's cast flash both read it), and a
+       * strike is the orb's, several a second, long after the press.
+       */
+      w.events.push({ kind: "spell", x: o.x, y: o.y, what: "orb_strike", amount: best.id, facing: Math.atan2(dir.y, dir.x) });
+    }
   }
 }
 

@@ -764,8 +764,8 @@ function buildWorld(input: CreateWorldOptions): World {
      */
     orbs: Array.from({ length: 9 }, () => ({
       alive: false, x: 0, y: 0, vx: 0, vy: 0, radius: 0, lifeMs: 0, maxLifeMs: 1, zapClockMs: 0, zapMs: 300,
-      zapReach: 0, damage: 0, element: "none" as const, elementPower: 0, powers: noPowers(), proc: 1, statusMult: 1,
-      affixes: [], spellIndex: -1, manaSpent: 0, born: 0, lastTargetId: -1,
+      zapReach: 0, zapCount: 1, damage: 0, element: "none" as const, elementPower: 0, powers: noPowers(), proc: 1, statusMult: 1,
+      affixes: [], spellIndex: -1, manaSpent: 0, born: 0, lastTargetId: -1, lastTargetIds: [],
     })),
     wards: [],
     echoes: [],

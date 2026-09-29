@@ -373,7 +373,9 @@ export function spellBehaviour(item: BaseItem | undefined, level = 1): string {
     case "orb":
       bits.push((num("speed") ?? 0) > 0 ? `a slow orb drifts from the player for ${num("lifetime") ?? 0} s`
         : `an orb set down beside the player stands for ${num("lifetime") ?? 0} s`,
-        `strikes the nearest body within ${num("zap_reach") ?? 0} px every ${num("zap_ms") ?? 0} ms for ${round1(damage)} damage`,
+        (num("zap_count") ?? 1) > 1
+          ? `discharges every ${num("zap_ms") ?? 0} ms at the nearest ${num("zap_count")} bodies within ${num("zap_reach") ?? 0} px at once, ${round1(damage)} damage each`
+          : `strikes the nearest body within ${num("zap_reach") ?? 0} px every ${num("zap_ms") ?? 0} ms for ${round1(damage)} damage`,
         "no damage on contact",
         `up to ${num("max_alive") ?? 1} from the key at once, a new one replacing the oldest`);
       break;

@@ -617,6 +617,12 @@ export interface Orb {
   zapClockMs: number;
   zapMs: number;
   zapReach: number;
+  /**
+   * How many bodies one discharge strikes (`zap_count`): the nearest that
+   * many in reach, one bolt each. One for Ball Lightning; several for Storm
+   * Totem, which strikes slower and at a crowd.
+   */
+  zapCount: number;
   damage: number;
   element: Element;
   elementPower: number;
@@ -632,6 +638,8 @@ export interface Orb {
   born: number;
   /** The body it struck last and when, for the renderer's arc; -1 before its first strike. */
   lastTargetId: number;
+  /** Every body the last discharge struck, for the renderer: one bolt each (`zapCount`). */
+  lastTargetIds: number[];
 }
 
 /**

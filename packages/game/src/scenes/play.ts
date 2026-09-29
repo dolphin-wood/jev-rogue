@@ -964,6 +964,9 @@ const LODGED_BODY_LIFT = 6;
 /** How far above its landing point Mortar's impact is drawn: the painting's debris pile sits low in its frame. */
 const MORTAR_IMPACT_LIFT = 14;
 const TOTEM_ORB_LIFT = 17;
+/** How long a Storm Totem's bolts hang after a discharge, and how long before the next it is seen charging, ms. */
+const TOTEM_BOLT_MS = 180;
+const TOTEM_CHARGE_MS = 420;
 
 export class PlayScene extends Phaser.Scene {
   private atlas!: RecolourableAtlas;
@@ -8464,8 +8467,24 @@ export class PlayScene extends Phaser.Scene {
           bodyDepth(o.y + TOTEM_CENTRE_DROP + 16, 0));
         else this.spellSprite(`vfx_ball_lightning_${Math.floor(tick / 5) % 4}`, o.x, o.y, 9.1);
       }
-      const struck = o.lastTargetId >= 0 && o.zapClockMs > o.zapMs - 90 ? w.enemies.find((e) => e.id === o.lastTargetId && e.hp > 0) : undefined;
-      if (struck) this.spellArc(fx, fy, struck.x, struck.y - 4, Math.floor(tick / 5) % 4);
+      /*
+       * The bolts of the last discharge, one to each body it struck. A
+       * totem's hang a moment longer, and it is seen gathering the next one —
+       * sparks climbing round its orb — as a coil charging before it fires.
+       */
+      const held = totem ? TOTEM_BOLT_MS : 90;
+      if (o.zapClockMs > o.zapMs - held)
+        for (const id of o.lastTargetIds) {
+          const struck = w.enemies.find((e) => e.id === id && e.hp > 0);
+          if (struck) this.spellArc(fx, fy, struck.x, struck.y - 4, (Math.floor(tick / 3) + id) % 4);
+        }
+      if (totem && o.zapClockMs < TOTEM_CHARGE_MS && o.zapClockMs > 0) {
+        const k = 1 - o.zapClockMs / TOTEM_CHARGE_MS;
+        if (Math.random() < 0.3 + 0.6 * k) {
+          const a = Math.random() * Math.PI * 2, r = 9 - 6 * k;
+          this.burst(fx + Math.cos(a) * r, fy + Math.sin(a) * r, 0xfff3b0, 1, 40 + 60 * k, a + Math.PI, 0.6, 0.7 + 0.5 * k);
+        }
+      }
     }
 
     this.drawBladeWinds(floor, air, tick);

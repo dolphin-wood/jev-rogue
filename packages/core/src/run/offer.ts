@@ -264,8 +264,13 @@ export function offerStatParts(item: BaseItem, level = 1): StatPart[] {
    * stance's is the answer to the hit it takes.
    */
   if (shape === "orb") {
-    const n = Math.max(1, Math.round(1000 / Math.max(1, num(item.params, "zap_ms", 300))));
-    push(`${n} strikes a second`, "trait", "stat.orb", { n });
+    // A totem's figure is each bolt of a discharge at several bodies, so it says how many; an orb's, how often.
+    const many = Math.round(num(item.params, "zap_count", 1));
+    if (many > 1) push(`strikes ${many} at once`, "trait", "stat.orbMany", { n: many });
+    else {
+      const n = Math.max(1, Math.round(1000 / Math.max(1, num(item.params, "zap_ms", 300))));
+      push(`${n} strikes a second`, "trait", "stat.orb", { n });
+    }
   }
   if (shape === "boomerang") {
     if (Number(item.params.lodge_max ?? 0) > 0) push("sword hits load it", "trait", "stat.recall");

@@ -436,6 +436,7 @@ export const JA: Table = {
   "stat.summon": "味方を召喚",
   "stat.fieldPoison": "毒の霧",
   "stat.orb": "毎秒 {n} 回撃つ",
+  "stat.orbMany": "一度に {n} 体を撃つ",
   "stat.boomerang": "行きと帰りで斬る",
   "stat.recall": "剣を当てて装填",
   "stat.trail": "燃える足跡",

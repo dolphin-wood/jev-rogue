@@ -721,6 +721,7 @@ export function fireUnit(
     orb.zapClockMs = zapMs * 0.5;
     orb.zapMs = zapMs;
     orb.zapReach = num(base.params, "zap_reach", 90);
+    orb.zapCount = Math.max(1, Math.round(num(base.params, "zap_count", 1)));
     orb.damage = damage;
     orb.element = element;
     orb.elementPower = powers[element as "fire"] ?? 0;
@@ -733,6 +734,7 @@ export function fireUnit(
     orb.manaSpent = mods.manaSpent;
     orb.born = world.tick;
     orb.lastTargetId = -1;
+    orb.lastTargetIds = [];
     world.events.push({ kind: "spell", x: orb.x, y: orb.y, what: "orb" });
     shots.push({ x: orb.x, y: orb.y, family: base.id });
     return;

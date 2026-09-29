@@ -437,6 +437,7 @@ export const ZH: Table = {
   "stat.summon": "召唤随从",
   "stat.fieldPoison": "毒雾",
   "stat.orb": "每秒电击 {n} 次",
+  "stat.orbMany": "一次电击 {n} 个",
   "stat.boomerang": "往返各斩一次",
   "stat.recall": "剑命中时装填",
   "stat.trail": "燃烧足迹",

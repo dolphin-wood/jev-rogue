@@ -444,6 +444,7 @@ export const EN = {
   "stat.summon": "summons an ally",
   "stat.fieldPoison": "poison cloud",
   "stat.orb": "{n} strikes a second",
+  "stat.orbMany": "strikes {n} at once",
   "stat.boomerang": "cuts out and back",
   "stat.recall": "sword hits load it",
   "stat.trail": "burning trail",

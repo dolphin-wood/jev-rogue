@@ -913,16 +913,18 @@ const ATTACKS: readonly BaseItem[] = [
     mana: 4,
     params: {
       /*
-       * An orb that does not drift: set down beside the caster, it strikes
-       * the nearest body in its wider reach until it runs out, so the player
-       * fights round it rather than sending it off. Two at most.
+       * An orb that does not drift, and does not pick one body: set down
+       * beside the caster, it gathers its charge and discharges at the
+       * nearest `zap_count` bodies in its reach at once, a slow heavy beat,
+       * so it is a thing to fight a crowd round. Ball Lightning is the
+       * orb sent off to spark at one body several times a second. Two at most.
        */
-      shape: "orb", damage: 2.6, speed: 0, radius: 8, count: 1, spread: 0, lifetime: 5, pierce: 0,
-      element: "none", seek: 0, curve: 0, weight: 0.3, zap_ms: 420, zap_reach: 185, max_alive: 2, place_px: 30,
+      shape: "orb", damage: 7, speed: 0, radius: 8, count: 1, spread: 0, lifetime: 5, pierce: 0,
+      element: "none", seek: 0, curve: 0, weight: 0.3, zap_ms: 1100, zap_count: 4, zap_reach: 150, max_alive: 2, place_px: 30,
       windup_ms: 80, recover_ms: 160, move_scale: 0.8,
     },
     description:
-      "Storm Totem sets a crackling totem down beside the caster that strikes the nearest body within its reach a few times a second until it fades; two can stand at once.",
+      "Storm Totem sets a crackling totem down beside the caster that gathers its charge and discharges at up to four bodies within its reach at once, about once a second, until it fades; two can stand at once.",
   },
   /*
    * **The four the roster had no machinery for** (spell-roster-survey 1.1-1.5):
