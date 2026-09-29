@@ -348,15 +348,29 @@ export function spellBehaviour(item: BaseItem | undefined, level = 1): string {
   const bits: string[] = [];
   switch (shape) {
     case "orbit":
-      bits.push(`${count} blades orbit the player for ${num("lifetime") ?? 0} s`, `${round1(damage)} damage a pass`);
+      if ((num("anchor_reach") ?? 0) > 0)
+        bits.push(`${count} blades spin in place on the floor ${num("anchor_reach")} px ahead, or under the body it seeks, for ${num("lifetime") ?? 0} s`,
+          `${round1(damage)} damage a pass`, "the ring stays where it was set when the player moves");
+      else if ((num("stack_max") ?? 0) > 0)
+        bits.push(`each cast adds ${count === 1 ? "a blade" : `${count} blades`} to a ring orbiting the player and renews the ring for ${num("lifetime") ?? 0} s, up to ${num("stack_max")} blades`,
+          `${round1(damage)} damage a pass`);
+      else bits.push(`${count} blades orbit the player for ${num("lifetime") ?? 0} s`, `${round1(damage)} damage a pass`);
+      break;
+    case "beam":
+      bits.push(`held: while the key stays down, for up to ${num("lifetime") ?? 0} s, a line runs ${num("reach") ?? 0} px along the aim to the first wall`,
+        `${round1(damage)} damage every ${num("tick_ms") ?? 0} ms to each body across it`,
+        "the cost is paid once, at the press", "the player moves slowly while it is held, and a dash ends it");
       break;
     case "field":
       bits.push(str("element") === "poison"
         ? `a cloud of poison on the ground for ${num("lifetime") ?? 0} s that poisons and slows what stands in it`
-        : `a patch of ground burns for ${num("lifetime") ?? 0} s`, `${round1(damage)} damage a tick`);
+        : str("element") === "ice"
+          ? `frost on the ground for ${num("lifetime") ?? 0} s that slows what stands in it and chills it toward a freeze`
+          : `a patch of ground burns for ${num("lifetime") ?? 0} s`, `${round1(damage)} damage a tick`);
       break;
     case "orb":
-      bits.push(`a slow orb drifts from the player for ${num("lifetime") ?? 0} s`,
+      bits.push((num("speed") ?? 0) > 0 ? `a slow orb drifts from the player for ${num("lifetime") ?? 0} s`
+        : `an orb set down beside the player stands for ${num("lifetime") ?? 0} s`,
         `strikes the nearest body within ${num("zap_reach") ?? 0} px every ${num("zap_ms") ?? 0} ms for ${round1(damage)} damage`,
         "no damage on contact",
         `up to ${num("max_alive") ?? 1} from the key at once, a new one replacing the oldest`);
@@ -413,6 +427,12 @@ export function spellBehaviour(item: BaseItem | undefined, level = 1): string {
         bits.push(`the ground is marked ${num("telegraph_ms")} ms before it goes off, and a body can walk out of the mark`);
       break;
     default:
+      if ((num("lob") ?? 0) > 0) {
+        bits.push(`a shell lobbed in an arc over bodies and walls to the body it seeks, landing after ${round1((num("lob") ?? 0) * 1000)} ms`,
+          `${round1(damage)} damage to every body within ${num("lob_radius") ?? 0} px of where it lands`,
+          "touches nothing on the way, and a body can walk out from under it");
+        break;
+      }
       bits.push(
         count > 1 ? `${count} projectiles in a ${num("spread") ?? 0}° spread` : "one projectile",
         `${round1(damage)} damage${count > 1 ? " each" : ""}`,

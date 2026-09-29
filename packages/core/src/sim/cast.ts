@@ -360,6 +360,92 @@ export function fireUnit(
    */
   const placed: { x: number; y: number } | null = free ? (target ?? null) : (marks[0] ?? null);
 
+  /*
+   * **A lob** (`lob`, Mortar): thrown in an arc to the body the cast sought,
+   * or the aim's point at the spell's reach, over whatever stands between.
+   * It touches nothing on the way and lands for the whole of its damage on
+   * every body within `lob_radius` of where it comes down (`lobLand`).
+   */
+  if (shape === "bolt" && num(base.params, "lob", 0) > 0) {
+    const reach = num(base.params, "reach", 160);
+    const spot = placed ?? { x: from.x + aim.x * reach, y: from.y + aim.y * reach };
+    const flight = num(base.params, "lob", 0) * 1000;
+    for (let i = 0; i < count; i++) {
+      const b = acquire(world.playerBullets, true);
+      if (!b) return;
+      // A volley of several lands in a small spread round the spot, not in one hole.
+      const jitter = count > 1 ? ((i / (count - 1)) - 0.5) * num(base.params, "lob_spread", 36) : 0;
+      const tx = spot.x - aim.y * jitter, ty = spot.y + aim.x * jitter;
+      b.delivery = "lob";
+      b.x = from.x; b.y = from.y; b.originX = from.x; b.originY = from.y;
+      b.lobMs = flight * (1 + i * 0.12);
+      b.lifeMs = b.lobMs;
+      b.vx = (tx - from.x) / (b.lobMs / 1000);
+      b.vy = (ty - from.y) / (b.lobMs / 1000);
+      b.lobRadius = num(base.params, "lob_radius", 36) * mods.radiusMult;
+      b.radius = radius;
+      b.damage = damage;
+      b.pierce = 0; b.bounce = 0; b.homing = 0;
+      b.split = mods.split;
+      b.affixes = mods.affixes;
+      b.spellIndex = mods.spellIndex;
+      b.manaSpent = mods.manaSpent;
+      b.arcLeft = arcJumps(mods.affixes);
+      b.element = element;
+      b.elementPower = powers[element as "fire"] ?? 0;
+      copyPowers(b.powers, powers);
+      b.proc = proc;
+      b.statusMult = statusMult;
+      b.weight = weight;
+      shots.push({ x: b.x, y: b.y, family: base.id });
+    }
+    return;
+  }
+
+  /*
+   * **A beam** (`beam`): a line out along the aim that burns what it crosses
+   * each tick (`stepBeams`). Pressed, it is channelled — held on its key for
+   * up to its `lifetime`, following the caster and the aim; cast free, it is
+   * a short flash at the body it was cast at. One beam a key: a new one puts
+   * the old out.
+   */
+  if (shape === "beam") {
+    for (const old of world.beams) if (old.alive && old.spellIndex === mods.spellIndex) old.alive = false;
+    const reach = num(base.params, "reach", 200);
+    const dir = free && target ? normalise(target.x - from.x, target.y - from.y) : aim;
+    const beam = world.beams.find((x) => !x.alive) ?? (() => {
+      const fresh = {
+        alive: false, x0: 0, y0: 0, x1: 0, y1: 0, reach: 0, width: 0, damage: 0, tickMs: 0, clockMs: 0,
+        lifeMs: 0, maxLifeMs: 0, channel: false, element: "none" as Element, powers: noPowers(), proc: 1,
+        statusMult: 1, weight: 1, spellIndex: -1,
+      };
+      world.beams.push(fresh);
+      return fresh;
+    })();
+    beam.alive = true;
+    beam.x0 = from.x; beam.y0 = from.y;
+    beam.x1 = from.x + dir.x * reach; beam.y1 = from.y + dir.y * reach;
+    beam.reach = reach;
+    beam.width = radius;
+    beam.damage = damage;
+    beam.tickMs = num(base.params, "tick_ms", 100);
+    // The first tick at once: the line is seen to land as it appears.
+    beam.clockMs = 0;
+    beam.channel = !free;
+    beam.lifeMs = free ? num(base.params, "flash_ms", 300) : lifetime * 1000;
+    beam.maxLifeMs = beam.lifeMs;
+    beam.element = element;
+    copyPowers(beam.powers, powers);
+    beam.proc = proc;
+    beam.statusMult = statusMult;
+    beam.weight = weight;
+    beam.spellIndex = mods.spellIndex;
+    if (!free && mods.spellIndex >= 0) world.player.channelKey = mods.spellIndex;
+    world.events.push({ kind: "spell", x: from.x, y: from.y, what: "beam" });
+    shots.push({ x: beam.x1, y: beam.y1, family: base.id });
+    return;
+  }
+
   if (shape === "orbit") {
     /*
      * One ring per key. A recast **renews** the blades rather than adding to
@@ -374,21 +460,52 @@ export function fireUnit(
      * So `resonance` on Spirit Blades keeps the ring up for as long as the
      * sword keeps landing, which is the Blade style's whole plan.
      */
-    for (const b of world.playerBullets)
-      if (b.alive && b.orbitMs > 0 && b.spellIndex === mods.spellIndex) b.alive = false;
+    /*
+     * **A stacking ring** (`stack_max`, Blade Storm) is the exception: each
+     * cast adds its blades to the ring and renews every one, up to the cap,
+     * past which the oldest go. The ring is re-spaced evenly each time, so
+     * it reads as one ring growing rather than as blades piling up.
+     */
+    const stackMax = Math.round(num(base.params, "stack_max", 0));
+    const ring = world.playerBullets.filter((b) => b.alive && b.orbitMs > 0 && b.spellIndex === mods.spellIndex);
+    let kept: typeof ring = [];
+    if (stackMax > 0) {
+      kept = ring.sort((a, b) => b.orbitMs - a.orbitMs).slice(0, Math.max(0, stackMax - count));
+      for (const b of ring) if (!kept.includes(b)) b.alive = false;
+    } else for (const b of ring) b.alive = false;
     const orbitRadius = num(base.params, "orbit_radius", 40) * mods.radiusMult;
     const spin = num(base.params, "spin", 300);
+    /*
+     * **An anchored ring** (`anchor_reach`, Blade Rift) turns round a point
+     * on the floor — the body the cast sought, or the aim's point at the
+     * reach; cast free, the body it was cast at — instead of round the caster.
+     */
+    const anchorReach = num(base.params, "anchor_reach", 0);
+    const anchor = anchorReach > 0
+      ? (placed ?? { x: from.x + aim.x * anchorReach, y: from.y + aim.y * anchorReach })
+      : null;
+    const cx = anchor?.x ?? world.player.x, cy = anchor?.y ?? world.player.y;
+    const total = kept.length + count;
+    const start = kept[0]?.orbitAngle ?? world.player.facing;
+    kept.forEach((b, k) => {
+      b.orbitMs = lifetime * 1000;
+      b.lifeMs = lifetime * 1000;
+      b.orbitAngle = start + (k / total) * Math.PI * 2;
+    });
     for (let i = 0; i < count; i++) {
       const b = acquire(world.playerBullets, true);
       if (!b) return;
-      const angle = (i / count) * Math.PI * 2 + world.player.facing;
+      const angle = start + ((kept.length + i) / total) * Math.PI * 2;
       b.orbitMs = lifetime * 1000;
       b.orbitAngle = angle;
       b.orbitRadius = orbitRadius;
       b.orbitDegPerS = spin;
       b.rehitMs = 0;
-      b.x = world.player.x + Math.cos(angle) * orbitRadius;
-      b.y = world.player.y + Math.sin(angle) * orbitRadius;
+      b.anchored = anchor !== null;
+      b.orbitX = cx;
+      b.orbitY = cy;
+      b.x = cx + Math.cos(angle) * orbitRadius;
+      b.y = cy + Math.sin(angle) * orbitRadius;
       b.originX = b.x;
       b.originY = b.y;
       b.vx = 0;

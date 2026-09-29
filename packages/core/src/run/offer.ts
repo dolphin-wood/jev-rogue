@@ -244,11 +244,18 @@ export function offerStatParts(item: BaseItem, level = 1): StatPart[] {
         : { hits: status.hits, dmg: status.damage, s },
     );
   }
-  if (shape === "orbit") push("orbits you", "trait", "stat.orbit");
+  if (shape === "orbit") {
+    if (Number(item.params.anchor_reach ?? 0) > 0) push("spins in place", "trait", "stat.rift");
+    else if (Number(item.params.stack_max ?? 0) > 0) push("ring grows each cast", "trait", "stat.orbitStack");
+    else push("orbits you", "trait", "stat.orbit");
+  }
   if (shape === "field") {
     if (item.params.element === "poison") push("poison cloud", "trait", "stat.fieldPoison");
+    else if (item.params.element === "ice") push("frost ground", "trait", "stat.fieldIce");
     else push("burning ground", "trait", "stat.field");
   }
+  if (shape === "beam") push("hold to channel", "trait", "stat.beam");
+  if (Number(item.params.lob ?? 0) > 0) push("lobbed over walls", "trait", "stat.lob");
   /*
    * The newer shapes (doc 006), each by the one fact the damage figure beside
    * it does not say: an orb's figure is a strike, so how often it strikes; a
@@ -1079,6 +1086,8 @@ export interface HeldSpell {
   readonly pierce?: number;
   /** Its own element, `none` or absent for none: `spillover` needs a status to spill. */
   readonly element?: string;
+  /** Its flight as a lob, s; absent or 0 for a shot that flies (Mortar takes no affix of a shot's flight). */
+  readonly lob?: number;
   /** Affix ids already attached, which both exclude and upgrade. */
   readonly affixes: readonly string[];
 }
@@ -1093,7 +1102,7 @@ export function heldSpell(
     shape: itemShape(item), count: Number(item?.params["count"] ?? 1),
     spread: Number(item?.params["spread"] ?? 0), wake: Number(item?.params["wake_reach"] ?? 0),
     seek: Number(item?.params["seek"] ?? 0), pierce: Number(item?.params["pierce"] ?? 0),
-    element: String(item?.params["element"] ?? "none"), affixes,
+    element: String(item?.params["element"] ?? "none"), lob: Number(item?.params["lob"] ?? 0), affixes,
   };
 }
 
@@ -1116,7 +1125,7 @@ export function affixFitsHeld(affix: SpellAffix, key: HeldSpell): boolean {
   return affixFitsSpell(affix, {
     params: {
       shape: key.shape, count: key.count, spread: key.spread ?? 0, wake_reach: key.wake ?? 0,
-      seek: key.seek ?? 0, pierce: key.pierce ?? 0, element: key.element ?? "none",
+      seek: key.seek ?? 0, pierce: key.pierce ?? 0, element: key.element ?? "none", lob: key.lob ?? 0,
     },
   }, key.affixes);
 }

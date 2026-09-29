@@ -77,6 +77,10 @@ export const SPELL_LOOK: Readonly<Record<string, SpellLook>> = {
   returning_edge: { core: 0xe6fff4, glow: 0x7fe8c0, shape: "edge" },
   serpent_fang: { core: 0xecffd8, glow: 0x5fd64a, shape: "edge" },
   storm_totem: { core: 0xfffbe0, glow: 0xffe066, shape: "ball" },
+  blade_storm: { core: 0xf4f0ff, glow: 0xb9a7ff, shape: "blade" },
+  blade_rift: { core: 0xf0fffb, glow: 0x9ff0e0, shape: "blade" },
+  mortar: { core: 0xe9dcc4, glow: 0xb08a58, shape: "rock" },
+  void_ray: { core: 0xe2d0ff, glow: 0x7a4fd6, shape: "orb" },
   crescent_edge: { core: 0xf4f0ff, glow: 0xb9a7ff, shape: "crescent" },
   /*
    * Two spirit spells that throw no shot, given a light of their own for

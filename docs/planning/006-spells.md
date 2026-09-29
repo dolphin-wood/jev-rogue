@@ -57,19 +57,20 @@ not others"). Parameters listed under a shape are read only by that shape.
 
 | Shape | What appears | Parameters beyond the common ones |
 |---|---|---|
-| `bolt` | projectiles from the hand | `seek`, `curve`, `chain`, `pierce`, `count`, `spread`, `weight`; optional `charges`, `charge`, `doom`, `emit`, `contagion` (below) |
-| `orbit` | bodies circling the caster; a recast renews the ring | `orbit_radius`, `spin` |
-| `field` | a patch of ground under the nearest body or ahead of the hand | `reach`; the element decides what the ground does (fire burns, poison poisons and slows) |
+| `bolt` | projectiles from the hand | `seek`, `curve`, `chain`, `pierce`, `count`, `spread`, `weight`; optional `charges`, `charge`, `doom`, `emit`, `contagion`, `lob` (below) |
+| `orbit` | bodies circling the caster; a recast renews the ring | `orbit_radius`, `spin`; optional `stack_max`, `anchor_reach` (below) |
+| `field` | a patch of ground under the nearest body or ahead of the hand | `reach`; the element decides what the ground does (fire burns, poison poisons and slows, ice slows harder and chills toward a freeze) |
 | `pillar` | a solid raised between the caster and what they face, with a shove as it rises | `reach` |
 | `dash` | the caster thrown forward, cutting each body once, untouchable for the travel; with `land`, a leap that cuts nothing in the air and lands in a ring | optional `land` (below) |
 | `vortex` | a pull under the nearest body | `reach`, `pull`; optional `collapse` (below) |
 | `summon` | one companion that follows and fires on its own clock; a recast renews it | `interval`, `reach` |
 | `eruption` | ground cells that burst after a beat, in a line, a scatter or a ring | `pattern` (`line`, `scatter`, `ring`), `step`, `first`, `delay_ms`, `reach`, `area`, `burn_ms`; optional `telegraph_ms` (below) |
 | `boomerang` | a thrown blade that flies out, slows, and returns to the caster | `reach`, `return_speed` |
-| `orb` | a slow drifting sphere that strikes the nearest body in reach on its own clock | `zap_ms`, `zap_reach`, `max_alive` |
+| `orb` | a sphere, drifting or at `speed` 0 set down beside the caster, that strikes the nearest body in reach on its own clock | `zap_ms`, `zap_reach`, `max_alive` |
 | `trail` | for a while, the ground the caster walks over catches | `trail_ms`, `drop_px`, `patch_ms` |
 | `enchant` | for a while, every sword swing also throws a wave | `enchant_ms`, `wave_reach` |
 | `stance` | a short guard; a hit taken during it is cancelled and answered | `stance_ms`, `answer_radius`, `expire_share` |
+| `beam` | held: a line along the aim to the first wall that hurts what it crosses each tick | `reach`, `tick_ms`, `flash_ms` (below) |
 
 Common parameters on every item: `damage`, `radius`, `lifetime`, `element`,
 `element_power`, `status_scale` (how hard its burn or poison ticks against the
@@ -141,10 +142,27 @@ roster's standard status), `speed`, `windup_ms`, `recover_ms`, `move_scale`,
   drops the stance and answers at once at `expire_share`, because the dash
   keeps its priority over everything. The stance guards against bodies and
   projectiles, not against the room's own hazards.
+- **`beam`.** Channelled: the key's cost is paid at the press, and the beam
+  holds for as long as the key stays down, up to `lifetime`, following the
+  caster and the aim; the caster moves at `move_scale`, nothing else is cast
+  meanwhile, and the key coming up, another key, a dash or a stun puts it
+  out. It fires none of the projectile hooks. Cast free by an affix it is a
+  `flash_ms` flash at the body the affix names.
+- **`lob` (bolt).** The shell flies in an arc over every body and wall to the
+  body it seeks, or the aim's point at `reach`, for `lob` seconds, and lands
+  for its whole damage on every body within `lob_radius`. Its landing is its
+  hit: the hit and kill affixes fire there, and those that act on a shot's
+  flight (`pierce`, `seek`, `ricochet`, `shatter`, `fork`) are not dealt to it.
+- **`stack_max` (orbit).** A recast adds its blades to the ring instead of
+  replacing it and renews every blade, up to `stack_max`, past which the oldest
+  go; the ring is re-spaced evenly each time.
+- **`anchor_reach` (orbit).** The ring turns round a point on the floor — the
+  body the cast sought, or the aim's point at `anchor_reach` — and stays there
+  as the caster moves.
 
 ## The roster
 
-Forty-four spells. ★ marks each style's starter. A spell appears under every
+Forty-eight spells. ★ marks each style's starter. A spell appears under every
 style it is tagged with; its first row is its primary style.
 
 ### Barrage (`spam`)
@@ -160,6 +178,7 @@ style it is tagged with; its first row is its primary style.
 | Mana Darts `mana_darts` | void | uncommon | bolt + `charges` | banks darts while the key rests; a press looses all of them |
 | Ball Lightning `ball_lightning` | storm | uncommon | orb | a slow orb that strikes the nearest body in reach several times a second; several can be out at once |
 | Storm Totem `storm_totem` | storm | uncommon | orb (still) | a totem set down beside the caster that strikes the nearest body in a wide reach; two at most |
+| Blade Storm `blade_storm` | spirit | rare | orbit + `stack_max` | see Blade |
 
 ### Heavy (`nuke`)
 
@@ -176,6 +195,8 @@ style it is tagged with; its first row is its primary style.
 | Doom Sigil `doom_sigil` | void | uncommon | bolt + `doom` | a hit marks the body, and the mark bursts a few seconds later (also Affliction) |
 | Leap Slam `leap_slam` | stone | uncommon | dash + `land` | leaps at a body and lands in a ring of broken ground (also Blade) |
 | Glacial Guard `glacial_guard` | frost | uncommon | stance | see Blade |
+| Mortar `mortar` | stone | rare | bolt + `lob` | a shell lobbed over everything to the body it seeks, bursting where it lands (also Crowd) |
+| Void Ray `void_ray` | void | rare | beam | held: a line of void light along the aim to the first wall, burning every body across it |
 
 ### Crowd (`area`)
 
@@ -193,6 +214,8 @@ style it is tagged with; its first row is its primary style.
 | Flame Pillars `flame_pillars` | flame | uncommon | eruption (line) | see Affliction |
 | Cinder Burst `cinder_burst` | flame | uncommon | bolt | see Affliction |
 | Blizzard `blizzard` | frost | uncommon | field (ice) | frost under the nearest body that slows what stands in it and chills it toward a freeze |
+| Mortar `mortar` | stone | rare | bolt + `lob` | see Heavy |
+| Blade Rift `blade_rift` | spirit | uncommon | orbit + `anchor_reach` | see Blade |
 
 ### Affliction (`dot`)
 
@@ -220,6 +243,8 @@ style it is tagged with; its first row is its primary style.
 | Glacial Guard `glacial_guard` | frost | uncommon | stance | the same guard, answered with a freezing spin that chills every body round the caster (also Heavy) |
 | Serpent Fang `serpent_fang` | venom | uncommon | boomerang | a fang thrown out and back that poisons each body it cuts on both passes |
 | Dash Slash `dash_slash` | spirit | uncommon | dash + wake | a run through the bodies ahead whose wake cuts those to either side |
+| Blade Storm `blade_storm` | spirit | rare | orbit + `stack_max` | each cast adds a blade to the ring round the caster and renews it, up to six (also Barrage) |
+| Blade Rift `blade_rift` | spirit | uncommon | orbit + `anchor_reach` | a whirl of three blades set spinning on the floor ahead, cutting what stands in it (also Crowd) |
 | Stone Ward `stone_ward` | stone | common | pillar | a pillar between the caster and what they face that blocks bodies and shots |
 | Spark Spray, Blink Strike, Frost Nova, Quake Ring, Leap Slam | | | | see above |
 
@@ -257,9 +282,9 @@ card.
 | frost | frost_needle, glacier_spike, frost_nova, frozen_orb, blizzard, glacial_guard |
 | venom | venom_spit, plague_bloom, toxic_cloud, contagion, serpent_fang |
 | storm | shock_arc, spark_spray, arc_lance, seeker_swarm, ball_lightning, storm_totem |
-| void | magic_bolt, void_orb, void_maw, mana_darts, arcane_cannon, doom_sigil |
-| spirit | spirit_blades, spirit_ally, blink_strike, returning_edge, crescent_edge, counter_stance |
-| stone | stone_shard, stone_ward, scatter_shot, fault_line, earth_spikes, quake_ring, leap_slam |
+| void | magic_bolt, void_orb, void_maw, mana_darts, arcane_cannon, doom_sigil, void_ray |
+| spirit | spirit_blades, spirit_ally, blink_strike, returning_edge, crescent_edge, counter_stance, dash_slash, blade_storm, blade_rift |
+| stone | stone_shard, stone_ward, scatter_shot, fault_line, earth_spikes, quake_ring, leap_slam, mortar |
 
 `STYLE_SCHOOLS` (`run/doors.ts`), the schools a style's door may promise, is
 derived from this table and the style tags: a school serves a style when it

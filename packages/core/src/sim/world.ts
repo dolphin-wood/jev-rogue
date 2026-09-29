@@ -41,7 +41,7 @@ import {
 } from "./affix-hooks.ts";
 import type { HookSim } from "./affix-hooks.ts";
 import {
-  SPELL_SLOTS, MANA_REGEN_FRACTION_PER_S, makeSpell, stepSpells, stepEchoes, ENEMY_BUILD_PER_HIT, cancelCharge,
+  SPELL_SLOTS, MANA_REGEN_FRACTION_PER_S, makeSpell, stepSpells, stepEchoes, ENEMY_BUILD_PER_HIT, cancelCharge, endChannel,
   freeCastScope,
 } from "./spells.ts";
 import { featureCells, spikesOut } from "../rooms/features.ts";
@@ -653,7 +653,7 @@ function buildWorld(input: CreateWorldOptions): World {
       invulnMs: 0,
       mana: o.staff.mana_max,
       castPending: -1, castWindupMs: 0, castCost: 0, castRecoverMs: 0, castMoveScale: 1,
-      chargeKey: -1, chargeMs: 0, chargeVoid: -1, landing: null,
+      chargeKey: -1, chargeMs: 0, chargeVoid: -1, channelKey: -1, landing: null,
       aim: { x: start.x + 1, y: start.y },
       facing: 0,
       dashMs: 0, dashIframeMs: 0, dashCooldownMs: 0, dashX: 0, dashY: 0,
@@ -767,6 +767,7 @@ function buildWorld(input: CreateWorldOptions): World {
     })),
     wards: [],
     echoes: [],
+    beams: [],
     freeStrikes: [],
     dooms: [],
     scorches: makeScorchPool(),
@@ -994,6 +995,7 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   // A stun silences the spells too, or it would only be a movement penalty.
   // A charge being held goes out with it, unpaid: a stun is not a release.
   if (w.player.stunMs > 0 && w.player.chargeKey >= 0) cancelCharge(w.player);
+  if (w.player.stunMs > 0 && w.player.channelKey >= 0) endChannel(w);
   const pressedSpell = w.player.stunMs > 0 ? null : input.spell ?? null;
   const cast = stepSpells(w, items, dtMs, pressedSpell, !!input.spellAuto);
   /*
@@ -1078,6 +1080,7 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   stepStatuses(w, dtMs);
   stepDashStrike(w, dtMs);
   stepVortices(w, dtMs);
+  stepBeams(w, dtMs);
   stepEruptions(w, dtMs);
   stepDooms(w, dtMs);
   stepPets(w, dtMs, items);
@@ -1422,6 +1425,8 @@ function stepPlayer(w: World, input: Input, dtMs: number): void {
     // And a held charge: the dash is the answer to a charge gone wrong, so it
     // puts the charge out at no cost (doc 006).
     if (p.chargeKey >= 0) cancelCharge(p);
+    // And a beam: the dash is the answer to standing in the open holding one.
+    if (p.channelKey >= 0) endChannel(w);
     /*
      * And a stance (doc 006). The dash keeps its place above everything
      * (doc 013): it drops the guard at once, and the guard answers as it
@@ -1489,7 +1494,7 @@ function stepPlayer(w: World, input: Input, dtMs: number): void {
     // Poisoned: a quarter off, for as long as it lasts.
     * (p.poisonMs > 0 && !dashing ? POISON_SLOW : 1)
     // Winding a spell up and recovering from it: the heavier, the slower.
-    * (!dashing && (p.castPending >= 0 || p.castRecoverMs > 0 || p.chargeKey >= 0) ? p.castMoveScale : 1)
+    * (!dashing && (p.castPending >= 0 || p.castRecoverMs > 0 || p.chargeKey >= 0 || p.channelKey >= 0) ? p.castMoveScale : 1)
     // Holding a stance: planted, and slowed for as long as it holds.
     * (!dashing && p.stance ? p.stance.moveScale : 1);
   const move = dashing ? { x: p.dashX, y: p.dashY } : dir;
@@ -4503,6 +4508,88 @@ function slipstream(w: World): void {
   }
 }
 
+/**
+ * **A lob coming down** (Mortar): the whole of its damage on every body
+ * within its landing reach, each struck as a shot strikes — the hit affixes
+ * first, the element, the kill affixes, a shove out from where it fell.
+ */
+function lobLand(w: World, b: Bullet): void {
+  const sim = hookSim(w);
+  w.events.push({ kind: "eruption", x: b.x, y: b.y, what: "mortar" });
+  impact(w, HITSTOP_HIT, TRAUMA_HIT * 1.4);
+  let struck = 0;
+  for (const e of w.enemies) {
+    if (!isActive(e) || e.hp <= 0) continue;
+    const dx = e.x - b.x, dy = e.y - b.y;
+    const d = Math.hypot(dx, dy);
+    if (d > b.lobRadius + e.radius) continue;
+    wake(w, e);
+    onHit(w, b, e, sim);
+    const { blocked } = hurtEnemy(w, e, b.damage, damageTag(w, b), { x: b.x, y: b.y }, b.damage * poiseOfWeight(b.weight || 1));
+    if (!blocked) applyElement(e, b);
+    if (e.hp <= 0) onKill(w, b, e, sim);
+    w.stats.damageDealt += b.damage;
+    e.hitFlashMs = HIT_FLASH_MS;
+    const push = (KNOCKBACK * (b.weight || 1)) / Math.max(1, e.radius / 10);
+    e.knockX += (dx / (d || 1)) * push;
+    e.knockY += (dy / (d || 1)) * push;
+    if ((b.weight || 1) >= SPELL_STAGGER_WEIGHT && e.hp > 0) spellStagger(w, e, b.weight);
+    w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: e.archetype, amount: b.damage });
+    struck++;
+  }
+  if (struck > 0) w.stats.shotHits++;
+}
+
+/**
+ * **The beams** (`beam`): a channelled one follows the caster and the aim
+ * and ends with its key (`endChannel`) or its time; each ticks on its clock,
+ * hurting every body across its line and filling their gauges with what it
+ * carries. The line stops at the first wall.
+ */
+function stepBeams(w: World, dtMs: number): void {
+  const p = w.player;
+  for (const beam of w.beams) {
+    if (!beam.alive) continue;
+    beam.lifeMs -= dtMs;
+    if (beam.lifeMs <= 0 || (beam.channel && p.channelKey !== beam.spellIndex)) {
+      beam.alive = false;
+      if (beam.channel && p.channelKey === beam.spellIndex) p.channelKey = -1;
+      continue;
+    }
+    if (beam.channel) {
+      const dir = { x: p.aim.x - p.x, y: p.aim.y - p.y };
+      const len = Math.hypot(dir.x, dir.y) || 1;
+      beam.x0 = p.x; beam.y0 = p.y;
+      beam.x1 = p.x + (dir.x / len) * beam.reach;
+      beam.y1 = p.y + (dir.y / len) * beam.reach;
+    }
+    // Stopped by the first wall along it.
+    const dx = beam.x1 - beam.x0, dy = beam.y1 - beam.y0;
+    const full = Math.hypot(dx, dy) || 1;
+    for (let t = 0; t <= full; t += 4) {
+      const x = beam.x0 + (dx / full) * t, y = beam.y0 + (dy / full) * t;
+      if (t > 8 && circleHitsWall(w.room.grid, x, y, 1)) { beam.x1 = x; beam.y1 = y; break; }
+    }
+    beam.clockMs -= dtMs;
+    if (beam.clockMs > 0) continue;
+    beam.clockMs += beam.tickMs;
+    const lx = beam.x1 - beam.x0, ly = beam.y1 - beam.y0;
+    const l2 = lx * lx + ly * ly || 1;
+    for (const e of w.enemies) {
+      if (!isActive(e) || e.hp <= 0) continue;
+      const t = Math.max(0, Math.min(1, ((e.x - beam.x0) * lx + (e.y - beam.y0) * ly) / l2));
+      const d = Math.hypot(e.x - (beam.x0 + lx * t), e.y - (beam.y0 + ly * t));
+      if (d > beam.width + e.radius) continue;
+      wake(w, e);
+      const { blocked } = hurtEnemy(w, e, beam.damage, beam.element !== "none" ? beam.element : "", { x: beam.x0, y: beam.y0 },
+        beam.damage * poiseOfWeight(beam.weight));
+      if (!blocked) applyElementsTo(e, beam.powers, beam.statusMult, beam.proc);
+      w.stats.damageDealt += beam.damage;
+      e.hitFlashMs = HIT_FLASH_MS;
+    }
+  }
+}
+
 /** How often an orbiting blade may hit the same body: about twice a second. */
 const ORBIT_REHIT_MS = 450;
 
@@ -4517,8 +4604,10 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
     if (!b.alive || b.orbitMs <= 0) continue;
     const step = (b.orbitDegPerS * Math.PI / 180) * (dtMs / 1000);
     b.orbitAngle += step;
-    b.x = w.player.x + Math.cos(b.orbitAngle) * b.orbitRadius;
-    b.y = w.player.y + Math.sin(b.orbitAngle) * b.orbitRadius;
+    // An anchored ring turns round its point on the floor; every other round the caster.
+    const cx = b.anchored ? b.orbitX : w.player.x, cy = b.anchored ? b.orbitY : w.player.y;
+    b.x = cx + Math.cos(b.orbitAngle) * b.orbitRadius;
+    b.y = cy + Math.sin(b.orbitAngle) * b.orbitRadius;
     const tangential = b.orbitRadius * (b.orbitDegPerS * Math.PI / 180);
     b.vx = -Math.sin(b.orbitAngle) * tangential;
     b.vy = Math.cos(b.orbitAngle) * tangential;
@@ -4564,7 +4653,8 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
   );
 
   for (const b of w.playerBullets) {
-    if (!b.alive) continue;
+    // A lob touches nothing in flight: it lands (`lobLand`).
+    if (!b.alive || b.delivery === "lob") continue;
     for (const e of w.enemies) {
       if (!isActive(e) || e.hp <= 0) continue;
       if (b.hitIds.includes(e.id)) continue;
@@ -4706,6 +4796,7 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
   // The player's own projectiles break scenery too. This was written and only
   // wired to the enemy pool, so a spell aimed at a crate was absorbed by it
   // and nothing happened — which reads as the spell being broken.
+  for (const b of expired) if (b.delivery === "lob") lobLand(w, b);
   bulletsBreakProps(w, [...expired, ...hitWall], (b) => b.damage);
 
   // `bloom` leaves a field where a shot ran out; `shatter` breaks it on a wall.

@@ -412,6 +412,11 @@ export const EN = {
   "stat.trailPoison": "poison trail",
   "stat.enchant": "sword waves {s} s",
   "stat.stance": "answers a hit",
+  "stat.rift": "spins in place",
+  "stat.orbitStack": "ring grows each cast",
+  "stat.fieldIce": "frost ground",
+  "stat.beam": "hold to channel",
+  "stat.lob": "lobbed over walls",
   "stat.chains": "chains x{n}",
   "stat.gold": "+{n} gold",
   "stat.status.fire": "Burn · {hits} hits · {dmg} dmg / {s} s",
@@ -467,6 +472,7 @@ export const EN = {
   "shape.trail": "trail",
   "shape.enchant": "enchant",
   "shape.stance": "stance",
+  "shape.beam": "beam",
 
   /* what each affix tier says */
   "affixtier.fork": "splits in two on impact",

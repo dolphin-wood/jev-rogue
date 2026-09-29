@@ -404,6 +404,11 @@ export const JA: Table = {
   "stat.trailPoison": "毒の足跡",
   "stat.enchant": "剣気 {s} 秒",
   "stat.stance": "受け止めて反撃",
+  "stat.rift": "その場で回転",
+  "stat.orbitStack": "詠唱ごとに刃が増える",
+  "stat.fieldIce": "霜の地面",
+  "stat.beam": "押し続けて照射",
+  "stat.lob": "壁越しに投げる",
   "stat.chains": "連鎖 ×{n}",
   "stat.gold": "ゴールド +{n}",
   "stat.status.fire": "燃焼 · {hits}ヒットで発動 · {s}秒で{dmg}ダメージ",
@@ -459,6 +464,7 @@ export const JA: Table = {
   "shape.trail": "足跡",
   "shape.enchant": "エンチャント",
   "shape.stance": "構え",
+  "shape.beam": "光線",
 
   /* what each affix tier says */
   "affixtier.fork": "着弾で2発に割れる",

@@ -488,7 +488,7 @@ export function stepSpells(
   world.lastSpellKey = pressed;
   // The window waits out the caster's own cast, which the player cannot hurry;
   // it runs down against everything else.
-  const casting = p.castPending >= 0 || p.castRecoverMs > 0 || p.chargeKey >= 0;
+  const casting = p.castPending >= 0 || p.castRecoverMs > 0 || p.chargeKey >= 0 || p.channelKey >= 0;
   if (!casting) p.spellBufferMs = Math.max(0, p.spellBufferMs - dtMs);
   if (p.spellBufferMs <= 0) p.spellBuffer = -1;
   const pressedSlot = pressed === null ? null : world.spells[pressed] ?? null;
@@ -528,6 +528,19 @@ export function stepSpells(
     const held = world.spells[at];
     if (!held) return { shots: [], refused: null };
     return release(world, items, held, at, p.castCost);
+  }
+
+  /*
+   * **A beam being channelled** (`beam`): held for as long as its key is the
+   * one held and its time lasts, and nothing else is cast meanwhile. The key
+   * coming up, or another taking its place, puts it out.
+   */
+  if (p.channelKey >= 0) {
+    const at = p.channelKey;
+    const beam = world.beams.find((b) => b.alive && b.channel && b.spellIndex === at);
+    if (!beam) p.channelKey = -1;
+    else if (pressed === at) return { shots: [], refused: null };
+    else endChannel(world);
   }
 
   // A charge put out by a dash or a stun: its key does nothing until it comes up.
@@ -719,6 +732,14 @@ function refillBanks(world: World, items: ItemRegistry, dtMs: number): void {
  * so does anything that takes the hands away — a stun, a key emptied under
  * it. The cooldown does not start either, because nothing was cast.
  */
+/** Puts out the beam being channelled, if any: the key came up, a dash, a stun. */
+export function endChannel(world: World): void {
+  const p = world.player;
+  if (p.channelKey < 0) return;
+  for (const b of world.beams) if (b.alive && b.channel && b.spellIndex === p.channelKey) b.alive = false;
+  p.channelKey = -1;
+}
+
 export function cancelCharge(p: World["player"]): void {
   // The key stays dead until it comes up: see `Player.chargeVoid`.
   if (p.chargeKey >= 0) p.chargeVoid = p.chargeKey;

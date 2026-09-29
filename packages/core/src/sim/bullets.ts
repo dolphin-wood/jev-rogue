@@ -23,6 +23,7 @@ function blankBullet(): Bullet {
     affixes: [], spellIndex: -1, manaSpent: 0, weight: 1, arcLeft: 0,
     originX: 0, originY: 0, targetId: -1, seekDegPerS: 0, seekMs: 0,
     orbitMs: 0, orbitAngle: 0, orbitRadius: 0, orbitDegPerS: 0, rehitMs: 0,
+    anchored: false, orbitX: 0, orbitY: 0, lobMs: 0, lift: 0, lobRadius: 0,
     lifeMs: 0, pierce: 0, bounce: 0, homing: 0, split: 0,
     element: "none", elementPower: 0, powers: noPowers(), proc: 1, statusMult: 1, hitIds: [],
     leavesFire: false, from: "",
@@ -86,6 +87,12 @@ function reset(b: Bullet): void {
   b.orbitRadius = 0;
   b.orbitDegPerS = 0;
   b.rehitMs = 0;
+  b.anchored = false;
+  b.orbitX = 0;
+  b.orbitY = 0;
+  b.lobMs = 0;
+  b.lift = 0;
+  b.lobRadius = 0;
   // A recycled slot keeps none of doc 006's shot options: a plain shard out
   // of a frozen orb's old slot must not mark, throw shards or spread poison.
   b.doomMs = 0;
@@ -117,6 +124,9 @@ export function liveCount(pool: readonly Bullet[]): number {
 export function hasRoom(pool: readonly Bullet[], needed: number): boolean {
   return liveCount(pool) + needed <= ENEMY_BULLET_CAP;
 }
+
+/** How high a lob rises at the top of its arc, px: drawn, never simulated. */
+export const LOB_HEIGHT_PX = 38;
 
 export interface IntegrateResult {
   /** Bullets that stopped this step, for the expiry hooks and particles. */
@@ -155,6 +165,21 @@ export function integrate(
     if (b.delivery === "boomerang") continue;
     // So is an enchant's wave (`stepWaves`): an arc that flies over the room's geometry.
     if (b.delivery === "wave") continue;
+    /*
+     * A lob flies over everything to where it was thrown: no wall stops it
+     * and no body (the hit loop passes it by), and it lands when its flight
+     * is over, which is its expiry (`lobLand` in `world.ts`). Its height is
+     * a sine over the flight, for the renderer.
+     */
+    if (b.delivery === "lob") {
+      b.x = clamp(b.x + b.vx * dt, 0, WORLD_W);
+      b.y = clamp(b.y + b.vy * dt, 0, WORLD_H);
+      b.lifeMs -= dtMs;
+      const t = b.lobMs > 0 ? 1 - Math.max(0, b.lifeMs) / b.lobMs : 1;
+      b.lift = Math.sin(Math.min(1, t) * Math.PI) * LOB_HEIGHT_PX;
+      if (b.lifeMs <= 0) { b.alive = false; b.lift = 0; expired.push(b); }
+      continue;
+    }
     if (b.orbitMs > 0) {
       b.orbitMs -= dtMs;
       b.lifeMs -= dtMs;

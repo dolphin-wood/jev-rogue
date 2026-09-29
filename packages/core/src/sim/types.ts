@@ -261,6 +261,21 @@ export interface Bullet {
   orbitMs: number;
   orbitAngle: number;
   orbitRadius: number;
+  /**
+   * Where an **anchored** ring turns (`anchor_reach`, Blade Rift): a point on
+   * the floor rather than the caster, when `anchored` is set.
+   */
+  anchored: boolean;
+  orbitX: number;
+  orbitY: number;
+  /**
+   * A **lob** (`delivery: "lob"`, Mortar) flies over bodies and walls to a
+   * point and lands there: `lobMs` is its whole flight, `lift` how high it is
+   * now (drawn, not simulated), and `lobRadius` what its landing reaches.
+   */
+  lobMs: number;
+  lift: number;
+  lobRadius: number;
   orbitDegPerS: number;
   rehitMs: number;
   /**
@@ -323,7 +338,37 @@ export interface Bullet {
 }
 
 /** See `Bullet.delivery`. */
-export type BulletDelivery = "shot" | "boomerang" | "strike" | "wave";
+export type BulletDelivery = "shot" | "boomerang" | "strike" | "wave" | "lob";
+
+/**
+ * **A beam** (doc 006, the `beam` shape): a line from the caster out along
+ * the aim, stopped by the first wall, that hurts every body across it each
+ * `tickMs`. A channelled one (`channel`) is held by its key — the line follows
+ * the caster and the aim, and ends when the key comes up or its time runs
+ * out; a free cast's is a short flash at the body it was cast at.
+ */
+export interface Beam {
+  alive: boolean;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  /** How far it reaches before a wall stops it, and how wide it is. */
+  reach: number;
+  width: number;
+  damage: number;
+  tickMs: number;
+  clockMs: number;
+  lifeMs: number;
+  maxLifeMs: number;
+  channel: boolean;
+  element: Element;
+  powers: ElementPowers;
+  proc: number;
+  statusMult: number;
+  weight: number;
+  spellIndex: number;
+}
 
 /**
  * A strike landed at a point without the player going there: a dash spell
@@ -1769,6 +1814,8 @@ export interface Player {
    * player never asked for, at a whole cast's price.
    */
   chargeVoid: number;
+  /** The key a `channel` spell is held on (a beam), or -1. */
+  channelKey: number;
   /** The ring a `land` dash comes down in, while it is in the air; see `Landing`. */
   landing: Landing | null;
   aim: Vec;
@@ -2366,6 +2413,8 @@ export interface World {
    * is the cast that was made, not a fresh full one.
    */
   echoes: { slot: number; delayMs: number; n?: number; charge?: number; volley?: number }[];
+  /** The beams alive: a channelled one held by its key, and free casts' flashes (`Beam`). */
+  beams: Beam[];
   /** Dash cuts cast free, waiting for the next step; see `FreeStrike`. */
   freeStrikes: FreeStrike[];
   /** `doom` marks whose bodies died first, still counting down; see `LooseDoom`. */

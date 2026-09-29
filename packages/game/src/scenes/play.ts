@@ -7762,6 +7762,11 @@ export class PlayScene extends Phaser.Scene {
       else if (ev.kind === "shot" && ev.what === "land") this.landingAt(ev.x, ev.y);
       else if (ev.kind === "shot" && ev.what === "emit_burst") this.frostRingAt(ev.x, ev.y);
       else if (ev.kind === "eruption" && ev.what === "doom") this.doomBurstAt(ev.x, ev.y);
+      // A mortar's shell coming down: the landing's dust, and stone thrown up round it.
+      else if (ev.kind === "eruption" && ev.what === "mortar") {
+        this.landingAt(ev.x, ev.y);
+        this.burst(ev.x, ev.y - 2, 0xd8c8a8, 14, 190, -Math.PI / 2, Math.PI * 1.4, 1.1, 300);
+      }
       // `aftershock`: the ground under the body going off — dust, and grit thrown up off it.
       else if (ev.kind === "eruption" && ev.what === "aftershock") {
         this.landingAt(ev.x, ev.y);
@@ -16479,10 +16484,40 @@ export class PlayScene extends Phaser.Scene {
     this.fxGfx.clear();
     this.fxTopGfx.clear();
     this.projGfx.clear();
+    /*
+     * **Beams** (`beam`): a wide soft band of the spell's light along the
+     * line, a tighter one, and a hot core, trembling a little each frame —
+     * light, not a drawn outline — and motes thrown off where it ends.
+     */
+    for (const beam of w.beams) {
+      if (!beam.alive) continue;
+      const look = spellLookOf(beam.spellIndex >= 0 ? w.spells[beam.spellIndex]?.item.base ?? null : null, beam.element);
+      const fade = beam.channel ? 1 : Math.max(0.3, beam.lifeMs / Math.max(1, beam.maxLifeMs));
+      const wob = 0.85 + 0.15 * Math.sin(w.tick * 0.9);
+      this.fxGfx.lineStyle(beam.width * 2.6 * wob, look.glow, 0.18 * fade);
+      this.fxGfx.lineBetween(beam.x0, beam.y0, beam.x1, beam.y1);
+      this.fxGfx.lineStyle(beam.width * 1.2 * wob, look.glow, 0.45 * fade);
+      this.fxGfx.lineBetween(beam.x0, beam.y0, beam.x1, beam.y1);
+      this.fxGfx.lineStyle(Math.max(1.5, beam.width * 0.45), look.core, 0.9 * fade);
+      this.fxGfx.lineBetween(beam.x0, beam.y0, beam.x1, beam.y1);
+      if ((w.tick & 1) === 0) this.burst(beam.x1, beam.y1, look.glow, 2, 70, undefined, Math.PI * 2, 0.8);
+    }
     for (const b of w.playerBullets) {
       if (!b.alive) continue;
       const look = lookOf(b, w.spells);
       const tint = look;
+      /*
+       * **A lob** is drawn where it is in the air — lifted off its ground
+       * point by its arc — over a shadow on the floor that shrinks as it
+       * rises, so where it will come down is read from the shadow.
+       */
+      if (b.delivery === "lob") {
+        const up = Math.min(1, b.lift / 38);
+        this.fxGfx.fillStyle(0x0d0b1f, 0.35 - 0.15 * up);
+        this.fxGfx.fillEllipse(b.x, b.y + 2, b.radius * (2.6 - up), b.radius * (1.3 - 0.5 * up));
+        drawProjectile(this.fxGfx, this.projGfx, { ...b, y: b.y - b.lift }, look, w.tick, (sp) => this.shed(sp));
+        continue;
+      }
       if (look.shape === "lightning") {
         /*
          * No sprite at all. The bolt is the line it has travelled: from where

@@ -1,0 +1,18 @@
+# Blade Storm
+1=#2e2458 2=#6a5ab8 3=#b9a7ff 4=#f4f0ff
+......oooo......
+.....o4443o.....
+..oo.o4432o.oo..
+.o44o.o43o.o43o.
+.o433o.oo.o432o.
+..o332o..o332o..
+...oo......oo...
+oooo...oo...oooo
+o4433oo44oo3322o
+oooo...oo...oooo
+...oo......oo...
+..o233o..o233o..
+.o234o.oo.o334o.
+.o34o.o34o.o44o.
+..oo.o2344o.oo..
+......oooo......

@@ -79,7 +79,7 @@ const REPRESENTATIVE: Readonly<Record<SpellShape, string>> = {
   bolt: "magic_bolt", orbit: "spirit_blades", field: "wildfire_field", pillar: "stone_ward",
   dash: "blink_strike", vortex: "void_maw", summon: "spirit_ally", eruption: "earth_spikes",
   boomerang: "returning_edge", orb: "ball_lightning", trail: "cinder_stride", enchant: "crescent_edge",
-  stance: "counter_stance",
+  stance: "counter_stance", beam: "void_ray",
 };
 
 /** The run's own affixes need a wake, which the shape's representative (Blink Strike) has not. */
@@ -287,7 +287,7 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix, alongside: r
       if (ev.kind === "eruption") seen.made++;
       if (ev.kind === "shot" && ev.what === "free_strike") seen.made++;
       // A trail, an enchant or a stance started or renewed on the caster.
-      if (ev.kind === "spell" && (ev.what === "trail" || ev.what === "enchant" || ev.what === "stance")) seen.made++;
+      if (ev.kind === "spell" && (ev.what === "trail" || ev.what === "enchant" || ev.what === "stance" || ev.what === "beam")) seen.made++;
       if (ev.kind === "shot" && ev.what === "split") seen.splits++;
       if (ev.kind === "shot" && ev.what === "arc") seen.arcs++;
       if (ev.kind === "enemy_hit" && ev.what === "brand") seen.brands++;

@@ -959,6 +959,83 @@ const ATTACKS: readonly BaseItem[] = [
     description:
       "Storm Totem sets a crackling totem down beside the caster that strikes the nearest body within its reach a few times a second until it fades; two can stand at once.",
   },
+  /*
+   * **The four the roster had no machinery for** (spell-roster-survey 1.1-1.5):
+   * a ring that grows with each cast, a ring set down on the floor, a shell
+   * thrown over the room, and a beam held on its key.
+   */
+  {
+    id: "blade_storm",
+    rarity: "rare",
+    tags: ["attack", "short", "none", "melee", "spam"],
+    mana: 2,
+    params: {
+      /*
+       * `stack_max`: each cast adds a blade to the ring round the caster and
+       * renews the rest, up to six, so the ring is built by pressing the key
+       * again and again — a cheap key that rewards being pressed.
+       */
+      shape: "orbit", damage: 1.9, speed: 0, radius: 5, count: 1, spread: 0, lifetime: 4, stack_max: 6,
+      orbit_radius: 34, spin: 340, pierce: 0, element: "none", seek: 0, curve: 0, weight: 0.5,
+    },
+    description:
+      "Blade Storm adds a spectral blade to a ring circling the caster and renews the ring, up to six blades; each blade cuts what it passes through.",
+  },
+  {
+    id: "blade_rift",
+    rarity: "uncommon",
+    tags: ["attack", "short", "none", "melee", "area"],
+    mana: 4,
+    params: {
+      /*
+       * `anchor_reach`: the ring turns round a point on the floor — the body
+       * the cast sought, or the aim's point a short way ahead — and stays
+       * there when the caster moves, so it is ground to hold a pack in.
+       */
+      shape: "orbit", damage: 1.8, speed: 0, radius: 8, count: 3, spread: 0, lifetime: 3.5, anchor_reach: 70,
+      orbit_radius: 16, spin: 480, pierce: 0, element: "none", seek: 0, curve: 0, weight: 0.6, cooldown_scale: 3,
+    },
+    description:
+      "Blade Rift tears open a whirl of three spectral blades on the floor ahead of the caster that spins in place, cutting every body that stands in it until it closes.",
+  },
+  {
+    id: "mortar",
+    rarity: "rare",
+    tags: ["attack", "long", "none", "nuke", "area"],
+    mana: 6,
+    params: {
+      /*
+       * `lob`: a shell thrown in an arc to the body the cast sought, over
+       * every body and wall between, landing for its whole damage on all
+       * within `lob_radius` of where it comes down. The flight is the risk:
+       * a body can walk out of where it will land.
+       */
+      damage: 22, speed: 0, radius: 7, count: 1, spread: 0, lifetime: 1, pierce: 0, element: "none",
+      seek: 0, curve: 0, weight: 2, lob: 0.75, lob_radius: 40, reach: 170,
+      windup_ms: 180, recover_ms: 260, move_scale: 0.6, cooldown_scale: 3.5,
+    },
+    description:
+      "Mortar lobs a stone shell in a high arc over everything in its way to the body it seeks; where it lands it bursts, hitting all within reach. A body can walk out from under it.",
+  },
+  {
+    id: "void_ray",
+    rarity: "rare",
+    tags: ["attack", "long", "none", "nuke"],
+    mana: 5,
+    params: {
+      /*
+       * `beam`, channelled: held on its key for up to `lifetime`, a line out
+       * along the aim to the first wall that hurts every body across it each
+       * `tick_ms`. The key's cost is paid once, at the press; the caster
+       * moves slowly while it is held, and letting go or dashing puts it out.
+       */
+      shape: "beam", damage: 1.4, speed: 0, radius: 7, count: 1, spread: 0, lifetime: 2.2, reach: 220, tick_ms: 120,
+      pierce: 0, element: "none", seek: 0, curve: 0, weight: 0.4, flash_ms: 360,
+      windup_ms: 0, recover_ms: 200, move_scale: 0.4, cooldown_scale: 3,
+    },
+    description:
+      "Void Ray is held: for as long as its key stays down, a line of void light runs from the caster along the aim to the first wall, burning every body across it. The caster moves slowly while it is held.",
+  },
 ];
 
 export const BASE_ITEMS: readonly BaseItem[] = ATTACKS;

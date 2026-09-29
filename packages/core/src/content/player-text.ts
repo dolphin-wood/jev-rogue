@@ -60,6 +60,10 @@ export const PLAYER_TEXT: Readonly<Record<string, string>> = {
   serpent_fang: "Throws a fang that flies out and comes back to you, poisoning each enemy it cuts both ways.",
   glacial_guard: "A short guard: the next hit on you is blocked and answered with a freezing spin around you.",
   storm_totem: "Sets a totem beside you that zaps the nearest enemy in reach several times a second. Up to two at once.",
+  blade_storm: "Adds a blade to a ring circling you and renews the ring, up to six blades.",
+  blade_rift: "Opens a whirl of blades on the floor ahead that spins in place, cutting anything standing in it.",
+  mortar: "Lobs a shell over walls and enemies to the nearest enemy; it bursts where it lands, hitting everything nearby.",
+  void_ray: "Hold the key to fire a beam along your aim that burns every enemy it crosses. You move slowly while holding it.",
 
   /* -------------------------------- affixes ------------------------------ */
   fork: "On hit, the shot splits into shards that keep flying forward.",

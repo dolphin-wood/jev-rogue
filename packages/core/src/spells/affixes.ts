@@ -86,13 +86,15 @@ import type { BaseItem, Element } from "../types.ts";
  *   trail is ground, a stance's answer is a cut round the caster — so only
  *   the affixes that act at the cast, through the element gauges, or by
  *   casting the spell free list them.
+ * - A `beam` is a line held on its key that hurts what it crosses, and fires
+ *   none of the projectile hooks either: the same affixes as a trail's.
  */
 export type SpellShape =
   | "bolt" | "orbit" | "field" | "pillar" | "dash" | "vortex" | "summon" | "eruption"
-  | "boomerang" | "orb" | "trail" | "enchant" | "stance";
+  | "boomerang" | "orb" | "trail" | "enchant" | "stance" | "beam";
 export const SPELL_SHAPES: readonly SpellShape[] = [
   "bolt", "orbit", "field", "pillar", "dash", "vortex", "summon", "eruption",
-  "boomerang", "orb", "trail", "enchant", "stance",
+  "boomerang", "orb", "trail", "enchant", "stance", "beam",
 ];
 
 /**
@@ -923,8 +925,17 @@ export function affixFitsSpell(affix: SpellAffix, item: Pick<BaseItem, "params">
    * spell with no element and no infusion puts nothing on it to hand on.
    */
   if (affix.id === "spillover" && !carriesElement(item, held)) return false;
+  /*
+   * **A lob meets nothing in flight** (Mortar): it lands, and its landing is
+   * its hit. What a shot does on the way — through bodies, toward them, off
+   * walls, split on a wall or on a body it flies into — has no way to happen.
+   */
+  if (Number(item?.params["lob"] ?? 0) > 0 && LOB_DEAD.includes(affix.id)) return false;
   return true;
 }
+
+/** The affixes a lob has no way to set off: they act on a shot's flight. */
+const LOB_DEAD: readonly string[] = ["pierce", "seek", "ricochet", "shatter", "fork"];
 
 /** The infusions: an affix that gives a spell an element of its own. */
 const INFUSIONS: readonly string[] = ["kindle", "rime", "blight"];

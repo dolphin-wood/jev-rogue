@@ -405,6 +405,11 @@ export const ZH: Table = {
   "stat.trailPoison": "剧毒足迹",
   "stat.enchant": "剑气持续 {s} 秒",
   "stat.stance": "抵消并反击",
+  "stat.rift": "原地旋转",
+  "stat.orbitStack": "每次施放加一把刀",
+  "stat.fieldIce": "冰霜地面",
+  "stat.beam": "按住引导",
+  "stat.lob": "越过墙壁抛射",
   "stat.chains": "连锁 ×{n}",
   "stat.gold": "金币 +{n}",
   "stat.status.fire": "灼烧 · 命中 {hits} 次触发 · {s} 秒共 {dmg} 伤害",
@@ -460,6 +465,7 @@ export const ZH: Table = {
   "shape.trail": "足迹",
   "shape.enchant": "附魔",
   "shape.stance": "架势",
+  "shape.beam": "光束",
 
   /* what each affix tier says */
   "affixtier.fork": "命中后分裂成 2 发",
