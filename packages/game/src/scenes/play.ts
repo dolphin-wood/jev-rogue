@@ -11489,12 +11489,22 @@ export class PlayScene extends Phaser.Scene {
        */
       if (slotted) {
         const sy = top + cardH - CARD_FOOT - SLOT_PX / 2 - 2;
+        /*
+         * Named, in the character screen's own words ("affixes 1/3"), so the
+         * squares say what they are; and quiet when they are empty — a faint
+         * outline and no ground — so a bare spell's row does not outweigh
+         * its description. A held affix keeps its rarity's border and icon.
+         */
+        const held = slotted.length;
+        const label = this.uiText(left, sy, t("char.affixesOf", { held, max: AFFIX_SLOTS }), 6, held > 0 ? "#8792b5" : "#4a5070")
+          .setOrigin(0, 0.5).setDepth(202);
+        extras.push(label);
+        const from = left + label.width / ZOOM + 6;
         for (let k = 0; k < AFFIX_SLOTS; k++) {
-          const sx = left + SLOT_PX / 2 + k * (SLOT_PX + 3);
+          const sx = from + SLOT_PX / 2 + k * (SLOT_PX + 3);
           const id = slotted[k];
-          // Bordered in the affix's rarity, as its own card was.
-          extras.push(this.add.rectangle(sx, sy, SLOT_PX + 2, SLOT_PX + 2, 0x0d0b1f, 0.9)
-            .setStrokeStyle(1, id ? affixRarity(id).stroke : 0x3a4266, 1).setDepth(202));
+          extras.push(this.add.rectangle(sx, sy, SLOT_PX + 2, SLOT_PX + 2, 0x0d0b1f, id ? 0.9 : 0)
+            .setStrokeStyle(1, id ? affixRarity(id).stroke : 0x3a4266, id ? 1 : 0.45).setDepth(202));
           const frame = id ? `icon_affix_${id}` : "";
           if (frame && this.atlas.has(frame))
             extras.push(this.add.image(sx, sy, this.crispTextureKey, frame).setOrigin(0.5).setScale(1 / TUNED).setDepth(202.5));
