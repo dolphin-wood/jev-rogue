@@ -4298,10 +4298,16 @@ export class PlayScene extends Phaser.Scene {
       const lvl = this.spellLevels[i] ?? 1;
       o.push(this.keys_(name.x + name.width / ZOOM + 6, y - 5,
         `${t("grade.lv", { n: lvl })} {pips:${lvl}/${SPELL_LEVEL_MAX}}`, 6, "#ffd45e", 230, 0));
-      const affixes = slot.affixes.map((a) => contentName(a.id, spellAffixById(a.id)?.name ?? a.id));
-      o.push(this.uiText(left + 20, y + 5,
-        affixes.length > 0 ? affixes.join(t("list.sep")) : t("over.noAffixes"),
-        6, affixes.length > 0 ? "#a88fe0" : "#4a4f6a").setOrigin(0, 0.5).setDepth(230));
+      // Each affix named in its rarity's colour, as on its card and the character screen.
+      if (slot.affixes.length === 0)
+        o.push(this.uiText(left + 20, y + 5, t("over.noAffixes"), 6, "#4a4f6a").setOrigin(0, 0.5).setDepth(230));
+      let ax = left + 20;
+      slot.affixes.forEach((a, k) => {
+        const label = contentName(a.id, spellAffixById(a.id)?.name ?? a.id) + (k < slot.affixes.length - 1 ? t("list.sep") : "");
+        const part = this.uiText(ax, y + 5, label, 6, affixRarity(a.id).text).setOrigin(0, 0.5).setDepth(230);
+        o.push(part);
+        ax += part.width / ZOOM;
+      });
     });
     // The other half of a build: what the body took, in the character
     // screen's own green.
@@ -11466,8 +11472,9 @@ export class PlayScene extends Phaser.Scene {
         for (let k = 0; k < AFFIX_SLOTS; k++) {
           const sx = left + SLOT_PX / 2 + k * (SLOT_PX + 3);
           const id = slotted[k];
+          // Bordered in the affix's rarity, as its own card was.
           extras.push(this.add.rectangle(sx, sy, SLOT_PX + 2, SLOT_PX + 2, 0x0d0b1f, 0.9)
-            .setStrokeStyle(1, id ? 0x8a7ad8 : 0x3a4266, 1).setDepth(202));
+            .setStrokeStyle(1, id ? affixRarity(id).stroke : 0x3a4266, 1).setDepth(202));
           const frame = id ? `icon_affix_${id}` : "";
           if (frame && this.atlas.has(frame))
             extras.push(this.add.image(sx, sy, this.crispTextureKey, frame).setOrigin(0.5).setScale(1 / TUNED).setDepth(202.5));
@@ -11876,8 +11883,14 @@ export class PlayScene extends Phaser.Scene {
          * decoration nobody could read.
          */
         const filled = slot.affixes.length;
-        const diamonds = `${"◆".repeat(filled)}${"◇".repeat(Math.max(0, AFFIX_SLOTS - filled))}`;
-        text(leftX - 30, rowY(i) + 4, `${diamonds}  ${t("char.affixesOf", { held: filled, max: AFFIX_SLOTS })}`, 6, filled > 0 ? "#d9a5ff" : "#6a7396").setOrigin(0, 0);
+        // A diamond a slot, each held one in its affix's rarity, then the count in words.
+        let dx = leftX - 30;
+        for (let k = 0; k < AFFIX_SLOTS; k++) {
+          const held = slot.affixes[k];
+          const d = text(dx, rowY(i) + 4, held ? "◆" : "◇", 6, held ? affixRarity(held.id).text : "#6a7396").setOrigin(0, 0);
+          dx += d.width / ZOOM;
+        }
+        text(dx + 4, rowY(i) + 4, t("char.affixesOf", { held: filled, max: AFFIX_SLOTS }), 6, filled > 0 ? "#c9cfe8" : "#6a7396").setOrigin(0, 0);
       } else {
         text(leftX - 30, rowY(i), t("char.emptyKey"), 8, "#5a5f7a").setOrigin(0, 0.5);
       }
@@ -12040,7 +12053,7 @@ export class PlayScene extends Phaser.Scene {
         const held = slot.affixes[k];
         const swapping = ui.mode === "attach" && ui.swapAffix === k;
         add(this.add.rectangle(rightX, y, panelW - 20, AFFIX_ROW_H, swapping ? 0x3a1a22 : 0x0d0b1f, 0.9)
-          .setStrokeStyle(swapping ? 2 : 1, swapping ? 0xff8877 : held ? 0x7a4fd6 : 0x2a2750, 1).setDepth(210.6));
+          .setStrokeStyle(swapping ? 2 : 1, swapping ? 0xff8877 : held ? affixRarity(held.id).stroke : 0x2a2750, 1).setDepth(210.6));
         if (held) {
           const def2 = spellAffixById(held.id);
           const icon = `icon_affix_${held.id}`;
@@ -12048,7 +12061,7 @@ export class PlayScene extends Phaser.Scene {
             add(this.add.image(slotIn + 8, y, this.crispTextureKey, icon).setOrigin(0.5).setScale(1 / TUNED).setDepth(211));
           // One line, centred in the row: the name, then what it does.
           // Named in its strength's colour, as its card was.
-          const nameT = text(slotIn + 22, y, contentName(held.id, def2?.name ?? held.id), 7, RARITY_STYLE[rarityOf(affixStrengthFloor(held.id))].text).setOrigin(0, 0.5);
+          const nameT = text(slotIn + 22, y, contentName(held.id, def2?.name ?? held.id), 7, affixRarity(held.id).text).setOrigin(0, 0.5);
           text(nameT.x + nameT.width / ZOOM + 6, y,
             def2 ? localizeStat({ text: def2.text, key: affixTextKey(held.id) }) : "", 6, "#8792b5").setOrigin(0, 0.5);
         } else if (ui.mode === "attach" && affix && k === slot.affixes.length && !slot.affixes.some((a) => a.id === affix.id) && affixFitsSpell(affix, ITEMS.get(slot.item.base), slot.affixes.map((a) => a.id))) {
@@ -20277,6 +20290,11 @@ function drawCardDeco(
  * "strength III" is a number the player has to be taught, and "legendary"
  * is one they already know. The door's stars say the same grade.
  */
+/** An affix's rarity look, from its own strength (`affixStrengthFloor`): the same wherever it is shown. */
+function affixRarity(id: string): (typeof RARITY_STYLE)[keyof typeof RARITY_STYLE] {
+  return RARITY_STYLE[rarityOf(affixStrengthFloor(id))];
+}
+
 const RARITY_STYLE: Readonly<Record<"common" | "rare" | "legendary", {
   label: StringKey; text: string; stroke: number; strokeOn: number; fill: number; fillOn: number; corner: number;
 }>> = {

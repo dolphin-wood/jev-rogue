@@ -12102,308 +12102,350 @@
       "w": 16,
       "h": 16
     },
-    "icon_stat_fleet": {
+    "icon_affix_kindle": {
       "x": 96,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_stat_second_wind": {
+    "icon_affix_rime": {
       "x": 112,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_stat_long_stride": {
+    "icon_affix_blight": {
       "x": 128,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_stat_vigour": {
+    "icon_affix_pierce": {
       "x": 144,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_stat_steady_nerve": {
+    "icon_affix_seek": {
       "x": 160,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_stat_deep_well": {
+    "icon_affix_ricochet": {
       "x": 176,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_stat_quickening": {
+    "icon_affix_haste": {
       "x": 192,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_stat_leeching_edge": {
+    "icon_stat_fleet": {
       "x": 208,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_stat_keen_edge": {
+    "icon_stat_second_wind": {
       "x": 224,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_stat_long_reach": {
+    "icon_stat_long_stride": {
       "x": 240,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_stat_swift_hand": {
+    "icon_stat_vigour": {
       "x": 256,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_stat_wrath": {
+    "icon_stat_steady_nerve": {
       "x": 272,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_school_flame": {
+    "icon_stat_deep_well": {
       "x": 288,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_school_frost": {
+    "icon_stat_quickening": {
       "x": 304,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_school_venom": {
+    "icon_stat_leeching_edge": {
       "x": 320,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_school_storm": {
+    "icon_stat_keen_edge": {
       "x": 336,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_school_void": {
+    "icon_stat_long_reach": {
       "x": 352,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_school_spirit": {
+    "icon_stat_swift_hand": {
       "x": 368,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_school_stone": {
+    "icon_stat_wrath": {
       "x": 384,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_reward_stat": {
+    "icon_school_flame": {
       "x": 400,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_reward_spell": {
+    "icon_school_frost": {
       "x": 416,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_reward_affix": {
+    "icon_school_venom": {
       "x": 432,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_reward_gold": {
+    "icon_school_storm": {
       "x": 448,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "ui_elite_badge": {
+    "icon_school_void": {
       "x": 464,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "vfx_earth_crack_0": {
+    "icon_school_spirit": {
       "x": 480,
+      "y": 5680,
+      "w": 16,
+      "h": 16
+    },
+    "icon_school_stone": {
+      "x": 496,
+      "y": 5680,
+      "w": 16,
+      "h": 16
+    },
+    "icon_reward_stat": {
+      "x": 512,
+      "y": 5680,
+      "w": 16,
+      "h": 16
+    },
+    "icon_reward_spell": {
+      "x": 528,
+      "y": 5680,
+      "w": 16,
+      "h": 16
+    },
+    "icon_reward_affix": {
+      "x": 544,
+      "y": 5680,
+      "w": 16,
+      "h": 16
+    },
+    "icon_reward_gold": {
+      "x": 560,
+      "y": 5680,
+      "w": 16,
+      "h": 16
+    },
+    "ui_elite_badge": {
+      "x": 576,
+      "y": 5680,
+      "w": 16,
+      "h": 16
+    },
+    "vfx_earth_crack_0": {
+      "x": 592,
       "y": 5680,
       "w": 32,
       "h": 16
     },
     "vfx_earth_crack_1": {
-      "x": 512,
+      "x": 624,
       "y": 5680,
       "w": 32,
       "h": 16
     },
     "vfx_arc_seg_0": {
-      "x": 544,
+      "x": 656,
       "y": 5680,
       "w": 32,
       "h": 16
     },
     "vfx_arc_seg_1": {
-      "x": 576,
+      "x": 688,
       "y": 5680,
       "w": 32,
       "h": 16
     },
     "vfx_arc_seg_2": {
-      "x": 608,
+      "x": 720,
       "y": 5680,
       "w": 32,
       "h": 16
     },
     "vfx_arc_seg_3": {
-      "x": 640,
+      "x": 752,
       "y": 5680,
       "w": 32,
       "h": 16
     },
     "vfx_arc_cap_0": {
-      "x": 672,
-      "y": 5680,
-      "w": 16,
-      "h": 16
-    },
-    "vfx_contagion_glob_0": {
-      "x": 688,
-      "y": 5680,
-      "w": 16,
-      "h": 16
-    },
-    "vfx_arc_cap_1": {
-      "x": 704,
-      "y": 5680,
-      "w": 16,
-      "h": 16
-    },
-    "vfx_contagion_glob_1": {
-      "x": 720,
-      "y": 5680,
-      "w": 16,
-      "h": 16
-    },
-    "vfx_brand_mark": {
-      "x": 736,
-      "y": 5680,
-      "w": 16,
-      "h": 16
-    },
-    "icon_npc_merchant": {
-      "x": 752,
-      "y": 5680,
-      "w": 16,
-      "h": 16
-    },
-    "icon_npc_smith": {
-      "x": 768,
-      "y": 5680,
-      "w": 16,
-      "h": 16
-    },
-    "icon_action_attack": {
       "x": 784,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_action_spin": {
+    "vfx_contagion_glob_0": {
       "x": 800,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_action_dodge": {
+    "vfx_arc_cap_1": {
       "x": 816,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_npc_fountain": {
+    "vfx_contagion_glob_1": {
       "x": 832,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_status_burn": {
+    "vfx_brand_mark": {
       "x": 848,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_status_poison": {
+    "icon_npc_merchant": {
       "x": 864,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_status_chill": {
+    "icon_npc_smith": {
       "x": 880,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_status_freeze": {
+    "icon_action_attack": {
       "x": 896,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_status_stun": {
+    "icon_action_spin": {
       "x": 912,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_status_stagger": {
+    "icon_action_dodge": {
       "x": 928,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "icon_status_alert": {
+    "icon_npc_fountain": {
       "x": 944,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "ui_shield": {
+    "icon_status_burn": {
       "x": 960,
       "y": 5680,
       "w": 16,
       "h": 16
     },
-    "vfx_spike_bone": {
+    "icon_status_poison": {
       "x": 976,
+      "y": 5680,
+      "w": 16,
+      "h": 16
+    },
+    "icon_status_chill": {
+      "x": 992,
+      "y": 5680,
+      "w": 16,
+      "h": 16
+    },
+    "icon_status_freeze": {
+      "x": 1008,
+      "y": 5680,
+      "w": 16,
+      "h": 16
+    },
+    "icon_status_stun": {
+      "x": 1024,
+      "y": 5680,
+      "w": 16,
+      "h": 16
+    },
+    "icon_status_stagger": {
+      "x": 1040,
+      "y": 5680,
+      "w": 16,
+      "h": 16
+    },
+    "icon_status_alert": {
+      "x": 1056,
+      "y": 5680,
+      "w": 16,
+      "h": 16
+    },
+    "ui_shield": {
+      "x": 1072,
+      "y": 5680,
+      "w": 16,
+      "h": 16
+    },
+    "vfx_spike_bone": {
+      "x": 1088,
       "y": 5680,
       "w": 16,
       "h": 6
     },
     "vfx_spike_gold": {
-      "x": 992,
+      "x": 1104,
       "y": 5680,
       "w": 16,
       "h": 6
