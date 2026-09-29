@@ -1105,6 +1105,18 @@ rates highly keeps most of its mass through `CARD_REPEAT_PENALTY` once its
 yes is raised to the fourth power. That is a sequence property, and so code's
 (finding 15), not something to ask Jev.
 
+**Then the lanes and the shapes** (the same day): six more affixes filling
+the Director's lanes on every shape and a freecast lane in place of the
+one-card cadence lane, and eight spells — a second on four one-spell shapes,
+and a stacking ring, an anchored ring, a lob and a channelled beam. Same five
+seeds: the affix pool per offer 21.5, 12.2 distinct in 15.6 affix cards a
+run, the hottest affix still Harvest at 1.93x; 38 of 48 spells on a screen,
+the new ones between 0.56x and 1.16x of uniform except Blizzard at 0.20x —
+Jev rates ice low in every style, as finding 35 found for Frost Needle and
+Glacier Spike. The infusions fell further (Kindle 0.18x): the survival and
+freecast cards that joined the pool outrank them. The repeats inside a run
+did not move, which is the draw's, as above.
+
 **Rule:** size a card pool against the cards a run is shown, per build and not
 over the roster; a pool a run exhausts repeats whatever the Director does.
 
