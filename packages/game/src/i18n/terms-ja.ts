@@ -468,7 +468,7 @@ export const JA_TERMS = {
   "term.q.blendedOffer": "混ぜ合わせた提示：{label}",
 
   /* ---------------------------- request headings ------------------------- */
-  "term.req.staff": "開始時：初期の杖",
+  "term.req.staff": "開始時：初期の呪文",
   "term.req.doors": "前の層を出る：次の層の緊張",
   "term.req.room1": "この層ラウンド1：地形・対称・雰囲気・ポータル・カード",
   "term.req.room2": "この層ラウンド2：ゾーン・戦闘編成・扉が約束するもの",

@@ -468,7 +468,7 @@ export const ZH_TERMS = {
   "term.q.blendedOffer": "混合后的给牌：{label}",
 
   /* ---------------------------- request headings ------------------------- */
-  "term.req.staff": "开局：起手法杖",
+  "term.req.staff": "开局：起手法术",
   "term.req.doors": "离开上一层：下一层的张力",
   "term.req.room1": "本层第一轮：地形、对称、氛围、传送门、卡牌",
   "term.req.room2": "本层第二轮：区块、遭遇与传送门的承诺",

@@ -484,7 +484,7 @@ export const EN_TERMS = {
   "term.q.blendedOffer": "The offer, blended: {label}",
 
   /* ---------------------------- request headings ------------------------- */
-  "term.req.staff": "run start: the starting staff",
+  "term.req.staff": "run start: the starting spell",
   "term.req.doors": "leaving the last room: the next room's tension",
   "term.req.room1": "the room, round 1: space, symmetry, mood, portals, cards",
   "term.req.room2": "the room, round 2: zones, the encounter, and what the doors promise",
