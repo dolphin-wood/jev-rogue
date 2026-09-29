@@ -11232,9 +11232,10 @@ export class PlayScene extends Phaser.Scene {
     /** The height of the lower corner brackets, which text must not cross. */
     const CARD_FOOT = 22;
     const ICON_PX = 34;
-    /** A spell card's row of affix slots, under its numbers (`cardSlotAffixes`). */
-    const SLOT_ROW = 20;
+    /** A spell card's row of affix slots, at its foot (`cardSlotAffixes`), with air above and below it. */
     const SLOT_PX = 16;
+    const SLOT_AIR = 7;
+    const SLOT_ROW = SLOT_PX + 2 + SLOT_AIR * 2;
     const SPREAD = CARD_W + CARD_GAP;
 
     /*
@@ -11488,7 +11489,7 @@ export class PlayScene extends Phaser.Scene {
        * low as each card's numbers ran, and a row of three stepped.
        */
       if (slotted) {
-        const sy = top + cardH - CARD_FOOT - SLOT_PX / 2 - 2;
+        const sy = top + cardH - CARD_FOOT - SLOT_AIR - (SLOT_PX + 2) / 2;
         /*
          * Named, in the character screen's own words ("affixes 1/3"), so the
          * squares say what they are; and quiet when they are empty — a faint
