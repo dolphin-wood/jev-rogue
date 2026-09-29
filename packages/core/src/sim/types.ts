@@ -380,6 +380,15 @@ export interface Beam {
   statusMult: number;
   weight: number;
   spellIndex: number;
+  /**
+   * A **whirl** (`whirl_radius`, Whirlwind): not a line but the ring round
+   * the caster, `ring` px out, hurting every body inside it each tick;
+   * `angle` is where the spinning blade is, for the renderer. 0 is a line.
+   */
+  ring: number;
+  angle: number;
+  /** Mana a second the channel costs while it is held (`drain_per_s`); 0 for one paid at the press only. */
+  drain: number;
 }
 
 /**

@@ -176,6 +176,8 @@ function fire(base: BaseItem): Result {
   const shape0 = String(base.params.shape ?? "bolt");
   if (shape0 === "boomerang") dummy.x = w.player.x + Math.min(70, Number(base.params.reach ?? 110) * 0.6);
   if (shape0 === "enchant" || shape0 === "stance" || shape0 === "trail") dummy.x = w.player.x + 36;
+  // A whirl cuts inside its ring round the caster.
+  if (Number(base.params.whirl_radius ?? 0) > 0) dummy.x = w.player.x + 30;
   w.enemies.push(dummy);
   const dx0 = dummy.x, dy0 = dummy.y;
 

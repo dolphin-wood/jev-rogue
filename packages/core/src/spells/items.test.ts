@@ -16,7 +16,7 @@ import { BASE_ITEMS, ITEMS, STYLE_START, plainInstance } from "./items.ts";
  * ray). Every item is a self-contained spell: nothing in the pool modifies
  * another.
  */
-const ATTACKS = 48;
+const ATTACKS = 49;
 
 describe("base items (doc 013 and doc 010)", () => {
   it("ships exactly the forty-seven attacks", () => {

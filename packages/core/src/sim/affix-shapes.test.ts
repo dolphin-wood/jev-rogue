@@ -287,7 +287,7 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix, alongside: r
       if (ev.kind === "eruption") seen.made++;
       if (ev.kind === "shot" && ev.what === "free_strike") seen.made++;
       // A trail, an enchant or a stance started or renewed on the caster.
-      if (ev.kind === "spell" && (ev.what === "trail" || ev.what === "enchant" || ev.what === "stance" || ev.what === "beam")) seen.made++;
+      if (ev.kind === "spell" && (ev.what === "trail" || ev.what === "enchant" || ev.what === "stance" || ev.what === "beam" || ev.what === "whirl")) seen.made++;
       if (ev.kind === "shot" && ev.what === "split") seen.splits++;
       if (ev.kind === "shot" && ev.what === "arc") seen.arcs++;
       if (ev.kind === "enemy_hit" && ev.what === "brand") seen.brands++;

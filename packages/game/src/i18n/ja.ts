@@ -446,6 +446,8 @@ export const JA: Table = {
   "stat.orbitStack": "詠唱ごとに刃が増える",
   "stat.fieldIce": "霜の地面",
   "stat.beam": "押し続けて照射",
+  "stat.whirl": "押し続けて回転",
+  "stat.drain": "押している間 毎秒{n}マナ",
   "stat.lob": "壁越しに投げる",
   "stat.chains": "連鎖 ×{n}",
   "stat.gold": "ゴールド +{n}",

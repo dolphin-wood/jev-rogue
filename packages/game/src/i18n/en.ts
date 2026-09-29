@@ -454,6 +454,8 @@ export const EN = {
   "stat.orbitStack": "ring grows each cast",
   "stat.fieldIce": "frost ground",
   "stat.beam": "hold to channel",
+  "stat.whirl": "hold to spin",
+  "stat.drain": "{n} mana/s held",
   "stat.lob": "lobbed over walls",
   "stat.chains": "chains x{n}",
   "stat.gold": "+{n} gold",

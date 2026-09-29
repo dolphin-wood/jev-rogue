@@ -24,7 +24,7 @@ import {
 } from "@jr/core";
 import { HOLD_MS, SPELL_BUFFER_MS } from "@jr/core";
 import type {
-  Bullet, Enemy, EnemyId, Input, ItemInstance, Mood, Offer, OfferCard, Portal,
+  Beam, Bullet, Enemy, EnemyId, Input, ItemInstance, Mood, Offer, OfferCard, Portal,
   PlayerMods, RewardCardKind, RoomPlan, RoomType, RunHistory, World, AttachedAffix,
   Element, Tension, RunContext, RunJournalEntry, Staff, SpellSlot, MeleeKind, MusicState, EliteAffix,
 } from "@jr/core";
@@ -959,6 +959,20 @@ interface RoomSoFar {
  * under the point and the gold orb this far above it, where strikes leave from.
  */
 const TOTEM_CENTRE_DROP = -6;
+/** How far above the caster's point a whirl turns: about the sword hand's height. */
+const WHIRL_LIFT = 6;
+/** The colours a conjured blade is drawn in (`drawConjured`): guard, edges, middle, body, and the one outline. */
+interface BladeInk { guard: number; edge: number; shade: number; core: number; body: number; rim: number; haze: number }
+/** The sword's own blue, every cut and the rage spin. */
+const CONJURED_INK: BladeInk = { guard: 0xcfeeff, edge: 0xffffff, shade: 0x6fb8ff, core: 0xf2fdff, body: 0xa9e2ff, rim: 0x16266a, haze: 0x2f63c8 };
+/**
+ * Whirlwind's violet: the same blade, in the spirit's light, so a spell's
+ * spin is never mistaken for the rage spin, which is the sword's own blue.
+ */
+const WHIRL_INK: BladeInk = { guard: 0xe6ddff, edge: 0xffffff, shade: 0x9b7bff, core: 0xf6f2ff, body: 0xc9b8ff, rim: 0x2a1a5e, haze: 0x5a3fb0 };
+const WHIRL_LOOK: SpellLook = { core: 0xe6ddff, glow: 0x9b7bff, shape: "blade" };
+/** How far out from the caster's middle the whirling sword's grip is held. */
+const WHIRL_HAND_PX = 5;
 /** How far above a body's point a blade lodged in it is drawn: about the middle of the figure. */
 const LODGED_BODY_LIFT = 6;
 /** How far above its landing point Mortar's impact is drawn: the painting's debris pile sits low in its frame. */
@@ -14035,6 +14049,17 @@ export class PlayScene extends Phaser.Scene {
     if (!h) return null;
     const sprite = this.spriteGripToCrystal();
     const w = this.world;
+    // Whirling: the staff turns with the spin, its blade out to the ring (`whirlStaff`).
+    const whirl = this.whirlNow();
+    if (whirl && swingPhase(w.player) === "none") {
+      const cut = this.whirlStaff(whirl);
+      const at = staffSpriteCentre(cut, this.frameStaff.gripToCrystal, sprite);
+      return {
+        gripX: cut.gripX, gripY: cut.gripY, angle: cut.angle,
+        crystalX: cut.crystalX, crystalY: cut.crystalY,
+        spriteX: at.x, spriteY: at.y,
+      };
+    }
     if (swingPhase(w.player) !== "none") {
       const box = w.swing;
       const cut = this.swingStaffAt(this.conjuredPose().angle, Math.max(box.reach, box.bladeReach));
@@ -14051,6 +14076,29 @@ export class PlayScene extends Phaser.Scene {
       flipX: this.frameStaff.flipX,
       gripToCrystal: this.frameStaff.gripToCrystal,
       spriteGripToCrystal: sprite,
+    });
+  }
+
+  /** The whirl the caster is turning in now (Whirlwind), if any. */
+  private whirlNow(): Beam | null {
+    return this.world.beams.find((b) => b.alive && b.ring > 0) ?? null;
+  }
+
+  /**
+   * **The staff through a whirl**: held out from the body at the spin's
+   * angle and turning with it, the grip on a circle round the caster as a
+   * cut's is round its swing, and the blade reaching the ring's edge — the
+   * player's own conjured blade, as every other cut of theirs is.
+   */
+  private whirlStaff(beam: Beam): ReturnType<typeof swingStaff> {
+    const p = this.world.player;
+    const cx = p.x, cy = p.y - WHIRL_LIFT;
+    return swingStaff({
+      centre: [cx, cy],
+      grip: [cx + Math.cos(beam.angle) * FOCUS_HAND_R, cy + Math.sin(beam.angle) * FOCUS_HAND_R],
+      angle: beam.angle,
+      reach: beam.ring,
+      gripToCrystal: this.frameStaff.gripToCrystal,
     });
   }
 
@@ -14329,7 +14377,8 @@ export class PlayScene extends Phaser.Scene {
    * pale core, a darker back edge and a dark rim — so that what the eye
    * follows through the swing is the blade, and the trail is only its wake.
    */
-  private drawConjured(bx: number, by: number, dx: number, dy: number, len: number, alpha: number, lead: number, white: boolean): void {
+  private drawConjured(bx: number, by: number, dx: number, dy: number, len: number, alpha: number, lead: number, white: boolean,
+    ink: BladeInk = CONJURED_INK): void {
     const g = this.conjureGfx;
     const px = new Map<number, number>();
     const nx = -dy * lead, ny = dx * lead;
@@ -14349,7 +14398,7 @@ export class PlayScene extends Phaser.Scene {
       const h = halfAt(t);
       for (let sAc = -h; sAc <= h; sAc += 0.35) {
         const k = sAc / h;
-        const c = t < 1.6 * TUNED ? 0xcfeeff : k > 0.45 ? 0xffffff : k < -0.6 ? 0x6fb8ff : Math.abs(k) < 0.25 ? 0xf2fdff : 0xa9e2ff;
+        const c = t < 1.6 * TUNED ? ink.guard : k > 0.45 ? ink.edge : k < -0.6 ? ink.shade : Math.abs(k) < 0.25 ? ink.core : ink.body;
         px.set(pixKey(Math.round(ax + dx * t + nx * sAc), Math.round(ay + dy * t + ny * sAc)), c);
       }
     }
@@ -14360,7 +14409,7 @@ export class PlayScene extends Phaser.Scene {
         const n = key + oy * PIX_ROW + ox;
         if (!px.has(n)) rim.add(n);
       }
-    g.fillStyle(0x16266a, alpha);
+    g.fillStyle(ink.rim, alpha);
     for (const key of rim) g.fillRect(pixX(key) * cell - cell / 2, pixY(key) * cell - cell / 2, cell, cell);
     for (const [key, c] of px) {
       g.fillStyle(white ? 0xffffff : c, alpha);
@@ -14375,6 +14424,22 @@ export class PlayScene extends Phaser.Scene {
     const w = this.world;
     const p = w.player;
     const phase = swingPhase(p);
+    if (FOCUS && p.swingStretch === 1 && phase !== "none") { this.drawConjuredSwing(); return; }
+    // Whirling: the conjured blade out of the turning staff's crystal to the ring's edge.
+    const whirl = FOCUS ? this.whirlNow() : null;
+    if (whirl && phase === "none") {
+      const st = this.whirlStaff(whirl);
+      const len = Math.max(4, Math.hypot(st.tipX - st.crystalX, st.tipY - st.crystalY));
+      const ux = (st.tipX - st.crystalX) / len, uy = (st.tipY - st.crystalY) / len;
+      const fade = whirl.channel ? 1 : Math.max(0.3, whirl.lifeMs / Math.max(1, whirl.maxLifeMs));
+      for (let i = 0; i <= 6; i++) {
+        const u = i / 6;
+        g.fillStyle(WHIRL_INK.haze, 0.16 * fade);
+        g.fillCircle(st.crystalX + ux * len * u, st.crystalY + uy * len * u, 3.2 * (1 - u * 0.6));
+      }
+      this.drawConjured(st.crystalX, st.crystalY, ux, uy, len, fade, 1, false, WHIRL_INK);
+      return;
+    }
     if (FOCUS && p.swingStretch === 1) { this.drawConjuredSwing(); return; }
     if (phase === "none") return;
     const box = w.swing;
@@ -14516,6 +14581,42 @@ export class PlayScene extends Phaser.Scene {
     const slow = !b.returning && out < 0.3 ? 1 - out / 0.3 : 0;
     if (b.returning ? Math.random() < 0.5 : Math.random() < 0.1 + 0.4 * slow)
       this.shed({ x: b.x + (Math.random() - 0.5) * 6, y: b.y - lift + (Math.random() - 0.5) * 6, vx: -b.vx * 0.15 + (Math.random() - 0.5) * 20, vy: -b.vy * 0.15 + (Math.random() - 0.5) * 20, ms: 0, life: 200 + Math.random() * 140, size: 0.8 + Math.random() * 0.5, colour: Math.random() < 0.5 ? look.core : look.glow, gravity: -10 });
+  }
+
+  /**
+   * **A whirl** (Whirlwind): the band the turning blade sweeps, filling
+   * behind it out to the whole reach, so what the spin cuts is what the eye
+   * sees it cover. The staff and its conjured blade are the player's own,
+   * turned with the spin (`whirlStaff`, `drawMagicBlade`).
+   */
+  private drawWhirl(beam: Beam, look: SpellLook): void {
+    const p = this.world.player;
+    const cx = p.x, cy = p.y - WHIRL_LIFT;
+    const a = beam.angle;
+    const fade = beam.channel ? 1 : Math.max(0.3, beam.lifeMs / Math.max(1, beam.maxLifeMs));
+    const g = this.fxGfx;
+    // The swept band: slices round behind the blade, each fainter than the last.
+    const slices = 10, sweep = 2.4;
+    for (let k = 0; k < slices; k++) {
+      const a0 = a - (k + 1) * (sweep / slices), a1 = a - k * (sweep / slices);
+      const alpha = (0.34 * (1 - k / slices)) * fade;
+      g.fillStyle(look.glow, alpha);
+      g.beginPath();
+      g.arc(cx, cy, beam.ring, a0, a1, false);
+      g.arc(cx, cy, beam.ring * 0.35, a1, a0, true);
+      g.closePath();
+      g.fillPath();
+    }
+    // The edge of the reach, lit where the blade is.
+    g.lineStyle(1.6, look.core, 0.7 * fade);
+    g.beginPath();
+    g.arc(cx, cy, beam.ring, a - 0.9, a, false);
+    g.strokePath();
+    if (Math.random() < 0.6) {
+      const r = beam.ring * (0.6 + Math.random() * 0.4);
+      this.shed({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r, vx: -Math.sin(a) * 60, vy: Math.cos(a) * 60, ms: 0,
+        life: 180 + Math.random() * 120, size: 0.8 + Math.random() * 0.6, colour: Math.random() < 0.5 ? look.core : look.glow, gravity: 0 });
+    }
   }
 
   /** The renderer's memory of one enchant wave, made the first time it is seen (`waveEdges`). */
@@ -17121,6 +17222,8 @@ export class PlayScene extends Phaser.Scene {
     for (const beam of w.beams) {
       if (!beam.alive) continue;
       const look = spellLookOf(beam.spellIndex >= 0 ? w.spells[beam.spellIndex]?.item.base ?? null : null, beam.element);
+      // A whirl is lit in its own violet, apart from the sword's blue and the rage spin's.
+      if (beam.ring > 0) { this.drawWhirl(beam, WHIRL_LOOK); continue; }
       const fade = beam.channel ? 1 : Math.max(0.3, beam.lifeMs / Math.max(1, beam.maxLifeMs));
       const wob = 0.85 + 0.15 * Math.sin(w.tick * 0.9);
       this.fxGfx.lineStyle(beam.width * 2.6 * wob, look.glow, 0.18 * fade);

@@ -37,6 +37,8 @@ function firstHit(id: string): number | null {
   // raised pillar beside the body it shoves at its own reach.
   const shape = String(item.params["shape"] ?? "");
   const close = ["orbit", "dash", "boomerang", "stance", "trail"].includes(shape) || Number(item.params["spread"] ?? 0) >= 50
+    // A whirl cuts what stands inside its ring round the caster.
+    || Number(item.params["whirl_radius"] ?? 0) > 0
     // Rings of ground round the caster reach a few tiles and no further.
     || item.params["pattern"] === "ring";
   /*

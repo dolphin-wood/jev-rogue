@@ -359,6 +359,13 @@ export function spellBehaviour(item: BaseItem | undefined, level = 1): string {
       else bits.push(`${count} blades orbit the player for ${num("lifetime") ?? 0} s`, `${round1(damage)} damage a pass`);
       break;
     case "beam":
+      if ((num("whirl_radius") ?? 0) > 0) {
+        bits.push(`held: while the key stays down, for up to ${num("lifetime") ?? 0} s, the player spins with the blade out`,
+          `${round1(damage)} damage every ${num("tick_ms") ?? 0} ms to each body within ${num("whirl_radius")} px`,
+          `drains ${num("drain_per_s") ?? 0} mana a second while it turns, and ends when the bar is dry`,
+          "the player moves slowly and cannot swing while spinning, and a dash ends it");
+        break;
+      }
       bits.push(`held: while the key stays down, for up to ${num("lifetime") ?? 0} s, a line runs ${num("reach") ?? 0} px along the aim to the first wall`,
         `${round1(damage)} damage every ${num("tick_ms") ?? 0} ms to each body across it`,
         "the cost is paid once, at the press", "the player moves slowly while it is held, and a dash ends it");
