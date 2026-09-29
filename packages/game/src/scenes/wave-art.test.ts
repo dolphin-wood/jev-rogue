@@ -57,6 +57,17 @@ describe("the thrown crescent", () => {
       expect(d).toBeLessThanOrEqual(wave.radius + TELE_PIX * 3);
     }
   });
+  it("keeps its span as it fades, so it goes on spreading rather than sliding", () => {
+    const span = (life: number) => {
+      const { pen, rects } = recorder();
+      drawCrescentWave(pen, { ...wave, life });
+      let most = 0;
+      for (const r of rects) for (const x of [r.x, r.x + r.w])
+        most = Math.max(most, Math.abs(Math.atan2(r.y + TELE_PIX / 2 - wave.y, x - wave.x)));
+      return most;
+    };
+    expect(span(0.3)).toBeGreaterThan(span(1) * 0.85);
+  });
   it("dissolves from the tips: less of it drawn as it fades, and nothing at the end", () => {
     const area = (life: number) => { const { pen, rects } = recorder(); drawCrescentWave(pen, { ...wave, life }); return rects.reduce((a, r) => a + r.w, 0); };
     expect(area(0.5)).toBeLessThan(area(1));

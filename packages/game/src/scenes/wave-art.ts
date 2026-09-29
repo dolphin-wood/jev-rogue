@@ -73,7 +73,7 @@ function hash(a: number, b: number, c: number): number {
 }
 
 /** Which band a texel is in: 0 none, 1 lip, 2 aura, 3 mid, 4 core. */
-function bandAt(o: CrescentWave, px: number, py: number, half: number, thick: number, flick: number): number {
+function bandAt(o: CrescentWave, px: number, py: number, half: number, thick: number, flick: number, solid = 1): number {
   const dx = px - o.x, dy = py - o.y;
   const d = Math.sqrt(dx * dx + dy * dy);
   let off = Math.atan2(dy, dx) - o.facing;
@@ -83,6 +83,8 @@ function bandAt(o: CrescentWave, px: number, py: number, half: number, thick: nu
   else if (off < -Math.PI) off += Math.PI * 2;
   const u = off / half;
   if (Math.abs(u) >= 1) return 0;
+  // Past `solid` toward the tips it is breaking up: most of its texels gone, the rest flickering.
+  if (Math.abs(u) > solid && hash(Math.round(px / TELE_PIX), Math.round(py / TELE_PIX), flick + 13) < 0.55 + 0.4 * (Math.abs(u) - solid) / Math.max(0.01, 1 - solid)) return 0;
   // Fat in the middle, drawn to a point at each tip.
   const h = thick * Math.pow(1 - u * u, 0.8);
   const lip = TELE_PIX * 1.5;
@@ -110,8 +112,16 @@ function bandAt(o: CrescentWave, px: number, py: number, half: number, thick: nu
 export function drawCrescentWave(pen: Pen, o: CrescentWave, alpha = 1): void {
   const life = Math.max(0, Math.min(1, o.life));
   if (life <= 0 || alpha <= 0) return;
-  // The tips go first: the span closes toward the middle as it dissolves, and it thins.
-  const half = o.half * (0.35 + 0.65 * life);
+  /*
+   * **The span never closes.** The tips go first as it dissolves — they break
+   * up into flickering texels from the tip inward (`solid`) — and it thins,
+   * but the arc keeps its angle, so it goes on spreading as it runs. Closing
+   * the angle as the radius grew held the arc's length about still, and the
+   * last stretch of a wave read as a curved bar sliding in a straight line;
+   * it also drew the tips gone while the band still hit there.
+   */
+  const half = o.half;
+  const solid = 0.2 + 0.8 * life;
   const thick = o.thick * (0.45 + 0.55 * life);
   const flick = (o.tick >> 1) + o.seed * 31;
   const colours = [0, o.palette.lip, o.palette.aura, o.palette.mid, o.palette.core];
@@ -147,7 +157,7 @@ export function drawCrescentWave(pen: Pen, o: CrescentWave, alpha = 1): void {
     const inner = Math.abs(dy) < rIn ? Math.sqrt(rIn * rIn - dy * dy) : 0;
     for (const [lo, hi] of [[o.x - outer, o.x - inner], [o.x + inner, o.x + outer]] as const) {
       const i0 = Math.max(0, Math.floor((lo - gx0) / P)), i1 = Math.min(cols - 1, Math.ceil((hi - gx0) / P));
-      for (let i = i0; i <= i1; i++) grid[j * cols + i] = bandAt(o, gx0 + i * P + P / 2, py, half, thick, flick);
+      for (let i = i0; i <= i1; i++) grid[j * cols + i] = bandAt(o, gx0 + i * P + P / 2, py, half, thick, flick, solid);
     }
   }
   // One pass over the grid for every band's runs (x, y, width, flattened), then each band in one colour.
