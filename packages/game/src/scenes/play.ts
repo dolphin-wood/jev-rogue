@@ -9180,7 +9180,8 @@ export class PlayScene extends Phaser.Scene {
           }
           // The entrance is intentionally silent: the room's music is held
           // from arrival until the laser and burrow sequence has finished.
-          if (ev.what === "guardian_intro_notice") break;
+          // The room turning on the player, heard: the wake, low, and the lock's sting over it.
+          if (ev.what === "guardian_intro_notice") { sfx.play("enemy_wake", 0.75); sfx.play("boss_lock", 1.15); break; }
           // The Frontier Veteran's arm going up: the call heard before the dead answer (doc 024).
           if (ev.what === "guardian_call") sfx.play("cast_void", 0.6);
           if (ev.what === "guardian_stakes" || ev.what === "guardian_palisade") sfx.play("hit_heavy", 0.7);
@@ -19222,12 +19223,24 @@ function drawEnemy(
    * feel that only exists in the step function is feel nobody gets.
    */
   if (e.alertMs > 0) {
-    // The delivered alert mark, popping up as it notices. (A notice held
-    // longer than `ALERT_MS` — the Veteran's entrance — is shown whole.)
-    const pop = e.alertMs > ALERT_MS ? 1 : Math.min(1, (ALERT_MS - e.alertMs) / 90);
+    /*
+     * The delivered alert mark, popping up as it notices. A notice held longer
+     * than `ALERT_MS` is the Veteran's entrance, the one moment a whole room
+     * turns on the player at once: its marks are drawn large — the Veteran's
+     * own largest — thrown in past their size and settling, then beating, so
+     * the beat reads from across the room.
+     */
+    const entrance = e.alertMs > ALERT_MS;
+    // The entrance holds its marks up for the whole beat (the sim re-arms them each step), so they beat on the scene's clock.
+    const pop = entrance ? 1 : Math.min(1, (ALERT_MS - e.alertMs) / 90);
+    const big = entrance ? (e.guardian ? 3 : 2) : 1;
+    const beat = entrance ? 1 + 0.1 * Math.abs(Math.sin(scene.time.now / 110)) : 1;
+    // The Veteran's own at the upper right of its head, clear of its bar and name over the middle.
+    const mx = e.guardian && entrance ? e.x + e.radius * 0.95 : e.x;
+    const my = e.guardian && entrance ? e.y - e.radius * 1.6 : e.y - e.radius - 14 * big;
     if (atlas.has("icon_status_alert")) {
-      group.image(e.x, e.y - e.radius - 14 - (1 - pop) * 4, textureKey, "icon_status_alert")
-        .setOrigin(0.5).setScale((0.9 * (0.6 + 0.4 * pop)) / TUNED).setDepth(8);
+      group.image(mx, my - (1 - pop) * 4, textureKey, "icon_status_alert")
+        .setOrigin(0.5).setScale((0.9 * big * beat * (0.6 + 0.4 * pop)) / TUNED).setDepth(entrance ? 10.6 : 8);
     } else if (label) {
       label(`alert:${e.id}`, e.x, e.y - e.radius - 12, "!", {
         fontFamily: fontFamily(), fontSize: "12px", color: "#ffe9a8",
