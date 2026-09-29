@@ -70,7 +70,7 @@ export const JA: Table = {
   "autoCast.auto": "全自動",
   "autoCast.offNote": "呪文はそれぞれのキー U・I・O でだけ詠唱する。",
   "autoCast.spaceNote": "Space で準備済みの呪文を一番近い敵へ詠唱する。どれを使うかはゲームが選ぶ。長押しで連続詠唱。U I O で選んだ呪文も詠唱できる。",
-  "autoCast.autoNote": "呪文が一番近い敵へ自動で詠唱される。U I O で選んだ呪文も詠唱できる。",
+  "autoCast.autoNote": "呪文が一番近い敵へ自動で詠唱される。Space で次の一発をすぐ放てる。U I O で選んだ呪文も詠唱できる。",
   "menu.tabGeneral": "一般",
   "menu.assistHeading": "戦闘アシスト",
   "menu.roomPlan": "各層の開始前にプランを表示",
@@ -309,6 +309,7 @@ export const JA: Table = {
   "hud.jevFallback": "Jev · ルールで代行",
   "hud.hintStrip": "[@character] {character}  [Esc] {menu}",
   "hud.autoCast": "自動詠唱",
+  "hud.castNow": "今すぐ詠唱",
   "hud.character": "キャラ",
   "hud.menu": "メニュー",
 

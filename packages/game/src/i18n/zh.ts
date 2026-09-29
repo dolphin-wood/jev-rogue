@@ -71,7 +71,7 @@ export const ZH: Table = {
   "autoCast.auto": "全自动",
   "autoCast.offNote": "每个法术只能用自己的键施放：U、I、O。",
   "autoCast.spaceNote": "按 Space 对最近的敌人施放一个就绪的法术，放哪个由游戏挑；按住可连续施放。U I O 仍可指定法术。",
-  "autoCast.autoNote": "法术会自动对最近的敌人施放。U I O 仍可指定法术。",
+  "autoCast.autoNote": "法术会自动对最近的敌人施放。空格可立刻放出下一发；U I O 仍可指定法术。",
   "menu.tabGeneral": "通用",
   "menu.assistHeading": "战斗辅助",
   "menu.roomPlan": "每层开始前显示规划",
@@ -310,6 +310,7 @@ export const ZH: Table = {
   "hud.jevFallback": "Jev · 规则接管",
   "hud.hintStrip": "[@character] {character}  [Esc] {menu}",
   "hud.autoCast": "自动施法",
+  "hud.castNow": "立即施法",
   "hud.character": "角色",
   "hud.menu": "菜单",
 

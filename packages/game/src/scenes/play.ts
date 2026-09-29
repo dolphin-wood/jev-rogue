@@ -5397,7 +5397,7 @@ export class PlayScene extends Phaser.Scene {
       [t("first.move"), [["walk", "@up @left @down @right", t("first.walk")], ["dodge", "@dash", t("first.dodge")]]],
       [t("first.fight"), [["sword", "@attack", t("first.sword")], ["spin", "@spin", t("first.spin")]]],
       // The assist's key first while it casts: the key a player would not guess, and the one the default leans on.
-      [t("first.spells"), this.autoCastMode === "space"
+      [t("first.spells"), this.autoCastMode !== "off"
         ? [["castAuto", "@autoCast", t("first.castAuto")], ["cast", "@spell1 @spell2 @spell3", t("first.cast")]]
         : [["cast", "@spell1 @spell2 @spell3", t("first.cast")]]],
       [t("first.menus"), [["use", "@interact", t("first.use")], ["character", "@character", t("first.character")], ["menu", "Esc", t("first.menu")]]],
@@ -5627,7 +5627,8 @@ export class PlayScene extends Phaser.Scene {
     // No [E]: the prompt over what can be used says it when there is something to use.
     const strip = t("hud.hintStrip", { character: t("hud.character"), menu: t("hud.menu") });
     // Space first while it casts: the one key of the fight a player would not guess.
-    return this.autoCastMode === "space" ? `[@autoCast] ${t("hud.autoCast")}  ${strip}` : strip;
+    return this.autoCastMode === "space" ? `[@autoCast] ${t("hud.autoCast")}  ${strip}`
+      : this.autoCastMode === "auto" ? `[@autoCast] ${t("hud.castNow")}  ${strip}` : strip;
   }
 
   /**
@@ -16936,13 +16937,19 @@ export class PlayScene extends Phaser.Scene {
     if (own !== null) return { spell: own };
     if (this.autoCastMode === "off") return { spell: null };
     if (this.autoCastMode === "space" && !space.wanted) return { spell: null };
-    const auto = this.autoSpell(this.autoCastMode === "space");
+    /*
+     * On `auto`, Space is still the player's moment: it casts now what the
+     * beat would have cast next (`pickNow`), and the beat starts over from
+     * it, so the assist does not cast again straight after.
+     */
+    const now = space.wanted;
+    const auto = this.autoSpell(now);
     playtestLog.autoCast(this.autoCastMode, auto !== null);
     if (auto === null) {
       if (space.fresh) this.noteSpaceRefusal();
       return { spell: null };
     }
-    if (this.autoCastMode === "space") this.spaceWantMs = 0;
+    if (now) this.spaceWantMs = 0;
     return { spell: auto, spellAuto: true };
   }
 
@@ -16954,7 +16961,7 @@ export class PlayScene extends Phaser.Scene {
    */
   private spaceWanted(): { wanted: boolean; fresh: boolean } {
     const key = this.key("autoCast");
-    if (!key || this.offerUi || this.staffUi || this.autoCastMode !== "space") { this.spaceWantMs = 0; return { wanted: false, fresh: false }; }
+    if (!key || this.offerUi || this.staffUi || this.autoCastMode === "off") { this.spaceWantMs = 0; return { wanted: false, fresh: false }; }
     const fresh = Phaser.Input.Keyboard.JustDown(key);
     const p = this.world.player;
     const casting = p.castPending >= 0 || p.castRecoverMs > 0 || p.chargeKey >= 0;

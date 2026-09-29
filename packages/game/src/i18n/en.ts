@@ -71,7 +71,7 @@ export const EN = {
   "autoCast.auto": "Full",
   "autoCast.offNote": "Each spell casts only from its own key: U, I or O.",
   "autoCast.spaceNote": "Space casts a ready spell at the nearest enemy, and the game picks which. Hold it to keep casting. U I O still cast the one you choose.",
-  "autoCast.autoNote": "Spells cast themselves at the nearest enemy. U I O still cast the one you choose.",
+  "autoCast.autoNote": "Spells cast themselves at the nearest enemy. Space casts the next one now; U I O still cast the one you choose.",
   "menu.tabGeneral": "General",
   "menu.assistHeading": "Combat assists",
   "menu.roomPlan": "Show plan before each floor",
@@ -314,6 +314,7 @@ export const EN = {
   "hud.jevFallback": "Jev · fallback",
   "hud.hintStrip": "[@character] {character}  [Esc] {menu}",
   "hud.autoCast": "auto-cast",
+  "hud.castNow": "cast now",
   "hud.character": "character",
   "hud.menu": "menu",
 
