@@ -313,7 +313,7 @@ cards, in the room's own request.
     refused or ran under the cheapest key, a slow cast rate, a low damage
     rate) — accuracy (tracking and area spells; `seek`, `chain`, `scatter`;
     the movement family), mana (Barrage spells; the mana family), cast
-    frequency (Barrage spells; `haste`, `repeat`, `resonance`; the mana
+    frequency (Barrage spells; `repeat`, `resonance`; the mana
     family), damage (Heavy and Crowd spells; `brand`, `fork`, `pierce`,
     `kindle`, `blight`, `harvest`; the sword).
   - `synergy`: it works with what is held — a spell of an element the keys
@@ -380,7 +380,7 @@ real set:
 | Lane | Affixes | Fits |
 |---|---|---|
 | `homing` | seek, ricochet, lodestar | few bodies hit per shot, a run in which the sword has done nothing |
-| `freecast` | haste, retort, slipstream, parting, resonance, whirl, afterimage | a slow cast rate, a run the sword carries (casts that go off without a press; no affix gives mana back) |
+| `freecast` | retort, slipstream, parting, resonance, whirl, afterimage | a slow cast rate, a run the sword carries (casts that go off without a press; no affix gives mana back) |
 | `elemental` | kindle, rime, blight, spillover | keys leaning, or a stated style of, dot or area |
 | `heavier` | fork, pierce, shatter, brand, aftershock, cull, overload | keys leaning, or a stated style of, nuke; a low damage rate |
 | `wider` | scatter, repeat, bloom, chain, harvest, slam | keys leaning, or a stated style of, area or spam; heavy movement pressure |

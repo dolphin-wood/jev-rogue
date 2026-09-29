@@ -572,7 +572,7 @@ function nearestOther(
 /**
  * A body died to a projectile carrying affixes.
  *
- * `harvest` bursts where it fell; `haste` takes cooldown off. Nothing on a
+ * `harvest` bursts where it fell; `spillover` hands its statuses on. Nothing on a
  * spell gives mana back — Echo did, and a spell that paid for itself left
  * the sword, which is what supplies mana, with nothing to do.
  */
@@ -606,14 +606,6 @@ export function onKill(w: World, b: Bullet, e: Enemy, sim: HookSim): void {
       }
       if (reached > 0) w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "spillover" });
     }
-  }
-
-  // `haste`: the kill takes a share off this spell's cooldown.
-  const haste = find(kills, "haste");
-  const slot = b.spellIndex >= 0 ? w.spells[b.spellIndex] : null;
-  if (haste && haste.kind === "haste" && slot && slot.cooldownMs > 0) {
-    slot.cooldownMs *= 1 - haste.fraction;
-    w.events.push({ kind: "pickup", x: e.x, y: e.y, what: "haste" });
   }
 }
 

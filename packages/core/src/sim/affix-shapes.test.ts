@@ -190,7 +190,6 @@ interface Seen {
   arcs: number;
   brands: number;
   harvests: number;
-  hastes: number;
   fires: number;
   wards: number;
   burn: number;
@@ -253,7 +252,7 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix, alongside: r
   const aim = scenario === "wall" ? { x: PX - 600, y: PY } : scenario === "far" ? { x: PX + 700, y: PY }
     : scenario === "aside" ? { x: PX, y: PY - 150 } : { x: PX + 150, y: PY };
   const seen: Seen = {
-    damage: 0, made: 0, splits: 0, arcs: 0, brands: 0, harvests: 0, hastes: 0, fires: 0,
+    damage: 0, made: 0, splits: 0, arcs: 0, brands: 0, harvests: 0, fires: 0,
     wards: 0, burn: 0, poison: 0, chill: 0, airborne: 0, stationary: 0, momentum: 0, finales: 0, inward: 0,
     toward: 0, repulses: 0, spills: 0, aftershock: 0, intercepts: 0, culls: 0, overloads: 0, slams: 0, afterimages: 0,
   };
@@ -292,7 +291,6 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix, alongside: r
       if (ev.kind === "shot" && ev.what === "arc") seen.arcs++;
       if (ev.kind === "enemy_hit" && ev.what === "brand") seen.brands++;
       if (ev.kind === "enemy_hit" && ev.what === "harvest") seen.harvests++;
-      if (ev.kind === "pickup" && ev.what === "haste") seen.hastes++;
       if (ev.kind === "spell" && ev.what === "momentum") seen.momentum++;
       if (ev.kind === "spell" && ev.what === "finale") seen.finales++;
       if (ev.kind === "shot" && ev.what === "repulse") seen.repulses++;
@@ -379,7 +377,6 @@ function observable(a: SpellAffix, bare: Seen, withIt: Seen): boolean {
     case "arc": return withIt.arcs > bare.arcs;
     case "mark": return withIt.brands > bare.brands;
     case "burst": return withIt.harvests > bare.harvests;
-    case "haste": return withIt.hastes > bare.hastes;
     case "momentum": return withIt.momentum > bare.momentum;
     case "undertow": return withIt.inward > bare.inward;
     case "finale": return withIt.finales > bare.finales;

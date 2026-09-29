@@ -805,7 +805,7 @@ const GAP_SPELL_TAGS: Readonly<Record<string, readonly string[]>> = {
 };
 const GAP_AFFIXES: Readonly<Record<string, readonly string[]>> = {
   damage: ["brand", "fork", "pierce", "kindle", "blight", "harvest", "aftershock", "cull", "overload"],
-  cast_frequency: ["haste", "repeat", "resonance", "whirl", "parting", "afterimage"],
+  cast_frequency: ["repeat", "resonance", "whirl", "parting", "afterimage"],
   mana: [], accuracy: ["seek", "chain", "scatter", "lodestar", "expanse"],
 };
 const GAP_FAMILIES: Readonly<Record<string, readonly string[]>> = {
@@ -874,8 +874,7 @@ export interface CardPool {
  *   still lands) fit its bolts: `ricochet` six, `seek` the four that fire
  *   one projectile.
  * - **Heavy** is single heavy bolts, a charge, a mark, a telegraphed and a
- *   line eruption, and two dashes; its verb is one committed hit. `haste`
- *   returns the long cooldown on a kill, `shatter` makes a committed shot
+ *   line eruption, and two dashes; its verb is one committed hit. `shatter` makes a committed shot
  *   that meets a wall still split, `fork` splits the one large hit, `brand`
  *   sets off on the next hit on the same body, and `rime`'s frozen body
  *   takes the next hit at triple. Each of the bolt-only ones fits six of ten.
@@ -917,7 +916,7 @@ export interface CardPool {
  */
 const AFFIX_STYLE: Readonly<Record<string, readonly string[]>> = {
   spam: ["repeat", "fork", "seek", "ricochet", "parting", "overload", "intercept", "afterimage"],
-  nuke: ["haste", "shatter", "fork", "brand", "rime", "aftershock", "repulse", "cull", "lodestar"],
+  nuke: ["shatter", "fork", "brand", "rime", "aftershock", "repulse", "cull", "lodestar"],
   area: ["scatter", "chain", "harvest", "pierce", "aftershock", "lodestar", "slam", "afterimage", "expanse", "linger"],
   dot: ["kindle", "blight", "bloom", "brand", "spillover", "parting", "linger"],
   melee: ["resonance", "retort", "slipstream", "ward", "momentum", "undertow", "finale", "whirl", "drag", "repulse", "intercept", "slam"],

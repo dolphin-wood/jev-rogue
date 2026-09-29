@@ -529,7 +529,6 @@ export const ZH: Table = {
   "affixtier.kindle": "灼烧命中的敌人",
   "affixtier.rime": "冰缓命中的敌人",
   "affixtier.blight": "使命中的敌人中毒",
-  "affixtier.haste": "击杀时冷却减半",
   "affixtier.resonance": "每 5 次剑击自动施放",
   "affixtier.momentum": "每斩过一个敌人，冲刺多冲一段",
   "affixtier.undertow": "剑气把敌人吸向路线",

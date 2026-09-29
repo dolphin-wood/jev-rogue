@@ -466,7 +466,7 @@ dead draw dressed as a choice is worse than a smaller pool.
 |---|---|---|
 | Fork, Shatter, Pierce, Seek, Ricochet | hit / wall / cast | bolt |
 | Chain | hit | bolt, boomerang, orb |
-| Brand, Harvest, Haste, Drag, Cull, Overload | hit / kill | bolt, orbit, boomerang, orb, enchant |
+| Brand, Harvest, Drag, Cull, Overload | hit / kill | bolt, orbit, boomerang, orb, enchant |
 | Slam | hit | bolt, orbit, boomerang, enchant: a body the spell throws into a wall is hurt and staggered |
 | Intercept | cast | bolt, orbit, boomerang, enchant: the spell's shots and blades put out enemy shots |
 | Lodestar | cast | eruption, field, vortex, pillar: the cast lands under the nearest body |

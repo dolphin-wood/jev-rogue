@@ -528,7 +528,6 @@ export const JA: Table = {
   "affixtier.kindle": "当てた敵を燃やす",
   "affixtier.rime": "当てた敵を冷やす",
   "affixtier.blight": "当てた敵を毒にする",
-  "affixtier.haste": "撃破でクールダウン半減",
   "affixtier.resonance": "剣の5ヒットごとに詠唱",
   "affixtier.momentum": "斬り抜けるたびにさらに進む",
   "affixtier.undertow": "剣気が敵を引き寄せる",

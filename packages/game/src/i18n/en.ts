@@ -536,7 +536,6 @@ export const EN = {
   "affixtier.kindle": "burns what it hits",
   "affixtier.rime": "chills what it hits",
   "affixtier.blight": "poisons what it hits",
-  "affixtier.haste": "a kill halves the cooldown",
   "affixtier.resonance": "every fifth sword hit casts it",
   "affixtier.momentum": "each body cut carries the run on",
   "affixtier.undertow": "the wake draws bodies in",

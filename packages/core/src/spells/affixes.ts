@@ -120,7 +120,7 @@ const STRIKING: readonly SpellShape[] = SPELL_SHAPES.filter((s) => s !== "pillar
 
 /**
  * The shapes whose projectiles hit and kill: where `chain`, `brand`,
- * `harvest`, `echo` and `haste` do something. See `SpellShape`.
+ * `harvest` and `echo` do something. See `SpellShape`.
  */
 const HITTING: readonly SpellShape[] = ["bolt", "orbit", "boomerang", "orb", "enchant"];
 
@@ -168,8 +168,6 @@ export type AffixEffect =
     readonly duration?: number;
     readonly element?: Element; readonly power?: number;
   }
-  /** A kill with this spell takes `fraction` off its cooldown. */
-  | { readonly kind: "haste"; readonly fraction: number }
   /** Each body a run's cut goes through carries the run on `px` further, `times` at most. */
   | { readonly kind: "momentum"; readonly px: number; readonly times: number }
   /** A run's wake draws bodies in to the run's line, at `pull` of its shove, instead of throwing them off. */
@@ -419,8 +417,6 @@ const BASE_AFFIXES: SpellAffix[] = [
  *   way, where the old pool only had what it does on arrival.
  * - **Element** — `kindle`, `rime`, `blight`: a spell of any school can carry
  *   fire, ice or poison, so a status build is not tied to three spells.
- * - **Tempo** — `haste`: a finisher that comes back sooner, the cooldown's
- *   counterpart to `echo`'s mana.
  */
 /** The one sentence all three element affixes end with; see `STATUS_BREADTH_MULT`. */
 const BREADTH = " A body carrying two different elements takes more from every hit.";
@@ -487,12 +483,6 @@ BASE_AFFIXES.push(
     text: "poisons what it hits",
     description: "The spell's hits fill the poison gauge, alongside any element it already carries; a poisoned body loses health over time." + BREADTH,
   },
-  {
-    id: "haste", name: "Haste", hook: "kill", shapes: [...HITTING], element: null,
-    effect: { kind: "haste", fraction: 0.5 },
-    text: "a kill halves the cooldown",
-    description: "A kill with this spell takes half of its cooldown off.",
-  },
 );
 
 export const SPELL_AFFIXES: readonly SpellAffix[] = BASE_AFFIXES;
@@ -518,7 +508,7 @@ export const SPELL_AFFIXES: readonly SpellAffix[] = BASE_AFFIXES;
  *
  * ### And an affix that only changes a shot's path pays nothing
  *
- * `seek`, `ricochet`, the element affixes, `brand`, `harvest`, `haste`, `ward`,
+ * `seek`, `ricochet`, the element affixes, `brand`, `harvest`, `ward`,
  * `echo`, `bloom`, `retort`, `slipstream`, `resonance`, `shatter` — none of
  * them multiplies what a press is worth against what is in front of the
  * player, and several are defensive.
@@ -776,7 +766,7 @@ BASE_AFFIXES.push(
  * **The lanes the Director could not fill** (the third expansion). The affix
  * intent tilts an offer toward a lane, and on a staff with no projectile
  * several lanes held nothing at a strength-I door: `homing` was two bolt-only
- * affixes, the cadence lane was Haste alone at strength III, and every
+ * affixes, the cadence lane held one strength III affix, and every
  * strength III affix needed a projectile, so a legendary door for a staff of
  * ground, pulls and companions fell back a grade. These six fill those cells:
  *
@@ -876,14 +866,14 @@ const RUN_AFFIXES: ReadonlySet<string> = new Set(["momentum", "undertow", "final
  * **The strength each affix waits for.** Measured on the bench (`pnpm
  * spell-bench`, the affix loadouts on the bolt): `repeat` doubles what a key
  * does to one body for a fifth more mana and tops most spells' best build;
- * `chain`, `brand` and `haste` are the next three down, each turning one hit
- * or one cast into several. Those four are strength III, enough of them that
+ * `chain` and `brand` are the next two down, each turning one hit or one
+ * cast into several. Those three are strength III, enough of them that
  * a III door's offer is full of III cards rather than one and filler. The
  * affixes that reach more bodies or change what a spell does wait for II;
  * the rest — defences, aim, elements — are dealt from the first room.
  */
 const STRENGTH_FLOOR: Readonly<Record<string, 2 | 3>> = {
-  repeat: 3, chain: 3, brand: 3, haste: 3,
+  repeat: 3, chain: 3, brand: 3,
   // More of the room from one cast: a rare card.
   expanse: 2,
   // More of the same from one cast, in time rather than space: Expanse's other half.

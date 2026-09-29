@@ -61,20 +61,19 @@ export const AFFIX_LANES: Readonly<Record<AffixIntent, Lane>> = {
   },
   freecast: {
     /*
-     * **Casts the key did not have to be pressed for.** This lane was
-     * `cheaper`, Haste alone: a kill hands the cast back sooner. But most keys
-     * wait on the bar, not on a cooldown, and nothing on a spell may pay for
-     * spells, so a lane about the cast rate had one card at strength III and
-     * nothing on most shapes. What does raise how often a spell goes off is
+     * **Casts the key did not have to be pressed for.** Most keys wait on
+     * the bar and the cast's own recovery, not on a cooldown, and nothing on
+     * a spell may pay for spells, so a card that shortened a cooldown did
+     * nothing a player could feel. What does raise how often a spell goes off is
      * the spell going off on its own — from a hit taken, a dash, the sword, its
      * spin, a pull running out — and those were scattered over `survival`,
      * which is where the lane's answers now come from.
      */
-    affixes: ["haste", "retort", "slipstream", "parting", "resonance", "whirl", "afterimage"],
+    affixes: ["retort", "slipstream", "parting", "resonance", "whirl", "afterimage"],
     // Not "fast": "clear rooms fast" is a sentence about pace, not about the cast rate.
     words: ["often", "cooldown", "spam", "free", "automatic", "auto", "proc", "trigger"],
     phrases: ["cast more", "cast faster", "casts itself", "on its own"],
-    text: "Casts that go off without a press: Haste hands one back on a kill, Retort casts at a hit taken, "
+    text: "Casts that go off without a press: Retort casts at a hit taken, "
       + "Slipstream through a dashed body and Parting Shot from where a dash began, Resonance from the sword and "
       + "Whirl from its spin, Afterimage when a pull, a companion or an orb runs out.",
     fits: [["cast_rate", "slow"], ["sword_share", "most"]],
