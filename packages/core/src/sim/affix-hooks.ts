@@ -77,6 +77,8 @@ export interface HookSim {
    * the spell the player put on the key.
    */
   fire(spellIndex: number, origin: { x: number; y: number }, target: { x: number; y: number }): void;
+  /** Puts `power` of an element's gauge on a body, as a hit carrying it would (`spillover`). */
+  status(e: Enemy, element: "fire" | "ice" | "poison", power: number): void;
 }
 
 /** A rune left on the floor by `ward`, which stops enemy projectiles. */
@@ -208,14 +210,88 @@ export function castAdditions(affixes: readonly AttachedAffix[]): {
  * enemy projectiles for a few shots, and it is where the player was, not where
  * they are — so it rewards casting from a spot and holding it.
  */
-export function onCast(w: World, slot: SpellSlot): void {
-  const ward = find(at(slot.affixes, "cast"), "ward");
+export function onCast(w: World, slot: SpellSlot, spellIndex = -1, cost = 0): void {
+  const casts = at(slot.affixes, "cast");
+  const ward = find(casts, "ward");
   if (ward && ward.kind === "ward")
     w.wards.push({
       x: w.player.x, y: w.player.y, radius: WARD_RADIUS,
       shots: ward.shots, lifeMs: WARD_LIFE_MS,
     });
+  /*
+   * `repulse`: the bodies close round the caster are thrown back, by the
+   * same knockback a blow gives, so a plated body or the king holds (`stepEnemy`).
+   */
+  const repulse = find(casts, "repulse");
+  if (repulse && repulse.kind === "repulse") {
+    const p = w.player;
+    let shoved = 0;
+    for (const e of w.enemies) {
+      if (e.hp <= 0 || e.spawnFadeMs > 0) continue;
+      const dx = e.x - p.x, dy = e.y - p.y;
+      const d = Math.hypot(dx, dy) || 1;
+      if (d > repulse.radiusPx + e.radius) continue;
+      const push = repulse.push / Math.max(1, e.radius / 10);
+      e.knockX += (dx / d) * push;
+      e.knockY += (dy / d) * push;
+      shoved++;
+    }
+    if (shoved > 0) w.events.push({ kind: "shot", x: p.x, y: p.y, what: "repulse" });
+  }
+  /*
+   * `aftershock`: a delayed burst under the nearest body, through the same
+   * loose marks a doom leaves (`World.dooms`), worth a share of what the
+   * press cost — so a cheap key's aftershock is small and a dear one's is not.
+   */
+  const shock = find(casts, "aftershock");
+  if (shock && shock.kind === "aftershock" && cost > 0) {
+    const [t] = nearestN(w, w.player.x, w.player.y, 1);
+    if (t && Math.hypot(t.x - w.player.x, t.y - w.player.y) <= shock.rangePx) {
+      w.dooms.push({
+        x: t.x, y: t.y, ms: shock.delayMs, radius: shock.radiusPx,
+        damage: Math.max(1, Math.round(cost * AFTERSHOCK_PER_MANA)), spellIndex, tag: "aftershock",
+      });
+      w.events.push({ kind: "hazard_tick", x: t.x, y: t.y, what: "aftershock_mark" });
+    }
+  }
 }
+
+/**
+ * What an `aftershock` deals per point of mana the cast cost. A bare bolt
+ * costs about eight and lands about fourteen, so the burst is a little over
+ * a third of the cast again, on the body and whatever stands beside it.
+ */
+export const AFTERSHOCK_PER_MANA = 0.6;
+
+/**
+ * The sword's spin started. Any spell with `whirl` is cast, free, at the
+ * nearest bodies — one cast a body, as `retort` casts at the one that hit.
+ */
+export function onSpin(w: World, sim: HookSim): void {
+  w.spells.forEach((slot, i) => {
+    if (!slot) return;
+    const r = find(at(slot.affixes, "spin"), "whirl");
+    if (!r || r.kind !== "whirl") return;
+    for (const t of nearestN(w, w.player.x, w.player.y, r.targets)) sim.fire(i, w.player, t);
+  });
+}
+
+/**
+ * What a `drag` hit does to the body in place of the shot's own shove: a
+ * pull toward the caster, at this many px/s, or 0 for a shot without it.
+ * Read by the hit in `world.ts`, which owns the knockback.
+ */
+export function dragPull(b: Bullet): number {
+  const drag = find(at(b.affixes, "hit"), "drag");
+  return drag && drag.kind === "drag" ? drag.px * DRAG_PER_PX : 0;
+}
+
+/**
+ * A knockback of `v` px/s carries a body about `v / 10.8` px as it decays
+ * (`stepEnemy`: ×0.82 a step at sixty steps a second), so this turns the
+ * affix's distance into the shove that travels it.
+ */
+const DRAG_PER_PX = 10.8;
 
 /**
  * The extra directions a `spread` cast fires in, as unit vectors about the aim.
@@ -388,6 +464,30 @@ export function onKill(w: World, b: Bullet, e: Enemy, sim: HookSim): void {
   if (harvest && harvest.kind === "burst")
     burst(w, e.x, e.y, harvest.radiusPx, BURST_DAMAGE, sim, "harvest");
 
+  /*
+   * `spillover`: what the body carried goes on to the bodies round it — a
+   * burn, chill or poison running or building on it, and the element of the
+   * hit that killed it, which lands after the kill and so is not on the body
+   * yet — each at two hits' worth, so a spread status still has to be finished.
+   */
+  const spill = find(kills, "spill");
+  if (spill && spill.kind === "spill") {
+    const carried: ("fire" | "ice" | "poison")[] = [];
+    if (e.burnMs > 0 || e.burnBuild > 0 || b.powers.fire > 0) carried.push("fire");
+    if (e.frozenMs > 0 || e.chillBuild > 0 || b.powers.ice > 0) carried.push("ice");
+    if (e.poisonMs > 0 || e.poisonBuild > 0 || b.powers.poison > 0) carried.push("poison");
+    if (carried.length > 0) {
+      let reached = 0;
+      for (const o of w.enemies) {
+        if (o === e || o.hp <= 0 || o.spawnFadeMs > 0) continue;
+        if (Math.hypot(o.x - e.x, o.y - e.y) > spill.radiusPx + o.radius) continue;
+        for (const el of carried) sim.status(o, el, SPILL_POWER);
+        reached++;
+      }
+      if (reached > 0) w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "spillover" });
+    }
+  }
+
   // `haste`: the kill takes a share off this spell's cooldown.
   const haste = find(kills, "haste");
   const slot = b.spellIndex >= 0 ? w.spells[b.spellIndex] : null;
@@ -396,6 +496,9 @@ export function onKill(w: World, b: Bullet, e: Enemy, sim: HookSim): void {
     w.events.push({ kind: "pickup", x: e.x, y: e.y, what: "haste" });
   }
 }
+
+/** The element power a spilled status lands with: about two ordinary hits of gauge. */
+const SPILL_POWER = 2;
 
 /** Hurts every other body within `radius` of a point. */
 function burst(
@@ -447,6 +550,21 @@ export function onHurt(w: World, fromX: number, fromY: number, sim: HookSim): vo
     const r = find(at(slot.affixes, "hurt"), "riposte");
     if (!r || r.kind !== "riposte") return;
     for (const t of nearestN(w, fromX, fromY, r.targets)) sim.fire(i, w.player, t);
+  });
+}
+
+/**
+ * A dash began at `from`. Any spell with `parting` casts, free, from there at
+ * the nearest body in reach: once a dash, before the dash has carried the
+ * caster anywhere, so it is the spot left behind that fires.
+ */
+export function onDashStart(w: World, from: { x: number; y: number }, sim: HookSim): void {
+  w.spells.forEach((slot, i) => {
+    if (!slot) return;
+    const r = find(at(slot.affixes, "dash"), "parting");
+    if (!r || r.kind !== "parting") return;
+    const [t] = nearestN(w, from.x, from.y, 1);
+    if (t && Math.hypot(t.x - from.x, t.y - from.y) <= r.rangePx) sim.fire(i, { x: from.x, y: from.y }, t);
   });
 }
 

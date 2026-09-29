@@ -7762,10 +7762,22 @@ export class PlayScene extends Phaser.Scene {
       else if (ev.kind === "shot" && ev.what === "land") this.landingAt(ev.x, ev.y);
       else if (ev.kind === "shot" && ev.what === "emit_burst") this.frostRingAt(ev.x, ev.y);
       else if (ev.kind === "eruption" && ev.what === "doom") this.doomBurstAt(ev.x, ev.y);
+      // `aftershock`: the ground under the body going off — dust, and grit thrown up off it.
+      else if (ev.kind === "eruption" && ev.what === "aftershock") {
+        this.landingAt(ev.x, ev.y);
+        this.burst(ev.x, ev.y - 2, 0xd8b98a, 10, 150, -Math.PI / 2, Math.PI * 1.2, 1, 260);
+      }
+      // `repulse`: the air thrown off the caster, flat and out to the shove's reach.
+      else if (ev.kind === "shot" && ev.what === "repulse") this.burst(ev.x, ev.y, 0xe8f0ff, 16, 260, undefined, Math.PI * 2, 0.8);
+      // `spillover`: what the fallen body carried, flung to its neighbours.
+      else if (ev.kind === "hazard_tick" && ev.what === "spillover") this.burst(ev.x, ev.y - 4, 0xffc27a, 12, 170, undefined, Math.PI * 2, 1);
       else if (ev.kind === "eruption" && ev.what === "collapse") this.collapseAt(ev.x, ev.y);
       else if (ev.kind === "eruption" && ev.what === "fire") {
         const c = w.eruptions.find((c) => c.alive && c.fired && c.telegraphMs > 0 && Math.abs(c.x - ev.x) < 0.5 && Math.abs(c.y - ev.y) < 0.5);
         if (c) this.meteorImpactAt(c.x, c.y, c.radius);
+      } else if (ev.kind === "hazard_tick" && ev.what === "aftershock_mark") {
+        // The ground taking the mark: a puff of grit at the body's feet.
+        this.burst(ev.x, ev.y + 2, 0xd8b98a, 6, 60, -Math.PI / 2, Math.PI, 0.8, 120);
       } else if (ev.kind === "hazard_tick" && ev.what === "doom_mark") {
         // The mark taking: violet motes drawn into the body.
         this.burst(ev.x, ev.y - 6, 0xc69cff, 8, 90, undefined, Math.PI * 2, 0.7);
@@ -8146,6 +8158,14 @@ export class PlayScene extends Phaser.Scene {
       this.drawDoomRune(e.x, e.y - e.radius - 16, left);
     }
     for (const d of w.dooms) {
+      /*
+       * An aftershock waiting under a body is grit trembling on the floor, not
+       * a rune: it is the ground about to go, and a rune is the void's.
+       */
+      if (d.tag === "aftershock") {
+        if ((tick & 3) === 0) this.burst(d.x + (Math.random() - 0.5) * 14, d.y + 3, 0xb89868, 1, 30, -Math.PI / 2, 0.8, 0.8, 80);
+        continue;
+      }
       const left = d.ms / this.doomTotalMs(d.spellIndex);
       this.drawDoomRune(d.x, d.y - 12, left);
     }

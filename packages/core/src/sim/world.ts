@@ -36,7 +36,7 @@ import { CLOUD_TICK_MS, FIRE_ENEMY_DAMAGE, FIRE_TICK_MS, GROUND_STATUS_POWER, li
 import { eruptRing, fireUnit, PROC_MIN } from "./cast.ts";
 import { stepBoomerangs, stepEnchant, stepOrbs, stepTrail, stepWaves, waveCentre, waveHits } from "./shapes.ts";
 import {
-  effectOf, onDashThrough, onExpire, onHit, onHurt, onKill, stepWards,
+  dragPull, effectOf, onDashStart, onDashThrough, onExpire, onHit, onHurt, onKill, onSpin, stepWards,
   wallSplitCount, wardStops,
 } from "./affix-hooks.ts";
 import type { HookSim } from "./affix-hooks.ts";
@@ -100,6 +100,8 @@ const HAZARD_GRACE_MS = 400;
 const NEAR_MISS_RADIUS = 26;
 /** Impulse a hit imparts, scaled down for heavier bodies. */
 const KNOCKBACK = 160;
+/** The knockback that carries a body one px as it decays (`stepEnemy`, ×0.82 a step): see `dragPull`. */
+const DRAG_TRAVEL_INV = 10.8;
 /**
  * How long a body cannot be staggered by a spell again, after one has.
  *
@@ -1424,6 +1426,7 @@ function stepPlayer(w: World, input: Input, dtMs: number): void {
      * dodge is never refused because a guard was up.
      */
     if (p.stance) answerStance(w, p.stance.expireShare);
+    onDashStart(w, { x: p.x, y: p.y }, hookSim(w));
     p.dashMs = DASH_MS;
     // And the sword's rest: a dash starts a fresh run of swings, so moving is
     // how the player keeps up the pressure (see `SWING_BREATH_MS`).
@@ -1453,7 +1456,7 @@ function stepPlayer(w: World, input: Input, dtMs: number): void {
    */
   if (input.spin) p.spinBufferMs = SPIN_BUFFER_MS;
   const spun = p.spinBufferMs > 0 && !stunned && beginSpin(p, w);
-  if (spun) p.spinBufferMs = 0;
+  if (spun) { p.spinBufferMs = 0; onSpin(w, hookSim(w)); }
   else {
     /*
      * A press with no charge banked is **said**, not dropped in silence: the
@@ -4415,6 +4418,7 @@ function hookSim(w: World): HookSim {
       if (!slot) return;
       fireUnit(w, slot.item, freeCastScope(slot, spellIndex), ITEMS, [], origin, target);
     },
+    status: (e, element, power) => applyElementTo(e, element, power, e.statusMult || 1),
   };
 }
 
@@ -4560,9 +4564,24 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
         e.hitFlashMs = HIT_FLASH_MS;
         // A hit that does not move the target reads as no hit at all.
         const weight = b.weight || 1;
-        const push = (KNOCKBACK * weight) / Math.max(1, e.radius / 10);
-        e.knockX += ux * push;
-        e.knockY += uy * push;
+        /*
+         * `drag` turns the shove round: toward the caster, and no further
+         * than the caster, so a body pulled in lands in sword reach and not
+         * behind the player.
+         */
+        const pull = dragPull(b);
+        if (pull > 0) {
+          const tx = w.player.x - e.x, ty = w.player.y - e.y;
+          const td = Math.hypot(tx, ty) || 1;
+          const v = Math.min(pull, Math.max(0, td - e.radius - PLAYER_RADIUS - 6) * DRAG_TRAVEL_INV)
+            / Math.max(1, e.radius / 10);
+          e.knockX += (tx / td) * v;
+          e.knockY += (ty / td) * v;
+        } else {
+          const push = (KNOCKBACK * weight) / Math.max(1, e.radius / 10);
+          e.knockX += ux * push;
+          e.knockY += uy * push;
+        }
         /*
          * **Mass decides what a hit does to a body**, not only how far it
          * moves it. A light shot — a spark, a pellet, a seeker — pushes and
@@ -5977,7 +5996,7 @@ function stepDooms(w: World, dtMs: number): void {
   if (w.dooms.length === 0) return;
   for (const d of w.dooms) {
     d.ms -= dtMs;
-    if (d.ms <= 0) doomBurst(w, d.x, d.y, d.damage, d.radius);
+    if (d.ms <= 0) doomBurst(w, d.x, d.y, d.damage, d.radius, d.tag);
   }
   w.dooms = w.dooms.filter((d) => d.ms > 0);
 }
@@ -5988,18 +6007,19 @@ function stepDooms(w: World, dtMs: number): void {
  * doom burst as the spell's status — the delayed payoff the caster left to
  * work — and the bench's affliction gate reads status damage by that tag.
  */
-function doomBurst(w: World, x: number, y: number, damage: number, radius: number): void {
+function doomBurst(w: World, x: number, y: number, damage: number, radius: number, tag = "dot:doom"): void {
   for (const e of w.enemies) {
     if (!isActive(e) || e.hp <= 0) continue;
     if (Math.hypot(e.x - x, e.y - y) > radius + e.radius) continue;
-    hurtEnemy(w, e, damage, "dot:doom", { x, y }, damage * PROC_POISE);
+    hurtEnemy(w, e, damage, tag, { x, y }, damage * PROC_POISE);
     w.stats.damageDealt += damage;
     e.hitFlashMs = HIT_FLASH_MS;
     w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: e.archetype, amount: damage });
   }
   impact(w, HITSTOP_HIT * 2, TRAUMA_HIT);
   emit(w, x, y, "kill", 8);
-  w.events.push({ kind: "eruption", x, y, what: "doom" });
+  // An aftershock is the ground going off, not the void's mark: the renderer draws them apart.
+  w.events.push({ kind: "eruption", x, y, what: tag === "aftershock" ? "aftershock" : "doom" });
 }
 
 /**

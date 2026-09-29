@@ -76,6 +76,15 @@ const RUN_REPRESENTATIVE: Readonly<Record<string, string>> = {
   momentum: "dash_slash", undertow: "dash_slash", finale: "dash_slash",
 };
 
+/**
+ * Affixes that act on what another affix put on the spell: `spillover` hands
+ * on a status, so a representative with no element of its own carries Kindle
+ * — in the bare run too, so the difference is still only the affix's.
+ */
+const ALONGSIDE: Readonly<Record<string, readonly string[]>> = {
+  spillover: ["kindle"],
+};
+
 /*
  * Two of doc 006's newer shapes do nothing where the rest are measured, and
  * both by their own rule: a trail lays ground only as the caster walks, and
@@ -98,8 +107,9 @@ const swings = (spell: string) => itemShape(ITEMS.get(spell)) === "enchant";
  * - `hurt`: an enemy shot lands on the player; the key is not pressed.
  * - `dash`: the player dashes through a body; the key is not pressed.
  * - `swing`: the sword swung into a body; the key is not pressed.
+ * - `spin`: the sword's spin, again each time it ends; the key is not pressed.
  */
-type Scenario = "press" | "kill" | "wall" | "far" | "hurt" | "dash" | "swing";
+type Scenario = "press" | "kill" | "wall" | "far" | "hurt" | "dash" | "swing" | "spin";
 
 function scenarioOf(a: SpellAffix): Scenario {
   // A shot that bends onto bodies shows it on a shot that was not aimed at one.
@@ -111,6 +121,7 @@ function scenarioOf(a: SpellAffix): Scenario {
     case "hurt": return "hurt";
     case "dash": return "dash";
     case "swing": return "swing";
+    case "spin": return "spin";
     default: return "press";
   }
 }
@@ -132,6 +143,7 @@ const BODIES: Readonly<Record<Scenario, readonly [number, number][]>> = {
   hurt: [[120, 0], [60, 40]],
   dash: [[40, 0], [80, 30]],
   swing: [[20, 0], [40, 24]],
+  spin: [[30, 0], [0, 40], [-50, 0]],
 };
 
 /** Ten seconds: long enough for a ring of blades to run out and an on-hit roll to come up. */
@@ -166,9 +178,16 @@ interface Seen {
   finales: number;
   /** Body-frames being shoved back toward the run's line (`undertow`) rather than off it. */
   inward: number;
+  /** Body-frames being pulled toward the caster (`drag`). */
+  toward: number;
+  /** Casts that threw bodies back (`repulse`), and spilled statuses (`spillover`). */
+  repulses: number;
+  spills: number;
+  /** Damage the delayed bursts under a body dealt (`aftershock`). */
+  aftershock: number;
 }
 
-function run(spell: string, scenario: Scenario, affix?: SpellAffix): Seen {
+function run(spell: string, scenario: Scenario, affix?: SpellAffix, alongside: readonly string[] = []): Seen {
   const w: World = createWorld({
     room, encounter: null, props: 0,
     staff: { slots: 6, mana_max: 120 },
@@ -178,9 +197,9 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix): Seen {
   w.player.x = PX;
   w.player.y = PY;
   w.player.facing = 0;
-  if (affix) {
+  for (const id of [...alongside, ...(affix ? [affix.id] : [])]) {
     let slot = w.spells[0]!;
-    slot = attachAffix(slot, affix.id) ?? slot;
+    slot = attachAffix(slot, id) ?? slot;
     w.spells[0] = slot;
   }
   const hp = scenario === "kill" ? 1 : 100_000;
@@ -202,6 +221,7 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix): Seen {
   const seen: Seen = {
     damage: 0, made: 0, splits: 0, arcs: 0, brands: 0, harvests: 0, hastes: 0, fires: 0,
     wards: 0, burn: 0, poison: 0, chill: 0, airborne: 0, stationary: 0, momentum: 0, finales: 0, inward: 0,
+    toward: 0, repulses: 0, spills: 0, aftershock: 0,
   };
   /*
    * A pool slot counts as a birth when it comes alive **or is renewed** —
@@ -241,6 +261,9 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix): Seen {
       if (ev.kind === "pickup" && ev.what === "haste") seen.hastes++;
       if (ev.kind === "spell" && ev.what === "momentum") seen.momentum++;
       if (ev.kind === "spell" && ev.what === "finale") seen.finales++;
+      if (ev.kind === "shot" && ev.what === "repulse") seen.repulses++;
+      if (ev.kind === "hazard_tick" && ev.what === "spillover") seen.spills++;
+      if (ev.kind === "damage" && ev.what === "hp:aftershock") seen.aftershock += ev.amount ?? 0;
     }
     seen.wards = Math.max(seen.wards, w.wards.length);
     let still = 0;
@@ -255,6 +278,7 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix): Seen {
     // and how long it runs, not how high.
     // The run goes along the aim, level with the caster: back toward it is toward PY.
     for (const e of bodies) if (Math.abs(e.knockY) > 1 && (e.y - PY) * e.knockY < 0) seen.inward++;
+    for (const e of bodies) if (Math.hypot(e.knockX, e.knockY) > 1 && (e.x - w.player.x) * e.knockX + (e.y - w.player.y) * e.knockY < 0) seen.toward++;
     for (const e of bodies) {
       seen.burn += e.burnBuild + (e.burnMs > 0 ? 1 + e.burnSources : 0);
       seen.poison += e.poisonBuild + e.poisonStacks;
@@ -275,11 +299,13 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix): Seen {
       case "wall": case "far": return t === 0 ? { ...base, spell: 0 } : base;
       case "dash": return t === 0 ? { ...base, moveX: 1, dash: true } : t < 14 ? { ...base, moveX: 1 } : base;
       case "swing": return { ...base, swing: true };
+      case "spin": return { ...base, spin: true };
       default: return base;
     }
   };
   for (let t = 0; t < FRAMES; t++) {
     w.player.mana = w.staff.mana_max;
+    if (scenario === "spin") w.player.rage = Math.max(w.player.rage, 1);
     if (scenario === "hurt" && t === 0) {
       w.player.invulnMs = 0;
       const b = w.enemyBullets.find((x) => !x.alive)!;
@@ -309,6 +335,12 @@ function observable(a: SpellAffix, bare: Seen, withIt: Seen): boolean {
     case "momentum": return withIt.momentum > bare.momentum;
     case "undertow": return withIt.inward > bare.inward;
     case "finale": return withIt.finales > bare.finales;
+    case "repulse": return withIt.repulses > bare.repulses;
+    case "parting": return withIt.made > bare.made || withIt.damage > bare.damage;
+    case "spill": return withIt.spills > bare.spills;
+    case "drag": return withIt.toward > bare.toward;
+    case "aftershock": return withIt.aftershock > bare.aftershock;
+    case "whirl": return withIt.made > bare.made || withIt.damage > bare.damage;
     case "field": return withIt.fires > bare.fires;
     case "ward": return withIt.wards > bare.wards;
     case "repeat": case "spread": return withIt.made > bare.made;
@@ -330,10 +362,10 @@ function observable(a: SpellAffix, bare: Seen, withIt: Seen): boolean {
 }
 
 const bareCache = new Map<string, Seen>();
-function bare(spell: string, scenario: Scenario): Seen {
-  const key = `${spell}:${scenario}`;
+function bare(spell: string, scenario: Scenario, alongside: readonly string[] = []): Seen {
+  const key = `${spell}:${scenario}:${alongside.join(",")}`;
   let s = bareCache.get(key);
-  if (!s) { s = run(spell, scenario); bareCache.set(key, s); }
+  if (!s) { s = run(spell, scenario, undefined, alongside); bareCache.set(key, s); }
   return s;
 }
 
@@ -344,10 +376,11 @@ describe("every affix does something on every shape it lists", () => {
       it(`${a.id} on ${shape} (${spell})`, () => {
         // The representative must itself be able to take the affix, or the
         // offer would never deal it there and the claim is untested.
-        expect(affixFitsSpell(a, ITEMS.get(spell), [])).toBe(true);
+        const alongside = ALONGSIDE[a.id] ?? [];
+        expect(affixFitsSpell(a, ITEMS.get(spell), alongside)).toBe(true);
         const scenario = scenarioOf(a);
-        const seen = run(spell, scenario, a);
-        expect({ affix: a.id, shape, seen: observable(a, bare(spell, scenario), seen) })
+        const seen = run(spell, scenario, a, alongside);
+        expect({ affix: a.id, shape, seen: observable(a, bare(spell, scenario, alongside), seen) })
           .toEqual({ affix: a.id, shape, seen: true });
       });
     }

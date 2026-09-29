@@ -357,6 +357,8 @@ export interface LooseDoom {
   damage: number;
   radius: number;
   spellIndex: number;
+  /** What the burst reads as, for the damage number and the bench: a doom's by default. */
+  tag?: string;
 }
 
 /**

@@ -1069,6 +1069,45 @@ from a list, ask each item on its own — one Noul each — and let code set how
 sharply the judgements are read; a choice distribution used as a sampling
 distribution is a draw from the winners.
 
+### 36. The affix pool was smaller than a run; Jev's draw was not the cause (2026-09-29)
+Reported from play: "a few runs in, it is the same affixes over and over,
+especially on the Jev arm". Measured with `pnpm card-exposure` (five runs on
+each arm, styles rotated): the Jev arm's runs met **16.8 affix cards** against
+a pool that a build could actually be dealt of **12.9 on average** (the rule
+arm met 8.5). A run saw the whole pool it could be dealt, and the next run of
+the same style saw the same pool. The draw added to it — harvest held 2.1×
+a uniform share, the infusions Kindle and Rime 0.26× and 0.29× — but no draw
+spreads seventeen cards over thirteen without repeating.
+
+The pool was also lopsided by shape: fourteen of the twenty-two affixes hang
+on a projectile's hit, kill, expiry or wall, so a bolt starter could be dealt
+eighteen and Earth Spikes nine, Crescent Edge ten, Counter Stance six. On a
+strength-I door a non-projectile staff drew from the six any-shape cards,
+three of them the infusions.
+
+**Now:** six affixes at moments every shape reaches or the projectile keys
+lacked (`repulse`, `aftershock`, `parting`, `whirl`, `spillover`, `drag`), so
+a bolt starter can be dealt 23, Earth Spikes 13, Crescent Edge 15. Same seeds,
+Jev arm:
+
+| | before | after |
+|---|---|---|
+| affixes a build could be dealt, mean per offer | 12.9 | **17.2** |
+| affixes ever on a screen, five runs | 19 of 22 | 23 of 28 |
+| hottest affix, share against uniform | harvest 2.10× | harvest 1.93× |
+| Kindle / Rime against uniform | 0.26× / 0.29× | 0.82× / 0.73× |
+| top quarter of the pool's share of exposure | 55% | 45% |
+| affix cards a run / distinct | 16.8 / 11.8 | 16.8 / 11.8 |
+
+Across runs the offer spread; **inside one run it did not**: five of every
+seventeen affix cards are still ones the run has shown, because a card Jev
+rates highly keeps most of its mass through `CARD_REPEAT_PENALTY` once its
+yes is raised to the fourth power. That is a sequence property, and so code's
+(finding 15), not something to ask Jev.
+
+**Rule:** size a card pool against the cards a run is shown, per build and not
+over the roster; a pool a run exhausts repeats whatever the Director does.
+
 ## Standing rules that follow
 - State: facts from play, in words, with counts precomputed; no verdicts, no
   prescriptions; every coined term explained. An instruction may name a fact

@@ -35,7 +35,8 @@ interface Lane {
 }
 
 /**
- * The six lanes, disjoint over the twenty affixes, so an answer moves a real
+ * The six lanes, disjoint over the affixes (the run's own three, which only a
+ * wake takes, belong to none), so an answer moves a real
  * set rather than a fuzzy one. Their fit clauses are disjoint too — `archetype`
  * names one lane each, never three — because a lane that matches twice on one
  * underlying fact wins on the count rather than on the merits. `cheaper` said
@@ -73,19 +74,19 @@ export const AFFIX_LANES: Readonly<Record<AffixIntent, Lane>> = {
     fits: [["cast_rate", "slow"]],
   },
   elemental: {
-    affixes: ["kindle", "rime", "blight"],
-    words: ["fire", "burn", "ice", "freeze", "frozen", "chill", "shatter", "poison", "venom", "element", "status"],
+    affixes: ["kindle", "rime", "blight", "spillover"],
+    words: ["fire", "burn", "ice", "freeze", "frozen", "chill", "shatter", "poison", "venom", "element", "status", "spread"],
     text:
       "Any spell carries an element: Kindle burns, Rime chills toward a freeze and a frozen body shatters for triple, "
-      + "Blight poisons.",
+      + "Blight poisons, and Spillover hands what a killed body carried on to the bodies near it.",
     fits: [["keys_lean", "dot", "area"], ["intent_preset", "dot", "area"]],
   },
   heavier: {
-    affixes: ["fork", "pierce", "shatter", "brand"],
+    affixes: ["fork", "pierce", "shatter", "brand", "aftershock"],
     words: ["damage", "big", "hard", "heavy", "hurt", "nuke", "pierce", "through"],
     phrases: ["big hit", "one shot", "hits hard", "one big"],
-    text: "A shot that lands more than once: Fork splits on impact, Pierce passes through, Brand sets off a mark "
-      + "on the next hit, Shatter splits on a wall.",
+    text: "A cast that lands more than once: Fork splits on impact, Pierce passes through, Brand sets off a mark "
+      + "on the next hit, Shatter splits on a wall, Aftershock bursts the ground under a body a beat after the cast.",
     fits: [["keys_lean", "nuke"], ["intent_preset", "nuke"], ["damage_rate", "low"]],
   },
   wider: {
@@ -97,11 +98,13 @@ export const AFFIX_LANES: Readonly<Record<AffixIntent, Lane>> = {
     fits: [["keys_lean", "area", "spam"], ["intent_preset", "area", "spam"], ["movement_pressure_recent", "heavy"]],
   },
   survival: {
-    affixes: ["ward", "retort", "slipstream", "resonance"],
-    words: ["survive", "safe", "defend", "block", "shield", "melee", "sword", "dash", "tank"],
+    affixes: ["ward", "retort", "slipstream", "resonance", "repulse", "parting", "whirl", "drag"],
+    words: ["survive", "safe", "defend", "block", "shield", "melee", "sword", "dash", "tank", "spin", "knockback", "pull"],
     phrases: ["stay alive", "keep dying", "sword range", "up close"],
     text: "Casts fired off the fight at close quarters: Ward leaves a rune that stops shots, Retort casts back "
-      + "at a hit, Slipstream casts through a dashed body, Resonance casts from the sword.",
+      + "at a hit, Slipstream casts through a dashed body, Parting Shot casts back from where a dash began, "
+      + "Resonance casts from the sword and Whirl from its spin, Repulse throws back what is close, and Drag "
+      + "pulls a hit body into sword reach.",
     fits: [["health", "low", "critical"], ["hurt_by", "blades"], ["intent_preset", "melee"]],
   },
 };
@@ -164,7 +167,8 @@ export const LANE_SPEC: Readonly<Record<AffixIntent, OptionSpec>> = {
   },
   heavier: {
     what: AFFIX_LANES.heavier.text,
-    not_for: "A build whose hits already kill what they land on, and a spell that throws no projectile.",
+    not_for: "A build whose hits already kill what they land on, and a spell that throws no projectile, where "
+      + "only Aftershock has something to land with.",
   },
   wider: {
     what: AFFIX_LANES.wider.text,

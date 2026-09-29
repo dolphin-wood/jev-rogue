@@ -491,4 +491,10 @@ export const EN = {
   "affixtier.momentum": "each body cut carries the run on",
   "affixtier.undertow": "the wake draws bodies in",
   "affixtier.finale": "the run ends in a thrown cut",
+  "affixtier.repulse": "the cast throws back what is close",
+  "affixtier.parting": "dashing away casts it behind",
+  "affixtier.aftershock": "the ground under a body bursts after",
+  "affixtier.whirl": "the spin casts it round you",
+  "affixtier.spillover": "a kill spreads its statuses",
+  "affixtier.drag": "hits pull bodies in",
 } as const;

@@ -60,6 +60,9 @@ interface Seen {
   readonly poison: number;
   readonly chill: number;
   readonly damage: number;
+  /** Casts that threw bodies back (`repulse`), and damage the bursts under a body dealt (`aftershock`). */
+  readonly repulses: number;
+  readonly aftershock: number;
 }
 
 function cast(affix?: string): Seen {
@@ -90,9 +93,11 @@ function cast(affix?: string): Seen {
     return e;
   });
   const aim = { ...NO_INPUT, aimX: PX + 200, aimY: PY };
-  let eruptions = 0, burn = 0, poison = 0, chill = 0;
+  let eruptions = 0, burn = 0, poison = 0, chill = 0, repulses = 0, aftershock = 0;
   const observe = (): void => {
     eruptions += w.events.filter((e) => e.kind === "eruption").length;
+    repulses += w.events.filter((e) => e.kind === "shot" && e.what === "repulse").length;
+    for (const e of w.events) if (e.kind === "damage" && e.what === "hp:aftershock") aftershock += e.amount ?? 0;
     for (const e of bodies) {
       burn = Math.max(burn, e.burnBuild + (e.burnMs > 0 ? 1 : 0));
       poison = Math.max(poison, e.poisonBuild + e.poisonStacks);
@@ -106,7 +111,7 @@ function cast(affix?: string): Seen {
     observe();
   }
   const damage = bodies.reduce((t, e) => t + (100_000 - e.hp), 0);
-  return { eruptions, wards: w.wards.length, burn, poison, chill, damage };
+  return { eruptions, wards: w.wards.length, burn, poison, chill, damage, repulses, aftershock };
 }
 
 /**
@@ -121,6 +126,8 @@ function observable(a: SpellAffix, bare: Seen, withIt: Seen): boolean | null {
     // The side casts are lines of ground in other directions: more cells go off.
     case "spread": return withIt.eruptions > bare.eruptions;
     case "ward": return withIt.wards > bare.wards;
+    case "repulse": return withIt.repulses > bare.repulses;
+    case "aftershock": return withIt.aftershock > bare.aftershock;
     case "shape":
       if (e.element === "fire") return withIt.burn > bare.burn;
       if (e.element === "poison") return withIt.poison > bare.poison;
@@ -144,11 +151,12 @@ describe("the eruption shape", () => {
     expect([bare.wards, bare.burn, bare.poison, bare.chill]).toEqual([0, 0, 0, 0]);
     const listed = SPELL_AFFIXES.filter((a) => a.shapes.includes("eruption"));
     expect(listed.map((a) => a.id).sort()).toEqual(
-      ["blight", "kindle", "repeat", "resonance", "retort", "rime", "scatter", "slipstream", "ward"]);
+      ["aftershock", "blight", "kindle", "parting", "repeat", "repulse", "resonance", "retort", "rime", "scatter",
+        "slipstream", "ward", "whirl"]);
     /*
-     * The cast-time ones here, on a press. `retort`, `slipstream` and
-     * `resonance` fire the eruption free from a hit taken, a dash and the
-     * sword, which this press cannot set off; `affix-shapes.test.ts` sets off
+     * The cast-time ones here, on a press. `retort`, `slipstream`,
+     * `parting`, `resonance` and `whirl` fire the eruption free from a hit
+     * taken, a dash, the sword and its spin, which this press cannot set off; `affix-shapes.test.ts` sets off
      * each of them on every shape they list, this one included.
      */
     for (const a of listed.filter((x) => x.hook === "cast")) {

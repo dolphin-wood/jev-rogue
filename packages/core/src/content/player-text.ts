@@ -80,6 +80,12 @@ export const PLAYER_TEXT: Readonly<Record<string, string>> = {
   momentum: "Each enemy your dash cuts through carries the dash further, up to three times.",
   undertow: "The sword energy on both sides of your dash pulls enemies in toward its path instead of knocking them away.",
   finale: "When your dash ends, it throws a crescent of sword energy forward that hits every enemy in its reach.",
+  repulse: "Casting knocks nearby enemies back, giving you room.",
+  parting: "Each dash casts this spell at the nearest enemy from where you started, at no mana cost.",
+  aftershock: "A moment after you cast, the ground under the nearest enemy bursts, hitting everything around it.",
+  whirl: "Your spin attack casts this spell at up to three nearby enemies at no mana cost.",
+  spillover: "Enemies killed by this spell pass their burn, chill and poison to enemies nearby.",
+  drag: "Hits pull enemies toward you instead of knocking them away.",
 
   /* --------------------------------- stats ------------------------------- */
   fleet: "Move faster.",

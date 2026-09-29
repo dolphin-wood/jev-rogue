@@ -483,4 +483,10 @@ export const JA: Table = {
   "affixtier.momentum": "斬り抜けるたびにさらに進む",
   "affixtier.undertow": "剣気が敵を引き寄せる",
   "affixtier.finale": "終わりに剣気を放つ",
+  "affixtier.repulse": "詠唱で近くの敵を弾き飛ばす",
+  "affixtier.parting": "ダッシュの起点から詠唱",
+  "affixtier.aftershock": "少し後に敵の足元が爆ぜる",
+  "affixtier.whirl": "回転斬りで詠唱",
+  "affixtier.spillover": "撃破で状態異常が広がる",
+  "affixtier.drag": "当てた敵を引き寄せる",
 };

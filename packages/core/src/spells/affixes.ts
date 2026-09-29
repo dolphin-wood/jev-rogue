@@ -35,6 +35,7 @@
  * | `hurt` | the player takes a hit |
  * | `dash` | the player dashes through a body |
  * | `swing` | the sword connects |
+ * | `spin` | the sword's spin starts |
  *
  * ### Two things are called "affix" in this repository
  *
@@ -100,7 +101,7 @@ export const SPELL_SHAPES: readonly SpellShape[] = [
 const HITTING: readonly SpellShape[] = ["bolt", "orbit", "boomerang", "orb", "enchant"];
 
 /** The moments an affix can attach to. Every one already exists in `sim`. */
-export type AffixHook = "hit" | "expire" | "wall" | "kill" | "cast" | "hurt" | "dash" | "swing";
+export type AffixHook = "hit" | "expire" | "wall" | "kill" | "cast" | "hurt" | "dash" | "swing" | "spin";
 
 /**
  * What happens at the hook.
@@ -148,7 +149,19 @@ export type AffixEffect =
   /** A run's wake draws bodies in to the run's line, at `pull` of its shove, instead of throwing them off. */
   | { readonly kind: "undertow"; readonly pull: number }
   /** A run ends by throwing its cut on ahead: a crescent at `share` of the cut, out `reachPx`. */
-  | { readonly kind: "finale"; readonly share: number; readonly reachPx: number };
+  | { readonly kind: "finale"; readonly share: number; readonly reachPx: number }
+  /** Throws the bodies within `radiusPx` of the caster back, at `push` px/s of shove. */
+  | { readonly kind: "repulse"; readonly radiusPx: number; readonly push: number }
+  /** At a dash's start, casts the spell free from there at the nearest body within `rangePx`. */
+  | { readonly kind: "parting"; readonly rangePx: number }
+  /** Casts the spell, free, at up to `targets` of the nearest bodies. */
+  | { readonly kind: "whirl"; readonly targets: number }
+  /** Hands the body's statuses to every body within `radiusPx`. */
+  | { readonly kind: "spill"; readonly radiusPx: number }
+  /** Draws the body `px` toward the caster. */
+  | { readonly kind: "drag"; readonly px: number }
+  /** The ground under the nearest body within `rangePx` bursts for `radiusPx`, `delayMs` after the cast. */
+  | { readonly kind: "aftershock"; readonly rangePx: number; readonly radiusPx: number; readonly delayMs: number };
 
 export interface SpellAffix {
   readonly id: string;
@@ -596,6 +609,105 @@ BASE_AFFIXES.push(
   },
 );
 
+/*
+ * **The shapes the pool had left short** (the second expansion). Measured
+ * over the roster, a projectile key could be dealt eighteen affixes and every
+ * other shape six to nine: fourteen of the pool hang on a projectile's hit,
+ * kill, expiry or wall, so a staff of ground, a run, a ring or a guard drew
+ * the same six any-shape cards — three of them the element infusions — on
+ * every strength-I door. Reported from play as "the same affixes every run".
+ *
+ * These six add events at moments every shape reaches (the cast, the dash,
+ * the spin) and two the projectile keys did not have (a kill that passes a
+ * status on, a hit that pulls rather than pushes):
+ *
+ * - `repulse` — the cast shoves back what is close: room to cast from.
+ * - `parting` — a dash casts the spell back from where it began: a retreat
+ *   that fights. `slipstream` needs the dash to go *through* a body; this
+ *   one pays on the way out.
+ * - `aftershock` — the ground under the nearest body goes off a beat after
+ *   the cast, for what the press cost: a second landing for any shape.
+ * - `whirl` — the spin casts the spell at the bodies round it: the rage
+ *   gauge becomes a spell key too.
+ * - `spillover` — a kill hands its burn, chill and poison to the bodies near
+ *   it: a status build that spreads.
+ * - `drag` — a hit pulls the body toward the caster: a ranged key that feeds
+ *   the sword.
+ */
+BASE_AFFIXES.push(
+  {
+    id: "repulse",
+    name: "Repulse",
+    hook: "cast",
+    shapes: [...SPELL_SHAPES],
+    element: null,
+    effect: { kind: "repulse", radiusPx: 60, push: 300 },
+    text: "the cast throws back what is close",
+    description:
+      "Casting throws the bodies close round the caster back a step, clearing room to cast the next one from.",
+  },
+  {
+    id: "parting",
+    name: "Parting Shot",
+    hook: "dash",
+    // Every shape: a free cast is the spell's own shape at the body (`fireUnit`).
+    shapes: [...SPELL_SHAPES],
+    element: null,
+    effect: { kind: "parting", rangePx: 260 },
+    text: "dashing away casts it behind",
+    description:
+      "Each dash casts this spell, free, from where the dash began at the nearest body, so a retreat leaves "
+      + "something behind it.",
+  },
+  {
+    id: "aftershock",
+    name: "Aftershock",
+    hook: "cast",
+    shapes: [...SPELL_SHAPES],
+    element: null,
+    effect: { kind: "aftershock", rangePx: 220, radiusPx: 40, delayMs: 650 },
+    text: "the ground under a body bursts after",
+    description:
+      "A beat after the cast, the ground under the nearest body bursts, hitting what stands round it for a "
+      + "share of what the cast cost in mana.",
+  },
+  {
+    id: "whirl",
+    name: "Whirl",
+    hook: "spin",
+    // A stance forbids the swing, and the spin with it: the spin that raised one would end at once.
+    shapes: SPELL_SHAPES.filter((s) => s !== "stance"),
+    element: null,
+    effect: { kind: "whirl", targets: 3 },
+    text: "the spin casts it round you",
+    description:
+      "The sword's spin casts this spell, free, at up to three of the nearest bodies as it starts.",
+  },
+  {
+    id: "spillover",
+    name: "Spillover",
+    hook: "kill",
+    shapes: [...HITTING],
+    element: null,
+    effect: { kind: "spill", radiusPx: 72 },
+    text: "a kill spreads its statuses",
+    description:
+      "A body this spell kills hands its burn, chill and poison, and the element of the hit that killed it, on "
+      + "to the bodies near it as it falls.",
+  },
+  {
+    id: "drag",
+    name: "Drag",
+    hook: "hit",
+    shapes: [...HITTING],
+    element: null,
+    effect: { kind: "drag", px: 34 },
+    text: "hits pull bodies in",
+    description:
+      "Each hit pulls the body a step toward the caster instead of leaving it where it stood, into sword reach.",
+  },
+);
+
 /** The affixes that change a run, and need its wake to mean anything. */
 const RUN_AFFIXES: ReadonlySet<string> = new Set(["momentum", "undertow", "finale"]);
 
@@ -613,6 +725,8 @@ const STRENGTH_FLOOR: Readonly<Record<string, 2 | 3>> = {
   repeat: 3, chain: 3, brand: 3, haste: 3,
   scatter: 2, resonance: 2, fork: 2,
   momentum: 2, undertow: 2, finale: 2,
+  // A second landing and three free casts a spin: both multiply what one press or one spin is worth.
+  aftershock: 2, whirl: 2,
 };
 for (const a of BASE_AFFIXES) {
   const floor = STRENGTH_FLOOR[a.id];
@@ -692,7 +806,21 @@ export function affixFitsSpell(affix: SpellAffix, item: Pick<BaseItem, "params">
   if (affix.id === "seek" && Number(item?.params["seek"] ?? 0) >= STRONG_SEEK) return false;
   if (affix.id === "pierce" && Number(item?.params["pierce"] ?? 0) >= PIERCES_ALL) return false;
   if (affix.id === "fork" && Number(item?.params["spread"] ?? 0) >= 180) return false;
+  /*
+   * **A status to spill.** `spillover` hands on what the body carried, and a
+   * spell with no element and no infusion puts nothing on it to hand on.
+   */
+  if (affix.id === "spillover" && !carriesElement(item, held)) return false;
   return true;
+}
+
+/** The infusions: an affix that gives a spell an element of its own. */
+const INFUSIONS: readonly string[] = ["kindle", "rime", "blight"];
+
+/** Whether a spell's hits put a status on a body: its own element, or an infusion it holds. */
+function carriesElement(item: Pick<BaseItem, "params"> | null | undefined, held: readonly string[]): boolean {
+  const el = item?.params["element"];
+  return (typeof el === "string" && el !== "none") || held.some((id) => INFUSIONS.includes(id));
 }
 
 /** What the card and the staff screen say about where an affix goes. */

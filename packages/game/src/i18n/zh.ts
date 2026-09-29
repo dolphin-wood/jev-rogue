@@ -484,4 +484,10 @@ export const ZH: Table = {
   "affixtier.momentum": "每斩过一个敌人，冲刺多冲一段",
   "affixtier.undertow": "剑气把敌人吸向路线",
   "affixtier.finale": "冲刺结束时甩出剑气",
+  "affixtier.repulse": "施法时震退身边的敌人",
+  "affixtier.parting": "冲刺时从起点施放",
+  "affixtier.aftershock": "片刻后敌人脚下爆开",
+  "affixtier.whirl": "回旋斩时施放",
+  "affixtier.spillover": "击杀时状态蔓延",
+  "affixtier.drag": "命中时把敌人拉近",
 };

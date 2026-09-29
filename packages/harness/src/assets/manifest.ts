@@ -438,6 +438,9 @@ export const MANIFEST: FrameSpec[] = (() => {
   out.push(frame("icon_affix_resonance", "s32", true, false, [16, 16]));
   // Drawn as text (`assets/icons`): the run's own affixes.
   for (const id of ["momentum", "undertow", "finale"]) out.push(frame(`icon_affix_${id}`, "s32", true, false, [16, 16]));
+  // And the second expansion's, drawn as text the same way.
+  for (const id of ["repulse", "parting", "aftershock", "whirl", "spillover", "drag"])
+    out.push(frame(`icon_affix_${id}`, "s32", true, false, [16, 16]));
   for (const id of [
     "fleet", "second_wind", "long_stride", "vigour", "steady_nerve",
     "deep_well", "quickening", "leeching_edge", "keen_edge", "long_reach", "swift_hand",

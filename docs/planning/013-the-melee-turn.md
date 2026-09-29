@@ -445,6 +445,7 @@ pool from a wishlist:
 | `hurt` | the player takes a hit |
 | `dash` | the player dashes |
 | `swing` | a sword hit connects |
+| `spin` | the sword's spin starts |
 
 The simulation already fires a spell's effect at a position and at a body, so
 an affix is a *use* of existing machinery rather than a request for new
@@ -463,13 +464,16 @@ dead draw dressed as a choice is worse than a smaller pool.
 | affix | hook | fits |
 |---|---|---|
 | Fork, Shatter, Pierce, Seek, Ricochet | hit / wall / cast | bolt |
-| Chain, Brand, Harvest, Haste | hit / kill | bolt, orbit, boomerang, orb, enchant |
-| Bloom | expire | bolt, orbit, enchant |
+| Chain | hit | bolt, boomerang, orb |
+| Brand, Harvest, Haste, Drag | hit / kill | bolt, orbit, boomerang, orb, enchant |
+| Spillover | kill | the same, on a spell that carries an element of its own or an infusion: a kill hands the body's burn, chill and poison, and the killing hit's element, to the bodies near it |
+| Bloom | expire | bolt, orbit |
 | Repeat | cast | bolt, eruption, boomerang |
 | Scatter | cast | bolt, field, pillar, vortex, dash, eruption, boomerang |
-| Ward, Kindle, Rime, Blight | cast | any spell |
-| Retort, Slipstream | hurt / dash | any spell |
-| Resonance | swing | any spell but a stance, which forbids the swing it counts: every fifth, fourth or third connecting sword hit casts the spell at the body struck, free — the melee build's affix |
+| Ward, Kindle, Rime, Blight, Repulse, Aftershock | cast | any spell |
+| Retort, Slipstream, Parting Shot | hurt / dash | any spell |
+| Resonance, Whirl | swing / spin | any spell but a stance, which forbids the swing it counts: every fifth connecting sword hit, or the start of a spin, casts the spell free — the melee build's affixes |
+| Momentum, Undertow, Finale | cast | a dash with a wake (Dash Slash) |
 
 A spell cast by an affix — a `scatter` side cast, a `retort`, a `slipstream`,
 a `resonance` — is **the spell's own shape**, fired from the caster toward the
@@ -490,18 +494,26 @@ Four things the composition of the pool is doing deliberately:
 - **`repeat` is the only way a spell casts more than once**, attached to a
   spell the player named rather than being a spell of its own with nothing to
   repeat.
-- **Two of them fire when the player is losing** (`retort`, `slipstream`). A
-  pool that only pays out while winning is a pool that widens every gap it is
-  meant to close.
+- **Several fire when the player is losing** (`retort`, `slipstream`,
+  `parting`, `repulse`). A pool that only pays out while winning is a pool
+  that widens every gap it is meant to close.
 - **`shatter` makes a cluttered room better than an open one**, which is the
   only thing in the build system that argues with doc 015's geometry rather
   than agreeing with it. That tension is wanted.
-- **The pool a build can draw from stays close to its slots.** There are
-  twenty affixes, but an offer deals only those a held spell can take, so a
-  build of three spells draws from roughly ten to fourteen against its nine
-  slots. Duplicates are supposed to be common, because a duplicate is an
-  upgrade; a pool much larger than the slots would make duplicates rare and
-  turn the ladder back into a stat screen.
+- **The pool a build can draw from is larger than what a run is shown.** An
+  affix is one fixed effect and a key that holds one is not dealt it again,
+  so a duplicate is not an upgrade: a card the run has already seen is only a
+  repeat. What sizes the pool is how many affix cards a run meets — measured
+  on the Jev arm, about seventeen, against the thirteen a build could be dealt
+  when the pool held twenty-two — and a pool smaller than that is a run that
+  sees all of it, and the next run seeing the same. The pool is twenty-eight,
+  and **every shape gets a share of it**: fourteen of the first twenty-two
+  hung on a projectile's hooks, so a staff of ground, a run or a guard drew
+  the same six any-shape cards, three of them the infusions, on every
+  strength-I door. `repulse`, `aftershock`, `parting` and `whirl` act at
+  moments every shape reaches; `drag` and `spillover` give the projectile
+  keys a pull and a spread. A bolt starter can now be dealt twenty-three,
+  Earth Spikes thirteen and Crescent Edge fifteen.
 
 The implementation follows the same rule. A spell's affixes ride the cast scope
 onto every projectile it fires, so a bullet knows what it carries when it hits,

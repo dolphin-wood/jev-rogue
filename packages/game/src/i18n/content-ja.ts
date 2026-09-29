@@ -77,6 +77,12 @@ export const JA_CONTENT: ContentTable = {
   momentum: { name: "モメンタム", description: "ダッシュで敵を斬り抜けるたび、さらに少し先まで突き進む。最大3回。" },
   undertow: { name: "アンダートウ", description: "ダッシュの両側の剣気が敵を弾き飛ばさず、進路へ引き寄せる。ダッシュ自体は敵を少し前へ押すだけになる。" },
   finale: { name: "フィナーレ", description: "ダッシュの終わりに、前方へ三日月の剣気を放ち、届く範囲の敵をすべて貫く。" },
+  repulse: { name: "リパルス", description: "詠唱すると近くの敵を一歩弾き飛ばし、次の詠唱の間合いを作る。" },
+  parting: { name: "パーティングショット", description: "ダッシュするたび、ダッシュの起点から一番近い敵へこの呪文をマナなしで詠唱する。" },
+  aftershock: { name: "アフターショック", description: "詠唱の少し後、一番近い敵の足元が爆ぜて周りの敵にも当たる。威力は詠唱に使ったマナで決まる。" },
+  whirl: { name: "ワール", description: "回転斬りの始まりに、近くの敵最大3体へこの呪文をマナなしで詠唱する。" },
+  spillover: { name: "スピルオーバー", description: "この呪文で倒した敵は、燃焼・冷気・毒を近くの敵へ移しながら倒れる。" },
+  drag: { name: "ドラッグ", description: "当てた敵を弾き飛ばさず自分の方へ引き寄せ、剣の間合いに入れる。" },
 
   /* --------------------------------- stats ------------------------------- */
   fleet: { name: "俊足", description: "移動が速くなる。" },

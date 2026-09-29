@@ -795,7 +795,7 @@ function release(
      * keep up let the bank fill and every echo fired all of it again.
      */
     world.echoes.push({ slot: pressed, delayMs: repeatGapMs(items, slot.item.base) * i, n: i, charge: opts.charge });
-  onCast(world, slot);
+  onCast(world, slot, pressed, cost);
   return { shots, refused: null };
 }
 

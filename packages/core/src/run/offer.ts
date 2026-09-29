@@ -686,12 +686,15 @@ const GAP_SPELL_TAGS: Readonly<Record<string, readonly string[]>> = {
   damage: ["nuke", "area"], cast_frequency: ["spam"], mana: ["spam"], accuracy: ["tracking", "area"],
 };
 const GAP_AFFIXES: Readonly<Record<string, readonly string[]>> = {
-  damage: ["brand", "fork", "pierce", "kindle", "blight", "harvest"], cast_frequency: ["haste", "repeat", "resonance"],
+  damage: ["brand", "fork", "pierce", "kindle", "blight", "harvest", "aftershock"],
+  cast_frequency: ["haste", "repeat", "resonance", "whirl", "parting"],
   mana: [], accuracy: ["seek", "chain", "scatter"],
 };
 const GAP_FAMILIES: Readonly<Record<string, readonly string[]>> = {
   damage: ["sword"], cast_frequency: ["mana"], mana: ["mana"], accuracy: ["movement"],
 };
+/** The affixes a hurt run is short of: a rune, a riposte, room cleared round the caster, a retreat that fires. */
+const HURT_AFFIXES: readonly string[] = ["ward", "retort", "repulse", "parting"];
 /** The infusion affix for each element, for `synergy`. */
 const INFUSION: Readonly<Record<string, string>> = { fire: "kindle", ice: "rime", poison: "blight" };
 
@@ -775,16 +778,24 @@ export interface CardPool {
  *   (the sword casts the spell), `retort` (a hit taken), `slipstream` (a dash
  *   through a body) and `ward` (a rune where the caster stands).
  *
+ * - The second expansion reads the same way: `parting` (a dash casts back
+ *   from where it began) keeps a Barrage or an Affliction caster moving and
+ *   pressing; `aftershock` lands a committed cast twice (Heavy) and on the
+ *   body's neighbours (Crowd); `repulse` clears room to cast from (Heavy)
+ *   and throws a pack off a sword (Blade); `spillover` spreads a status
+ *   (Affliction); `whirl` and `drag` are the sword's: the spin casts, and a
+ *   hit pulls the body into reach.
+ *
  * Every affix reads as at least one style, so a taken affix always counts
- * toward something; `fork` and `brand` read as two, because their event
- * works two verbs.
+ * toward something; `fork`, `brand`, `parting`, `aftershock` and `repulse`
+ * read as two, because their event works two verbs.
  */
 const AFFIX_STYLE: Readonly<Record<string, readonly string[]>> = {
-  spam: ["repeat", "fork", "seek", "ricochet"],
-  nuke: ["haste", "shatter", "fork", "brand", "rime"],
-  area: ["scatter", "chain", "harvest", "pierce"],
-  dot: ["kindle", "blight", "bloom", "brand"],
-  melee: ["resonance", "retort", "slipstream", "ward", "momentum", "undertow", "finale"],
+  spam: ["repeat", "fork", "seek", "ricochet", "parting"],
+  nuke: ["haste", "shatter", "fork", "brand", "rime", "aftershock", "repulse"],
+  area: ["scatter", "chain", "harvest", "pierce", "aftershock"],
+  dot: ["kindle", "blight", "bloom", "brand", "spillover", "parting"],
+  melee: ["resonance", "retort", "slipstream", "ward", "momentum", "undertow", "finale", "whirl", "drag", "repulse"],
 };
 
 /**
@@ -903,10 +914,10 @@ export function cardPool(
       facts: [
         ...when(!!style && !!AFFIX_STYLE[style]?.includes(a.id), "style"),
         ...when(revealed.some((t) => AFFIX_STYLE[t]?.includes(a.id)), "build"),
-        ...when(!!needs.hurt && (a.id === "ward" || a.id === "retort"), "need"),
+        ...when(!!needs.hurt && HURT_AFFIXES.includes(a.id), "need"),
         ...when(!!GAP_AFFIXES[neck]?.includes(a.id), "eases"),
         // An infusion for an element already held, or a gauge affix on a status build.
-        ...when(elements.some((el) => INFUSION[el] === a.id), "synergy"),
+        ...when(elements.some((el) => INFUSION[el] === a.id) || (a.id === "spillover" && elements.length > 0), "synergy"),
       ],
     }));
   }
@@ -1059,6 +1070,8 @@ export interface HeldSpell {
   /** Its own steer and pierce: a shot that already hunts or passes through everything takes no `seek` or `pierce`. */
   readonly seek?: number;
   readonly pierce?: number;
+  /** Its own element, `none` or absent for none: `spillover` needs a status to spill. */
+  readonly element?: string;
   /** Affix ids already attached, which both exclude and upgrade. */
   readonly affixes: readonly string[];
 }
@@ -1072,7 +1085,8 @@ export function heldSpell(
     ...(item?.id ? { id: item.id } : {}),
     shape: itemShape(item), count: Number(item?.params["count"] ?? 1),
     spread: Number(item?.params["spread"] ?? 0), wake: Number(item?.params["wake_reach"] ?? 0),
-    seek: Number(item?.params["seek"] ?? 0), pierce: Number(item?.params["pierce"] ?? 0), affixes,
+    seek: Number(item?.params["seek"] ?? 0), pierce: Number(item?.params["pierce"] ?? 0),
+    element: String(item?.params["element"] ?? "none"), affixes,
   };
 }
 
@@ -1095,7 +1109,7 @@ export function affixFitsHeld(affix: SpellAffix, key: HeldSpell): boolean {
   return affixFitsSpell(affix, {
     params: {
       shape: key.shape, count: key.count, spread: key.spread ?? 0, wake_reach: key.wake ?? 0,
-      seek: key.seek ?? 0, pierce: key.pierce ?? 0,
+      seek: key.seek ?? 0, pierce: key.pierce ?? 0, element: key.element ?? "none",
     },
   }, key.affixes);
 }

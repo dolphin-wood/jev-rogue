@@ -3,7 +3,7 @@ id: 007
 title: Rewards and Build Director
 status: proposed
 date: 2026-09-21
-summary: Intent at run start (a build style and free text), revealed preference and the staff written out key by key feed one card request per offer. Card selection is the Director's main job and the part that is genuinely semantic, so the two questions that shape an offer carry the Director's brief — the standing rules of roguelike reward design, as words rather than as code rules. `build_shape` says how complete the build is, each reward kind owns one of its levels, and `spell_levels`, `affix_slots_open` and `casts_per_bar` say what the staff still has room for. The door has already fixed the reward kind, so Jev judges each of that kind's legal cards on its own — one Noul per card, "does this card belong on this screen" — plus a variety level; code draws in proportion to each card's yes raised to a power the variety answer picks, samples two and adds one wildcard (the rule arm keeps the three choice axes, overall, style and needs, and blends them), with code-owned pity, temptation and the full-staff guarantee of an upgrade beside a replacement. An affix offer also carries the affix intent, one of six lanes over the twenty affixes. The merchant's shelf, pool exhaustion and rule precedence are defined.
+summary: Intent at run start (a build style and free text), revealed preference and the staff written out key by key feed one card request per offer. Card selection is the Director's main job and the part that is genuinely semantic, so the two questions that shape an offer carry the Director's brief — the standing rules of roguelike reward design, as words rather than as code rules. `build_shape` says how complete the build is, each reward kind owns one of its levels, and `spell_levels`, `affix_slots_open` and `casts_per_bar` say what the staff still has room for. The door has already fixed the reward kind, so Jev judges each of that kind's legal cards on its own — one Noul per card, "does this card belong on this screen" — plus a variety level; code draws in proportion to each card's yes raised to a power the variety answer picks, samples two and adds one wildcard (the rule arm keeps the three choice axes, overall, style and needs, and blends them), with code-owned pity, temptation and the full-staff guarantee of an upgrade beside a replacement. An affix offer also carries the affix intent, one of six lanes over the affixes. The merchant's shelf, pool exhaustion and rule precedence are defined.
 depends_on: [002, 003, 006]
 ---
 
@@ -224,7 +224,7 @@ being used for its own sake.
 
 **Card selection is the part that is genuinely semantic**, and it is where the
 Director's judgement should be spent. Choosing between thirty spell
-descriptions, twenty affix descriptions or twelve stat descriptions,
+descriptions, twenty-eight affix descriptions or twelve stat descriptions,
 weighed against a staff written out key by key and against a sentence the
 player typed in their own words, is reading and judging fit. No weight table
 reads "Shock Arc, level 5, storm school, no element, dear to cast, carries rime,
@@ -373,30 +373,29 @@ is the only offer whose direction the player can state in words. That direction
 is one question, `affix_intent`, asked with an affix offer and only with one,
 in the same request as the cards it steers.
 
-The options are six **lanes**, disjoint over the twenty affixes, so an answer
-names a real set:
+The options are six **lanes**, disjoint over the affixes (the run's own three,
+which only a dash with a wake can take, belong to none), so an answer names a
+real set:
 
 | Lane | Affixes | Fits |
 |---|---|---|
 | `homing` | seek, ricochet | few bodies hit per shot, a run in which the sword has done nothing |
 | `cheaper` | haste | a slow cast rate (no affix gives mana back; running dry is the mana family's) |
-| `elemental` | kindle, rime, blight | keys leaning, or a stated style of, dot or area |
-| `heavier` | fork, pierce, shatter, brand | keys leaning, or a stated style of, nuke; a low damage rate |
+| `elemental` | kindle, rime, blight, spillover | keys leaning, or a stated style of, dot or area |
+| `heavier` | fork, pierce, shatter, brand, aftershock | keys leaning, or a stated style of, nuke; a low damage rate |
 | `wider` | scatter, repeat, bloom, chain, harvest | keys leaning, or a stated style of, area or spam; heavy movement pressure |
-| `survival` | ward, retort, slipstream, resonance | health low or critical, hurt most by blades, a stated melee style |
+| `survival` | ward, retort, slipstream, resonance, repulse, parting, whirl, drag | health low or critical, hurt most by blades, a stated melee style |
 
-**Is the pool too small?** Twenty affixes, and every one of them is reachable:
-each fits the shapes its hook fires on (013), `seek` fits only single-shot bolts
-and seven fit every shape, and every one of them reaches a reward screen over
-a handful of seeded runs. So the answer to "affixes feel like the same
-few every time" was not the pool — it was that the affix door was on nearly
-every offer, so the head of the blended distribution was seen again and again.
-With the door varying, the histogram flattens out.
-
-It is still **thin at the top end**, and worth noting for a content pass: three
-keys with three slots each means one run can take nine of the twenty, so a
-completed build holds nearly half the game's affixes. Thirty would leave more
-between two runs.
+**The pool is sized against what a run is shown, build by build.** An offer
+deals only the affixes some held key can take (013), and a key that holds an
+affix is not dealt it again, so what matters is not the twenty-eight in the
+roster but the part of them one staff can be dealt, against the affix cards one
+run meets — about seventeen on the Jev arm. A bolt starter can be dealt
+twenty-three, Earth Spikes thirteen, Crescent Edge fifteen: every shape has
+affixes at the moments it reaches (the cast, the dash, the spin), not only the
+projectile's. A pool a run can exhaust repeats whatever the Director does
+(jev-findings 36); inside a run, the repeat penalty and the unshown card in
+the tail are what spread the offer, and they are code's.
 
 The lane is a **weight, not a filter**: every legal affix stays in the pool, as
 every other card does, and the chosen lane's cards are multiplied by
