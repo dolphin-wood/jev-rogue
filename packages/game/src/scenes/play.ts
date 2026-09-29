@@ -1544,6 +1544,8 @@ export class PlayScene extends Phaser.Scene {
       /** The price chip in the merchant's room, and anything else a card owns. */
       extras: Phaser.GameObjects.GameObject[];
     }[];
+    /** What the selected card's affixes are, beside it (`paintAffixTip`). */
+    tip: Phaser.GameObjects.GameObject[];
   } | null = null;
   /** The offer this room will present, kept for the card screen. */
   private offer: Offer | null = null;
@@ -11720,7 +11722,7 @@ export class PlayScene extends Phaser.Scene {
         .on("pointerout", () => { this.dismantlePointerDown = false; }));
     }
 
-    this.offerUi = { dim, heading, hint, rerollButton, rerollBar, dismantleButton, dismantleLabel, empty, cards: built, selected: 0 };
+    this.offerUi = { dim, heading, hint, rerollButton, rerollBar, dismantleButton, dismantleLabel, empty, cards: built, selected: 0, tip: [] };
     this.paintSelection();
     this.sfx.play("ui_select");
   }
@@ -11746,6 +11748,7 @@ export class PlayScene extends Phaser.Scene {
       c.body.destroy(); c.key.destroy(); c.zone.destroy(); c.kindTag.destroy();
       for (const o of c.extras) o.destroy();
     }
+    for (const o of this.offerUi.tip) o.destroy();
     this.offerUi = null;
   }
 
@@ -13259,6 +13262,53 @@ export class PlayScene extends Phaser.Scene {
         (o as Partial<Phaser.GameObjects.Components.Alpha> & { setAlpha?: (a: number) => unknown })
           .setAlpha?.(on ? 1 : 0.58);
     });
+    this.paintAffixTip(ui);
+  }
+
+  /**
+   * **What the selected card's affixes are**, in a box beside it: a spell
+   * card's slots show only icons, so the one the player is looking at names
+   * each and says what it does — its icon, its name in its rarity's colour,
+   * and its one-line effect, the character screen's words. Slay the Spire's
+   * keyword boxes are the model: over the neighbouring card, which is dimmed
+   * anyway, on the side there is one; never scrolled, since three affixes of
+   * a line or two each is all it can hold.
+   */
+  private paintAffixTip(ui: NonNullable<typeof this.offerUi>): void {
+    for (const o of ui.tip) o.destroy();
+    ui.tip = [];
+    const c = ui.cards[ui.selected];
+    const ids = c ? this.cardSlotAffixes(c.card) ?? [] : [];
+    if (!c || ids.length === 0) return;
+    const W = 150, PADT = 7, ICON = 16;
+    const textW = W - PADT * 2 - ICON - 6;
+    const lines = ids.map((id) => {
+      const def = spellAffixById(id);
+      const name = this.uiText(0, 0, contentName(id, def?.name ?? id), 7, affixRarity(id).text).setOrigin(0, 0).setDepth(206);
+      const effect = this.uiText(0, 0, def ? localizeStat({ text: def.text, key: affixTextKey(id) }) : "", 6, "#8792b5",
+        { wordWrap: { width: textW * ZOOM } }).setOrigin(0, 0).setDepth(206);
+      const h = Math.max(ICON, name.height / ZOOM + 1 + effect.height / ZOOM);
+      return { id, name, effect, h };
+    });
+    const height = PADT * 2 + lines.reduce((a, l) => a + l.h, 0) + (lines.length - 1) * 5;
+    const r = c.decoRect;
+    const last = ui.selected === ui.cards.length - 1 && ui.cards.length > 1;
+    const x0 = last ? r.x - 6 - W : r.x + r.w + 6;
+    const y0 = r.y + r.h - 22 - height;
+    ui.tip.push(this.add.rectangle(x0, y0, W, height, 0x0d0b1f, 0.97).setOrigin(0, 0)
+      .setStrokeStyle(1, 0x4a5480, 1).setDepth(205));
+    let y = y0 + PADT;
+    for (const l of lines) {
+      const frame = `icon_affix_${l.id}`;
+      if (this.atlas.has(frame))
+        ui.tip.push(this.add.image(x0 + PADT + ICON / 2, y + ICON / 2, this.crispTextureKey, frame)
+          .setOrigin(0.5).setScale(1 / TUNED).setDepth(206));
+      const tx = x0 + PADT + ICON + 6;
+      l.name.setPosition(tx, y);
+      l.effect.setPosition(tx, y + l.name.height / ZOOM + 1);
+      ui.tip.push(l.name, l.effect);
+      y += l.h + 5;
+    }
   }
 
   /**
