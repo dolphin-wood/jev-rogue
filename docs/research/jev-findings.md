@@ -1117,6 +1117,14 @@ Glacier Spike. The infusions fell further (Kindle 0.18x): the survival and
 freecast cards that joined the pool outrank them. The repeats inside a run
 did not move, which is the draw's, as above.
 
+**And the refusals** (the same day): an affix passed over twice against the
+same keys leaves the run (`exhaustedAffixes`), and a strength III door's new
+spell comes with an affix. Same five seeds on the Jev arm: 10.2 distinct in
+12.6 affix cards a run (19% repeats, from 22%), and the five commonest took
+41% of a run's affix cards, from 59%. The runs were shorter this time — 156
+Jev calls against 199, 16.8 spell cards a run against 19.2 — so the counts
+are not like for like; the share of the five commonest is the steadier read.
+
 **Rule:** size a card pool against the cards a run is shown, per build and not
 over the roster; a pool a run exhausts repeats whatever the Director does.
 
