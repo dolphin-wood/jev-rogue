@@ -157,8 +157,9 @@ has lost its time.
   court's dead rising at the edge. It resolves on a bar line.
 - **The wave is violet, the cut is red.** The greatsweep throws a sword wave
   and the greatslash throws none, and both cut the same sector. So the
-  greatsweep's windup also draws, past the red sector, dashed violet arcs
-  running outward (`drawWaveTell`, `TELE_WAVE`). The wave itself is drawn in
+  greatsweep's whole tell is violet (`WAVE_PALETTE`) where the slash's is
+  red, and past its sector dashed violet arcs run outward (`drawWaveTell`,
+  `TELE_WAVE`). The wave itself is drawn in
   the same violet (`KING_WAVE`), his cape's colour, not the red of his cuts.
   The player tells "step out of reach" from "leave the arc or dash it" before
   the blow lands.

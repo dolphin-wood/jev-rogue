@@ -87,7 +87,7 @@ import { drawArms, drawHasteCue, drawShockwaves, drawTollPulse } from "./ground.
 import type { ViewBox } from "./ground.ts";
 import {
   ART_SCALE, TELE_HOT, TELE_RIM, drawAimLine, drawBlastRing, drawFlameCone, drawLeapMark,
-  drawQuakeTell, drawRiftBurst, drawRiftCircle, drawRingTell, drawSectorTell, drawWaveTell,
+  drawQuakeTell, drawRiftBurst, drawRiftCircle, drawRingTell, drawSectorTell, drawWaveTell, CUT_PALETTE, WAVE_PALETTE,
   drawSlamTell, drawStrikeMark, TELE_ROCK,
 } from "./telegraph.ts";
 import { BAR_MS, BEAT_MS, BOSS_PALM_PX, BOSS_PHASES, BOSS_SLAM_STOMP_PX, BOSS_METEOR_LAND_PX, BOSS_METEOR_LAND_TELL_MS, MELEE_ATTACKS, RUN_BOSS_ROOM, bossMusicPhase, bossSlamNext, bossTempo, forceBossBlade, propState, queueBossMove } from "@jr/core";
@@ -15075,9 +15075,11 @@ export class PlayScene extends Phaser.Scene {
          * the room's mood hands it. The two radial sides are dashed for the
          * same reason: an open sector reads as a smear.
          */
-        drawSectorTell(this.threatGfx, e.x, e.y, box.reach, box.facing, half, t, tick, view);
-        // The king's sweep throws its arc on past the blade (`enemy.ts`, the sword wave); his slash, alike in the sector, throws none.
-        if (e.archetype === "boss" && e.meleeKind === "greatsweep") drawWaveTell(this.threatGfx, e.x, e.y, box.reach, box.facing, half, t, tick, view);
+        // The king's sweep throws its arc on past the blade (`enemy.ts`, the sword wave), so its tell is the wave's
+        // violet and runs on past the sector; his slash, alike in the sector, throws none and stays red.
+        const throws = e.archetype === "boss" && e.meleeKind === "greatsweep";
+        drawSectorTell(this.threatGfx, e.x, e.y, box.reach, box.facing, half, t, tick, view, throws ? WAVE_PALETTE : CUT_PALETTE);
+        if (throws) drawWaveTell(this.threatGfx, e.x, e.y, box.reach, box.facing, half, t, tick, view);
         // The tank's greatsword, raised: the tell for the chop is the blade
         // going up, and it comes down along the wedge below it.
         if (e.meleeKind === "cleave") this.drawGreatsword(e, box.facing, -Math.PI / 2 + Math.cos(box.facing) * 0.35, 0.8 + 0.2 * t);

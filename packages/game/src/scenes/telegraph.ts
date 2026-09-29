@@ -678,21 +678,28 @@ export function drawRingTell(
  */
 export function drawSectorTell(
   pen: Pen, x: number, y: number, reach: number, facing: number, half: number,
-  t: number, tick: number, view: ViewBox,
+  t: number, tick: number, view: ViewBox, palette: SectorPalette = CUT_PALETTE,
 ): void {
   const hot = t > 0.66;
-  teleSectorFill(pen, x, y, reach - INSET, facing, half, TELE_FILL, 0.55,
+  teleSectorFill(pen, x, y, reach - INSET, facing, half, palette.fill, 0.55,
     0.25 + 0.5 * Math.min(1, t), view);
   const arc = { facing, half };
   teleRing(pen, x, y, reach - RIM_PX * P, TELE_LINER, 0.85, view, { arc, thick: LINER_PX });
-  teleRing(pen, x, y, reach, t > 0.85 && !blink(tick, 2) ? TELE_FLASH : hot ? TELE_HOT : TELE_RIM,
+  teleRing(pen, x, y, reach, t > 0.85 && !blink(tick, 2) ? TELE_FLASH : hot ? palette.hot : palette.rim,
     1, view, { arc, thick: hot ? RIM_PX + 1 : RIM_PX });
   if (half >= Math.PI - 0.01) return;
   for (const s of [-1, 1] as const)
     teleEdge(pen, x, y, facing + s * half, s, RIM_PX * P * 2, reach - RIM_PX * P,
-      hot ? TELE_HOT : TELE_RIM, 0.75 + 0.25 * t, view,
+      hot ? palette.hot : palette.rim, 0.75 + 0.25 * t, view,
       { on: 5, off: 5, phase: march(tick) * 2 });
 }
+
+/** The three hues a sector tell is drawn in: its area, its rim, and its rim in the last third. */
+export interface SectorPalette { readonly fill: number; readonly rim: number; readonly hot: number }
+/** A cut's: the warning band's red. */
+export const CUT_PALETTE: SectorPalette = { fill: TELE_FILL, rim: TELE_RIM, hot: TELE_HOT };
+/** A cut that throws a wave (the king's greatsweep): the whole tell in the wave's violet. */
+export const WAVE_PALETTE: SectorPalette = { fill: 0x7a5cf0, rim: TELE_WAVE, hot: TELE_WAVE_HOT };
 
 /**
  * **A cut that throws a wave** (the king's greatsweep, doc 020): past the
@@ -700,8 +707,9 @@ export function drawSectorTell(
  * **outward** from the rim and fading as they go. A plain cut and a cut that
  * throws have the same sector, so without this the player cannot tell until
  * the wave is already on the floor whether stepping out of reach is enough.
- * In the wave's own violet (`TELE_WAVE`), not the cut's red, so the blade
- * and what it throws are told apart by colour first and by shape second.
+ * In the wave's own violet (`TELE_WAVE`), as the sweep's own sector is
+ * (`WAVE_PALETTE`): a cut that throws is violet, a cut that does not is red,
+ * told apart by colour first and by these arcs second.
  */
 export function drawWaveTell(
   pen: Pen, x: number, y: number, reach: number, facing: number, half: number,
