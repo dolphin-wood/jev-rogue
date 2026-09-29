@@ -409,11 +409,13 @@ export function fireUnit(
    * **A beam** (`beam`): a line out along the aim that burns what it crosses
    * each tick (`stepBeams`). Pressed, it is channelled — held on its key for
    * up to its `lifetime`, following the caster and the aim; cast free, it is
-   * a short flash at the body it was cast at. One beam a key: a new one puts
-   * the old out.
+   * a short flash at the body it was cast at. A press puts out whatever beam
+   * the key had; a flash puts out nothing — the flashes a spin casts at three
+   * bodies all burn at once, and one cast on being struck leaves the held
+   * beam burning.
    */
   if (shape === "beam") {
-    for (const old of world.beams) if (old.alive && old.spellIndex === mods.spellIndex) old.alive = false;
+    if (!free) for (const old of world.beams) if (old.alive && old.spellIndex === mods.spellIndex) old.alive = false;
     const reach = num(base.params, "reach", 200);
     const dir = free && target ? normalise(target.x - from.x, target.y - from.y) : aim;
     const beam = world.beams.find((x) => !x.alive) ?? (() => {

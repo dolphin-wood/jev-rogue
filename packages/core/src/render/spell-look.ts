@@ -14,6 +14,7 @@
  * the renderer can read is a claim nobody can check.
  */
 import type { Element } from "../types.ts";
+import { ITEMS } from "../spells/items.ts";
 
 export type ProjectileShape =
   | "dart" | "lightning" | "orb" | "needle" | "spike" | "flame" | "glob"
@@ -99,10 +100,23 @@ export const ELEMENT_SHAPE: Readonly<Record<Element, ProjectileShape>> = {
   none: "dart", fire: "flame", ice: "needle", poison: "glob",
 };
 
-/** The look for a shot: its spell's if it has one, else its element's. */
+/**
+ * The look for a shot: its spell's if it has one, else its element's.
+ *
+ * **An element the spell was given takes its colour.** A spell's own look is
+ * its own element's already (Frost Needle is ice-blue); one that `kindle`,
+ * `rime` or `blight` gives an element it does not have of itself is drawn in
+ * that element's light, keeping its shape — a fire Void Ray is an amber
+ * line, a frozen Magic Bolt a blue dart — so the build is seen in the fight.
+ */
 export function spellLookOf(base: string | null, element: Element): SpellLook {
   const named = base ? SPELL_LOOK[base] : undefined;
-  if (named) return named;
+  if (named) {
+    const own = String(ITEMS.get(base!)?.params["element"] ?? "none");
+    if (element === "none" || element === own) return named;
+    const t = ELEMENT_TINT[element] ?? ELEMENT_TINT.none;
+    return { core: t.core, glow: t.glow, shape: named.shape };
+  }
   const t = ELEMENT_TINT[element] ?? ELEMENT_TINT.none;
   return { core: t.core, glow: t.glow, shape: ELEMENT_SHAPE[element] ?? "dart" };
 }
