@@ -202,7 +202,7 @@ export interface SpellAffix {
   readonly element: Element | null;
   /**
    * **Its strength** (`affixStrengthFloor`), I to III; absent is I. It is the
-   * affix's own grade — what its card says — and the least strength of door
+   * affix's own grade — what its card says, as common, rare or legendary — and the least strength of door
    * that deals it, so an affix that multiplies what a press is worth waits for
    * the doors late in the run.
    */

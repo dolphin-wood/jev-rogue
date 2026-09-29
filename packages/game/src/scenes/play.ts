@@ -3699,7 +3699,7 @@ export class PlayScene extends Phaser.Scene {
       /*
        * **The door's strength, as stars on the arch's top-right corner**: one
        * for each strength, I to III, the number the cards behind it say
-       * (`card.strength*`). A door's strength rises with the run
+       * (`card.rarity*`: common, rare, legendary). A door's strength rises with the run
        * (`baseStrength`), so every door shows at least one. Kept with the
        * elite marks, which show and fade as the door does.
        */
@@ -10303,7 +10303,8 @@ export class PlayScene extends Phaser.Scene {
      * answers in. `term` is the one place they become words, and the request
      * that goes to Jev is untouched by it (doc 002).
      */
-    const grade = (n: number) => `  ${t("plan.grade", { n: ROMAN[n] ?? String(n) })}`;
+    // The door's grade as the cards behind it say it: common, rare, legendary.
+    const grade = (n: number) => `  ${t("plan.grade", { rarity: t(RARITY_STYLE[rarityOf(n)].label) })}`;
     const types = doorTypes(promise);
     const reward = types
       ? t("plan.rewardPromise", { kind: term(this.roomReward, "reward_kind"), promise: types }) + grade(promise.grade)
@@ -20269,21 +20270,19 @@ function drawCardDeco(
   }
 }
 
-/** A strength as the cards and doors write it. */
-const ROMAN: Readonly<Record<number, string>> = { 1: "I", 2: "II", 3: "III" };
-
 /**
- * A card's look by its **strength** (the grade: I, II, III): its label, frame,
- * ground and corner decoration. It was called rarity, and a card that was
- * "legendary" behind a door that deals the strongest affixes read as two
- * different things; it is one, and the label says which.
+ * A card's look by its **grade** (I, II, III), which the player reads as a
+ * rarity — common, rare, legendary: its label, frame, ground and corner
+ * decoration. The code calls it strength; the screen never does, because
+ * "strength III" is a number the player has to be taught, and "legendary"
+ * is one they already know. The door's stars say the same grade.
  */
 const RARITY_STYLE: Readonly<Record<"common" | "rare" | "legendary", {
   label: StringKey; text: string; stroke: number; strokeOn: number; fill: number; fillOn: number; corner: number;
 }>> = {
-  common: { label: "card.strength1", text: "#c9cfe8", stroke: 0x5a628f, strokeOn: 0xe8e3d8, fill: 0x161334, fillOn: 0x221d46, corner: 0x8792b5 },
-  rare: { label: "card.strength2", text: "#6fb4ff", stroke: 0x3f7fe0, strokeOn: 0x9fd0ff, fill: 0x13203f, fillOn: 0x1b2c58, corner: 0x5a9ef0 },
-  legendary: { label: "card.strength3", text: "#ffb040", stroke: 0xd08a30, strokeOn: 0xffd080, fill: 0x2a1d18, fillOn: 0x3a2818, corner: 0xe8a040 },
+  common: { label: "card.rarity1", text: "#c9cfe8", stroke: 0x5a628f, strokeOn: 0xe8e3d8, fill: 0x161334, fillOn: 0x221d46, corner: 0x8792b5 },
+  rare: { label: "card.rarity2", text: "#6fb4ff", stroke: 0x3f7fe0, strokeOn: 0x9fd0ff, fill: 0x13203f, fillOn: 0x1b2c58, corner: 0x5a9ef0 },
+  legendary: { label: "card.rarity3", text: "#ffb040", stroke: 0xd08a30, strokeOn: 0xffd080, fill: 0x2a1d18, fillOn: 0x3a2818, corner: 0xe8a040 },
 };
 
 /** The colour of each kind of figure on a numbers line; see `statRow`. */
