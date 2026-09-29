@@ -10,6 +10,7 @@ import { NO_INPUT } from "./types.ts";
 import type { Enemy, World } from "./types.ts";
 import { WORLD_H, WORLD_W } from "./collide.ts";
 import {
+  GUARDIAN_POWER,
   GUARDIAN_POISE, GUARDIAN_CALL_MS, GUARDIAN_INTRO_MS, GUARDIAN_INTRO_NOTICE_MS, GUARDIAN_INTRO_PRE_MS, GUARDIAN_INTRO_RECOVERY_MS, GUARDIAN_MID_CALL_DELAY_MS, GUARDIAN_HEARTS, GUARDIAN_HP, GUARDIAN_ACTION_GAP_MS, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_SCALE, GUARDIAN_SHOT_EVERY, GUARDIAN_SQUAD, GUARDIAN_STAKES_TELE_MS, GUARDIAN_VOLLEY_TELE_MS, GUARDIAN_VOLLEY_MS, GUARDIAN_XP, GUARDIAN_STANCE, GUARDIAN_BROKEN_MS, GUARDIAN_BROKEN_TAKEN, makeGuardian, stepGuardian,
 } from "./guardian.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
@@ -94,7 +95,8 @@ describe("the Frontier Veteran: the body", () => {
     g.swing.trackingMs = 0;
     const hearts = w.player.hearts;
     for (let i = 0; i < 180 && w.player.hearts === hearts; i++) step(w, NO_INPUT);
-    expect(w.player.hearts).toBeCloseTo(hearts - 0.7, 5);
+    // A tank's ram (1.4 hearts) at the Veteran's share of a blow.
+    expect(w.player.hearts).toBeCloseTo(hearts - Math.round(1.4 * GUARDIAN_POWER * 10) / 10, 5);
     expect(w.player.stunMs).toBeGreaterThan(0);
     expect(w.player.hurtX).toBeGreaterThan(0);
     expect(Math.abs(w.player.hurtX)).toBeGreaterThan(Math.abs(w.player.hurtY) + 1);

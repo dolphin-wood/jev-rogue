@@ -46,12 +46,12 @@ already know it. Nothing assembles it into an ordinary room.
 | Bar | `GUARDIAN_HP`, and `GUARDIAN_POWER` on its blows (see "Measured") |
 | Poise | `GUARDIAN_POISE` (doc 027): about four hits in a row before one interrupts it, whole again after a pause, and not broken twice running. An interrupt, never a stun: no stars |
 | Stance (架势) | `GUARDIAN_STANCE` (300): a gold bar under its health that every hit wears, a poise break `GUARDIAN_BREAK_STANCE` of it more and a wall `GUARDIAN_WALL_STANCE`. It flashes as it nears full. Left alone for 3 s it steadies, 30 a second. **Worn through, it is broken**: on its knees for `GUARDIAN_BROKEN_MS` (3.2 s) with stars over its head, whatever it had in hand dropped (a call goes unanswered), taking `GUARDIAN_BROKEN_TAKEN` (×1.5) from every hit, with a gold ring, sparks, and a long hitstop. The bar then drains with the time left. About eight seconds of a room-10 build's steady damage, so two or three breaks a fight |
-| Attack window | after every complete action, `GUARDIAN_ACTION_GAP_MS` (2.5 s) disables every attack family together. A ready fire shot, ram, stake drive or volley cannot fill another move's recovery; this is the player's guaranteed damage window |
+| Attack window | after every complete action, `GUARDIAN_ACTION_GAP_MS` (1.8 s) disables every attack family together. A ready fire shot, ram, stake drive or volley cannot fill another move's recovery; this is the player's guaranteed damage window |
 | Blunderbuss | the warden's shot: raise, level, a wide spray reaching `GUARDIAN_ATTACK_RANGE_MULT` as far and `GUARDIAN_MUSKET_SPREAD_MULT` as wide, then a reload to stand in |
 | Ram | the tank's charge from mid range, launched at full speed with no acceleration buffer. Its current travel is about 204 px, 20% shorter than the earlier 255 px run. It ends in a hard brake and the authored backward-leaning recovery frame, not a held thrust. The Veteran's charge has no sector overlay; its short hitstop and camera thump give the launch weight. **A head-on wall knocks it out**: the fight's big opening, set up by standing with a wall behind you |
 | Bash | the warden's shield shove, for a player standing on it, with the veteran's melee reach scaled by `GUARDIAN_ATTACK_RANGE_MULT` |
 | Sweep | up close, by turns with the shove: the gun swung 210° across its front, heavier and wider than the shove, with the veteran's melee reach scaled by `GUARDIAN_ATTACK_RANGE_MULT`. Behind it, or out of reach |
-| Ram twice | a ram that ends without its wall can come round again only after the same shared 2.5 s attack window. The second is another chance at the wall without reading as a continuous charge loop |
+| Ram twice | a ram that ends without its wall can come round again only after the same shared 1.8 s attack window. The second is another chance at the wall without reading as a continuous charge loop |
 | Stake line (地刺) | every `GUARDIAN_STAKES_EVERY_MS`, at range: the gun's butt driven down, and three lanes fanned at the player drawn on the floor for `GUARDIAN_STAKES_TELE_MS`, then stakes. Their original reach and spacing stay intact, so the warning does not become sparse. It stands planted through it and a beat after |
 | Palisade | the same turn on a player who has stuck to it: the player's Quake Ring in its hands, larger and violet — three rings of stakes breaking out round it one after another (a hostile `eruptRing`). Every future stake gets a visible violet floor footprint for the full 1.2 s tell, brightening in ring order. Its original radii and cells stay intact; the warning is the hit geometry. It hits once however many stakes the player stands in |
 | Volley (排枪) | every `GUARDIAN_VOLLEY_EVERY_MS`, it turns on the player and raises its gun to give the order, the muzzle burning white, flickering, and flaring as each line fires. Nine thin lines out of the room's walls, edge to edge and through whatever stands in the room, **all crossing within two and a half tiles of the player** at angles spread round the clock, one through the player's feet. Thin and many, so the room reads as lanes, not walls. Only a line's white core hits, and only when it reaches the player's middle (`BEAM_GRAZE`): a graze passes. The glow round it falls off in layers into the floor, wider than what hits, never narrower. They cross thick where the player stands and part as they go, so the answer is to move out along a gap. Each runs out of the screen in 0.2 s, is held for the rest of `GUARDIAN_VOLLEY_TELE_MS` (2 s), and then fires: the whole line lit at once, white on a warm glow, gone like lightning. A beat apart. **It stands with its arm up until the last has fired** (`GUARDIAN_VOLLEY_MS`), and **its squad goes to ground**: each body sinks into the floor, a violet mound where it went down, untouchable and doing nothing, and rises again as a spawn does once the last line has fired. The player reads the lines and nothing else |
@@ -117,47 +117,33 @@ on a rusher still standing would not have ended.
 | hearts lost at room 10 | above an ordinary room's, below 3 |
 | runs reaching the boss | not below today's |
 
-## Measured (2026-09-28)
+## Measured (2026-09-30)
 
-`pnpm guardian-bench` (a three-key build at level 6) and `pnpm play rule 30`.
+`pnpm guardian-bench <profile>`: a three-key build at level 6, eight seeds.
 The first cut, on the warden's own numbers and the room's ramp band, ended
-nearly every run at room 10: 5.5 hearts a fight for `player`, and a spray that
-cost a whole heart and a burn at a warden's pace. As tuned:
+nearly every run at room 10 (5.5 hearts a fight for `player`). It was then cut
+back so far that played runs took no damage from it at all. Three logged runs
+lost nothing in room 10 and felled it in 21 to 33 s. The bench's `expert` lost
+half a heart, so a player plays at or above `expert`. As tuned now:
 
 | | |
 |---|---|
-| `GUARDIAN_HP` | 1000 |
-| `GUARDIAN_POWER` | 0.3 of a warden's blows, not the room's ×1.45 |
-| `GUARDIAN_FLAME` | 0.4 of a heart a spray hit, and the burn |
-| `GUARDIAN_SHOT_EVERY` | 2.25 times a warden's 4.2 s |
-| `GUARDIAN_MUSKET_SPREAD_MULT` | 1.5× the warden's fire-cone angle |
-| `GUARDIAN_CHARGE_GAP_MULT` | 1.55× the ram's post-charge reset |
+| `GUARDIAN_HP` | 2000, for a fight of about half a minute to a minute |
+| `GUARDIAN_POWER` | 0.7 of a warden's blows, not the room's ×1.45 (a ram costs a heart) |
+| `GUARDIAN_FLAME` | 0.6 of a heart a spray hit, and the burn |
+| `GUARDIAN_SHOT_EVERY` | 2.8 times a warden's 4.2 s |
+| `GUARDIAN_ACTION_GAP_MS` | 1.8 s shared rest after every action |
+| `GUARDIAN_STAKES_EVERY_MS` | 8 s |
+| `GUARDIAN_VOLLEY_EVERY_MS` | 16 s, so a fight sees two |
 
-These were later raised back to 1300, 0.5 and 0.6. Real play showed the harness is weaker than a player (a player clears the unchanged main build almost every time), so a harness loss is a relative figure, not a limit.
+| profile | won | mean | hearts lost a fight |
+|---|---|---|---|
+| `expert` | 8 / 8 | 26 s | 1.3 |
+| `player` | 8 / 8 | 34 s | 2.2 |
+| `average` | 8 / 8 | 46 s | 4.7 |
+| `novice` | 0 / 8 | 89 s | the run |
 
-| | `player` | `average` |
-|---|---|---|
-| room 10: hearts, seconds | 1.88, 28 s | 2.50, 32 s |
-| runs reaching the boss, of 30 | 25 | 10 |
-| the same, room 10 a plain fight in the same arena | — | 12 |
-
-The guardian costs about what a hard ordinary room does, and it stops about
-two runs in thirty of the `average` profile that the plain room would have let
-through.
-
-## Measured (2026-09-28, stance and volley)
-
-With the stance, the volley round the player, the guardian standing through
-it and its squad under the floor, at `GUARDIAN_HP` 1300:
-
-| `pnpm guardian-bench` | won | mean | hearts left | breaks a fight |
-|---|---|---|---|---|
-| `player` | 8 / 8 | 23 s | 6.1 to 7.9 | 2 |
-| `average` | 8 / 8 | 31 s | 2.8 to 4.5 | 3 |
-
-The same bench without them: `player` 8 / 8 in 26 s, `average` 4 / 8 in
-37 s. The volley lands on `average` about half again as often as before
-(it dodges lines badly) and on `player` not at all, and everything else
-lands far less: the guardian spends about
-ten seconds a fight on its knees and about eight standing through its
-volleys. Both are under the 40 to 60 s target.
+It is the run's second-hardest room. A good player pays a heart or two, and
+an average one a real share of the bar. `novice`, which already lost six
+fights in eight at the lighter tuning, does not get past it. The two hearts
+its death leaves (`GUARDIAN_HEARTS`) are the heal toward the last stretch.

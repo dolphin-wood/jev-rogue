@@ -24,14 +24,14 @@ import { noPowers } from "../content/tags.ts";
 import { GRID_W, TILE_PX, Tile } from "../types.ts";
 
 /** Its bar. Sized for a room-10 build to take 40 to 60 s; `pnpm play` sets it (doc 024). */
-export const GUARDIAN_HP = 1300;
+export const GUARDIAN_HP = 2000;
 /**
  * What its blows and shots cost, as a multiple of a warden's. Not the room's
  * ramp band (×1.45 at room 10): on a body that rams and sprays from across the
  * room that measured at five and a half hearts a fight, and nearly every run
  * ended here.
  */
-export const GUARDIAN_POWER = 0.5;
+export const GUARDIAN_POWER = 0.7;
 /**
  * What one hit of its spray costs, in hearts: a warden's shot is a whole heart
  * and a burn, and it was the larger half of what the guardian cost a weaker
@@ -45,7 +45,7 @@ export const GUARDIAN_FLAME = 0.6;
  * The current 3.5× period leaves a real punish window between shots while its
  * enlarged fire lane remains dangerous.
  */
-export const GUARDIAN_SHOT_EVERY = 3.5;
+export const GUARDIAN_SHOT_EVERY = 2.8;
 /**
  * Its poise (`Enemy.poise`), which nothing wears: the Frontier Veteran's poise
  * is its stance (`GUARDIAN_STANCE`, doc 027), the bar every body shows. The
@@ -61,7 +61,7 @@ export const GUARDIAN_ATTACK_GAP_MULT = 2;
 /** The ram needs a longer reset than the Veteran's other close attacks. */
 export const GUARDIAN_CHARGE_GAP_MULT = 2.8;
 /** A visible punish window after every completed Veteran action, shared by every attack family. */
-export const GUARDIAN_ACTION_GAP_MS = 2500;
+export const GUARDIAN_ACTION_GAP_MS = 1800;
 /** The Veteran's fire cone is wider than a warden's, while its length uses the range multiplier. */
 export const GUARDIAN_MUSKET_SPREAD_MULT = 1.5;
 /** What its death pays in experience: an ordinary room's take, at its top (`KING_AUDIENCE_XP`'s reasoning). */
@@ -104,7 +104,7 @@ export const GUARDIAN_MID_CALL_DELAY_MS = 18_000;
  *   hands, larger and violet (`eruptRing`, a hostile cast) — so that standing
  *   in its shadow is not the answer to its poise.
  */
-export const GUARDIAN_STAKES_EVERY_MS = 11_000;
+export const GUARDIAN_STAKES_EVERY_MS = 8_000;
 /** How long the stakes' ground is drawn before it erupts. */
 export const GUARDIAN_STAKES_TELE_MS = 1200;
 /** How long it stands planted after they go up: the stakes' own window. */
@@ -140,7 +140,7 @@ const PALISADE_CELL = 20;
  * the lines and nothing else, and its planted body is there to be hit by a
  * player who finds a gap on its side.
  */
-export const GUARDIAN_VOLLEY_EVERY_MS = 24_000;
+export const GUARDIAN_VOLLEY_EVERY_MS = 16_000;
 /** How long a volley line is drawn before it fires: long, as the player has to read several at once. */
 export const GUARDIAN_VOLLEY_TELE_MS = 2000;
 /** The lines in a volley, and the beat between one and the next coming due. */
