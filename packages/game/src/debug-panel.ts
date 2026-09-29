@@ -591,7 +591,7 @@ export class DebugPanel {
 
     let remembered = false;
     try { remembered = localStorage.getItem(OPEN_KEY) === "1"; } catch { /* private window, or blocked */ }
-    if (remembered) this.toggle();
+    if (remembered) this.setOpen(true);
   }
 
   /** The tab bar: one button each, the current one lit. */
@@ -741,19 +741,30 @@ export class DebugPanel {
       ?.addEventListener("click", () => this.actions.toFinal());
   }
 
+  /** The button or the backquote: the player's own choice, remembered for the next load. */
   toggle(): void {
-    this.open = !this.open;
+    this.setOpen(!this.open);
+    try { localStorage.setItem(OPEN_KEY, this.open ? "1" : "0"); } catch { /* not available: the panel still works */ }
+  }
+
+  /**
+   * Shown or hidden **without remembering it**. A lab start (`?lab=boss`,
+   * `?lab=spells`) opens the panel for that visit only: remembered, every
+   * later load of the game — a reload after a code change, the next deploy —
+   * opened on the panel the player never asked for.
+   */
+  private setOpen(open: boolean): void {
+    this.open = open;
     // Flex, not block: the readout scrolls because it is the column's flexible child.
     this.root.style.display = this.open ? "flex" : "none";
     this.button.style.right = this.open ? "352px" : "8px";
-    try { localStorage.setItem(OPEN_KEY, this.open ? "1" : "0"); } catch { /* not available: the panel still works */ }
     if (this.open && this.last) this.render(this.last);
   }
 
   /** Straight to the BOSS tab, open: the `?lab=boss` start. */
   showBossLab(): void {
     this.setTab("boss");
-    if (!this.open) this.toggle();
+    this.setOpen(true);
     this.bossLab.syncHold();
   }
 
@@ -771,7 +782,7 @@ export class DebugPanel {
   showSpellLab(): void {
     if (!this.spellLab) return;
     this.setTab("spells");
-    if (!this.open) this.toggle();
+    this.setOpen(true);
   }
 
   /** Every frame while the SPELLS tab is on screen: what the lab changed. */
