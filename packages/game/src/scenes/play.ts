@@ -7013,7 +7013,32 @@ export class PlayScene extends Phaser.Scene {
    * a sentence otherwise. On an upgrade the level it reaches is the first row.
    */
   private cardFacts(card: OfferCard, width: number): { box: Phaser.GameObjects.Container; height: number } {
-    const box = this.add.container(0, 0).setDepth(202);
+    const lead: { label: string; value: string; tone: string }[] = [];
+    // The level an upgrade reaches, or that it cannot rise further.
+    if (card.kind === "spell" && card.itemId && this.world && this.heldIndex(card.itemId) >= 0) {
+      const level = this.spellLevels[this.heldIndex(card.itemId)] ?? 1;
+      lead.push(level >= SPELL_LEVEL_MAX
+        ? { label: t("rowlabel.card.heldAtLv"), value: t("rowvalue.card.heldAtLv", { n: level }), tone: "grade" }
+        : {
+          label: t("rowlabel.card.upgradeLv"),
+          value: t("rowvalue.card.upgradeLv", { from: level, to: Math.min(SPELL_LEVEL_MAX, level + (card.grade ?? 1)) }),
+          tone: "grade",
+        });
+    }
+    return this.factsBlock(this.cardStatParts(card), width, 202, lead);
+  }
+
+  /**
+   * The facts block itself, for any numbers line (`StatPart`s): the reward
+   * card's and the character screen's, so a spell reads the same on both.
+   * `lead` rows go first (an upgrade's level). `columns` sets the rows two
+   * abreast where the block is wide enough for it (the character screen).
+   */
+  private factsBlock(
+    parts: readonly (StatText & { readonly tone?: string })[], width: number, depth: number,
+    lead: readonly { label: string; value: string; tone: string }[] = [], columns: 1 | 2 = 1,
+  ): { box: Phaser.GameObjects.Container; height: number } {
+    const box = this.add.container(0, 0).setDepth(depth);
     const px = 7;
     const size = bodyPx(px, ZOOM);
     const rowH = Math.ceil(size) + 3;
@@ -7024,21 +7049,10 @@ export class PlayScene extends Phaser.Scene {
       Object.fromEntries(Object.entries(args ?? {}).map(([k, v]) =>
         [k, k === "affix" && typeof v === "string" ? contentName(v, spellAffixById(v)?.name ?? v) : v]));
     type Row = { label: string; value: string; tone: string };
-    const rows: Row[] = [];
+    const rows: Row[] = [...lead];
     const tags: string[] = [];
     const sentences: (StatText & { readonly tone?: string })[] = [];
-    // The level an upgrade reaches, or that it cannot rise further.
-    if (card.kind === "spell" && card.itemId && this.world && this.heldIndex(card.itemId) >= 0) {
-      const level = this.spellLevels[this.heldIndex(card.itemId)] ?? 1;
-      rows.push(level >= SPELL_LEVEL_MAX
-        ? { label: t("rowlabel.card.heldAtLv"), value: t("rowvalue.card.heldAtLv", { n: level }), tone: "grade" }
-        : {
-          label: t("rowlabel.card.upgradeLv"),
-          value: t("rowvalue.card.upgradeLv", { from: level, to: Math.min(SPELL_LEVEL_MAX, level + (card.grade ?? 1)) }),
-          tone: "grade",
-        });
-    }
-    for (const part of this.cardStatParts(card)) {
+    for (const part of parts) {
       const key = part.key ?? "";
       const label = key ? t(`rowlabel.${key}` as StringKey) : "";
       if (key && label !== `rowlabel.${key}`) {
@@ -7053,7 +7067,7 @@ export class PlayScene extends Phaser.Scene {
     };
     // What the card does in a sentence first — an affix's effect, a stat's gain — as its headline.
     if (sentences.length > 0) {
-      const row = this.statRow(sentences, width, 8, 202);
+      const row = this.statRow(sentences, width, 8, depth);
       row.box.setPosition(0, y);
       box.add(row.box);
       y += Math.ceil(row.height);
@@ -7066,13 +7080,20 @@ export class PlayScene extends Phaser.Scene {
     }
     if (rows.length > 0) {
       if (tags.length > 0 || sentences.length > 0) rule();
-      for (const r of rows) {
-        const l = this.add.text(0, y, r.label, style("#8792b5")).setOrigin(0, 0).setScale(1 / ZOOM);
-        const v = this.add.text(width, y, r.value, style(TONE_COLOUR[r.tone] ?? "#f5a623")).setOrigin(1, 0).setScale(1 / ZOOM);
-        box.add([l, v]);
-        // A figure too long to share the row takes the next one, still on the right.
-        if (l.width / ZOOM + 6 + v.width / ZOOM > width) { y += rowH; v.setY(y); }
-        y += rowH;
+      const GUTTER = 14;
+      const colW = columns === 2 ? (width - GUTTER) / 2 : width;
+      for (let i = 0; i < rows.length; i += columns) {
+        let lineH = rowH;
+        for (let c = 0; c < columns && i + c < rows.length; c++) {
+          const r = rows[i + c]!;
+          const x0 = c * (colW + GUTTER);
+          const l = this.add.text(x0, y, r.label, style("#8792b5")).setOrigin(0, 0).setScale(1 / ZOOM);
+          const v = this.add.text(x0 + colW, y, r.value, style(TONE_COLOUR[r.tone] ?? "#f5a623")).setOrigin(1, 0).setScale(1 / ZOOM);
+          box.add([l, v]);
+          // A figure too long to share the row takes the next one, still on the right.
+          if (l.width / ZOOM + 6 + v.width / ZOOM > colW) { v.setY(y + rowH); lineH = rowH * 2; }
+        }
+        y += lineH;
       }
     }
     // And a rule under it all, before the prose.
@@ -11989,19 +12010,18 @@ export class PlayScene extends Phaser.Scene {
          * widgets were one number.
          *
          * What the row carries instead is the one thing the card does not
-         * say at a glance: how many affixes are on this spell — and it says
-         * so in words, because three small diamonds with no label were a
-         * decoration nobody could read.
+         * say at a glance: how many affixes are on this spell, and of what
+         * rarity — a diamond a slot, each held one in its affix's colour. It
+         * once said the count in words too, when the diamonds were grey and
+         * alike; coloured, and with every affix named in the panel beside
+         * them, they are read, and the words said the count twice.
          */
-        const filled = slot.affixes.length;
-        // A diamond a slot, each held one in its affix's rarity, then the count in words.
         let dx = leftX - 30;
         for (let k = 0; k < AFFIX_SLOTS; k++) {
           const held = slot.affixes[k];
           const d = text(dx, rowY(i) + 4, held ? "◆" : "◇", 6, held ? affixRarity(held.id).text : "#6a7396").setOrigin(0, 0);
           dx += d.width / ZOOM;
         }
-        text(dx + 4, rowY(i) + 4, t("char.affixesOf", { held: filled, max: AFFIX_SLOTS }), 6, filled > 0 ? "#c9cfe8" : "#6a7396").setOrigin(0, 0);
       } else {
         text(leftX - 30, rowY(i), t("char.emptyKey"), 8, "#5a5f7a").setOrigin(0, 0.5);
       }
@@ -12127,9 +12147,10 @@ export class PlayScene extends Phaser.Scene {
       add(this.keys_(rightX + panelW / 2 - 10, cy - 117, `${t("grade.lv", { n: lvl })} {pips:${lvl}/${SPELL_LEVEL_MAX}}${lvl > 1 ? `  ${t("char.lvDamage", { pct: Math.round((levelDamageMult(lvl) - 1) * 100) })}` : ""}`, 6, lvl > 1 ? "#ffd45e" : "#6a7396", 211, 1));
       const leftX = rightX - panelW / 2 + 12;
       const cost = slotCost(slot, ITEMS, this.world.staff);
-      const row = this.statRow(
+      // Laid out as the reward card lays it out (`factsBlock`): traits as tags, a row a figure, a rule.
+      const row = this.factsBlock(
         def ? this.slotStatParts(def, lvl, cost) : [{ text: `${cost} mana`, tone: "mana", key: "stat.mana", args: { n: cost } }],
-        panelW - 24, 8, 211);
+        panelW - 24, 211, [], 2);
       row.box.setPosition(leftX, cy - 92);
       add(row.box);
       const desc = text(leftX, cy - 92 + row.height + 5,
@@ -12159,22 +12180,53 @@ export class PlayScene extends Phaser.Scene {
       const AFFIX_ROW_H = smith ? 15 : 19;
       const rowsTop = (smith ? cy - 34 : cy - 30) - AFFIX_ROW_H / 2;
       shift = Math.max(0, Math.ceil(desc.y + desc.displayHeight + PAD_S - rowsTop));
+      /*
+       * **A row as tall as its affix needs.** The name and what it does sat
+       * on one line whatever their length, and Chain's ran out past the
+       * panel's edge in English; a row whose words do not fit puts the effect
+       * under the name, wrapped, and the rows below — and the panel — move
+       * down by what it took.
+       */
+      const rowW = panelW - 20 - PAD_M * 2 - 22;
+      let rowTop = (smith ? cy - 34 : cy - 30) + shift - AFFIX_ROW_H / 2;
+      let grown = 0;
       for (let k = 0; k < AFFIX_SLOTS; k++) {
-        const y = (smith ? cy - 34 : cy - 30) + shift + (AFFIX_ROW_H + PAD_S - 1) * k;
         const held = slot.affixes[k];
-        const swapping = ui.mode === "attach" && ui.swapAffix === k;
-        add(this.add.rectangle(rightX, y, panelW - 20, AFFIX_ROW_H, swapping ? 0x3a1a22 : 0x0d0b1f, 0.9)
-          .setStrokeStyle(swapping ? 2 : 1, swapping ? 0xff8877 : held ? affixRarity(held.id).stroke : 0x2a2750, 1).setDepth(210.6));
+        const def2 = held ? spellAffixById(held.id) : null;
+        let nameT: Phaser.GameObjects.Text | null = null;
+        let effT: Phaser.GameObjects.Text | null = null;
+        let h = AFFIX_ROW_H;
         if (held) {
-          const def2 = spellAffixById(held.id);
+          // Named in its strength's colour, as its card was, then what it does.
+          nameT = text(0, 0, contentName(held.id, def2?.name ?? held.id), 7, affixRarity(held.id).text).setOrigin(0, 0.5);
+          const eff = def2 ? localizeStat({ text: def2.text, key: affixTextKey(held.id) }) : "";
+          effT = text(0, 0, eff, 6, "#8792b5").setOrigin(0, 0.5);
+          if (nameT.width / ZOOM + 6 + effT.width / ZOOM > rowW) {
+            effT.destroy();
+            effT = text(0, 0, eff, 6, "#8792b5", { wordWrap: { width: rowW * ZOOM } }).setOrigin(0, 0);
+            h = Math.max(AFFIX_ROW_H, Math.ceil(nameT.height / ZOOM + effT.height / ZOOM) + 6);
+          }
+        }
+        const y = rowTop + h / 2;
+        rowTop += h + PAD_S - 1;
+        grown += h - AFFIX_ROW_H;
+        const swapping = ui.mode === "attach" && ui.swapAffix === k;
+        add(this.add.rectangle(rightX, y, panelW - 20, h, swapping ? 0x3a1a22 : 0x0d0b1f, 0.9)
+          .setStrokeStyle(swapping ? 2 : 1, swapping ? 0xff8877 : held ? affixRarity(held.id).stroke : 0x2a2750, 1).setDepth(210.6));
+        if (held && nameT && effT) {
           const icon = `icon_affix_${held.id}`;
           if (this.atlas.has(icon))
             add(this.add.image(slotIn + 8, y, this.crispTextureKey, icon).setOrigin(0.5).setScale(1 / TUNED).setDepth(211));
-          // One line, centred in the row: the name, then what it does.
-          // Named in its strength's colour, as its card was.
-          const nameT = text(slotIn + 22, y, contentName(held.id, def2?.name ?? held.id), 7, affixRarity(held.id).text).setOrigin(0, 0.5);
-          text(nameT.x + nameT.width / ZOOM + 6, y,
-            def2 ? localizeStat({ text: def2.text, key: affixTextKey(held.id) }) : "", 6, "#8792b5").setOrigin(0, 0.5);
+          if (h === AFFIX_ROW_H) {
+            // One line, centred in the row.
+            nameT.setPosition(slotIn + 22, y);
+            effT.setPosition(nameT.x + nameT.width / ZOOM + 6, y);
+          } else {
+            // Two: the name at the top, the effect wrapped under it.
+            const top = y - h / 2 + 3;
+            nameT.setPosition(slotIn + 22, top + nameT.height / ZOOM / 2);
+            effT.setPosition(slotIn + 22, top + nameT.height / ZOOM + 1);
+          }
         } else if (ui.mode === "attach" && affix && k === slot.affixes.length && !slot.affixes.some((a) => a.id === affix.id) && affixFitsSpell(affix, ITEMS.get(slot.item.base), slot.affixes.map((a) => a.id))) {
           {
             /*
@@ -12197,6 +12249,8 @@ export class PlayScene extends Phaser.Scene {
           text(slotIn, y, t("char.affixSlot", { n: k + 1 }), 7, "#3f4460").setOrigin(0, 0.5);
         }
       }
+      // What the taller rows took, for the footer, the panel and the band under it.
+      shift += grown;
       /*
        * The panel's footer — the price, the warning, the trade — wrapped to
        * the panel's own width and split across two lines where it needs

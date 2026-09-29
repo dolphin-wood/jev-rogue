@@ -270,7 +270,6 @@ export const EN = {
   "char.gold": "Gold {gold}",
   "char.emptyKey": "Empty slot",
   "char.anEmptyKey": "An empty slot",
-  "char.affixesOf": "{held}/{max} affixes",
   "char.affixSlot": "Affix slot {n} · empty",
   "char.doesNotFitShape": "Incompatible: requires a {shapes} spell (this is a {shape})",
   "char.doesNotFitSeek": "Incompatible: spread spells can't home in (including fans of shots and Scatter)",

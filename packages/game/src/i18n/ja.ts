@@ -266,7 +266,6 @@ export const JA: Table = {
   "char.gold": "ゴールド {gold}",
   "char.emptyKey": "空き",
   "char.anEmptyKey": "空き",
-  "char.affixesOf": "付与枠 {held}/{max}",
   "char.affixSlot": "付与枠 {n} · 空き",
   "char.doesNotFitShape": "装着不可：{shapes}タイプの呪文専用（この呪文は{shape}）",
   "char.doesNotFitSeek": "装着不可：拡散する呪文には追尾を付けられない（扇状の射撃・「スキャッター」を含む）",

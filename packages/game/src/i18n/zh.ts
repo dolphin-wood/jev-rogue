@@ -267,7 +267,6 @@ export const ZH: Table = {
   "char.gold": "金币 {gold}",
   "char.emptyKey": "空位",
   "char.anEmptyKey": "空位",
-  "char.affixesOf": "词条 {held}/{max}",
   "char.affixSlot": "词条槽 {n} · 空",
   "char.doesNotFitShape": "无法装配：仅限{shapes}类法术，此法术为{shape}类",
   "char.doesNotFitSeek": "无法装配：扩散型法术无法追踪（扇形弹幕与「散射」均不行）",
