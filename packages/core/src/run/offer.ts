@@ -14,7 +14,7 @@
  * and without a baseline "the Director is working" is not a claim that can be
  * checked.
  */
-import type { BaseItem, DoorSet, ObservedLabels, RoomType, RunHistory, SummaryLabels } from "../types.ts";
+import type { BaseItem, DoorSet, ObservedLabels, RoomType, RunHistory, RunJournalEntry, SummaryLabels } from "../types.ts";
 import type { ItemRegistry } from "../spells/items.ts";
 import type { Rng } from "../rng.ts";
 import type { OfferCard, PortalSpec, RewardCardKind } from "../sim/exits.ts";
@@ -22,7 +22,7 @@ import { SPELL_DAMAGE_SCALE } from "../sim/cast.ts";
 import { AFFIX_SLOTS, SPELL_SLOTS, levelDamageMult, levelManaMult, spellCost, statusForecast, statusPerHit } from "../sim/spells.ts";
 import { num } from "../spells/items.ts";
 import { STAT_UPGRADES, statLine, statLinePart } from "./stats.ts";
-import { AFFIX_SURCHARGE_KEY, SPELL_AFFIXES, affixFitsLine, affixStrengthFloor, affixFitsSpell, affixSurchargePct, affixSurchargeText, affixTextKey, itemShape } from "../spells/affixes.ts";
+import { AFFIX_SURCHARGE_KEY, SPELL_AFFIXES, spellAffixById, affixFitsLine, affixStrengthFloor, affixFitsSpell, affixSurchargePct, affixSurchargeText, affixTextKey, itemShape } from "../spells/affixes.ts";
 import { schoolOf } from "../spells/schools.ts";
 import type { SpellAffix, SpellShape } from "../spells/affixes.ts";
 import { legalDoorSets } from "./pacing.ts";
@@ -336,6 +336,62 @@ export interface OfferPromise {
   readonly grade?: number;
   /** The run's build style: a spell offer with no school leans toward spells tagged with it. */
   readonly style?: string;
+  /**
+   * What makes a strong door's spell card come with the affix it does
+   * (`innateAffix`): the run and the room, so the choice differs from room
+   * to room and run to run, and is the same wherever this offer is built —
+   * the pool the Director judges and the cards the screen deals.
+   */
+  readonly salt?: string;
+  /** The spells on the keys, by id: a copy of one levels it and brings no affix. */
+  readonly held?: readonly string[];
+}
+
+/** The door strength from which a new spell card comes with an affix. */
+export const INNATE_GRADE = 3;
+
+/** A small, stable hash, for choosing among equals the same way everywhere. */
+function hashOf(text: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+
+/**
+ * **The affix a strong door's spell comes with**, or null.
+ *
+ * Late in a run the keys carry two or three affixes each, and a new spell
+ * arrives bare: taking it was a step down however good the spell, so the
+ * spell offers of the run's end went to the dismantle price. A strength III
+ * door's new spell therefore comes with one affix, of strength I or II so the
+ * affix doors keep their own top cards, fitted to the spell, and one of the
+ * affixes the run's style reads as where the spell can take one (`AFFIX_STYLE`)
+ * — chosen among those by the run and the room, never by chance at the
+ * moment of dealing, so the card the Director judged is the card dealt. A
+ * copy of a held spell levels that key and brings none.
+ */
+export function innateAffix(
+  items: ItemRegistry, spellId: string, grade: number | undefined, promise: OfferPromise,
+): SpellAffix | null {
+  if ((grade ?? 1) < INNATE_GRADE || promise.held?.includes(spellId)) return null;
+  const item = items.get(spellId);
+  if (!item) return null;
+  const fits = SPELL_AFFIXES.filter((a) => affixStrengthFloor(a.id) <= 2 && affixFitsSpell(a, item, []));
+  if (fits.length === 0) return null;
+  const styled = promise.style ? fits.filter((a) => AFFIX_STYLE[promise.style!]?.includes(a.id)) : [];
+  const from = styled.length > 0 ? styled : fits;
+  return from[hashOf(`${promise.salt ?? ""}:${spellId}`) % from.length] ?? null;
+}
+
+/** A spell card with the affix it comes with: on the card as a part of its numbers, and on the card to attach. */
+function withInnate(card: OfferCard, affix: SpellAffix | null): OfferCard {
+  if (!affix) return card;
+  const part: StatPart = { text: `+ ${affix.name}`, tone: "mod", key: "card.innate", args: { affix: affix.id } };
+  return {
+    ...card, affixes: [affix.id],
+    stats: `${card.stats}  ${part.text}`,
+    statParts: [...(card.statParts ?? [{ text: card.stats, tone: "mod" as const }]), part],
+  };
 }
 
 export function offerCards(
@@ -344,6 +400,7 @@ export function offerCards(
 ): OfferCard[] {
   const grade = Math.max(1, Math.min(3, promise.grade ?? 1));
   return offerCardsUngraded(items, rng, owned, kind, held, promise)
+    .map((c) => (c.kind === "spell" ? withInnate(c, innateAffix(items, c.itemId, grade, promise)) : c))
     .map((c) => {
       // An affix card is the affix's own strength, whatever door dealt it (`affixStrengthFloor`).
       if (c.kind === "affix") return { ...c, grade: affixStrengthFloor(c.itemId ?? "") };
@@ -559,6 +616,8 @@ export interface CardNeeds {
   /** The ids of the held spells, and of the affixes on them. */
   readonly heldSpells?: readonly string[];
   readonly heldAffixes?: readonly string[];
+  /** Affixes the player has turned down twice against the keys they hold (`exhaustedAffixes`). */
+  readonly exhausted?: readonly string[];
   /**
    * Whether any key is still empty.
    *
@@ -581,6 +640,7 @@ export function cardNeedsFor(
   labels: SummaryLabels, style: string,
   keys: readonly { readonly base: string; readonly affixes: readonly { readonly id: string }[] }[],
   items: ItemRegistry,
+  journal: readonly RunJournalEntry[] = [],
 ): CardNeeds {
   const elements = new Set<string>();
   for (const k of keys) {
@@ -597,7 +657,45 @@ export function cardNeedsFor(
     elements: [...elements],
     heldSpells: keys.map((k) => k.base),
     heldAffixes: keys.flatMap((k) => k.affixes.map((a) => a.id)),
+    exhausted: exhaustedAffixes(journal, keys.map((k) => k.base), items),
   };
+}
+
+/** How many times the player turns an affix down, against the same keys, before the run stops dealing it. */
+export const AFFIX_DECLINES = 2;
+
+/**
+ * **The affixes the player has turned down twice against the keys they hold.**
+ *
+ * An affix left on a reward screen is a statement — not now, not on these
+ * spells — and one Jev's taste keeps bringing back after it has been refused
+ * twice is the reward screen not listening. But a refusal is about the keys
+ * it was made against: an affix passed over while no key suited it may be the
+ * right card once a spell that does arrives. So a count starts again for
+ * every affix a newly held spell can take, and only two refusals against the
+ * same keys take an affix out of the run.
+ */
+export function exhaustedAffixes(
+  journal: readonly RunJournalEntry[], keysNow: readonly string[], items: ItemRegistry,
+): string[] {
+  const declines = new Map<string, number>();
+  let before: readonly string[] = [];
+  const arrive = (keys: readonly string[]): void => {
+    for (const id of keys) {
+      if (before.includes(id)) continue;
+      const item = items.get(id);
+      if (!item) continue;
+      for (const a of SPELL_AFFIXES) if (declines.has(a.id) && affixFitsSpell(a, item, [])) declines.delete(a.id);
+    }
+    before = keys;
+  };
+  for (const room of journal) {
+    arrive(room.keys ?? before);
+    for (const id of room.passed_over ?? [])
+      if (spellAffixById(id)) declines.set(id, (declines.get(id) ?? 0) + 1);
+  }
+  arrive(keysNow);
+  return [...declines].filter(([, n]) => n >= AFFIX_DECLINES).map(([id]) => id);
 }
 
 /** The blacksmith's price to raise a spell *from* this level. */
@@ -895,8 +993,16 @@ export function cardPool(
   const when = (cond: boolean, fact: CardFact): CardFact[] => (cond ? [fact] : []);
   let all: Entry[] = [];
   if (kind === "spell") {
-    all = [...items.values()].map((i) => ({
-      id: i.id, description: cardText(i.id, i.description), group: !!promise.school && schoolOf(i.id) === promise.school,
+    all = [...items.values()].map((i) => {
+      // What the card says it comes with, so the Director judges the card the screen deals.
+      const innate = innateAffix(items, i.id, promise.grade,
+        { ...promise, style: promise.style ?? needs.style, held: promise.held ?? needs.heldSpells });
+      return {
+      id: i.id,
+      description: innate
+        ? `${cardText(i.id, i.description)} It comes with ${innate.name} already attached: ${innate.description}`
+        : cardText(i.id, i.description),
+      group: !!promise.school && schoolOf(i.id) === promise.school,
       facts: [
         ...when(!!style && i.tags.includes(style), "style"),
         ...when(revealed.some((t) => i.tags.includes(t)), "build"),
@@ -905,7 +1011,8 @@ export function cardPool(
         ...when(elements.some((el) => el !== "none" && i.tags.includes(el)), "synergy"),
         ...when(!!needs.heldSpells?.includes(i.id), "upgrade"),
       ],
-    }));
+      };
+    });
   } else if (kind === "stat") {
     all = STAT_UPGRADES.map((u) => ({
       id: u.id, description: cardText(u.id, u.description, u.name), group: !!promise.family && u.family === promise.family,
@@ -917,8 +1024,17 @@ export function cardPool(
       ],
     }));
   } else if (kind === "affix") {
-    // A door whose strength is known deals only what it is strong enough for (`affixStrengthFloor`).
-    all = fittingAffixes(held).filter((a) => promise.grade === undefined || affixStrengthFloor(a.id) <= promise.grade).map((a) => ({
+    /*
+     * A door whose strength is known deals only what it is strong enough for
+     * (`affixStrengthFloor`), and none the player has turned down twice
+     * against the keys they still hold (`exhaustedAffixes`) — unless that
+     * would leave the screen short, when they come back rather than a card
+     * going missing.
+     */
+    const strong = fittingAffixes(held).filter((a) => promise.grade === undefined || affixStrengthFloor(a.id) <= promise.grade);
+    const out = new Set(needs.exhausted ?? []);
+    const kept = strong.filter((a) => !out.has(a.id));
+    all = (kept.length >= CARDS_PER_OFFER ? kept : strong).map((a) => ({
       id: a.id,
       description: cardText(a.id, a.description, a.name),
       ...(held.length > 0 && held.every((key) => key.id)
@@ -1005,7 +1121,8 @@ export function cardsFor(
 ): OfferCard[] {
   const grade = Math.max(1, Math.min(3, promise.grade ?? 1));
   return ids.flatMap((id) => {
-    const c = cardOf(items, kind, id, grade);
+    const bare = cardOf(items, kind, id, grade);
+    const c = bare && kind === "spell" ? withInnate(bare, innateAffix(items, id, grade, promise)) : bare;
     if (!c) return [];
     // An affix card is the affix's own strength, whatever door dealt it (`affixStrengthFloor`).
     if (c.kind === "affix") return [{ ...c, grade: affixStrengthFloor(id) }];

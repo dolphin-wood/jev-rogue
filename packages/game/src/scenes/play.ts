@@ -2684,7 +2684,7 @@ export class PlayScene extends Phaser.Scene {
   ): OfferAsk {
     const kind = this.roomReward;
     // The grade and the style only: the school or family on the door describes its cards, it does not choose them.
-    const promise: OfferPromise = fight ? { grade: this.roomPromise.grade, style: this.intent.preset } : {};
+    const promise: OfferPromise = fight ? this.rewardPromise(run.roomIndex, this.roomPromise.grade) : {};
     if (stage === "boss") return { kind, promise, request: {} };
     const needs = this.cardNeeds(ctx);
     const cards: CardRequest[] = [];
@@ -2834,7 +2834,20 @@ export class PlayScene extends Phaser.Scene {
   /** What the offer's facts read off the run: doc 007's needs. */
   private cardNeeds(ctx: RunContext): CardNeeds {
     const keys = this.slots.flatMap((x, i) => (x ? [{ base: x.base, affixes: this.spellAffixes[i] ?? [] }] : []));
-    return cardNeedsFor(ctx.labels, this.intent.preset, keys, ITEMS);
+    return cardNeedsFor(ctx.labels, this.intent.preset, keys, ITEMS, ctx.history.journal ?? []);
+  }
+
+  /**
+   * **A reward room's promise**: its grade and the run's style, and what
+   * decides the affix a strong door's spell comes with (`innateAffix`) — the
+   * run and the room, and the keys held. One builder, so the pool a door's
+   * cards are judged from and the cards its room deals agree.
+   */
+  private rewardPromise(roomIndex: number, grade: number): OfferPromise {
+    return {
+      grade, style: this.intent.preset, salt: `${this.runSeed}:${roomIndex}`,
+      held: this.slots.flatMap((x) => (x ? [x.base] : [])),
+    };
   }
 
   /**
@@ -6904,6 +6917,18 @@ export class PlayScene extends Phaser.Scene {
       (before[i]?.text === part.text || part.tone === "mana" ? part : { ...part, tone: "grade" }));
   }
 
+  /**
+   * The affixes a spell card's slots show, or null for a card that is not a
+   * spell: on an upgrade the held key's own, which the copy keeps; on a new
+   * spell what it comes with (`OfferCard.affixes`), usually nothing.
+   */
+  private cardSlotAffixes(card: OfferCard): readonly string[] | null {
+    if (card.kind !== "spell" || !card.itemId) return null;
+    const at = this.world ? this.heldIndex(card.itemId) : -1;
+    if (at >= 0) return (this.world.spells[at]?.affixes ?? []).map((a) => a.id);
+    return card.affixes ?? [];
+  }
+
   /** Which key holds this spell, or -1. */
   private heldIndex(itemId: string): number {
     return this.world.spells.findIndex((x) => x?.item.base === itemId);
@@ -9904,6 +9929,7 @@ export class PlayScene extends Phaser.Scene {
       ...(!portal || portal.onward ? {} : { door_taken: portal.npc ?? portal.reward }),
       ...(this.pickedThisRoom ? { picked: [this.pickedThisRoom] } : {}),
       passed_over: offered.filter((id) => id !== this.pickedThisRoom),
+      keys: this.slots.flatMap((x) => (x ? [x.base] : [])),
       ...(this.pickedThisRoom === "gold" ? { took_gold_instead: true } : {}),
     };
   }
@@ -11077,6 +11103,9 @@ export class PlayScene extends Phaser.Scene {
     /** The height of the lower corner brackets, which text must not cross. */
     const CARD_FOOT = 22;
     const ICON_PX = 34;
+    /** A spell card's row of affix slots, under its numbers (`cardSlotAffixes`). */
+    const SLOT_ROW = 20;
+    const SLOT_PX = 16;
     const SPREAD = CARD_W + CARD_GAP;
 
     /*
@@ -11151,7 +11180,8 @@ export class PlayScene extends Phaser.Scene {
       // The name's measured height too: a long name wraps to two lines and
       // the stat line was drawn over its second one.
       const nameH = Math.max(NAME_H, Math.ceil(name.height / ZOOM));
-      const bodyTop = PAD + ICON_PX + 6 + nameH + 2 + statH + 6;
+      const slotted = this.cardSlotAffixes(card);
+      const bodyTop = PAD + ICON_PX + 6 + nameH + 2 + statH + 6 + (slotted ? SLOT_ROW : 0);
       /*
        * The room the rules text has: from under the stat line to above the
        * lower corner brackets. It was measured to the padding, and the
@@ -11201,7 +11231,7 @@ export class PlayScene extends Phaser.Scene {
           body.setText(wrapText(`${parts.join(join)}…`, wrap / ZOOM, nativePx(1), letterSpacing()));
         }
       }
-      return { name, stats, body, bodyTop, nameH, needed, cut };
+      return { name, stats, body, bodyTop, nameH, statH, slotted, needed, cut };
     });
     /*
      * **The row grows before the copy is cut.** At the fixed height eight
@@ -11224,7 +11254,7 @@ export class PlayScene extends Phaser.Scene {
 
     const built = cards.map((card, i) => {
       const x = cx + (i - (cards.length - 1) / 2) * SPREAD;
-      const { name, stats, body, bodyTop, nameH } = texts[i]!;
+      const { name, stats, body, bodyTop, nameH, statH, slotted } = texts[i]!;
 
       /*
        * A spell card shows **its own icon**, not the generic kind.
@@ -11302,6 +11332,24 @@ export class PlayScene extends Phaser.Scene {
        * what the card does. Red when it cannot be afforded.
        */
       const extras: Phaser.GameObjects.GameObject[] = [];
+      /*
+       * **The affix slots**, on a spell card: one square a slot, holding the
+       * icon of what the spell will carry once taken — the affix a strong
+       * door's spell comes with, or on an upgrade the held key's own, which
+       * stay — and empty squares for the room it has left.
+       */
+      if (slotted) {
+        const sy = top + PAD + ICON_PX + 6 + nameH + 2 + statH + 4 + SLOT_PX / 2;
+        for (let k = 0; k < AFFIX_SLOTS; k++) {
+          const sx = left + SLOT_PX / 2 + k * (SLOT_PX + 3);
+          const id = slotted[k];
+          extras.push(this.add.rectangle(sx, sy, SLOT_PX + 2, SLOT_PX + 2, 0x0d0b1f, 0.9)
+            .setStrokeStyle(1, id ? 0x8a7ad8 : 0x3a4266, 1).setDepth(202));
+          const frame = id ? `icon_affix_${id}` : "";
+          if (frame && this.atlas.has(frame))
+            extras.push(this.add.image(sx, sy, this.crispTextureKey, frame).setOrigin(0.5).setScale(1 / TUNED).setDepth(202.5));
+        }
+      }
       if (this.shopping) {
         const price = MERCHANT_PRICE[card.kind] ?? 0;
         const afford = this.canAfford(price);
@@ -11499,7 +11547,7 @@ export class PlayScene extends Phaser.Scene {
     const kinds: readonly RewardCardKind[] = this.shopping ? SHELF_KINDS : [this.roomReward];
     const requests = kinds.flatMap((kind): CardRequest[] => {
       const shown = current.filter((card) => card.kind === kind).map((card) => card.itemId ?? "");
-      const promise: OfferPromise = this.shopping ? { grade: baseStrength(index, false) } : { grade: this.roomPromise.grade, style: this.intent.preset };
+      const promise: OfferPromise = this.shopping ? { grade: baseStrength(index, false) } : this.rewardPromise(index, this.roomPromise.grade);
       const base = cardPool(ITEMS, this.ownedFor(kind), kind, held, promise, needs);
       const pool = freshRerollPool(base, shown, this.shopping ? 1 : CARDS_PER_OFFER);
       return pool ? [{
@@ -11539,8 +11587,7 @@ export class PlayScene extends Phaser.Scene {
         });
       } else {
         const { request, cardPlan } = outcomes[0]!;
-        const cards = cardsFor(ITEMS, request.pool.kind, cardPlan.ids,
-          { grade: this.roomPromise.grade, style: this.intent.preset });
+        const cards = cardsFor(ITEMS, request.pool.kind, cardPlan.ids, this.rewardPromise(index, this.roomPromise.grade));
         if (cards.length === 0 || !this.offer) throw new Error("reroll returned unusable cards");
         this.offer = { ...this.offer, cards };
         this.roomCards = cardPlan.ids;
@@ -12139,7 +12186,8 @@ export class PlayScene extends Phaser.Scene {
     const oldValue = old ? dismantleValue(oldLevel, oldAffixes.map((a) => affixStrengthFloor(a.id))) : 0;
     // A floor spell keeps what it had; a card's spell starts bare, at the card's level.
     const floor = this.floorPending;
-    const fitted = this.equipAt(i, card.itemId, floor ? floor.level : card.grade ?? 1, floor ? floor.affixes : []);
+    const fitted = this.equipAt(i, card.itemId, floor ? floor.level : card.grade ?? 1,
+      floor ? floor.affixes : (card.affixes ?? []).map((id) => ({ id })));
     if (!fitted) { this.sfx.play("ui_deny"); return; }
     // The spell that came off the key lies on the floor, as it was.
     if (old) this.dropFloorSpell(old.item.base, oldValue, oldLevel, oldAffixes);
@@ -12234,19 +12282,9 @@ export class PlayScene extends Phaser.Scene {
         this.showReplace(card);
         return;
       }
-      this.owned.push(card.itemId);
+      // Onto the first free key, at the card's level, with the affix a strong door's spell comes with.
       const free = this.world.slots.findIndex((x) => x === null);
-      const fitted = equipKeepingOthers(
-        this.world, card.itemId, `${card.itemId}-${this.roomIndex}`, ITEMS,
-      );
-      // Equipping builds a new slot list on the world; the run has to take a
-      // copy or the pickup is lost at the next portal.
-      if (fitted) {
-        this.slots = [...this.world.slots];
-        this.spellLevels[free] = card.grade ?? 1;
-        const slot = this.world.spells[free];
-        if (slot) this.world.spells[free] = withLevel(slot, card.grade ?? 1);
-      }
+      this.equipAt(free, card.itemId, card.grade ?? 1, (card.affixes ?? []).map((id) => ({ id })));
     }
     this.finishTake();
   }
@@ -12336,7 +12374,7 @@ export class PlayScene extends Phaser.Scene {
      */
     const base = baseStrength(index + 1, false);
     const request = (k: RewardCardKind, grade: number, salt: string): CardRequest => ({
-      room_index: index + 1, pool: cardPool(ITEMS, this.ownedFor(k), k, held, { style: this.intent.preset, grade }, needs),
+      room_index: index + 1, pool: cardPool(ITEMS, this.ownedFor(k), k, held, this.rewardPromise(index + 1, grade), needs),
       count: CARDS_PER_OFFER, pity: this.needMisses >= 3, temptation: this.offersMade % 4 === 3, salt,
     });
     const requests: CardRequest[] = kinds.map((k) => request(k, base, `door_${k}`));

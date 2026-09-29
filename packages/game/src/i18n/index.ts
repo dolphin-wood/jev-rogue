@@ -171,6 +171,8 @@ function localizeArg(name: string, value: string | number): string | number {
   if (typeof value !== "string") return value;
   if (name === "element") return lookup(`element.${value}`) ?? value;
   if (name === "label") return lookup(`statlabel.${value}`) ?? value;
+  // An affix travels as its id and is named from the content table.
+  if (name === "affix") return contentName(value, value);
   if (name === "shapes")
     return value.split(",").map((s) => lookup(`shape.${s}`) ?? s).join(lookup("list.sep") ?? ", ");
   return value;

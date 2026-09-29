@@ -17,7 +17,7 @@ import {
   bucketConsistency, cardStyleTags, measureOf, observedLabels, UNMEASURED,
   makeEnemy, GRID_W, GRID_H, TILE_PX, runStaff, SPELL_LEVEL_MAX, slotCost, affixFitsSpell, spellAffixById, journalDoor, cardTypesOf, hasChest, CHEST_SALT, CHEST_GOLD,
 } from "@jr/core";
-import type {
+import type { OfferPromise,
   Archetype, ItemInstance, RoomType, JournalDoor, RunContext, RunHistory, RunJournalEntry, Staff, Tension, World,
   PlayerMods, RewardCardKind, DoorOffer, OfferCard, AttachedAffix,
 } from "@jr/core";
@@ -395,7 +395,12 @@ export async function playRun(
   const needsFor = (c: RunContext) => cardNeedsFor(
     c.labels, preset,
     slots.flatMap((x, i) => (x ? [{ base: x.base, affixes: spellAffixes[i] ?? [] }] : [])), ITEMS,
+    c.history.journal ?? [],
   );
+  /** A reward room's promise, as the scene builds it (`rewardPromise`): grade, style, and what picks a strong door's affix. */
+  const promiseFor = (room: number, grade: number): OfferPromise => ({
+    grade, style: preset, salt: `${seed}:${room}`, held: slots.flatMap((x) => (x ? [x.base] : [])),
+  });
   // As in the scene: a held spell below the cap stays offerable, a copy levels it.
   const ownedFor = (k: RewardCardKind): string[] => k === "spell"
     ? slots.flatMap((x, i) => (x && (spellLevels[i] ?? 1) >= SPELL_LEVEL_MAX ? [x.base] : []))
@@ -451,7 +456,7 @@ export async function playRun(
      */
     const base = baseStrength(index + 1, false);
     const request = (k: RewardCardKind, grade: number, salt: string): CardRequest => ({
-      room_index: index + 1, pool: cardPool(ITEMS, ownedFor(k), k, held, { style: preset, grade }, needs),
+      room_index: index + 1, pool: cardPool(ITEMS, ownedFor(k), k, held, promiseFor(index + 1, grade), needs),
       count: CARDS_PER_OFFER, pity: needMisses >= 3, temptation: offersMade % 4 === 3, salt,
     });
     const cards: CardRequest[] = kinds.map((k) => request(k, base, `door_${k}`));
@@ -524,7 +529,8 @@ export async function playRun(
     const held = heldNow();
     const needs = needsFor(ctx);
     // The first audience pays its door a grade higher (doc 022).
-    const promise = isFight ? { grade: isFixedFightRoom(index, audienceRoom) ? audienceGrade(door.grade) : door.grade, style: preset } : {};
+    const promise: OfferPromise = isFight
+      ? promiseFor(index, isFixedFightRoom(index, audienceRoom) ? audienceGrade(door.grade) : door.grade) : {};
     const decidedCards = isFight && door.reward !== "gold" ? door.cards : undefined;
     const cardReqs: CardRequest[] = [];
     if (isFight && door.reward !== "gold" && !decidedCards)
@@ -686,6 +692,8 @@ export async function playRun(
     const grade = isFight ? door.grade : 1;
 
     let reward: string | null = null;
+    // What was taken, by id, for the journal: the label is for reading, and "Parting Shot" is `parting`.
+    let rewardId: string | null = null;
     if (hearts > 0 && result.cleared && offerKind) {
       if (offer && offer.cards.length === 0) {
         /*
@@ -696,6 +704,7 @@ export async function playRun(
          */
         gold += goldRoomCoins(grade) * COIN_VALUE;
         reward = "gold";
+        rewardId = "gold";
       } else if (offer) {
         const card = chooseCard(offer.cards, hearts, stage === "shop" ? gold : null, {
           held: world.spells.flatMap((x) => (x ? [x.item.base] : [])),
@@ -706,6 +715,7 @@ export async function playRun(
           pickTags.push([...cardStyleTags(ITEMS, card.kind, card.itemId)]);
           if (stage === "shop") gold -= MERCHANT_PRICE[card.kind] ?? 0;
           reward = card.label;
+          rewardId = card.itemId || card.kind;
           if (card.kind === "stat") {
             statsTaken++;
             statsTaken_.push(card.itemId);
@@ -722,6 +732,8 @@ export async function playRun(
               slots.splice(0, slots.length, ...world.slots);
               owned.push(card.itemId);
               if (free >= 0) spellLevels[free] = card.grade ?? 1;
+              // The affix a strong door's spell comes with goes on with it, as in the scene (`equipAt`).
+              if (free >= 0 && card.affixes?.length) spellAffixes[free] = card.affixes.map((id) => ({ id }));
             } else {
               inventory.push(plainInstance(card.itemId, `${card.itemId}-${index}`));
             }
@@ -845,10 +857,11 @@ export async function playRun(
         ...(bodies.length ? { enemies: bodies } : {}),
         doors_offered: doorKinds,
         doors: journalDoors,
-        ...(reward ? { picked: [reward.toLowerCase().replace(/ /g, "_")] } : {}),
+        ...(rewardId ? { picked: [rewardId] } : {}),
         passed_over: cards
           .map((c) => c.itemId || c.kind)
-          .filter((id) => id !== reward?.toLowerCase().replace(/ /g, "_")),
+          .filter((id) => id !== rewardId),
+        keys: slots.flatMap((x) => (x ? [x.base] : [])),
         ...(reward === "gold" ? { took_gold_instead: true } : {}),
       });
     }

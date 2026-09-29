@@ -552,6 +552,11 @@ export interface RunJournalEntry {
   /** Cards taken and cards left on the screen, by id. */
   readonly picked?: readonly string[];
   readonly passed_over?: readonly string[];
+  /**
+   * The spells on the keys when the room ended, by id: what the offer on its
+   * screen was judged against (`exhaustedAffixes`).
+   */
+  readonly keys?: readonly string[];
   /** A room whose reward was a purse rather than a card. */
   readonly took_gold_instead?: boolean;
   /** The room's size as it was built. */

@@ -393,13 +393,33 @@ it.
 **The pool is sized against what a run is shown, build by build.** An offer
 deals only the affixes some held key can take (013), and a key that holds an
 affix is not dealt it again, so what matters is not the thirty-four in the
-roster but the part of them one staff can be dealt, against the affix cards one
+roster but the part of them one set of keys can be dealt, against the affix cards one
 run meets — about seventeen on the Jev arm. A bolt starter can be dealt
 twenty-seven, Earth Spikes fourteen, Crescent Edge nineteen: every shape has
 affixes at the moments it reaches (the cast, the dash, the spin), not only the
 projectile's. A pool a run can exhaust repeats whatever the Director does
 (jev-findings 36); inside a run, the repeat penalty and the unshown card in
 the tail are what spread the offer, and they are code's.
+
+**An affix turned down twice against the same keys is not dealt again**
+(`exhaustedAffixes`). A card left on the screen says "not on these spells";
+one the Director's taste brings back after two refusals is the screen not
+listening. But a refusal is about the keys it was made against, so the count
+starts again for every affix a newly held spell can take: an affix passed
+over while nothing suited it returns once something does. It leaves the pool
+only while enough remain to fill the screen. It is code's — a sequence
+property, like the repeat penalty (jev-findings 15) — and applies to both arms.
+
+**A strength III door's new spell comes with one affix** (`innateAffix`). Late
+in a run the keys carry two or three affixes each and a new spell arrives
+bare, so taking one was a step down however good the spell. The affix is of
+strength I or II, so the affix doors keep their own top cards; it fits the
+spell, and is one the run's style reads as where the spell can take one;
+among those it is chosen by the run and the room (`OfferPromise.salt`), never
+by chance at the moment of dealing, so the card the Director judges — its
+description says what it comes with — is the card dealt. A copy of a held
+spell levels that key and brings none. The card shows it in the stat line
+and in its row of affix slots.
 
 The lane is a **weight, not a filter**: every legal affix stays in the pool, as
 every other card does, and the chosen lane's cards are multiplied by

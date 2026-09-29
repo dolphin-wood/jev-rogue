@@ -115,6 +115,11 @@ export interface OfferCard {
    * take the harder room.
    */
   readonly grade?: number;
+  /**
+   * **The affixes a spell card comes with** (`innateAffix`): a strength III
+   * door's new spell arrives carrying one, attached as it goes on its key.
+   */
+  readonly affixes?: readonly string[];
 }
 
 /**

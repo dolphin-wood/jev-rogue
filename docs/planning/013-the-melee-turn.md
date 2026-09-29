@@ -621,6 +621,11 @@ scatters coins, and from taking a spell apart.
 
 ### Replacing a spell dismantles it into gold
 
+A spell card shows **its affix slots** under its numbers: the three squares a
+key has, holding what the spell will carry once taken — nothing on most new
+spells, the affix a strength III door's new spell comes with (007), and on an
+upgrade the held key's own, which the copy keeps.
+
 Replacing a spell **dismantles** it, and the spell plus the affixes invested in
 it convert into gold. `X` dismantles a spell card on the reward screen outright.
 A spell replaced on a full set of keys **drops on the floor as it was** — its

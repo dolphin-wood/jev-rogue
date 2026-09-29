@@ -226,6 +226,7 @@ export const EN = {
   "hud.bossPhase": "phase {n}",
   "prompt.cutTheLink": "Stand on the chain to break it",
   "card.upgradeLv": "upgrade Lv {from} → {to}",
+  "card.innate": "+ {affix}",
 
   /* ------------------------------ character ----------------------------- */
   "char.run": "Floor {room} · {type}",

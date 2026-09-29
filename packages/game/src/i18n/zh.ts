@@ -223,6 +223,7 @@ export const ZH: Table = {
   "hud.bossPhase": "第 {n} 阶段",
   "prompt.cutTheLink": "站到锁链上将其斩断",
   "card.upgradeLv": "升级 Lv {from} → {to}",
+  "card.innate": "+ {affix}",
 
   /* ------------------------------ character ----------------------------- */
   "char.run": "第 {room} 层 · {type}",

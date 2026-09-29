@@ -222,6 +222,7 @@ export const JA: Table = {
   "hud.bossPhase": "第 {n} 段階",
   "prompt.cutTheLink": "鎖の上に立って断ち切る",
   "card.upgradeLv": "強化 Lv {from} → {to}",
+  "card.innate": "+ {affix}",
 
   /* ------------------------------ character ----------------------------- */
   "char.run": "第 {room} 層 · {type}",
