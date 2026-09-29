@@ -11491,13 +11491,13 @@ export class PlayScene extends Phaser.Scene {
       if (slotted) {
         const sy = top + cardH - CARD_FOOT - SLOT_AIR - (SLOT_PX + 2) / 2;
         /*
-         * Named, in the character screen's own words ("affixes 1/3"), so the
-         * squares say what they are; and quiet when they are empty — a faint
-         * outline and no ground — so a bare spell's row does not outweigh
-         * its description. A held affix keeps its rarity's border and icon.
+         * Named ("affixes"), so the squares say what they are — the count is
+         * the squares themselves — and quiet when they are empty: a faint
+         * outline and no ground, so a bare spell's row does not outweigh its
+         * description. A held affix keeps its rarity's border and icon.
          */
         const held = slotted.length;
-        const label = this.uiText(left, sy, t("char.affixesOf", { held, max: AFFIX_SLOTS }), 6, held > 0 ? "#8792b5" : "#4a5070")
+        const label = this.uiText(left, sy, t("card.affixes"), 6, held > 0 ? "#8792b5" : "#4a5070")
           .setOrigin(0, 0.5).setDepth(202);
         extras.push(label);
         const from = left + label.width / ZOOM + 6;

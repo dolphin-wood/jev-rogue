@@ -227,6 +227,7 @@ export const EN = {
   "prompt.cutTheLink": "Stand on the chain to break it",
   "card.upgradeLv": "upgrade Lv {from} → {to}",
   "card.innate": "+ {affix}",
+  "card.affixes": "affixes",
 
   /* ------------------------------ character ----------------------------- */
   "char.run": "Floor {room} · {type}",

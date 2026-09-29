@@ -224,6 +224,7 @@ export const ZH: Table = {
   "prompt.cutTheLink": "站到锁链上将其斩断",
   "card.upgradeLv": "升级 Lv {from} → {to}",
   "card.innate": "+ {affix}",
+  "card.affixes": "词条",
 
   /* ------------------------------ character ----------------------------- */
   "char.run": "第 {room} 层 · {type}",

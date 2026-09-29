@@ -223,6 +223,7 @@ export const JA: Table = {
   "prompt.cutTheLink": "鎖の上に立って断ち切る",
   "card.upgradeLv": "強化 Lv {from} → {to}",
   "card.innate": "+ {affix}",
+  "card.affixes": "付与枠",
 
   /* ------------------------------ character ----------------------------- */
   "char.run": "第 {room} 層 · {type}",
