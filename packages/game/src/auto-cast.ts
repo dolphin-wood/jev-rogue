@@ -111,6 +111,29 @@ export function autoCastAnyReach(params: Readonly<Record<string, number | string
   return params["shape"] === "enchant" || params["shape"] === "summon";
 }
 
+/**
+ * **How much of the casting the assist does.** `off`: every cast is a key
+ * the player presses. `space`: one key under the thumb casts a ready spell
+ * at the player's moment, and the assist picks which (`pickNow`) — the
+ * spell keys sit under the fingers that swing, dash and spin, and the
+ * thumbs had nothing to do. `auto`: the assist picks the moment too
+ * (`pick`). U, I and O cast the key chosen in all three.
+ */
+export type AutoCastMode = "off" | "space" | "auto";
+/** In the order the setting steps through them. */
+export const AUTO_CAST_MODES: readonly AutoCastMode[] = ["off", "space", "auto"];
+
+/**
+ * The mode a saved setting names, `space` for none. `"0"` and `"1"` are the
+ * on/off switch it was, and keep their meaning: a player who turned the
+ * assist on keeps it on.
+ */
+export function autoCastModeOf(saved: string | null): AutoCastMode {
+  if (saved === "0" || saved === "off") return "off";
+  if (saved === "1" || saved === "auto") return "auto";
+  return "space";
+}
+
 /** The farthest any key reaches for auto-cast: about what the screen shows round the player. */
 export const AUTO_CAST_MAX_REACH_PX = 10 * TILE_PX;
 
@@ -159,6 +182,12 @@ export class AutoCaster {
   private next: number | null = null;
   /** Each key's weight in the draw; `AUTO_CAST_START_WEIGHT` until it has one. */
   private readonly weights: number[] = [];
+  /**
+   * The next draw's roll, made ahead of it, so `peek` can say which key the
+   * next cast is before it is made and be right: the same roll over the
+   * same keys and weights is the same key.
+   */
+  private roll: number | null = null;
 
   constructor(private readonly random: () => number = Math.random) {}
 
@@ -176,7 +205,21 @@ export class AutoCaster {
   /** Forgets the beat and every weight: a new room, a paused fight, the assist switched off. */
   reset(): void {
     this.next = null;
+    this.roll = null;
     this.weights.length = 0;
+  }
+
+  /**
+   * **The key the next cast would be, without casting it**: for a Space
+   * press (`now`), the key `pickNow` would give on this step; for the
+   * assist's own beat, the key `pick` would give when the beat comes — the
+   * key the bar is being saved for, if it is. Null when no key could go.
+   * Nothing moves: no weight, no roll, no beat.
+   */
+  peek(keys: readonly AutoCastKey[], bar: AutoCastBar, now: boolean): number | null {
+    if (now) return this.draw(keys, { ...bar, floor: 0 }, false);
+    const saved = this.savedFor(keys, bar);
+    return saved ?? this.draw(keys, bar, false);
   }
 
   /**
@@ -191,21 +234,56 @@ export class AutoCaster {
     // The beat is counted from the hands coming free.
     if (this.next === null) { this.next = now + AUTO_CAST_DELAY_MS + this.random() * AUTO_CAST_SPREAD_MS; return null; }
     if (now < this.next) return null;
-    const paid = (k: AutoCastKey) => bar.mana - k.cost >= bar.floor;
-    // The bar saved for the key most owed, when it is back and the bar is short of it — and could ever pay.
-    const top = Math.max(0, ...keys.map((k, i) => (k.held ? this.weight(i) : 0)));
-    if (keys.some((k, i) => k.ready && !paid(k) && k.cost + bar.floor <= bar.max && this.weight(i) >= top)) return null;
-    const pool = keys.flatMap((k, i) => (k.ready && paid(k) ? [i] : []));
+    if (this.savedFor(keys, bar) !== null) return null;
+    const key = this.draw(keys, bar, true);
     // Nothing can go: the beat waits on, and no weight moves.
+    if (key !== null) this.next = null;
+    return key;
+  }
+
+  /**
+   * **The key to cast now, for a press of the one cast key** (`Space`), or
+   * null when none can go.
+   *
+   * The player chose the moment, so there is no beat, no reserve and no
+   * saving up: a press that casts nothing while a key stands ready reads as
+   * a dropped input. Which key is still the draw's, by the same owed
+   * weights, so the dear key comes round as the cheap ones are spent.
+   */
+  pickNow(keys: readonly AutoCastKey[], free: boolean, bar: AutoCastBar): number | null {
+    if (!free) return null;
+    const key = this.draw(keys, { ...bar, floor: 0 }, true);
+    // The beat of `pick` is for the assist; a key cast here has had its turn all the same.
+    if (key !== null) this.next = null;
+    return key;
+  }
+
+  /** The key the bar is saved for: the most owed, back, and short of the bar — but one it could ever pay. */
+  private savedFor(keys: readonly AutoCastKey[], bar: AutoCastBar): number | null {
+    const top = Math.max(0, ...keys.map((k, i) => (k.held ? this.weight(i) : 0)));
+    const i = keys.findIndex((k, j) => k.ready && bar.mana - k.cost < bar.floor && k.cost + bar.floor <= bar.max && this.weight(j) >= top);
+    return i < 0 ? null : i;
+  }
+
+  /**
+   * The weighted draw among the keys ready and paid for; null for none.
+   * `commit` casts it — the weights move and the roll is spent — and
+   * without it the draw is only looked at (`peek`).
+   */
+  private draw(keys: readonly AutoCastKey[], bar: AutoCastBar, commit: boolean): number | null {
+    const paid = (k: AutoCastKey) => bar.mana - k.cost >= bar.floor;
+    const pool = keys.flatMap((k, i) => (k.ready && paid(k) ? [i] : []));
     if (pool.length === 0) return null;
-    this.next = null;
     const weights = pool.map((i) => this.weight(i));
-    let r = this.random() * weights.reduce((a, b) => a + b, 0);
+    this.roll ??= this.random();
+    let r = this.roll * weights.reduce((a, b) => a + b, 0);
     let key = pool[pool.length - 1]!;
     for (let n = 0; n < pool.length; n++) {
       r -= weights[n]!;
       if (r < 0) { key = pool[n]!; break; }
     }
+    if (!commit) return key;
+    this.roll = null;
     // Every other key lost this draw, whether it was in it or sat it out.
     keys.forEach((k, i) => {
       if (i !== key && k.held) this.weights[i] = Math.min(AUTO_CAST_MAX_WEIGHT, this.weight(i) + AUTO_CAST_MISS_WEIGHT);

@@ -11,6 +11,12 @@
  * Text is built at the scene's zoom and scaled back down, like every other
  * label in the game, so it stays crisp.
  *
+ * A cap may name an **action** rather than a key — `[@interact] open`,
+ * `[Hold @dismantle]` — and reads whatever key the player has put that
+ * action on (`setKeyTokens`), so no prompt goes stale when a key is rebound.
+ * The label goes in after the markup is split, so a key whose label is a
+ * bracket still draws as a cap.
+ *
  * Two tokens stand for drawings rather than words: `{coin}` is the coin, so a
  * price reads as money without the word "gold", and `{pips:3/5}` is a row of
  * five small squares with three filled, a level read at a glance.
@@ -36,6 +42,12 @@ type Part =
   | { key: false; icon: "coin"; text: "" }
   | { key: false; pips: [number, number]; text: "" };
 
+/** What an `@action` in a cap reads as: set by the scene from its bindings; unknown names are left as written. */
+let keyTokens: (name: string) => string | undefined = () => undefined;
+export function setKeyTokens(fn: (name: string) => string | undefined): void {
+  keyTokens = fn;
+}
+
 /** Splits `"[E] open  [A][D] move  {coin} 30  {pips:2/5}"` into words, keys and drawings. */
 export function parseKeyLine(str: string): Part[] {
   const parts: Part[] = [];
@@ -45,7 +57,7 @@ export function parseKeyLine(str: string): Part[] {
     if (m.index > at) parts.push({ key: false, text: str.slice(at, m.index) });
     if (m[0] === "{coin}") parts.push({ key: false, icon: "coin", text: "" });
     else if (m[2] !== undefined) parts.push({ key: false, pips: [Number(m[2]), Number(m[3])], text: "" });
-    else parts.push({ key: true, text: m[1]! });
+    else parts.push({ key: true, text: m[1]!.replace(/@(\w+)/g, (tok, name: string) => keyTokens(name) ?? tok) });
     at = m.index + m[0].length;
   }
   if (at < str.length) parts.push({ key: false, text: str.slice(at) });

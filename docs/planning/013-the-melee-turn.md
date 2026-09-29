@@ -74,9 +74,20 @@ Three consequences worth stating:
 With a melee basic attack and spells that either ride the swing or find their
 own target, **the mouse has no job.** Movement supplies the facing, and the
 game is fully playable on a keyboard alone or on a gamepad. The keys are `WASD`
-or the arrows to move, `J` to attack, `U I O` to cast, `L` to spin, `K` to
+or the arrows to move, `J` to attack, `U I O` to cast, `Space` to cast
+whichever spell is ready (doc 008's auto-cast), `L` to spin, `K` to
 dodge, `E` to use, `X` to dismantle, `Tab` for the character screen and `Esc`
 to pause.
+
+These are the defaults. **Every one of them but Enter, Esc and the arrows
+can be put on another key** from the controls page (`keybinds.ts`): a
+player whose thumbs or little fingers sit differently from the layout the
+game was built round should not have to play it anyway. The menus' own keys
+stay put, so a binding gone wrong can always be backed out of; a key
+another action held is swapped onto the rebound action's old key rather
+than doubled; and a binding keeps the label the key printed when it was
+pressed, so a JIS board's caps read as its own. Every prompt that names a
+key names an action (`[@interact]`) and draws whatever key it is on.
 
 **Movement is eight-directional; facing and attacks are four.** This is A Link
 to the Past's arrangement. Diagonal movement stays, which matters because enemy

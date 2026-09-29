@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AUTO_CAST_DELAY_MS, AUTO_CAST_MAX_WEIGHT, AUTO_CAST_MIN_WEIGHT, AUTO_CAST_MISS_WEIGHT, AUTO_CAST_SPREAD_MS,
-  AUTO_CAST_START_WEIGHT, AUTO_CAST_MAX_REACH_PX, AutoCaster, autoCastable, autoCastAnyReach, autoCastReach,
+  AUTO_CAST_START_WEIGHT, AUTO_CAST_MAX_REACH_PX, AutoCaster, autoCastable, autoCastAnyReach, autoCastModeOf, autoCastReach,
 } from "./auto-cast.ts";
 import type { AutoCastBar } from "./auto-cast.ts";
 import { ITEMS, TILE_PX } from "@jr/core";
@@ -160,6 +160,64 @@ describe("auto-cast", () => {
     }
     expect(casts[2]).toBeGreaterThan(40);
     expect(casts[0]! / casts[2]!).toBeLessThan(4);
+  });
+
+  it("casts at once for a Space press: no beat, no reserve, no saving up, only free hands", () => {
+    const a = new AutoCaster(() => 0);
+    const dear = { held: true, ready: true, cost: 50 };
+    // 60 in the bar pays down to 10, under the assist's own floor of 30: the player asked, so it goes.
+    const short = { mana: 60, floor: 30, max: 100 };
+    expect(a.pickNow([out, dear], false, short)).toBe(null);
+    expect(a.pickNow([out, dear], true, short)).toBe(1);
+    // Nothing ready, or nothing paid for: no key, and no weight moved.
+    expect(a.pickNow([out, out], true, full)).toBe(null);
+    expect(a.pickNow([dear], true, { mana: 40, floor: 30, max: 100 })).toBe(null);
+    expect(a.weight(0)).toBe(AUTO_CAST_START_WEIGHT + AUTO_CAST_MISS_WEIGHT);
+  });
+
+  it("turns the keys by the same owed weights on Space as on its own beat", () => {
+    const a = new AutoCaster(lcg(7));
+    const cast = [0, 1, 2].map(() => 0);
+    for (let n = 0; n < 300; n++) cast[a.pickNow([on, on, on], true, full)!]!++;
+    // No key held on to: each gets its share.
+    for (const c of cast) expect(c).toBeGreaterThan(60);
+  });
+
+  it("says the next cast before it is made, and is right, on Space and on the beat", () => {
+    const a = new AutoCaster(lcg(3));
+    const keys = [on, on, out, on];
+    for (let n = 0; n < 50; n++) {
+      const said = a.peek(keys, full, true);
+      // Looking moves nothing: asked twice, the same answer.
+      expect(a.peek(keys, full, true)).toBe(said);
+      expect(a.pickNow(keys, true, full)).toBe(said);
+    }
+    const b = new AutoCaster(lcg(5));
+    let t = 0;
+    for (let n = 0; n < 20; n++) {
+      const said = b.peek(keys, full, false);
+      let cast: number | null = null;
+      for (; cast === null; t += 16) cast = b.pick(t, keys, true, full);
+      expect(cast).toBe(said);
+    }
+    // Nothing can go: nothing is said.
+    expect(a.peek([out, off], full, true)).toBe(null);
+  });
+
+  it("says the key the bar is saved for, on the beat", () => {
+    const a = new AutoCaster(() => 0);
+    a.pick(0, [on, out], true, full);
+    a.pick(AUTO_CAST_DELAY_MS, [on, out], true, full);
+    const dear = { held: true, ready: true, cost: 50 };
+    expect(a.peek([on, dear], { mana: 60, floor: 30, max: 100 }, false)).toBe(1);
+  });
+
+  it("reads the setting it was: off and on keep their meaning, and none is Space", () => {
+    expect(autoCastModeOf(null)).toBe("space");
+    expect(autoCastModeOf("0")).toBe("off");
+    expect(autoCastModeOf("1")).toBe("auto");
+    for (const m of ["off", "space", "auto"] as const) expect(autoCastModeOf(m)).toBe(m);
+    expect(autoCastModeOf("garbled")).toBe("space");
   });
 
   it("gives every spell a reach of its own, short spells short and none past the screen", () => {

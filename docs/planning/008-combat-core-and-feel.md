@@ -44,7 +44,8 @@ Movement, collision, bullets, damage, elements, encounter waves and the spell ca
   press is kept for 180 ms (the window waits out a dash), and a press with no
   charge banked says so (`spin_refused`: the slot flashes, "No rage" rises)
   rather than doing nothing in silence.
-- **Auto-cast** (an assist, off by default, under Settings → Assists): a
+- **Auto-cast** (an assist under Settings → Assists, three steps: Off, Space
+  key, Full; Space key by default). On **Full**, a
   ready tap-cast spell presses itself after a random 0.7–1.6 s, only with a
   body within reach and only while the bar stays above 30% after paying;
   the player's own spell press restarts every wait. Which key goes is a
@@ -68,6 +69,36 @@ Movement, collision, bullets, damage, elements, encounter waves and the spell ca
   while walking away from the fight lands on the empty floor. Charge, stance
   and `dash` spells (Blink Strike, Leap Slam: they move the body) are never
   auto-cast.
+
+  On **Space key**, the assist picks the spell and the player picks the
+  moment: Space casts at once whatever the same owed-weight draw would cast,
+  with no beat, no 30% reserve and no saving up, since a press that casts
+  nothing while a key stands ready reads as a dropped input. Held, it casts
+  again each time the hands come free; a tap in a windup or recovery is kept
+  for `SPELL_BUFFER_MS`, as a spell key's is; a press with every key cooling
+  answers as a cooldown refusal on the soonest key. It aims and skips the
+  slow as the assist does. U, I and O still cast the key chosen in every
+  step. **Space key is the default** because U, I and O sit under the same
+  three fingers as J, K and L, so a hand press costs the swing, the dash or
+  the spin that shares its finger, and the thumbs had nothing to do: with
+  the assist off, a sword player cast once in ten swings with the bar never
+  short of a cast. Full remains for a player who wants the sword alone.
+
+  With the assist on, **the next cast is shown before it is made**. The
+  draw's roll is made ahead (`AutoCaster.peek`), so the key shown is the key
+  that goes: on Space key, what a press now would cast; on Full, what the
+  beat will cast. Its icon sits over the head in one row with the spin
+  pips, ahead of them, on a dark chip the pips' size with a hairline edge,
+  only while some key can go (stacked above the pips, two layers over the
+  head read as a lot for two small facts); the row sits down on the hood
+  unless a burn or poison gauge needs the room. On the
+  bar, every key the assist can cast has a pip over it in the spin pips'
+  diamond, lit blue on the key that is next and dark on the rest; a charge,
+  stance or dash key has none. (A word tag on every key read as noise, and
+  one flashed on each cast came and went too fast to read.)
+  The first-launch card, the controls page and the key strip in the
+  bottom-right corner list Space while it casts (the strip no longer lists
+  E: the prompt over a thing to use says it when there is one).
 - Dodge: K. A committed burst in the direction
   already held: 110 ms at 580 px/s, about two tiles, then 420 ms of cooldown.
   It commits to the direction it started in so it is a decision rather than a

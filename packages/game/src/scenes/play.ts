@@ -22,7 +22,7 @@ import {
   levelAt, withLevels, levelBonus, LEVEL_HP, swordAt,
   HIT_FLASH_MS, BOSS_ROAR_MS, spellReady, castTiming, hasLineOfSight,
 } from "@jr/core";
-import { HOLD_MS } from "@jr/core";
+import { HOLD_MS, SPELL_BUFFER_MS } from "@jr/core";
 import type {
   Bullet, Enemy, EnemyId, Input, ItemInstance, Mood, Offer, OfferCard, Portal,
   PlayerMods, RewardCardKind, RoomPlan, RoomType, RunHistory, World, AttachedAffix,
@@ -79,7 +79,8 @@ import { FireFx } from "./fire-fx.ts";
 import { FrameLayer } from "./frame-layer.ts";
 import { drawHallArt } from "./hall-art.ts";
 import { cellHash } from "./cell-hash.ts";
-import { fillKeyLine, KeyPrompt, keyLine, setCoinArt } from "../ui/keycap.ts";
+import { fillKeyLine, KeyPrompt, keyLine, setCoinArt, setKeyTokens } from "../ui/keycap.ts";
+import { ACTIONS, isAction, Keybinds, labelOfKey, type Action } from "../keybinds.ts";
 import type { ProjectileLook } from "./projectiles.ts";
 import { drawArms, drawHasteCue, drawShockwaves, drawTollPulse } from "./ground.ts";
 import type { ViewBox } from "./ground.ts";
@@ -109,7 +110,7 @@ import { layoutDecisionTable, maxScrollFor } from "../ui/plan-table.ts";
 import { questionAsked, questionBase, questionName } from "../ui/question-names.ts";
 import type { TableRow } from "../ui/plan-table.ts";
 import type { AtlasJson } from "../assets/atlas.ts";
-import { AUTO_CAST_MAX_REACH_PX, AUTO_CAST_RESERVE, AutoCaster, autoCastable, autoCastAnyReach, autoCastReach } from "../auto-cast.ts";
+import { AUTO_CAST_MAX_REACH_PX, AUTO_CAST_MODES, AUTO_CAST_RESERVE, AutoCaster, autoCastable, autoCastAnyReach, autoCastModeOf, autoCastReach, type AutoCastKey, type AutoCastMode } from "../auto-cast.ts";
 import { freshRerollPool, rerollPrice } from "../offer-reroll.ts";
 
 /**
@@ -1093,6 +1094,10 @@ export class PlayScene extends Phaser.Scene {
   private runX = 0;
   private lastY = 0;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
+  /** What the player has put each action on (`keybinds.ts`), remembered across visits. */
+  private readonly binds = new Keybinds((() => { try { return localStorage.getItem(KEYBINDS_KEY); } catch { return null; } })());
+  /** The Phaser key each action is on now (`applyBinds`). */
+  private readonly bound = new Map<Action, Phaser.Input.Keyboard.Key>();
   private tiles!: Phaser.GameObjects.Group;
   /** The upper halves of lone columns, drawn over the bodies; see `drawTiles`. */
   private pillarTops: { img: Phaser.GameObjects.Image; x: number; y: number; h: number }[] = [];
@@ -1651,8 +1656,21 @@ export class PlayScene extends Phaser.Scene {
   private dealtMult = readSetting(DEALT_KEY, 1);
   private takenMult = readSetting(TAKEN_KEY, 1);
   private autoMeleeAim = (() => { try { return localStorage.getItem(AUTO_MELEE_AIM_KEY) === "1"; } catch { return false; } })();
-  /** The auto-cast assist (`auto-cast.ts`): off unless the player turns it on. */
-  private autoCast = (() => { try { return localStorage.getItem(AUTO_CAST_KEY) === "1"; } catch { return false; } })();
+  /**
+   * The auto-cast assist (`auto-cast.ts`), in three steps: `off`, the keys
+   * alone; `space`, the thumb's one cast key, where the player picks the
+   * moment and the assist picks the spell; `auto`, the assist picks both.
+   * **`space` unless the player chooses otherwise.** It was off by
+   * default, and a player who fights with the sword pressed a spell once in
+   * ten swings with the bar never short: J, K and L sit under the same three
+   * fingers as U, I and O, so a spell key costs the swing, the dash or the
+   * spin it shares a finger with, and the thumbs had nothing to do.
+   */
+  private autoCastMode: AutoCastMode = (() => { try { return autoCastModeOf(localStorage.getItem(AUTO_CAST_KEY)); } catch { return "space"; } })();
+  /** A tap of Space kept while the caster is busy, as the sim keeps a spell key's (`SPELL_BUFFER_MS`). */
+  private spaceWantMs = 0;
+  /** The key the next auto-cast or Space press would cast, or null: drawn over the head and marked on the bar (`nextAutoKey`). */
+  private autoNext: number | null = null;
   private readonly autoCaster = new AutoCaster();
   /** Settings: take no damage at all. For testing a room without dying in it. */
   /** Screen shake: on, reduced (the default) or off. See `holdCamera`. */
@@ -2046,7 +2064,16 @@ export class PlayScene extends Phaser.Scene {
      * the arrow keys stay for menus only, unlisted, because a menu is the
      * one place a player reaches for them without being told.
      */
-    this.keys = this.input.keyboard!.addKeys("W,A,S,D,UP,LEFT,DOWN,RIGHT,Q,E,R,X,J,K,L,U,I,O,ENTER,ESC,BACKTICK,TAB") as Record<string, Phaser.Input.Keyboard.Key>;
+    this.keys = this.input.keyboard!.addKeys("W,A,S,D,UP,LEFT,DOWN,RIGHT,Q,E,R,X,J,K,L,U,I,O,SPACE,ENTER,ESC,BACKTICK,TAB") as Record<string, Phaser.Input.Keyboard.Key>;
+    /*
+     * **The fight's verbs are the player's to place** (`keybinds.ts`): each
+     * action reads the key it is bound to, and every cap that names an
+     * action (`[@interact]`) reads that key's label. The letters above stay
+     * for the menus that read fixed keys — Q and E turn the settings tabs,
+     * Tab turns the plan's pages — and the arrows and Enter and Esc.
+     */
+    this.applyBinds();
+    setKeyTokens((name) => (isAction(name) ? this.binds.label(name) : undefined));
     if (spellLabAsked()) this.spellLab = new SpellLab(this.spellLabHost());
     this.debug = new DebugPanel({
       ...(this.spellLab ? { spellLab: this.spellLab } : {}),
@@ -2962,7 +2989,7 @@ export class PlayScene extends Phaser.Scene {
         gold: this.runGold + w.gold, mods,
       },
       spells: w.spells.map((slot, i) => ({
-        key: SPELL_KEYS[i] ?? String(i + 1),
+        key: this.spellKeyLabel(i),
         name: slot ? contentName(slot.item.base, titleOfId(slot.item.base)) : null,
         cost: slot ? slotCost(slot, ITEMS, w.staff) : null,
         cooldownMs: slot?.cooldownMs ?? 0,
@@ -3700,14 +3727,16 @@ export class PlayScene extends Phaser.Scene {
       pips?: { have: number; max: number; next: number };
       /** The light the key's own spell is drawn in, for its charge and its pips. */
       tint?: number;
+      /** The assist's mark on a key it can cast, lit on the key it casts next. */
+      mark?: { lit: boolean };
     };
     const slots: Slot[] = [];
     // The three innate verbs have their own delivered icons.
     const verb = (own: string, fallback: string) => (this.atlas.has(own) ? own : fallback);
-    slots.push({ key: "J", icon: verb("icon_action_attack", "icon_stat_keen_edge"), sheet: "crisp", cooling: 0, usable: true, corner: "", accent: 0xe8e3d8 });
-    for (let i = 0; i < SPELL_KEYS.length; i++) {
+    slots.push({ key: this.binds.label("attack"), icon: verb("icon_action_attack", "icon_stat_keen_edge"), sheet: "crisp", cooling: 0, usable: true, corner: "", accent: 0xe8e3d8 });
+    for (let i = 0; i < SPELL_ACTIONS.length; i++) {
       const slot = w.spells[i] ?? null;
-      if (!slot) { slots.push({ key: SPELL_KEYS[i]!, icon: null, sheet: "crisp", cooling: 0, usable: false, corner: "", accent: 0x4a5480, refused: this.refusalOn(i) }); continue; }
+      if (!slot) { slots.push({ key: this.spellKeyLabel(i), icon: null, sheet: "crisp", cooling: 0, usable: false, corner: "", accent: 0x4a5480, refused: this.refusalOn(i) }); continue; }
       const cost = slotCost(slot, ITEMS, w.staff);
       // The cooldown the cast really starts: the spell's own scale, and a trail's, enchant's or orb's floor.
       const full = slotCooldownMs(slot, ITEMS, cost);
@@ -3726,7 +3755,7 @@ export class PlayScene extends Phaser.Scene {
       const bankEmpty = max > 0 && bank < 1 ? 1 - nextShare : 0;
       const tint = spellLookOf(slot.item.base, "none").glow;
       slots.push({
-        key: SPELL_KEYS[i]!, icon: `icon_${slot.item.base}`, sheet: "crisp",
+        key: this.spellKeyLabel(i), icon: `icon_${slot.item.base}`, sheet: "crisp",
         charge: p.chargeKey === i ? chargeShare(w, ITEMS) : undefined,
         pips: max > 0 ? { have: bank, max, next: nextShare } : undefined,
         tint,
@@ -3743,17 +3772,18 @@ export class PlayScene extends Phaser.Scene {
         cornerColour: "#ffd45e",
         accent: 0x8fdcff,
         refused: this.refusalOn(i),
+        mark: this.autoCastMode !== "off" && this.autoCastableKey(i) ? { lit: this.autoNext === i } : undefined,
       });
     }
     // In the keys' own order on the keyboard: J, K, L.
     slots.push({
-      key: "K", icon: verb("icon_action_dodge", "icon_stat_second_wind"), sheet: "crisp",
+      key: this.binds.label("dash"), icon: verb("icon_action_dodge", "icon_stat_second_wind"), sheet: "crisp",
       cooling: p.dashCooldownMs > 0 ? Math.min(1, p.dashCooldownMs / (DASH_COOLDOWN_MS * p.mods.dashCooldown + DASH_MS)) : 0,
       usable: p.dashCooldownMs <= 0, corner: "", accent: 0x8fdcff,
     });
     const charges = Math.floor(p.rage);
     slots.push({
-      key: "L", icon: verb("icon_action_spin", "icon_stat_keen_edge"), sheet: "crisp",
+      key: this.binds.label("spin"), icon: verb("icon_action_spin", "icon_stat_keen_edge"), sheet: "crisp",
       // The spin's slot fills from the bottom as the next charge is earned.
       cooling: charges > 0 ? 0 : 1 - (p.rage - charges), usable: charges > 0,
       corner: `${charges}`, accent: 0xff7a4a, ring: 0xff7a4a,
@@ -3767,8 +3797,8 @@ export class PlayScene extends Phaser.Scene {
      * middle, full size, on their own backing; the innate three sit to their
      * right, smaller and in bone rather than the spells' blue.
      */
-    const spells = slots.slice(1, 1 + SPELL_KEYS.length);
-    const innate = [slots[0]!, ...slots.slice(1 + SPELL_KEYS.length)];
+    const spells = slots.slice(1, 1 + SPELL_ACTIONS.length);
+    const innate = [slots[0]!, ...slots.slice(1 + SPELL_ACTIONS.length)];
     // Lifted so the keycaps under the slots sit on the same baseline as the
     // key strip in the corner, and the bar keeps the HUD's own margin.
     const y = UI_H - 32;
@@ -3846,6 +3876,7 @@ export class PlayScene extends Phaser.Scene {
       accent: number; ring?: number; cornerColour?: string; refused?: { k: number; mana: boolean; cooldown: boolean };
 
       charge?: number; pips?: { have: number; max: number; next: number }; tint?: number;
+      mark?: { lit: boolean };
     },
     x: number, y: number, size: number, groupAccent: number,
   ): void {
@@ -3925,7 +3956,14 @@ export class PlayScene extends Phaser.Scene {
     // The chip is sized from the letter it holds, which grew with the body
     // floor; a fixed 12x10 box clipped a `Tab`-sized cap and crowded the rest.
     const capPx = bodyPx(7, ZOOM);
-    const capW = Math.max(12, Math.ceil(capPx * 0.72 * sl.key.length) + 6);
+    /*
+     * No wider than the slot and the gap beside it: a rebound key's name can
+     * be a word (`Shift`, `Space`), and a cap as wide as its word ran into
+     * the caps on either side. A word too long for that is set smaller
+     * rather than cut.
+     */
+    const capMax = size + 4;
+    const capW = Math.min(capMax, Math.max(12, Math.ceil(capPx * 0.72 * sl.key.length) + 6));
     const capH = Math.ceil(capPx * 1.15);
     const capY = y + size / 2 + capH / 2 + 2;
     const cap = this.sprites.graphics().setDepth(103);
@@ -3935,9 +3973,21 @@ export class PlayScene extends Phaser.Scene {
     cap.strokeRoundedRect(x - capW / 2, capY - capH / 2, capW, capH, 2.5);
     // The key on the cap is the thing the bar exists to tell you, so it takes
     // the body floor like every other word a player reads.
-    this.ftext(`slot:key:${sl.key}`, x, capY, sl.key, {
+    const keyText = this.ftext(`slot:key:${sl.key}`, x, capY, sl.key, {
       fontFamily: fontFamily(), fontSize: `${Math.round(bodyPx(7, ZOOM) * ZOOM)}px`, color: "#e8e3d8",
     }).setScale(1 / ZOOM).setOrigin(0.5).setDepth(104);
+    if (keyText.displayWidth > capW - 3) keyText.setScale((1 / ZOOM) * (capW - 3) / keyText.displayWidth);
+    /*
+     * **The assist's mark**: a pip over the key, in the spin pips' diamond,
+     * on every key the assist can cast — lit in the spells' blue on the one
+     * it casts next (the icon over the head), dark on the rest. Small and
+     * standing: a tag flashed on each cast came and went too fast to read,
+     * and a word on every key was noise.
+     */
+    if (sl.mark) {
+      this.sprites.rectangle(x, y - size / 2 - 3, 3, 3, sl.mark.lit ? 0x8fdcff : 0x3a4266, 1).setAngle(45)
+        .setStrokeStyle(0.6, sl.mark.lit ? 0xe0f6ff : 0x5a6488, 0.9).setDepth(104.5);
+    }
   }
 
   /* -------------------------------- game over -------------------------------- */
@@ -4437,7 +4487,7 @@ export class PlayScene extends Phaser.Scene {
     // the view's bottom edge rather than 40 px from a number that moved.
     ui.objects.push(this.fittedKeys(cx - pw / 2, UI_H - 26, focused
       ? `[Enter] ${t("hint.select")}     [Esc] ${t("hint.back")}`
-      : `[A][D] ${t("hint.choose")}     [Tab] ${t("intent.ownWords")}     [J] ${t("menu.jevDirector")}     [Esc] ${t("hint.back")}`,
+      : `[@left][@right] ${t("hint.choose")}     [Tab] ${t("intent.ownWords")}     [@attack] ${t("menu.jevDirector")}     [Esc] ${t("hint.back")}`,
     8, "#8792b5", UI_W - pw - 40, 232));
     ui.objects.push(this.add.rectangle(bb.centerX, bb.centerY, bb.width + beginPad, bb.height + 14, 0x2a2350, 0.95)
       .setStrokeStyle(1.5, 0xffe9a8, 0.9).setDepth(232.5));
@@ -4702,7 +4752,7 @@ export class PlayScene extends Phaser.Scene {
      * arrows the style cards already own — so the cards keep A/D and the
      * switch needs no focus of its own to reach.
      */
-    if (down(this.keys.J)) {
+    if (down(this.key("attack"))) {
       if (jevAvailable()) {
         setDirectorArm(directorArm() === "jev" ? "rule" : "jev");
         this.director = this.buildDirector();
@@ -4712,8 +4762,8 @@ export class PlayScene extends Phaser.Scene {
       return;
     }
     let moved = false;
-    if (down(this.keys.A) || down(this.keys.LEFT)) { ui.selected = (ui.selected + STYLES.length - 1) % STYLES.length; moved = true; }
-    if (down(this.keys.D) || down(this.keys.RIGHT)) { ui.selected = (ui.selected + 1) % STYLES.length; moved = true; }
+    if (down(this.key("left")) || down(this.keys.LEFT)) { ui.selected = (ui.selected + STYLES.length - 1) % STYLES.length; moved = true; }
+    if (down(this.key("right")) || down(this.keys.RIGHT)) { ui.selected = (ui.selected + 1) % STYLES.length; moved = true; }
     if (moved) { this.sfx.play("ui_move"); this.renderIntent(); }
     if (down(this.keys.ENTER)) { this.sfx.play("ui_select"); void this.beginRun(); }
   }
@@ -4790,7 +4840,7 @@ export class PlayScene extends Phaser.Scene {
     });
     ui.objects.push(this.uiText(cx, y + H / 2 + 8, t("first.soundLater"), 6, "#7a8098").setOrigin(0.5, 0).setDepth(depth + 1));
     ui.objects.push(this.fittedKeys(cx, top + panelH - 12,
-      `[A][D] ${t("hint.choose")}     [Enter] ${t("hint.select")}     [Esc] ${t("menu.off")}`, 7, "#8792b5", panelW - 24, depth + 1));
+      `[@left][@right] ${t("hint.choose")}     [Enter] ${t("hint.select")}     [Esc] ${t("menu.off")}`, 7, "#8792b5", panelW - 24, depth + 1));
   }
 
   /** Moves the focus, and plays the style it lands on (or stops, on Off). */
@@ -4825,8 +4875,8 @@ export class PlayScene extends Phaser.Scene {
     if (!ui) return;
     const down = (k?: Phaser.Input.Keyboard.Key) => !!k && Phaser.Input.Keyboard.JustDown(k);
     const n = SOUND_STYLES.length;
-    if (down(this.keys.A) || down(this.keys.LEFT)) this.focusSoundChoice((ui.selected + n - 1) % n);
-    else if (down(this.keys.D) || down(this.keys.RIGHT)) this.focusSoundChoice((ui.selected + 1) % n);
+    if (down(this.key("left")) || down(this.keys.LEFT)) this.focusSoundChoice((ui.selected + n - 1) % n);
+    else if (down(this.key("right")) || down(this.keys.RIGHT)) this.focusSoundChoice((ui.selected + 1) % n);
     else if (down(this.keys.ENTER)) this.closeSoundChoice();
     else if (down(this.keys.ESC)) { ui.selected = 0; this.closeSoundChoice(); }
   }
@@ -4940,8 +4990,8 @@ export class PlayScene extends Phaser.Scene {
     const down = (k?: Phaser.Input.Keyboard.Key) => !!k && Phaser.Input.Keyboard.JustDown(k);
     const rows = this.titleRows();
     let changed = false;
-    if (down(this.keys.W) || down(this.keys.UP)) { ui.selected = (ui.selected + rows.length - 1) % rows.length; changed = true; this.sfx.play("ui_move"); }
-    if (down(this.keys.S) || down(this.keys.DOWN)) { ui.selected = (ui.selected + 1) % rows.length; changed = true; this.sfx.play("ui_move"); }
+    if (down(this.key("up")) || down(this.keys.UP)) { ui.selected = (ui.selected + rows.length - 1) % rows.length; changed = true; this.sfx.play("ui_move"); }
+    if (down(this.key("down")) || down(this.keys.DOWN)) { ui.selected = (ui.selected + 1) % rows.length; changed = true; this.sfx.play("ui_move"); }
     const row = rows[Math.min(ui.selected, rows.length - 1)];
     const nudge = (dir: 1 | -1) => {
       // A row that cannot move says so, rather than answering with silence.
@@ -4949,8 +4999,8 @@ export class PlayScene extends Phaser.Scene {
       row.adjust(dir);
       this.sfx.play("ui_select");
     };
-    if (down(this.keys.A) || down(this.keys.LEFT)) { nudge(-1); changed = true; }
-    if (down(this.keys.D) || down(this.keys.RIGHT)) { nudge(1); changed = true; }
+    if (down(this.key("left")) || down(this.keys.LEFT)) { nudge(-1); changed = true; }
+    if (down(this.key("right")) || down(this.keys.RIGHT)) { nudge(1); changed = true; }
     if (down(this.keys.ENTER)) {
       this.sfx.play(row?.disabled ? "ui_deny" : "ui_select");
       row?.act();
@@ -5170,11 +5220,15 @@ export class PlayScene extends Phaser.Scene {
     const o: Phaser.GameObjects.GameObject[] = [];
     const cx = UI_W / 2;
     const cy = UI_H / 2;
+    // Actions as `@action`, so the card reads the keys the player has bound (`keybinds.ts`).
     const groups: [string, [string, string][]][] = [
-      [t("first.move"), [["W A S D", t("first.walk")], ["K", t("first.dodge")]]],
-      [t("first.fight"), [["J", t("first.sword")], ["L", t("first.spin")]]],
-      [t("first.spells"), [["U I O", t("first.cast")]]],
-      [t("first.menus"), [["E", t("first.use")], ["Tab", t("first.character")], ["Esc", t("first.menu")]]],
+      [t("first.move"), [["@up @left @down @right", t("first.walk")], ["@dash", t("first.dodge")]]],
+      [t("first.fight"), [["@attack", t("first.sword")], ["@spin", t("first.spin")]]],
+      // The assist's key first while it casts: the key a player would not guess, and the one the default leans on.
+      [t("first.spells"), this.autoCastMode === "space"
+        ? [["@autoCast", t("first.castAuto")], ["@spell1 @spell2 @spell3", t("first.cast")]]
+        : [["@spell1 @spell2 @spell3", t("first.cast")]]],
+      [t("first.menus"), [["@interact", t("first.use")], ["@character", t("first.character")], ["Esc", t("first.menu")]]],
     ];
     const lines = groups.reduce((n, [, rows]) => n + rows.length, 0);
     const panelW = 320;
@@ -5264,9 +5318,58 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private hidePause(): void {
+    this.endCapture();
     for (const g of this.pauseUi?.objects ?? []) g.destroy();
     this.pauseUi = null;
   }
+
+  /** The action waiting for its new key on the controls page, or null. */
+  private captureAction: Action | null = null;
+  /** A line for the controls page's foot: what the last binding moved, or why it was refused. */
+  private bindNote = "";
+  /** Set when a key has just been bound, so the menu does not also read that press. */
+  private bindInputGuard = false;
+
+  /** Waits for the next key pressed, and binds `a` to it (`onCaptureKey`). */
+  private startCapture(a: Action): void {
+    this.endCapture();
+    this.captureAction = a;
+    this.bindNote = "";
+    this.input.keyboard?.on("keydown", this.onCaptureKey);
+  }
+
+  private endCapture(): void {
+    if (!this.captureAction) return;
+    this.captureAction = null;
+    this.input.keyboard?.off("keydown", this.onCaptureKey);
+  }
+
+  /**
+   * **The key pressed while a row waits.** Esc gives up and leaves the key
+   * as it was. A menu's own key is refused and the row keeps waiting. Any
+   * other key takes the action; one another action held is swapped onto
+   * this action's old key, and the foot of the page says so, so no key is
+   * ever on two actions and none is left with nothing.
+   */
+  private readonly onCaptureKey = (ev: KeyboardEvent): void => {
+    const a = this.captureAction;
+    if (!a || ev.repeat) return;
+    ev.preventDefault();
+    if (ev.keyCode === 27) {
+      this.sfx.play("ui_back");
+      this.endCapture();
+    } else {
+      const was = this.binds.label(a);
+      const done = this.binds.set(a, { code: ev.keyCode, label: labelOfKey(ev) });
+      if (!done.ok) { this.sfx.play("ui_deny"); this.bindNote = t("bind.reserved"); this.renderPause(); return; }
+      this.sfx.play("ui_select");
+      this.bindNote = done.swapped ? t("bind.swapped", { action: t(`bind.${done.swapped}`), key: was }) : "";
+      this.endCapture();
+      this.applyBinds();
+    }
+    this.bindInputGuard = true;
+    this.renderPause();
+  };
 
   /**
    * The rows of the current page: a label, a value, and what Enter does.
@@ -5309,9 +5412,10 @@ export class PlayScene extends Phaser.Scene {
 
   /** The permanent control row over the bottom wall, in the current language. */
   private hintStripText(): string {
-    return t("hud.hintStrip", {
-      use: t("hud.use"), character: t("hud.character"), menu: t("hud.menu"),
-    });
+    // No [E]: the prompt over what can be used says it when there is something to use.
+    const strip = t("hud.hintStrip", { character: t("hud.character"), menu: t("hud.menu") });
+    // Space first while it casts: the one key of the fight a player would not guess.
+    return this.autoCastMode === "space" ? `[@autoCast] ${t("hud.autoCast")}  ${strip}` : strip;
   }
 
   /**
@@ -5918,17 +6022,20 @@ export class PlayScene extends Phaser.Scene {
       this.autoMeleeAim = !this.autoMeleeAim;
       try { localStorage.setItem(AUTO_MELEE_AIM_KEY, this.autoMeleeAim ? "1" : "0"); } catch { /* still applies */ }
     };
-    const setAutoCast = () => {
-      this.autoCast = !this.autoCast;
+    const setAutoCast = (dir: 1 | -1) => {
+      const n = AUTO_CAST_MODES.length;
+      this.autoCastMode = AUTO_CAST_MODES[(AUTO_CAST_MODES.indexOf(this.autoCastMode) + dir + n) % n]!;
       this.autoCaster.reset();
-      try { localStorage.setItem(AUTO_CAST_KEY, this.autoCast ? "1" : "0"); } catch { /* still applies */ }
+      this.spaceWantMs = 0;
+      try { localStorage.setItem(AUTO_CAST_KEY, this.autoCastMode); } catch { /* still applies */ }
+      this.rebuildHintStrip();
     };
     const assistRows = [
       { label: t("menu.damageDealt"), value: `x${this.dealtMult}`, act: () => setDealt(this.dealtMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setDealt },
       { label: t("menu.damageTaken"), value: `x${this.takenMult}`, act: () => setTaken(this.takenMult >= MULT_STEPS[MULT_STEPS.length - 1]! ? -1 : 1), adjust: setTaken },
       { label: t("menu.autoMeleeAim"), value: t(this.autoMeleeAim ? "menu.on" : "menu.off"), act: setAutoMeleeAim, adjust: setAutoMeleeAim },
       // Who it is for, under the row: without it the switch reads as a cheat rather than as the way in.
-      { label: t("menu.autoCast"), value: t(this.autoCast ? "menu.on" : "menu.off"), act: setAutoCast, adjust: setAutoCast, note: t("menu.autoCastNote") },
+      { label: t("menu.autoCast"), value: t(`autoCast.${this.autoCastMode}`), act: () => setAutoCast(1), adjust: setAutoCast, note: t(`autoCast.${this.autoCastMode}Note`) },
     ];
     if (ui.page === "firstAssist") return [
       ...assistRows,
@@ -5968,11 +6075,26 @@ export class PlayScene extends Phaser.Scene {
         { label: t("menu.back"), act: () => { if (this.pauseFromTitle) this.closePauseToTitle(); else { ui.page = "main"; ui.selected = 2; } } },
       ];
     }
-    if (ui.page === "controls") return [{ label: t("menu.back"), act: () => {
-      if (this.controlsFromSettings) { this.controlsFromSettings = false; ui.page = "settings"; ui.selected = 0; }
-      else if (this.pauseFromTitle) this.closePauseToTitle();
-      else { ui.page = "main"; ui.selected = 3; }
-    } }];
+    /*
+     * **The controls page is where keys are bound**: one row per action
+     * (`keybinds.ts`), its key on the right; Enter on a row waits for the
+     * next key pressed and puts the action on it (`startCapture`). The
+     * menus' own keys are not listed — they do not move — and the note under
+     * Reset says so.
+     */
+    if (ui.page === "controls") return [
+      ...ACTIONS.map((a) => ({
+        label: t(`bind.${a}`),
+        value: this.captureAction === a ? t("bind.press") : this.binds.label(a),
+        act: () => this.startCapture(a),
+      })),
+      { label: t("bind.reset"), act: () => { this.binds.reset(); this.applyBinds(); this.bindNote = ""; }, note: t("bind.fixed") },
+      { label: t("menu.back"), act: () => {
+        if (this.controlsFromSettings) { this.controlsFromSettings = false; ui.page = "settings"; ui.selected = 0; }
+        else if (this.pauseFromTitle) this.closePauseToTitle();
+        else { ui.page = "main"; ui.selected = 3; }
+      } },
+    ];
     return [
       { label: t("menu.resume"), act: () => this.hidePause() },
       { label: t("menu.character"), act: () => { this.hidePause(); this.showStaff("view", null); this.staffFromPause = true; } },
@@ -5998,8 +6120,8 @@ export class PlayScene extends Phaser.Scene {
      * rather than words floating over the room. The controls page is the tall
      * one: a table of every bound key.
      */
-    const controlRows = PlayScene.CONTROL_KEYS;
-    const pitch = 17 * linePitch();
+    // The controls page lists every action, so its rows sit a little closer.
+    const pitch = (ui.page === "controls" ? 14 : 17) * linePitch();
     // A heading needs half a row of air on each side, or it sits on the row
     // under it — which is what "JEV" was doing to "Jev Director".
     const headingH = pitch;
@@ -6020,7 +6142,7 @@ export class PlayScene extends Phaser.Scene {
     const firstAssist = ui.page === "firstAssist";
     // The settings panel is as tall as its tallest tab, and the tab strip, so turning a tab never resizes it.
     const tabsH = ui.page === "settings" ? 22 + pitch / 2 : 0;
-    const bodyH = (ui.page === "controls" ? controlRows.length * 12 * linePitch() + 16 : 0)
+    const bodyH = (ui.page === "controls" ? notes : 0)
       + (ui.page === "settings" ? Math.max(rows.length, SETTINGS_TAB_ROWS) : rows.length) * pitch + headings + tabsH
       + (firstAssist ? 30 + notes : 0);
     const panelW = panelWFor(ui.page);
@@ -6059,24 +6181,6 @@ export class PlayScene extends Phaser.Scene {
       });
       ui.objects.push(this.keys_(x - gap + 12, y, "[E]", 7, "#8792b5", 231, 0));
       y += 22;
-    }
-    if (ui.page === "controls") {
-      /*
-       * A two-column table: every cap right-aligned to one edge, every
-       * description left-aligned to another, so the eye runs down a straight
-       * line on both sides. The caps used to be centred as a group, which
-       * left `[W][A][S][D] / arrows` sticking out a long way past the single
-       * letters below it and nothing lining up with anything.
-       */
-      const capsX = cx - panelW / 2 + 150;
-      const descX = capsX + 10;
-      for (const [k, v] of controlRows) {
-        const caps = k.split(/\s+/).map((tk) => (/^[a-z]/.test(tk) ? ` ${tk} ` : `[${tk}]`)).join("");
-        ui.objects.push(this.keys_(capsX, y, caps, 7, "#8792b5", 231, 1));
-        ui.objects.push(this.uiText(descX, y, t(v), 7, "#c9cfe8").setOrigin(0, 0.5).setDepth(231));
-        y += 12 * linePitch();
-      }
-      y += 10;
     }
     // Every row through the one helper, so this menu and the title menu are
     // laid out by the same rule rather than by two that happen to agree.
@@ -6133,33 +6237,13 @@ export class PlayScene extends Phaser.Scene {
         { wordWrap: { width: (panelW - 40) * ZOOM } }).setOrigin(0, 0.5).setDepth(231));
     }
     ui.objects.push(this.fittedKeys(cx, cy + panelH / 2 - 14, firstAssist
-      ? `[W][S] ${t("hint.choose")}     [A][D] ${t("hint.change")}     [Enter] ${t("hint.select")}     [Esc] ${t("hint.close")}`
+      ? `[@up][@down] ${t("hint.choose")}     [@left][@right] ${t("hint.change")}     [Enter] ${t("hint.select")}     [Esc] ${t("hint.close")}`
+      : ui.page === "controls"
+      ? (this.captureAction ? t("bind.pressHint") : `[@up][@down] ${t("hint.choose")}     [Enter] ${t("hint.rebind")}     [Esc] ${t("hint.back")}${this.bindNote ? `     ${this.bindNote}` : ""}`)
       : ui.page === "settings"
-      ? `[Q][E] ${t("hint.tabs")}     [W][S] ${t("hint.choose")}     [A][D] ${t("hint.change")}     [Esc] ${t("hint.back")}`
-      : `[W][S] ${t("hint.choose")}     [Enter] ${t("hint.select")}     [Esc] ${t("hint.back")}`, 7, "#8792b5", panelW - 24));
+      ? `[Q][E] ${t("hint.tabs")}     [@up][@down] ${t("hint.choose")}     [@left][@right] ${t("hint.change")}     [Esc] ${t("hint.back")}`
+      : `[@up][@down] ${t("hint.choose")}     [Enter] ${t("hint.select")}     [Esc] ${t("hint.back")}`, 7, "#8792b5", panelW - 24));
   }
-
-  /**
-   * Every key the game binds, for the controls page.
-   *
-   * The list used to stop at ten and leave out the keys a player is most
-   * likely to go looking for — the number keys on the card screen, the
-   * restart, the debug panel — so the one screen that answers "what does this
-   * key do" did not answer it.
-   */
-  private static readonly CONTROL_KEYS: readonly (readonly [string, StringKey])[] = [
-    ["W A S D", "keys.walk"],
-    ["J", "keys.attack"],
-    ["K", "keys.dodge"],
-    ["L", "keys.spin"],
-    ["U I O", "keys.cast"],
-    ["E", "keys.use"],
-    ["X", "keys.dismantle"],
-    ["R", "keys.reroll"],
-    ["Enter", "keys.confirm"],
-    ["Tab", "keys.characterScreen"],
-    ["Esc", "keys.pauseMenu"],
-  ];
 
   /** Turns the settings page to a tab, wrapping, with the cursor on its first row. */
   private setSettingsTab(tab: number): void {
@@ -6181,6 +6265,13 @@ export class PlayScene extends Phaser.Scene {
       this.firstAssistInputGuard = false;
       return;
     }
+    // A key being bound is the capture's (`onCaptureKey`), and so is the press that bound it.
+    if (this.captureAction) return;
+    if (this.bindInputGuard) {
+      for (const key of [...Object.values(this.keys), ...this.bound.values()]) down(key);
+      this.bindInputGuard = false;
+      return;
+    }
     const rows = this.pauseRows();
     if (down(this.keys.ESC)) {
       this.sfx.play("ui_back");
@@ -6197,16 +6288,16 @@ export class PlayScene extends Phaser.Scene {
       const turn = (down(this.keys.E) ? 1 : 0) - (down(this.keys.Q) ? 1 : 0);
       if (turn !== 0) { this.setSettingsTab(ui.tab + turn); return; }
     }
-    if (down(this.keys.W) || down(this.keys.UP)) { ui.selected = (ui.selected + rows.length - 1) % rows.length; changed = true; this.sfx.play("ui_move"); }
-    if (down(this.keys.S) || down(this.keys.DOWN)) { ui.selected = (ui.selected + 1) % rows.length; changed = true; this.sfx.play("ui_move"); }
+    if (down(this.key("up")) || down(this.keys.UP)) { ui.selected = (ui.selected + rows.length - 1) % rows.length; changed = true; this.sfx.play("ui_move"); }
+    if (down(this.key("down")) || down(this.keys.DOWN)) { ui.selected = (ui.selected + 1) % rows.length; changed = true; this.sfx.play("ui_move"); }
     const row = rows[ui.selected];
     const nudge = (dir: 1 | -1) => {
       if (!row?.adjust) { this.sfx.play("ui_deny"); return; }
       row.adjust(dir);
       this.sfx.play("ui_select");
     };
-    if (down(this.keys.A) || down(this.keys.LEFT)) { nudge(-1); changed = true; }
-    if (down(this.keys.D) || down(this.keys.RIGHT)) { nudge(1); changed = true; }
+    if (down(this.key("left")) || down(this.keys.LEFT)) { nudge(-1); changed = true; }
+    if (down(this.key("right")) || down(this.keys.RIGHT)) { nudge(1); changed = true; }
     if (down(this.keys.ENTER)) {
       this.sfx.play(row?.disabled ? "ui_deny" : "ui_select");
       rows[ui.selected]?.act();
@@ -6826,7 +6917,7 @@ export class PlayScene extends Phaser.Scene {
     this.tookMs = 1800;
     this.levelUpFx(t("fx.levelUpLine", {
       spell: contentName(slot.item.base, titleOfId(slot.item.base)), from: level, to: next,
-    }), SPELL_KEYS[i] ?? "");
+    }), this.spellKeyLabel(i));
     return true;
   }
 
@@ -6943,7 +7034,7 @@ export class PlayScene extends Phaser.Scene {
    */
   debugSpells(list: readonly string[]): void {
     // `+` arrives from a URL as a space, so either joins an affix on.
-    const wanted = list.slice(0, SPELL_KEYS.length).map((entry) => entry.split(/[+\s]+/).filter(Boolean));
+    const wanted = list.slice(0, SPELL_ACTIONS.length).map((entry) => entry.split(/[+\s]+/).filter(Boolean));
     wanted.forEach(([id], i) => { if (id && ITEMS.get(id)) this.equipAt(i, id, 1, []); });
     // Affixes after every key is on, so each key's are attached to the slot it ends with.
     wanted.forEach(([, ...affixes], i) => {
@@ -6994,7 +7085,7 @@ export class PlayScene extends Phaser.Scene {
     if (free >= 0) {
       if (this.equipAt(free, f.itemId, f.level, f.affixes)) {
         this.removeFloorSpell(f);
-        this.tookLabel = t("toast.onKey", { label: f.label, key: SPELL_KEYS[free] ?? "" });
+        this.tookLabel = t("toast.onKey", { label: f.label, key: this.spellKeyLabel(free) });
         this.tookMs = 1600;
         this.sfx.play("pickup");
       }
@@ -7476,15 +7567,30 @@ export class PlayScene extends Phaser.Scene {
       this.sprites.rectangle(p.x - 10, y, 20 * fill, 2.4, colour, 1).setOrigin(0, 0.5).setDepth(9.8);
     });
     /*
-     * Spin charges, over the head: one pip per banked spin. The gauge in the
-     * status bar is the detail (how close the next one is); this is the one
-     * number the player needs mid-fight, where their eyes are.
+     * **One row over the head**: the spell the assist casts next, then the
+     * spin charges. The charges are one pip per banked spin — the gauge in
+     * the status bar is the detail (how close the next one is); this is the
+     * one number the player needs mid-fight, where their eyes are. The spell
+     * is its icon on a dark chip the pips' size, with a hairline edge, shown
+     * only with the assist on and a key able to go, so on `space` it doubles
+     * as *a press now casts this*. Side by side rather than stacked: two
+     * layers over a head read as a lot for two small facts. The row sits
+     * down on the hood unless a status gauge needs the room.
      */
     const charges = Math.floor(p.rage);
-    const pipY = top - gauges.length * 4 - 3;
+    const rowY = gauges.length > 0 ? top - gauges.length * 4 - 3 : top + 3;
+    this.autoNext = this.nextAutoKey();
+    const next = this.autoNext === null ? null : w.spells[this.autoNext];
+    const icon = next ? `icon_${next.item.base}` : "";
+    const lead = next && this.atlas.has(icon) ? 1 : 0;
+    const count = lead + charges;
+    const at = (i: number) => p.x + (i - (count - 1) / 2) * 6;
+    if (lead) {
+      this.sprites.rectangle(at(0), rowY, 5, 5, 0x0d0b1f, 0.8).setStrokeStyle(0.5, 0x8fdcff, 0.45).setDepth(9.8);
+      this.sprites.image(at(0), rowY, this.crispTextureKey, icon).setOrigin(0.5).setScale((4 / 20) / TUNED).setDepth(9.9);
+    }
     for (let i = 0; i < charges; i++) {
-      const x = p.x + (i - (charges - 1) / 2) * 6;
-      this.sprites.rectangle(x, pipY, 3.4, 3.4, 0xff7a4a, 1).setAngle(45)
+      this.sprites.rectangle(at(lead + i), rowY, 3.4, 3.4, 0xff7a4a, 1).setAngle(45)
         .setStrokeStyle(0.8, 0xffe0c0, 0.9).setDepth(9.8);
     }
     // A burning player's flames are `FireFx`'s.
@@ -9076,8 +9182,8 @@ export class PlayScene extends Phaser.Scene {
      * a portal. The menu reads its own keys.
      */
     if (!this.modalOpen) {
-      if (this.keys.E && Phaser.Input.Keyboard.JustDown(this.keys.E)) this.interactPressed = true;
-      if (this.keys.L && Phaser.Input.Keyboard.JustDown(this.keys.L)) this.spinPressed = true;
+      if (this.justDown("interact")) this.interactPressed = true;
+      if (this.justDown("spin")) this.spinPressed = true;
     }
     this.accumulator += Math.min(delta, 100) * this.labSpeed;
     if (this.labSteps > 0) { this.accumulator += STEP_MS * this.labSteps; this.labSteps = 0; }
@@ -9108,7 +9214,7 @@ export class PlayScene extends Phaser.Scene {
     // Not over a card that has ended the run: the run is over, and the
     // character screen is a thing to read while there is still a run.
     if (!this.titleUi && !this.intentUi && !this.pauseUi && !this.offerUi && !this.chestUi && !this.gameOverUi && !this.victoryUi
-      && this.keys.TAB && Phaser.Input.Keyboard.JustDown(this.keys.TAB)) {
+      && this.justDown("character")) {
       if (this.staffUi) this.hideStaff();
       else this.showStaff("view", null);
     }
@@ -10653,7 +10759,7 @@ export class PlayScene extends Phaser.Scene {
     const gold = this.uiText(cx + W / 2 - PAD, top + H - 14, `+${CHEST_GOLD}`, 9, "#ffd45e").setOrigin(1, 0.5).setDepth(203);
     objects.push(gold);
     objects.push(this.add.image(gold.x - gold.displayWidth - 8, gold.y, this.uiTextureKey, "pickup_coin_0").setOrigin(0.5).setDisplaySize(10, 10).setDepth(203));
-    objects.push(this.keys_(cx, cy + H / 2 + 20, `[E] ${t("hint.claim")}`, 9, "#e8e3d8", 202));
+    objects.push(this.keys_(cx, cy + H / 2 + 20, `[@interact] ${t("hint.claim")}`, 9, "#e8e3d8", 202));
     this.chestUi = { objects };
     this.sfx.play("reward_reveal");
   }
@@ -10661,7 +10767,7 @@ export class PlayScene extends Phaser.Scene {
   private readChestKeys(): void {
     const k = this.keys;
     const down = (key?: Phaser.Input.Keyboard.Key) => !!key && Phaser.Input.Keyboard.JustDown(key);
-    if (down(k.E) || down(k.ENTER) || down(k.SPACE)) this.takeChest();
+    if (down(this.key("interact")) || down(k.ENTER)) this.takeChest();
   }
 
   /** Taken: the card goes, the lid comes up, the gold bursts out (the world's), and the stat goes into the run. */
@@ -10713,8 +10819,8 @@ export class PlayScene extends Phaser.Scene {
     if (tu) {
       const pages = PlayScene.PLAN_PAGES.length;
       let redraw = false;
-      if (down(this.keys.RIGHT) || down(this.keys.D) || down(this.keys.TAB)) { tu.page = (tu.page + 1) % pages; tu.scroll = 0; redraw = true; }
-      if (down(this.keys.LEFT) || down(this.keys.A)) { tu.page = (tu.page + pages - 1) % pages; tu.scroll = 0; redraw = true; }
+      if (down(this.keys.RIGHT) || down(this.key("right")) || down(this.keys.TAB)) { tu.page = (tu.page + 1) % pages; tu.scroll = 0; redraw = true; }
+      if (down(this.keys.LEFT) || down(this.key("left"))) { tu.page = (tu.page + pages - 1) % pages; tu.scroll = 0; redraw = true; }
       /*
        * A line a press; held, a line every `PLAN_REPEAT_MS` after a short
        * beat — by the clock, not by the frame. It moved at most one line a
@@ -10731,9 +10837,9 @@ export class PlayScene extends Phaser.Scene {
         return lines;
       };
       const step = PLAN_SCROLL_STEP;
-      const downBy = (down(this.keys.DOWN) || down(this.keys.S) ? 1 : 0) + held(this.keys.DOWN, this.keys.S);
-      const upBy = (down(this.keys.UP) || down(this.keys.W) ? 1 : 0) + held(this.keys.UP, this.keys.W);
-      if (!this.keys.DOWN?.isDown && !this.keys.S?.isDown && !this.keys.UP?.isDown && !this.keys.W?.isDown) this.planScrollAt = 0;
+      const downBy = (down(this.keys.DOWN) || down(this.key("down")) ? 1 : 0) + held(this.keys.DOWN, this.key("down"));
+      const upBy = (down(this.keys.UP) || down(this.key("up")) ? 1 : 0) + held(this.keys.UP, this.key("up"));
+      if (!this.keys.DOWN?.isDown && !this.key("down")?.isDown && !this.keys.UP?.isDown && !this.key("up")?.isDown) this.planScrollAt = 0;
       if (downBy > 0 && tu.scroll < tu.maxScroll) { tu.scroll = Math.min(tu.maxScroll, tu.scroll + step * downBy); redraw = true; }
       if (upBy > 0 && tu.scroll > 0) { tu.scroll = Math.max(0, tu.scroll - step * upBy); redraw = true; }
       if (redraw) this.renderRoomPlan();
@@ -11244,7 +11350,7 @@ export class PlayScene extends Phaser.Scene {
     const ry = top - 30;
     rerollButton.push(this.add.rectangle(rx, ry, 158, 18, 0x161334, 0.96)
       .setStrokeStyle(1, afford ? 0x8a6a28 : 0x7a2a2a, 1).setDepth(201));
-    rerollButton.push(this.keys_(rx, ry, `[R] ${t("hint.reroll", { price })}`, 7,
+    rerollButton.push(this.keys_(rx, ry, `[@reroll] ${t("hint.reroll", { price })}`, 7,
       afford ? "#ffd45e" : "#ff6a5a", 202));
     const rerollBar = this.add.graphics().setPosition(rx, ry).setDepth(202.5);
     rerollButton.push(rerollBar);
@@ -11528,7 +11634,7 @@ export class PlayScene extends Phaser.Scene {
       const panel = add(this.add.rectangle(leftX, rowY(i), 150, 38, on ? 0x221d46 : 0x161334, 0.96)
         .setStrokeStyle(on ? 2 : 1, picked ? 0x8fdcff : on ? 0xffe9a8 : 0x4a5480, 1).setDepth(210.5));
       if (!eligible) panel.setAlpha(0.55);
-      text(leftX - 66, rowY(i), SPELL_KEYS[i] ?? "", 11, on ? "#ffe9a8" : "#8792b5").setOrigin(0, 0.5);
+      text(leftX - 66, rowY(i), this.spellKeyLabel(i), 11, on ? "#ffe9a8" : "#8792b5").setOrigin(0, 0.5);
       if (slot) {
         const icon = `icon_${slot.item.base}`;
         if (this.atlas.has(icon))
@@ -11831,12 +11937,12 @@ export class PlayScene extends Phaser.Scene {
     }
 
     const hint = ui.mode === "attach"
-      ? `[W][S] ${t("hint.choose")}     [Enter] ${t("hint.attach")}     [Esc] ${t("hint.backToCards")}`
+      ? `[@up][@down] ${t("hint.choose")}     [Enter] ${t("hint.attach")}     [Esc] ${t("hint.backToCards")}`
       : ui.mode === "replace"
-        ? `[W][S] ${t("hint.choose")}     [Enter] ${t("hint.replace")}     [Esc] ${t("hint.back")}`
+        ? `[@up][@down] ${t("hint.choose")}     [Enter] ${t("hint.replace")}     [Esc] ${t("hint.back")}`
         : ui.mode === "smith"
-          ? `[W][S] ${t("hint.choose")}     [Enter] ${t("hint.raiseLevel")}     [Esc] ${t("hint.close")}`
-          : `[W][S] ${t("hint.choose")}     [Enter] ${t("hint.pickUpSwap")}     [Tab] / [Esc] ${t("hint.close")}`;
+          ? `[@up][@down] ${t("hint.choose")}     [Enter] ${t("hint.raiseLevel")}     [Esc] ${t("hint.close")}`
+          : `[@up][@down] ${t("hint.choose")}     [Enter] ${t("hint.pickUpSwap")}     [@character] / [Esc] ${t("hint.close")}`;
     ui.objects.push(this.fittedKeys(ui.mode === "replace" ? cx - 100 : cx, view.bottom - 16,
       hint, 8, "#8792b5", ui.mode === "replace" ? view.width - 280 : view.width - 40, 211));
     if (ui.mode === "replace") {
@@ -11866,17 +11972,17 @@ export class PlayScene extends Phaser.Scene {
 
     // Choosing which affix a full spell gives up: W S move among its three.
     if (ui.swapAffix !== null && ui.swapAffix !== undefined) {
-      if (down(this.keys.W) || down(this.keys.UP)) { ui.swapAffix = (ui.swapAffix + AFFIX_SLOTS - 1) % AFFIX_SLOTS; this.renderStaff(); }
-      if (down(this.keys.S) || down(this.keys.DOWN)) { ui.swapAffix = (ui.swapAffix + 1) % AFFIX_SLOTS; this.renderStaff(); }
+      if (down(this.key("up")) || down(this.keys.UP)) { ui.swapAffix = (ui.swapAffix + AFFIX_SLOTS - 1) % AFFIX_SLOTS; this.renderStaff(); }
+      if (down(this.key("down")) || down(this.keys.DOWN)) { ui.swapAffix = (ui.swapAffix + 1) % AFFIX_SLOTS; this.renderStaff(); }
       if (down(this.keys.ESC)) { ui.swapAffix = null; this.renderStaff(); return; }
     } else {
-    if (down(this.keys.W) || down(this.keys.UP)) { ui.selected = (ui.selected + n - 1) % n; moved = true; }
-    if (down(this.keys.S) || down(this.keys.DOWN)) { ui.selected = (ui.selected + 1) % n; moved = true; }
+    if (down(this.key("up")) || down(this.keys.UP)) { ui.selected = (ui.selected + n - 1) % n; moved = true; }
+    if (down(this.key("down")) || down(this.keys.DOWN)) { ui.selected = (ui.selected + 1) % n; moved = true; }
     }
     for (let i = 0; i < n; i++)
-      if (down(this.keys[["U", "I", "O"][i] ?? ""])) { ui.selected = i; moved = true; }
+      if (down(this.key(SPELL_ACTIONS[i] ?? "spell1"))) { ui.selected = i; moved = true; }
 
-    if (down(this.keys.ESC) || ((ui.mode === "view" || ui.mode === "smith") && down(this.keys.TAB))) {
+    if (down(this.keys.ESC) || ((ui.mode === "view" || ui.mode === "smith") && down(this.key("character")))) {
       this.shopPending = null;
       if (ui.mode === "replace" && this.floorPending) { this.floorPending = null; this.hideStaff(); return; }
       if (ui.mode === "replace") { this.hideStaff(); this.showRewards(); return; }
@@ -11983,7 +12089,7 @@ export class PlayScene extends Phaser.Scene {
     if (!fitted) { this.sfx.play("ui_deny"); return; }
     // The spell that came off the key lies on the floor, as it was.
     if (old) this.dropFloorSpell(old.item.base, oldValue, oldLevel, oldAffixes);
-    this.tookLabel = t("toast.onKey", { label: contentName(card.itemId ?? "", card.label), key: SPELL_KEYS[i] ?? "" });
+    this.tookLabel = t("toast.onKey", { label: contentName(card.itemId ?? "", card.label), key: this.spellKeyLabel(i) });
     this.tookMs = 1800;
     if (floor) {
       // Picked up off the floor: no reward was being answered.
@@ -12419,7 +12525,7 @@ export class PlayScene extends Phaser.Scene {
         this.pickFloorSpell(spellNear);
         return;
       }
-      const x = this.keys.X;
+      const x = this.key("dismantle");
       const dt = this.game.loop.delta;
       // An abandoned hold drains back, and a second hold resumes its progress.
       if (x?.isDown && !this.floorHoldSpent) {
@@ -12464,7 +12570,7 @@ export class PlayScene extends Phaser.Scene {
       return;
     }
     // Away from any floor spell: the bar drains and the press is forgotten.
-    if (!this.keys.X?.isDown) this.floorHoldSpent = false;
+    if (!this.key("dismantle")?.isDown) this.floorHoldSpent = false;
     this.floorHoldMs = Math.max(0, this.floorHoldMs - this.game.loop.delta * 1.5);
     this.holdGfx.clear();
     if (npcNear && !this.offerUi && !this.staffUi) {
@@ -12621,7 +12727,7 @@ export class PlayScene extends Phaser.Scene {
    */
   private holdingX(): number {
     const dt = this.game.loop.delta;
-    if (!this.keys.X?.isDown && !this.dismantlePointerDown) {
+    if (!this.key("dismantle")?.isDown && !this.dismantlePointerDown) {
       this.modalHoldSpent = false;
       this.modalHoldMs = Math.max(0, this.modalHoldMs - dt * 1.5);
       return 0;
@@ -12639,7 +12745,7 @@ export class PlayScene extends Phaser.Scene {
     this.modalHoldGfx.fillStyle(0x2a2750, 1);
     this.modalHoldGfx.fillRect(x - width / 2, y, width, 4);
     if (k <= 0) return;
-    this.modalHoldGfx.fillStyle(this.keys.X?.isDown || this.dismantlePointerDown ? 0xffd45e : 0x9a7a3a, 1);
+    this.modalHoldGfx.fillStyle(this.key("dismantle")?.isDown || this.dismantlePointerDown ? 0xffd45e : 0x9a7a3a, 1);
     this.modalHoldGfx.fillRect(x - width / 2, y, width * k, 4);
   }
 
@@ -12695,15 +12801,15 @@ export class PlayScene extends Phaser.Scene {
   /** The offer screen's navigation and main action, clear of the hold button. */
   private offerHint(): string {
     if (this.shopping)
-      return `[A][D] ${t("hint.move")}     [Enter] ${t("hint.buy")}     [Esc] ${t("hint.leave")}     ${t("hint.gold", { gold: this.goldShown() })}`;
-    return `[A][D] ${t("hint.move")}     [Enter] ${t("hint.take")}`;
+      return `[@left][@right] ${t("hint.move")}     [Enter] ${t("hint.buy")}     [Esc] ${t("hint.leave")}     ${t("hint.gold", { gold: this.goldShown() })}`;
+    return `[@left][@right] ${t("hint.move")}     [Enter] ${t("hint.take")}`;
   }
 
   /** Keyboard and pointer share one hold meter, so a refresh cannot fire on a stray tap. */
   private tickRerollHold(): boolean {
     const ui = this.offerUi;
     if (!ui) return false;
-    const held = !!this.keys.R?.isDown || this.rerollPointerDown;
+    const held = !!this.key("reroll")?.isDown || this.rerollPointerDown;
     if (!held) this.rerollHoldSpent = false;
     if (this.rerollLoading) this.rerollHoldMs = 0;
     else if (!held) this.rerollHoldMs = Math.max(0, this.rerollHoldMs - this.game.loop.delta * 1.5);
@@ -12733,7 +12839,7 @@ export class PlayScene extends Phaser.Scene {
 
     if (this.tickRerollHold()) return;
     if (this.rerollLoading) {
-      for (const key of [k.A, k.D, k.LEFT, k.RIGHT, k.ENTER, k.ESC, k.R, k.X]) down(key);
+      for (const key of [this.key("left"), this.key("right"), k.LEFT, k.RIGHT, k.ENTER, k.ESC, this.key("reroll"), this.key("dismantle")]) down(key);
       return;
     }
 
@@ -12765,8 +12871,8 @@ export class PlayScene extends Phaser.Scene {
     }
     if (deal && ui.dismantleLabel)
       this.drawHoldBar(ui.dismantleLabel.x, ui.dismantleLabel.y + 11, 190);
-    if (down(k.A) || down(k.LEFT)) ui.selected = (ui.selected + count - 1) % count;
-    if (down(k.D) || down(k.RIGHT)) ui.selected = (ui.selected + 1) % count;
+    if (down(this.key("left")) || down(k.LEFT)) ui.selected = (ui.selected + count - 1) % count;
+    if (down(this.key("right")) || down(k.RIGHT)) ui.selected = (ui.selected + 1) % count;
 
     // One decision per frame: the index is read before anything can invalidate
     // the screen it indexes into.
@@ -15918,6 +16024,37 @@ export class PlayScene extends Phaser.Scene {
     return `idle${Math.floor(this.world.tick / IDLE_FRAME_TICKS) % 4}`;
   }
 
+  /** What spell slot `i`'s key reads. */
+  private spellKeyLabel(i: number): string {
+    const a = SPELL_ACTIONS[i];
+    return a ? this.binds.label(a) : String(i + 1);
+  }
+
+  /** Whether `a`'s key went down since it was last asked (`JustDown`, which spends the edge). */
+  private justDown(a: Action): boolean {
+    const k = this.key(a);
+    return !!k && Phaser.Input.Keyboard.JustDown(k);
+  }
+
+  /** The Phaser key `a` is bound to now. */
+  private key(a: Action): Phaser.Input.Keyboard.Key | undefined {
+    return this.bound.get(a);
+  }
+
+  /**
+   * Makes the Phaser keys for the bindings, and keeps them. A key another
+   * binding or a menu already made is the same key (`addKey` hands back the
+   * one it has), so rebinding never takes a key away from a menu.
+   */
+  private applyBinds(): void {
+    const kb = this.input.keyboard;
+    if (!kb) return;
+    this.bound.clear();
+    for (const a of ACTIONS) this.bound.set(a, kb.addKey(this.binds.get(a).code));
+    try { localStorage.setItem(KEYBINDS_KEY, this.binds.serialize()); } catch { /* bound for this visit */ }
+    this.rebuildHintStrip();
+  }
+
   /**
    * Which spell key is **held**, or null.
    *
@@ -15932,7 +16069,7 @@ export class PlayScene extends Phaser.Scene {
   private pressedSpell(): number | null {
     if (this.offerUi || this.staffUi) return null;
     const bound: (Phaser.Input.Keyboard.Key | undefined)[] =
-      [this.keys.U, this.keys.I, this.keys.O];
+      SPELL_ACTIONS.map((a) => this.key(a));
     for (let i = 0; i < bound.length; i++) {
       if (!bound[i]?.isDown) continue;
       // Remembered even when the press is refused: the bar's cost tick
@@ -15961,16 +16098,96 @@ export class PlayScene extends Phaser.Scene {
    * Its cast does not slow the player (`Input.spellAuto`), so it may go
    * mid-stride.
    */
-  /** The spell half of the input: the player's own key, else the assist's, marked as such. */
+  /**
+   * The spell half of the input: the player's own key, else Space's or the
+   * assist's, marked as such. A Space cast is the assist's pick at the
+   * player's moment, so it goes as the assist's does: at the nearest body,
+   * and without the slow (`Input.spellAuto`).
+   */
   private spellInput(): { spell: number | null; spellAuto?: boolean } {
     const own = this.pressedSpell();
+    const space = this.spaceWanted();
     if (own !== null) return { spell: own };
-    const auto = this.autoSpell();
-    return auto === null ? { spell: null } : { spell: auto, spellAuto: true };
+    if (this.autoCastMode === "off") return { spell: null };
+    if (this.autoCastMode === "space" && !space.wanted) return { spell: null };
+    const auto = this.autoSpell(this.autoCastMode === "space");
+    playtestLog.autoCast(this.autoCastMode, auto !== null);
+    if (auto === null) {
+      if (space.fresh) this.noteSpaceRefusal();
+      return { spell: null };
+    }
+    if (this.autoCastMode === "space") this.spaceWantMs = 0;
+    return { spell: auto, spellAuto: true };
   }
 
-  private autoSpell(): number | null {
-    if (!this.autoCast) return null;
+  /**
+   * **Whether Space asks for a cast on this step**: held, or tapped within
+   * `SPELL_BUFFER_MS` of the caster coming free — the window the sim gives
+   * a spell key's tap, waited out through the caster's own cast, so a tap in
+   * a recovery is not lost. `fresh` is the press going down.
+   */
+  private spaceWanted(): { wanted: boolean; fresh: boolean } {
+    const key = this.key("autoCast");
+    if (!key || this.offerUi || this.staffUi || this.autoCastMode !== "space") { this.spaceWantMs = 0; return { wanted: false, fresh: false }; }
+    const fresh = Phaser.Input.Keyboard.JustDown(key);
+    const p = this.world.player;
+    const casting = p.castPending >= 0 || p.castRecoverMs > 0 || p.chargeKey >= 0;
+    if (fresh) this.spaceWantMs = SPELL_BUFFER_MS;
+    else if (!casting) this.spaceWantMs = Math.max(0, this.spaceWantMs - STEP_MS);
+    return { wanted: key.isDown || this.spaceWantMs > 0, fresh };
+  }
+
+  /**
+   * A Space press with nothing to cast, answered as a spell key's is: when
+   * every key it could cast is cooling, the soonest one says *not yet*
+   * (`noteRefusal`). With one back but no body in its reach, or still
+   * running, it says nothing: the press is kept a moment and goes if the
+   * body steps in.
+   */
+  private noteSpaceRefusal(): void {
+    let soonest = -1;
+    let ms = Infinity;
+    let anyReady = false;
+    this.world.spells.forEach((slot, i) => {
+      const params = ITEMS.get(slot?.item.base ?? "")?.params;
+      if (!slot || !params || !autoCastable(params, chargeMsOf(ITEMS, slot.item.base))) return;
+      if (spellReady(slot, ITEMS)) { anyReady = true; return; }
+      if (slot.cooldownMs < ms) { ms = slot.cooldownMs; soonest = i; }
+    });
+    if (!anyReady && soonest >= 0) this.noteRefusal("cooldown", soonest);
+  }
+
+  /** The key the assist casts on this step, or null: on its own beat, or `now` for a Space press. */
+  private autoSpell(now: boolean): number | null {
+    const { keys, free, bar, target } = this.autoKeys();
+    const key = now ? this.autoCaster.pickNow(keys, free, bar) : this.autoCaster.pick(this.world.tick * STEP_MS, keys, free, bar);
+    // An enchant or a companion with no body in reach aims nowhere in particular: the facing the player has.
+    if (key !== null) this.autoTargetId = target?.id ?? null;
+    return key;
+  }
+
+  /**
+   * **The key the next assisted cast would be**, for the eye: on `space`,
+   * what a press now would cast; on `auto`, what the beat will cast when it
+   * comes (`AutoCaster.peek`, which draws with the roll the cast will use,
+   * so it is the key that goes). Null with the assist off or no key able
+   * to go. Read once a frame, before the bar and the head are drawn.
+   */
+  private nextAutoKey(): number | null {
+    if (this.autoCastMode === "off" || this.modalOpen) return null;
+    const { keys, bar } = this.autoKeys();
+    return this.autoCaster.peek(keys, bar, this.autoCastMode === "space");
+  }
+
+  /** Whether key `i` holds a spell the assist may ever cast (`autoCastable`): a tap, not a hold, a guard or a dash. */
+  private autoCastableKey(i: number): boolean {
+    const slot = this.world.spells[i];
+    const params = ITEMS.get(slot?.item.base ?? "")?.params;
+    return !!slot && !!params && autoCastable(params, chargeMsOf(ITEMS, slot.item.base));
+  }
+
+  /** What the assist's draw sees on this step: each key, whether the hands are free, the bar, and the body it would aim at. */
+  private autoKeys(): { keys: AutoCastKey[]; free: boolean; bar: { mana: number; floor: number; max: number }; target: Enemy | null } {
     const w = this.world;
     const p = w.player;
     const free = p.castPending < 0 && p.castRecoverMs <= 0 && p.chargeKey < 0 && !p.stance && p.stunMs <= 0 && p.dashMs <= 0;
@@ -15999,10 +16216,7 @@ export class PlayScene extends Phaser.Scene {
         cost: slotCost(slot, ITEMS, w.staff),
       };
     });
-    const key = this.autoCaster.pick(w.tick * STEP_MS, keys, free, { mana: p.mana, floor, max: w.staff.mana_max });
-    // An enchant or a companion with no body in reach aims nowhere in particular: the facing the player has.
-    if (key !== null) this.autoTargetId = target?.id ?? null;
-    return key;
+    return { keys, free, bar: { mana: p.mana, floor, max: w.staff.mana_max }, target };
   }
 
   /**
@@ -16153,8 +16367,8 @@ export class PlayScene extends Phaser.Scene {
     }
     const k = this.keys;
     const p = this.input.activePointer;
-    const x = (down(k.D) || down(k.RIGHT) ? 1 : 0) - (down(k.A) || down(k.LEFT) ? 1 : 0);
-    const y = (down(k.S) || down(k.DOWN) ? 1 : 0) - (down(k.W) || down(k.UP) ? 1 : 0);
+    const x = (down(this.key("right")) || down(k.RIGHT) ? 1 : 0) - (down(this.key("left")) || down(k.LEFT) ? 1 : 0);
+    const y = (down(this.key("down")) || down(k.DOWN) ? 1 : 0) - (down(this.key("up")) || down(k.UP) ? 1 : 0);
 
     // Aim is a point one reach ahead along the facing — or, through an
     // auto-cast, along the line to the body it was cast at (`autoAim`).
@@ -16164,7 +16378,7 @@ export class PlayScene extends Phaser.Scene {
       moveX: x, moveY: y,
       aimX: this.world.player.x + Math.cos(f) * 64,
       aimY: this.world.player.y + Math.sin(f) * 64,
-      swing: down(k.J) || p.leftButtonDown(),
+      swing: down(this.key("attack")) || p.leftButtonDown(),
       autoMeleeAim: this.autoMeleeAim,
       // A press, never a hold: a spin is a segment of rage and must not be
       // spent by a finger resting on the key. Latched like the interact key,
@@ -16180,7 +16394,7 @@ export class PlayScene extends Phaser.Scene {
        * queueing the next one is exactly right for a basic attack.
        */
       ...spell,
-      dash: down(k.K),
+      dash: down(this.key("dash")),
       // An edge, like the spell index: taking a card and stepping through a
       // portal are both decisions that must cost one press, not one frame.
       interact: this.interactPressed,
@@ -18934,6 +19148,9 @@ const STYLES: readonly { id: "spam" | "nuke" | "area" | "dot" | "melee"; name: s
 const DAMAGE_NUMBERS_KEY = "jr-damage-numbers";
 const AUTO_MELEE_AIM_KEY = "jr-auto-melee-aim";
 const AUTO_CAST_KEY = "jr-auto-cast";
+/** The player's key bindings (`keybinds.ts`). */
+const KEYBINDS_KEY = "jr-keybinds";
+
 /** The pause panel's width on each page: the controls table is the wide one. */
 function panelWFor(page: "main" | "settings" | "controls" | "firstAssist"): number {
   return page === "controls" ? 400 : page === "settings" || page === "firstAssist" ? 340 : 190;
@@ -19749,7 +19966,8 @@ function DEBUG_SPELLS(): string[] {
 }
 
 /** The keys the three spells are bound to, in slot order. */
-const SPELL_KEYS = ["U", "I", "O"] as const;
+/** The three spell keys' actions, in slot order. */
+const SPELL_ACTIONS = ["spell1", "spell2", "spell3"] as const satisfies readonly Action[];
 /** The player's own `shot` events, which are never an enemy's shot; those without a sound of their own say nothing. */
 const PLAYER_SHOT_EVENTS: ReadonlySet<string> = new Set(["free_strike", "land", "emit_burst", "contagion"]);
 /**

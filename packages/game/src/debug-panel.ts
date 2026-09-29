@@ -78,6 +78,14 @@ export interface PlaytestRoom {
   castRefusedMana: number;
   manaShortMs: number;
   /**
+   * The auto-cast mode the room was fought in (`space` or `auto`; absent
+   * for `off`), and how many of `castPresses` were the assist's pick — a
+   * Space press, or the assist's own beat. Without them a log could not say
+   * whether a room's casts were chosen key by key.
+   */
+  autoCast?: string;
+  autoCasts?: number;
+  /**
    * **What the Director decided for this room, every answer of it**: the
    * room's own questions, the doors out and what each promised, the cards
    * offered and the one taken. Without these the log said how a room went
@@ -201,6 +209,14 @@ export class PlaytestRecorder {
   attach(index: number, add: (r: PlaytestRoom) => void): void {
     if (this.live && this.live.index === index) { add(this.live); return; }
     this.pending.set(index, [...(this.pending.get(index) ?? []), add]);
+  }
+
+  /** The auto-cast assist, in `mode`, was asked for a key on this step, and gave one if `cast`. */
+  autoCast(mode: string, cast: boolean): void {
+    const r = this.live;
+    if (!r) return;
+    r.autoCast = mode;
+    if (cast) r.autoCasts = (r.autoCasts ?? 0) + 1;
   }
 
   /** Adds a plan's decisions to room `index`'s record. */

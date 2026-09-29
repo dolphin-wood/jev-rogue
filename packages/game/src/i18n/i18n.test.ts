@@ -61,7 +61,8 @@ describe("string tables", () => {
     // `[E]` and friends are drawn as chips; a translation that loses the
     // brackets loses the chip and prints a bare letter mid-sentence.
     for (const key of keys) {
-      const caps = (s: string) => [...s.matchAll(/\[(\w+)\]/g)].map((m) => m[1]!).sort();
+      // `[@action]` too: the cap that reads whatever key the action is on.
+      const caps = (s: string) => [...s.matchAll(/\[(@?\w+)\]/g)].map((m) => m[1]!).sort();
       const want = caps(EN[key as keyof typeof EN]);
       for (const [name, table] of [["zh", ZH], ["ja", JA]] as const) {
         expect(caps(table[key as keyof typeof EN]), `${name} ${key}`).toEqual(want);
@@ -397,7 +398,7 @@ describe("t", () => {
   });
 
   it("leaves keycap and icon markup untouched", () => {
-    expect(t("prompt.open")).toBe("[E] Open");
+    expect(t("prompt.open")).toBe("[@interact] Open");
     expect(t("char.price", { price: 25, held: 100 })).toContain("{coin}");
   });
 });
