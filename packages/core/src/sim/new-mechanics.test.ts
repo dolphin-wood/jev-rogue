@@ -78,26 +78,24 @@ describe("Blade Storm", () => {
     }
   });
 
-  it("flings the whole ring outward on the sixth, and the next cast starts a new one", () => {
+  it("stops at six, and a press on a full ring takes its oldest blade's place, which deals nothing as it goes", () => {
     const w = world("blade_storm");
-    for (let n = 0; n < 5; n++) press(w);
-    run(w, 1, () => ({ ...aimRight, spell: 0 }));
-    expect(ring(w).length).toBe(6);
-    run(w, 30, () => aimRight);
-    expect(ring(w).length).toBe(0);
-    const flung = w.playerBullets.filter((b) => b.alive && b.spellIndex === 0);
-    expect(flung.length).toBe(6);
-    for (const b of flung) expect(Math.hypot(b.x - w.player.x, b.y - w.player.y)).toBeGreaterThan(70);
-    press(w);
-    expect(ring(w).length).toBe(1);
-  });
-
-  it("cuts a body standing beyond the ring with the burst", () => {
-    const w = world("blade_storm");
-    const e = body(w, 100, 0);
     for (let n = 0; n < 6; n++) press(w);
+    expect(ring(w).length).toBe(6);
+    // The time each blade has left, oldest first (pooled bullets are reused, so they are told apart by it).
+    const times = () => ring(w).map((b) => b.orbitMs).sort((a, b) => a - b);
+    const before = times();
+    run(w, 1, () => ({ ...aimRight, spell: 0 }));
+    expect(w.events.some((ev) => ev.kind === "spell" && ev.what === "orbit_fade")).toBe(true);
+    const after = times();
+    expect(after).toHaveLength(6);
+    // The oldest is gone: the least time left now is about what the second oldest had.
+    expect(after[0]!).toBeGreaterThan(before[0]! + 100);
+    expect(after[0]!).toBeCloseTo(before[1]!, -2);
     run(w, 30, () => aimRight);
-    expect(e.hp).toBeLessThan(e.maxHp);
+    expect(ring(w).length).toBe(6);
+    // Nothing flies out: every blade of the key is still on its circle.
+    expect(w.playerBullets.filter((b) => b.alive && b.spellIndex === 0 && b.orbitMs <= 0)).toHaveLength(0);
   });
 });
 

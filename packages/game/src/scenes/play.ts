@@ -8107,7 +8107,6 @@ export class PlayScene extends Phaser.Scene {
       // A full Blade Storm flung outward: a streak of light off each blade along its way out.
       // A blade ripped out of its body by a recall: a spurt of the spirit's light off it.
       else if (ev.kind === "shot" && ev.what === "recall") this.burst(ev.x, ev.y - LODGED_BODY_LIFT, 0xe6ddff, 7, 150, undefined, Math.PI * 2, 0.8);
-      else if (ev.kind === "shot" && ev.what === "blade_burst") this.burst(ev.x, ev.y, 0xe6ddff, 6, 240, ev.facing, 0.45, 0.85);
       else if (ev.kind === "shot" && ev.what === "intercept") this.burst(ev.x, ev.y, 0xf4fbff, 7, 120, undefined, Math.PI * 2, 0.7);
       // `overload`: the strike coming down on the body, and its light thrown off.
       else if (ev.kind === "enemy_hit" && ev.what === "overload") {
@@ -8249,6 +8248,12 @@ export class PlayScene extends Phaser.Scene {
         this.fxSlashes.push({ x: cx, y: cy, angle: a + Math.PI / 2 - 0.5, ms: 0, colour: look.core, len: 15 });
         this.burst(cx, cy, 0xffffff, 8, 260, a, 1.1, 0.8);
         this.burst(cx, cy, look.glow, 8, 180, a, 1.6, 0.9);
+        break;
+      }
+      case "orbit_fade": {
+        // A full ring's oldest blade giving its place up: its light shed where it was, and nothing more.
+        const look = this.shapeLook("orbit", "blade_storm");
+        this.burst(ev.x, ev.y, look.core, 5, 50, undefined, Math.PI * 2, 0.5, -20);
         break;
       }
       case "charge_shield": {
@@ -9149,13 +9154,9 @@ export class PlayScene extends Phaser.Scene {
            * off the body that died.
            */
           else if (what === "free_strike") sfx.play("dash_strike", 1.1);
-          // Six blades leave in one step: one rush of steel for the burst, not six.
           // Every blade ripped out at once: one rush, not one a blade.
           else if (what === "recall") {
             if (this.time.now - this.bladeBurstHeardAt > 80) { sfx.play("dash_strike", 1.4); sfx.play("cast_spirit", 1.2); this.bladeBurstHeardAt = this.time.now; }
-          }
-          else if (what === "blade_burst") {
-            if (this.time.now - this.bladeBurstHeardAt > 80) { sfx.play("dash_strike", 1.25); this.bladeBurstHeardAt = this.time.now; }
           }
           else if (what === "land") sfx.play("impact_stone", 0.72);
           else if (what === "emit_burst") sfx.play("cast_nova", 1.2);
@@ -17035,7 +17036,7 @@ export class PlayScene extends Phaser.Scene {
       const inReach = autoCastAnyReach(params) ? fight : !!target && dist <= autoCastReach(params);
       // A ring built by pressing again (`stack_max`): how much of it is up, for the run that builds it (`AUTO_CAST_RUN_MS`).
       const stackMax = Number(params["stack_max"] ?? 0);
-      const up = stackMax > 0 ? w.playerBullets.filter((b) => b.alive && b.orbitMs > 0 && b.burstMs <= 0 && b.spellIndex === i).length : 0;
+      const up = stackMax > 0 ? w.playerBullets.filter((b) => b.alive && b.orbitMs > 0 && b.spellIndex === i).length : 0;
       return {
         held,
         ready: held && inReach && this.keyRunningMs(i) <= 0 && spellReady(slot, ITEMS) && this.recallDue(i),

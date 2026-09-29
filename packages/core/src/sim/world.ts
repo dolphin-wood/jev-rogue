@@ -4718,14 +4718,6 @@ const BEAM_TURN_DEG_PER_S = 200;
 /** How often an orbiting blade may hit the same body: about twice a second. */
 const ORBIT_REHIT_MS = 450;
 
-/**
- * How hard a bursting Blade Storm blade turns onto its body, and for how
- * long: a curl out of the ring into it, not a lock that turns it round again
- * once it has passed through.
- */
-const BURST_TURN_DEG_PER_S = 900;
-const BURST_SEEK_MS = 380;
-
 function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
   /*
    * Orbiting shots are placed, not flown: on their circle round the player,
@@ -4733,48 +4725,8 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
    * blade was moving. The rehit clock clears the hit list so a body that
    * stays in the ring keeps paying.
    */
-  // How many of this step's bursting blades have gone for each body, so a burst spreads over the pack.
-  const burstAt = new Map<number, number>();
   for (const b of w.playerBullets) {
     if (!b.alive || b.orbitMs <= 0) continue;
-    /*
-     * A full Blade Storm bursts (`Bullet.burstMs`): the blade leaves its
-     * circle outward and curls onto a body within its reach — the one the
-     * fewest blades of the burst have gone for, and of those the nearest —
-     * so six blades find a lone body and share out a pack, where six straight
-     * spokes would pass either side of anything but a crowd. From here it is
-     * an ordinary piercing shot until its reach runs out.
-     */
-    if (b.burstMs > 0) {
-      b.burstMs -= dtMs;
-      if (b.burstMs <= 0) {
-        const reach = b.burstSpeed * b.burstLifeMs / 1000;
-        let pick: Enemy | null = null, best = Infinity;
-        for (const e of w.enemies) {
-          if (!isActive(e) || e.hp <= 0) continue;
-          const d = Math.hypot(e.x - b.x, e.y - b.y);
-          if (d > reach) continue;
-          const score = (burstAt.get(e.id) ?? 0) * 1e4 + d;
-          if (score < best) { best = score; pick = e; }
-        }
-        if (pick) burstAt.set(pick.id, (burstAt.get(pick.id) ?? 0) + 1);
-        const ux = Math.cos(b.orbitAngle), uy = Math.sin(b.orbitAngle);
-        b.orbitMs = 0;
-        b.burstMs = 0;
-        b.vx = ux * b.burstSpeed;
-        b.vy = uy * b.burstSpeed;
-        b.targetId = pick ? pick.id : -1;
-        b.seekDegPerS = pick ? BURST_TURN_DEG_PER_S : 0;
-        b.seekMs = pick ? BURST_SEEK_MS : 0;
-        b.lifeMs = b.burstLifeMs;
-        b.damage = b.burstDamage;
-        b.originX = b.x;
-        b.originY = b.y;
-        b.hitIds.length = 0;
-        w.events.push({ kind: "shot", x: b.x, y: b.y, what: "blade_burst", facing: b.orbitAngle });
-        continue;
-      }
-    }
     const step = (b.orbitDegPerS * Math.PI / 180) * (dtMs / 1000);
     b.orbitAngle += step;
     // An anchored ring turns round its point on the floor; every other round the caster.

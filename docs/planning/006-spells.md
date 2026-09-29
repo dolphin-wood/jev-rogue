@@ -175,14 +175,16 @@ roster's standard status), `speed`, `windup_ms`, `recover_ms`, `move_scale`,
   hit: the hit and kill affixes fire there, and those that act on a shot's
   flight (`pierce`, `seek`, `ricochet`, `shatter`, `fork`) are not dealt to it.
 - **`stack_max` (orbit).** A recast adds its blades to the ring instead of
-  replacing it, up to `stack_max`, past which the oldest go; each blade keeps
-  its own `lifetime` from the cast that made it, so a ring not pressed thins; the ring is re-spaced evenly each time and widens and quickens by
-  `orbit_grow` px and `spin_grow` °/s a blade. With `burst_speed`, the cast
-  that fills the ring bursts it `burst_ms` later: each blade leaves the circle
-  outward and curls onto a body within `burst_reach` (the one the fewest
-  blades of the burst went for, then the nearest), piercing, at `burst_scale`
-  of its damage; the next cast starts a new ring. The ring is the build, the
-  burst the release — where Spirit Blades is a ring that is simply there.
+  replacing it, up to `stack_max`.
+  - Each blade keeps its own `lifetime` from the cast that made it, so a ring
+    that stops being pressed thins out.
+  - The ring is re-spaced evenly each time, and widens and quickens by
+    `orbit_grow` px and `spin_grow` °/s a blade.
+  - A cast on a full ring takes the place of its oldest blade. That blade
+    dissolves (`orbit_fade`) and deals nothing, so pressing on a full ring
+    only keeps it full, and is not a free extra blow.
+  - The ring is kept up by pressing, where Spirit Blades is a ring that is
+    simply there.
 - **`anchor_reach` (orbit).** The ring turns round a point on the floor — the
   body the cast sought, or the aim's point at `anchor_reach` — and stays there
   as the caster moves.
@@ -278,7 +280,7 @@ style it is tagged with; its first row is its primary style.
 | Returning Edge `returning_edge` | spirit | common | boomerang | a spectral sword thrown ahead that comes back, cutting on both passes |
 | Counter Stance `counter_stance` | spirit | uncommon | stance | a short guard that cancels the next hit and answers with a spin slash |
 | Dash Slash `dash_slash` | spirit | uncommon | dash + wake | a run through the bodies ahead whose wake cuts those to either side |
-| Blade Storm `blade_storm` | spirit | rare | orbit + `stack_max` | each cast adds a blade to a ring round the caster that widens and quickens; the sixth flings them all out at nearby bodies (also Barrage) |
+| Blade Storm `blade_storm` | spirit | rare | orbit + `stack_max` | each cast adds a blade to a ring round the caster that widens and quickens, up to six; a cast on a full ring replaces the oldest (also Barrage) |
 | Blade Recall `blade_recall` | spirit | uncommon | boomerang + `lodge_max` | each sword blow leaves a blade in the body struck, up to ten for fifteen seconds; the press calls them all home through everything between |
 | Blade Rift `blade_rift` | spirit | uncommon | orbit + `anchor_reach` | a whirl of three blades set spinning on the floor ahead, cutting what stands in it (also Crowd) |
 | Stone Ward `stone_ward` | stone | common | pillar | a pillar between the caster and what they face that blocks bodies and shots |

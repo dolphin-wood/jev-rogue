@@ -34,7 +34,7 @@
  *
  * **A ring built by pressing again is built whole** (`stacks`, Blade
  * Storm). Once the draw casts it, the assist presses it again at
- * `AUTO_CAST_RUN_MS` until it is full and flung, waiting a moment on its
+ * `AUTO_CAST_RUN_MS` until it is full, waiting a moment on its
  * short cooldown, and then goes back to the draw. On the ordinary beat, a
  * turn in three, its blades ran out as fast as they were added.
  *
@@ -170,10 +170,10 @@ export const AUTO_CAST_MAX_WEIGHT = 4;
 /**
  * **The beat of a ring being built** (`AutoCastKey.stacks`, Blade Storm): once
  * the draw casts a key that grows with each press, the assist presses it
- * again this soon after the hands are free, until the ring is full and flung
- * — the spell is a cheap key pressed again and again to build to a release,
- * and on the ordinary beat, a turn in three, its blades ran out as fast as
- * they were added and it never got past two.
+ * again this soon after the hands are free, until the ring is full — the
+ * spell is a cheap key pressed again and again to keep a storm up, and on
+ * the ordinary beat, a turn in three, its blades ran out as fast as they
+ * were added and it never got past two.
  */
 export const AUTO_CAST_RUN_MS = 150;
 /**
@@ -303,7 +303,7 @@ export class AutoCaster {
 
   /**
    * Whether the run's key can be pressed now: part built (some of it up,
-   * not yet full), back, and paid for. A ring full and flung is no longer
+   * not yet full), back, and paid for. A full ring is no longer
    * building, and the run ends with it.
    */
   private runGoesOn(keys: readonly AutoCastKey[], bar: AutoCastBar): boolean {

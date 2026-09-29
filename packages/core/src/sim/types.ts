@@ -280,17 +280,6 @@ export interface Bullet {
   orbitDegPerS: number;
   rehitMs: number;
   /**
-   * A **full stacking ring** (`stack_max` with `burst_speed`, Blade Storm)
-   * bursts: `burstMs` counts down from the cast that filled it, and at zero
-   * the blade leaves its circle and flies straight out for `burstLifeMs` at
-   * `burstSpeed`, dealing `burstDamage`. Zero `burstMs` is a blade that
-   * never bursts.
-   */
-  burstMs: number;
-  burstSpeed: number;
-  burstLifeMs: number;
-  burstDamage: number;
-  /**
    * Leaves a patch of fire where it stops. This is how the thrown-flame attack
    * kind works: the travel and the collision are the ordinary bullet path, and
    * only the ending differs.

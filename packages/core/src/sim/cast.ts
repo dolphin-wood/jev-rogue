@@ -482,29 +482,25 @@ export function fireUnit(
      * it reads as one ring growing rather than as blades piling up, and it
      * widens and quickens with each blade (`orbit_grow`, `spin_grow`).
      *
-     * With `burst_speed` the cap is not a ceiling but a payoff: the cast that
-     * fills the ring sets every blade to burst `burst_ms` later, flying
-     * straight out through everything for `burst_reach` at `burst_scale` of
-     * its damage. A bursting ring is no longer the key's ring, so the next
-     * press starts a new one.
+     * A press on a full ring takes the place of its oldest blade, which
+     * dissolves (`orbit_fade`) and deals nothing: a full ring is kept full by
+     * pressing, never cashed in, so pressing at the cap is not a free blow.
      */
     const stackMax = Math.round(num(base.params, "stack_max", 0));
-    const ring = world.playerBullets.filter((b) => b.alive && b.orbitMs > 0 && b.burstMs <= 0 && b.spellIndex === mods.spellIndex);
+    const ring = world.playerBullets.filter((b) => b.alive && b.orbitMs > 0 && b.spellIndex === mods.spellIndex);
     let kept: typeof ring = [];
     if (stackMax > 0) {
       kept = ring.sort((a, b) => b.orbitMs - a.orbitMs).slice(0, Math.max(0, stackMax - count));
-      for (const b of ring) if (!kept.includes(b)) b.alive = false;
+      for (const b of ring) if (!kept.includes(b)) {
+        b.alive = false;
+        world.events.push({ kind: "spell", x: b.x, y: b.y, what: "orbit_fade" });
+      }
     } else for (const b of ring) b.alive = false;
     const total = kept.length + count;
     const grown = stackMax > 0 ? Math.max(0, total - 1) : 0;
     // The ring's reach is its own: a larger spell (`expanse`) has larger blades, and a ring pushed out would leave the bodies at arm's length.
     const orbitRadius = num(base.params, "orbit_radius", 40) + grown * num(base.params, "orbit_grow", 0);
     const spin = num(base.params, "spin", 300) + grown * num(base.params, "spin_grow", 0);
-    const burstSpeed = num(base.params, "burst_speed", 0);
-    const bursts = stackMax > 0 && burstSpeed > 0 && total >= stackMax;
-    const burstMs = bursts ? Math.max(1, num(base.params, "burst_ms", 0)) : 0;
-    const burstLifeMs = burstSpeed > 0 ? (num(base.params, "burst_reach", 120) / burstSpeed) * 1000 : 0;
-    const burstDamage = damage * num(base.params, "burst_scale", 1);
     /*
      * **An anchored ring** (`anchor_reach`, Blade Rift) turns round a point
      * on the floor — the body the cast sought, or the aim's point at the
@@ -519,10 +515,6 @@ export function fireUnit(
     const arm = (b: (typeof ring)[number]): void => {
       b.orbitRadius = orbitRadius;
       b.orbitDegPerS = spin;
-      b.burstMs = burstMs;
-      b.burstSpeed = burstSpeed;
-      b.burstLifeMs = burstLifeMs;
-      b.burstDamage = burstDamage;
     };
     kept.forEach((b, k) => {
       b.orbitAngle = start + (k / total) * Math.PI * 2;
