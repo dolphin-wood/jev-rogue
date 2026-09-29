@@ -364,8 +364,8 @@ export const ruleTable: WeightTable = (scopedQuestion, option, scopedState) => {
       const base = label(state, "portal_count") === "one" ? 0.43 : 2.4;
       return base * (label(state, "health") === "full" ? 1.3 : hurt(state) ? 0.25 : 1) * power(state);
     }
-    // The grade reads as a word rather than the digit it applies; the
-    // control's odds are what `gradeFor` draws (0.25 on a raised normal door).
+    // The grade reads as a word rather than the digit it applies: whether the
+    // room's per-door draws lean up (`rollNormalGrades`), a quarter of the time.
     case "normal_grade":
       return option === "raised" ? 0.25 : 0.75;
     /*

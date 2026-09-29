@@ -14,7 +14,7 @@ import {
   generateRoom, pacingLabels, sampleOne,
   sampleUniform, sampleWithoutReplacement, toRoomPlan, withTemperature,
   allowedTensions, PLAYABLE_ARCHETYPES, FEATURES,
-  assemblePortals, SCHOOL_OF,
+  assemblePortals, rollNormalGrades, SCHOOL_OF,
   rampDensities, rampAnchors, rampSubspecies, rampElitePresence, rampFor, rampRoster,
   keysLean, UNMEASURED, PORTAL_NEED_TEMPERATURE, PORTAL_TAIL_TEMPERATURE, NPC_MIN_NEED, FOUNTAIN_MIN_NEED_HURT,
   buildFacts, NO_BUILD, enemy, isFixedFightRoom, audienceRoomFor, objectiveFor, isGuardianRoom, baseArchetype, audienceZones, biomeFor, BIOME_TEMPERATURE,
@@ -166,7 +166,7 @@ interface PortalDraft {
   readonly kinds: readonly RewardCardKind[];
   readonly eliteKind: RewardCardKind | null;
   readonly eliteGrade: 1 | 2 | 3;
-  readonly normalGrade: 1 | 2 | 3;
+  readonly normalGrades: readonly (1 | 2 | 3)[];
   readonly npc: NpcKind | null;
   /** Carried between the rounds so the whole plan draws from one stream. */
   readonly rng: Rng;
@@ -814,16 +814,17 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
       questions.normal_grade = choiceQuestion({
         labels, style,
         instructions:
-          "The normal portals' rewards come at the strength this point of the run deals; later rooms deal " +
-          "stronger ones on their own. Choose whether they go one strength further, as a catch-up for a run " +
-          "that is behind; answer from health, recent damage and clear speed.",
+          "Each normal portal's reward draws its own strength about the one this point of the run deals: one " +
+          "below, the same, or one above; later rooms deal stronger ones on their own. Choose whether this " +
+          "room's draws lean a strength higher, as a catch-up for a run that is behind; answer from health, " +
+          "recent damage and clear speed.",
         options: [
           { ...opt("ordinary", grounded(
-            "The run's own strength for this point.",
+            "Drawn about the run's own strength for this point.",
             ["clear_speed", "fast", "normal"], ["health", "ok", "full"], ["recent_damage", "none", "some"],
           )), spec: NORMAL_GRADE_SPEC.ordinary! },
           { ...opt("raised", grounded(
-            "One strength past the run's own, for a run that is behind.",
+            "Drawn leaning one strength past the run's own, for a run that is behind.",
             ["clear_speed", "slow"], ["health", "low", "critical"], ["recent_damage", "heavy"],
           )), spec: NORMAL_GRADE_SPEC.raised! },
         ],
@@ -966,9 +967,19 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
           });
           eliteKind = pick as RewardCardKind;
         }
-        const normalGrade = (choices.lateGrade && strength.normal < 3 && take("normal_grade") === "raised"
-          ? strength.normal + 1 : strength.normal) as 1 | 2 | 3;
-        return { kinds, eliteKind, eliteGrade, normalGrade, npc, rng, source, path, decisions };
+        /*
+         * **Each normal door draws its own grade** about the run's own
+         * (`rollNormalGrades`), so a room's doors differ and one can be the
+         * find; the Director's call is whether the room leans up, a catch-up
+         * for a run that is behind.
+         */
+        const raised = choices.lateGrade && strength.normal < 3 && take("normal_grade") === "raised";
+        const normalGrades = rollNormalGrades(kinds.length - (eliteKind ? 1 : 0), strength.normal, raised, rng);
+        decisions.push({
+          choice: normalGrades.join(" "), probabilities: {}, confidence: null, source: "rule",
+          question: `normal_grades (code draw, ${raised ? "raised" : "ordinary"} odds)`,
+        });
+        return { kinds, eliteKind, eliteGrade, normalGrades, npc, rng, source, path, decisions };
       },
       /*
        * **Nothing is asked after the kinds.** A spell door named a school and a
@@ -983,7 +994,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
       finish(draft) {
         const doors = assemblePortals({
           kinds: draft.kinds, eliteKind: draft.eliteKind, eliteGrade: draft.eliteGrade,
-          normalGrade: draft.normalGrade, npc: draft.npc,
+          normalGrades: draft.normalGrades, npc: draft.npc,
         });
         return { room_index: ctx.room_index, doors, source: draft.source, decisions: [...draft.decisions] };
       },

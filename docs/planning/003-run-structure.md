@@ -138,9 +138,29 @@ them.
 | normal | a standard encounter, tiers 1 to 3 |
 | elite | tiers 4 to 5, and a better roll on the same kind |
 
-Every portal also carries a **grade** — 1 ordinarily, 2 or 3 behind an elite
-(2 at 65%, 3 at 35%), and 2 a quarter of the time from room 8 — and a spell
-portal names a **school**, a stat portal a **family**:
+Every portal also carries a **grade**, and a spell portal names a **school**,
+a stat portal a **family**.
+
+**The grade.** The run's own strength rises with depth (`baseStrength`): I
+until room 6, II until room 11, III after. That is the floor the room is
+graded about.
+
+- **Each normal portal draws its own grade** (`rollNormalGrades`): one below
+  the run's own (20%), the run's own (55%) or one above (25%). The result is
+  never below I or past III.
+  - The floor under the room: at least one normal portal is at the run's own
+    strength. If none drew it, the first one, the most needed, is raised to it.
+  - So the doors of one room differ, and one of them can be the find. Choosing
+    between a better door and the reward kind the build needs is part of the
+    offer.
+- **The Director can lean a room up** (`normal_grade`, from room 4 while there
+  is a strength above the run's own): raised odds are 5% below, 45% the run's
+  own, 50% above. It is a catch-up for a run that is behind. The draw itself
+  is code's.
+- **An elite portal draws none.** It is always the run's own plus one, so its
+  stars say where the run is.
+
+What a grade deals:
 
 | grade | spell | affix | stat | gold |
 |---|---|---|---|---|
@@ -201,8 +221,7 @@ portals (`assemblePortals`). The questions, independent of one another:
 |---|---|---|---|
 | `portal_need` | 1 | one per badge: stat, spell, affix, gold, and the merchant, the blacksmith and the fountain where code allows them | spell for a raw build, affix for a forming one, stat and gold for a formed one; the merchant below a reward the build still needs; the fountain by health alone |
 | `elite_portal` | 1 | none, elite (when legal) | elite most of the time with several portals, a third with one; rarely when hurt |
-| `elite_grade` | 1 | raised, best | 65 / 35 |
-| `normal_grade` | 1 | ordinary, raised (from room 8) | 75 / 25 |
+| `normal_grade` | 1 | ordinary, raised (from room 4, while a strength above the run's own is left): whether this room's per-door grade draws lean up | 75 / 25 |
 | `spell_school` | 2 | the seven schools, each option naming its spells | half the mass on the schools of the chosen style |
 | `stat_family` | 2 | the four families | survival when hurt, mana when the bar spent the fight under the cheapest key, sword when the blade did the damage |
 

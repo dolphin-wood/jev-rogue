@@ -12900,9 +12900,10 @@ export class PlayScene extends Phaser.Scene {
     const kinds = ["spell", "affix", "stat"] as const;
     /*
      * **Drawn at the strength the doors start from**: the run's own for the
-     * room behind them (`baseStrength`). A door that comes out stronger — the
-     * elite, or a catch-up — is an affix door's only reason to deal other
-     * cards, so that door alone asks again with its own pool below.
+     * room behind them (`baseStrength`). A door that comes out at another —
+     * the elite, or a normal door's own draw (`rollNormalGrades`) — is an
+     * affix door's only reason to deal other cards, so that door alone asks
+     * again with its own pool below.
      */
     const base = baseStrength(index + 1, false);
     const request = (k: RewardCardKind, grade: number, salt: string): CardRequest => ({
@@ -12949,8 +12950,9 @@ export class PlayScene extends Phaser.Scene {
         if (d.npc || d.reward === "gold") { doors.push(d); continue; }
         const k = kinds.indexOf(d.reward as (typeof kinds)[number]);
         let ids = plan.cards[k]?.ids ?? [];
-        // A stronger affix door, asked again at its own strength.
-        if (d.reward === "affix" && (d.grade ?? 1) > base) {
+        // An affix door of another strength than the doors start from, asked again at its own:
+        // a stronger one deals stronger affixes, and a weaker one none past what its strength allows.
+        if (d.reward === "affix" && (d.grade ?? 1) !== base) {
           const raised = await this.director.planCards(ctx, request("affix", d.grade ?? 1, `door_affix_${d.grade}`));
           playtestLog.decide(index, "portals", raised.decisions.map((x) => ({ ...x, question: `door_affix__${x.question ?? ""}` })));
           ids = raised.ids;

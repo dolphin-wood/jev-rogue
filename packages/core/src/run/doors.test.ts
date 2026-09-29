@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { RngSource } from "../rng.ts";
 import {
+  rollNormalGrades,
   RUN_BOSS_ROOM, RUN_COMBAT_ROOMS, REWARD_KINDS, RUN_SHOP_ROOM,
   bossExit, fixedExit, legalDifficulties, cardTypesOf, NPC_OFFERS_MAX, portalChoices, ruleDoors, shopExit, stageFor,
 } from "./doors.ts";
@@ -217,5 +218,38 @@ describe("the doors onto a first audience drawn from rooms 4 to 6 (doc 022)", ()
         if (i + 1 === at) expect(legalDifficulties(shape)).toEqual(["normal"]);
       }
     }
+  });
+});
+
+describe("each normal door draws its own grade", () => {
+  const draws = (base: 1 | 2 | 3, raised: boolean, n = 3, rooms = 400) => {
+    const rng = new RngSource(`grades-${base}-${raised}`).stream("g");
+    return Array.from({ length: rooms }, () => rollNormalGrades(n, base, raised, rng));
+  };
+
+  it("keeps every door within one of the run's own, and I to III", () => {
+    for (const base of [1, 2, 3] as const)
+      for (const room of draws(base, false))
+        for (const g of room) {
+          expect(g).toBeGreaterThanOrEqual(Math.max(1, base - 1));
+          expect(g).toBeLessThanOrEqual(Math.min(3, base + 1));
+        }
+  });
+
+  it("puts at least one door of every room at the run's own strength", () => {
+    for (const base of [1, 2, 3] as const)
+      for (const room of draws(base, false)) expect(Math.max(...room)).toBeGreaterThanOrEqual(base);
+  });
+
+  it("gives the doors of one room different grades often enough to choose between", () => {
+    for (const base of [1, 2, 3] as const) {
+      const mixed = draws(base, false).filter((room) => new Set(room).size > 1).length / 400;
+      expect(mixed, `base ${base}`).toBeGreaterThan(0.3);
+    }
+  });
+
+  it("leans higher when the room is raised", () => {
+    const mean = (rooms: number[][]) => rooms.flat().reduce((a, b) => a + b, 0) / rooms.flat().length;
+    expect(mean(draws(2, true))).toBeGreaterThan(mean(draws(2, false)) + 0.3);
   });
 });

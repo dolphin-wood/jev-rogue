@@ -99,8 +99,8 @@ export function styleSchools(items: readonly BaseItem[]): Record<string, readonl
  * elite door one higher. What a door deals grows with how far the player has
  * pushed — the level of its spell, the size of its stat, and which
  * affixes it may deal at all (`affixStrengthFloor`) — so the
- * run gets better the further it goes. How the player is doing is only a
- * correction on top of a normal door (`STRENGTH_CATCH_UP`): one more for a run that is behind.
+ * run gets better the further it goes. Each normal door draws its own grade
+ * about it (`rollNormalGrades`), so the doors of one room differ.
  *
  * `roomIndex` is the room the door leads **to**.
  */
@@ -112,25 +112,53 @@ export function baseStrength(roomIndex: number, elite: boolean): 1 | 2 | 3 {
 }
 
 /**
- * A rule door's catch-up: how often a normal door is one stronger than the
- * run's own. An elite door takes none — it is always the run's own plus one,
- * so its stars say where the run is and nothing else.
+ * **How a normal door's grade falls about the run's own** (`baseStrength`):
+ * one below, the run's own, or one above, each door drawn on its own, so a
+ * room's doors differ and one of them can be the better find. `raised` is
+ * the room leaning up — a catch-up for a run that is behind, the Director's
+ * call (`normal_grade`). An elite door draws none: it is always the run's own
+ * plus one, so its stars say where the run is and nothing else.
  */
-const STRENGTH_CATCH_UP = 0.25;
+export const DOOR_GRADE_ODDS: Readonly<Record<"ordinary" | "raised", { readonly below: number; readonly above: number }>> = {
+  ordinary: { below: 0.2, above: 0.25 },
+  raised: { below: 0.05, above: 0.5 },
+};
 
-function gradeFor(elite: boolean, roomIndex: number, rng: Rng): number {
-  const base = baseStrength(roomIndex, elite);
-  if (elite) return base;
-  return Math.min(3, base + (rng.next() < STRENGTH_CATCH_UP ? 1 : 0));
+/**
+ * **Each normal door's grade, drawn**, for `n` doors in the order they stand
+ * (the most needed first). The floor under each is one below the run's own,
+ * and never below I; the most is one above, never past III. And a floor under
+ * the room: at least one door is at the run's own, the first if none drew it,
+ * so a room is never all below where the run is.
+ */
+export function rollNormalGrades(n: number, base: 1 | 2 | 3, raised: boolean, rng: Rng): (1 | 2 | 3)[] {
+  const odds = DOOR_GRADE_ODDS[raised ? "raised" : "ordinary"];
+  const low = Math.max(1, base - 1), top = Math.min(3, base + 1);
+  const grades = Array.from({ length: n }, () => {
+    const r = rng.next();
+    const g = r < odds.above ? base + 1 : r < odds.above + odds.below ? base - 1 : base;
+    return Math.max(low, Math.min(top, g)) as 1 | 2 | 3;
+  });
+  if (n > 0 && !grades.some((g) => g >= base)) grades[0] = base;
+  return grades;
 }
 
 /**
- * A rule door's kind, difficulty and grade. It names no school or family: a
- * badge names what the cards behind it are (`cardTypesOf`), and a rule door's
- * cards are only drawn when its room is entered.
+ * A rule door's kind and difficulty; its grade comes after, drawn over the
+ * room's doors together (`rollNormalGrades`). It names no school or family:
+ * a badge names what the cards behind it are (`cardTypesOf`), and a rule
+ * door's cards are only drawn when its room is entered.
  */
-function dressDoor(reward: RewardCardKind, difficulty: Difficulty, roomIndex: number, rng: Rng, _style?: string): DoorOffer {
-  return { reward, difficulty, grade: gradeFor(difficulty === "elite", roomIndex, rng) };
+function dressDoor(reward: RewardCardKind, difficulty: Difficulty, roomIndex: number): DoorOffer {
+  return { reward, difficulty, grade: baseStrength(roomIndex, difficulty === "elite") };
+}
+
+/** The room's normal doors' grades, drawn together, onto `doors` in order. */
+function gradeDoors(doors: DoorOffer[], roomIndex: number, rng: Rng): DoorOffer[] {
+  const normal = doors.filter((d) => d.difficulty === "normal");
+  const grades = rollNormalGrades(normal.length, baseStrength(roomIndex, false), false, rng);
+  let j = 0;
+  return doors.map((d) => (d.difficulty === "normal" ? { ...d, grade: grades[j++]! } : d));
 }
 
 export const REWARD_KINDS: readonly RewardCardKind[] = ["stat", "spell", "affix", "gold"];
@@ -385,10 +413,12 @@ export function ruleDoors(run: RunShape, rng: Rng, count = drawPortalCount(rng))
   // A single portal can still be elite: the one door offered is the hard one
   // about a third of the time it is offered alone, so a forced choice is
   // sometimes a forced fight.
+  // The room the doors lead to is the one their grade is for (`baseStrength`).
+  const to = run.roomIndex + 1;
   if (picked.length === 1 && difficulties.includes("elite") && rng.next() < 0.3)
-    return [dressDoor(picked[0]!, "elite", run.roomIndex, rng, run.style)];
+    return [dressDoor(picked[0]!, "elite", to)];
 
-  return picked.map((reward, i) => dressDoor(
+  return gradeDoors(picked.map((reward, i) => dressDoor(
     reward,
     /*
      * At most one elite on offer, and never the first portal listed. An
@@ -398,8 +428,8 @@ export function ruleDoors(run: RunShape, rng: Rng, count = drawPortalCount(rng))
     i === picked.length - 1 && difficulties.includes("elite") && picked.length > 1
       ? "elite"
       : "normal",
-    run.roomIndex, rng, run.style,
-  ));
+    to,
+  )), to, rng);
 }
 
 /* ------------------------- the Director's portal question ------------------------- */
@@ -607,8 +637,8 @@ export interface PortalAnswers {
   /** The kind whose door is elite, or null for none. */
   readonly eliteKind: RewardCardKind | null;
   readonly eliteGrade: 1 | 2 | 3;
-  /** A normal door's strength: the run's own, or one past it as a catch-up. */
-  readonly normalGrade: 1 | 2 | 3;
+  /** Each normal door's strength, in the order the normal doors stand (`rollNormalGrades`). */
+  readonly normalGrades: readonly (1 | 2 | 3)[];
   readonly npc: NpcKind | null;
 }
 
@@ -624,9 +654,10 @@ export function assemblePortals(a: PortalAnswers): DoorOffer[] {
     kinds.splice(kinds.indexOf(a.eliteKind), 1);
     kinds.push(a.eliteKind);
   }
+  let j = 0;
   const doors: DoorOffer[] = kinds.map((reward) => {
     const elite = reward === a.eliteKind;
-    const grade = elite ? a.eliteGrade : a.normalGrade;
+    const grade = elite ? a.eliteGrade : a.normalGrades[j++] ?? a.normalGrades[0] ?? 1;
     return { reward, difficulty: elite ? "elite" : "normal", grade };
   });
   if (a.npc) {
