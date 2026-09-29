@@ -954,15 +954,19 @@ const ATTACKS: readonly BaseItem[] = [
     mana: 2,
     params: {
       /*
-       * `stack_max`: each cast adds a blade to the ring round the caster and
-       * renews the rest, up to six, so the ring is built by pressing the key
-       * again and again — a cheap key that rewards being pressed.
+       * `stack_max` with a burst: each cast adds a blade to the ring round
+       * the caster, which widens and quickens with every blade, and the cast
+       * that makes six flings the whole ring outward through the room. A
+       * cheap key pressed again and again to build to a release — where
+       * Spirit Blades is a ring that is simply there.
        */
-      shape: "orbit", damage: 1.9, speed: 0, radius: 5, count: 1, spread: 0, lifetime: 4, stack_max: 6,
-      orbit_radius: 34, spin: 340, pierce: 0, element: "none", seek: 0, curve: 0, weight: 0.5,
+      shape: "orbit", damage: 2.2, speed: 0, radius: 5, count: 1, spread: 0, lifetime: 4, stack_max: 6,
+      orbit_radius: 22, orbit_grow: 6, spin: 280, spin_grow: 45,
+      burst_ms: 280, burst_speed: 320, burst_reach: 150, burst_scale: 1.8,
+      pierce: 0, element: "none", seek: 0, curve: 0, weight: 0.5,
     },
     description:
-      "Blade Storm adds a spectral blade to a ring circling the caster and renews the ring, up to six blades; each blade cuts what it passes through.",
+      "Blade Storm adds a spectral blade to a ring circling the caster that grows wider and faster with each; the sixth flings every blade outward, cutting through all in its path.",
   },
   {
     id: "blade_rift",

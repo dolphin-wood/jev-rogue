@@ -56,7 +56,7 @@ export const JA_CONTENT: ContentTable = {
   blizzard: { name: "ブリザード", description: "一番近い敵の足元に霜を広げ、中にいる敵を鈍らせながら凍結へと冷やしていく。" },
   serpent_fang: { name: "サーペントファング", description: "曲がった牙を投げ、飛んだ先で折り返して手元に戻る。行きと帰りで一度ずつ敵を切って毒を与える。" },
   storm_totem: { name: "ストームトーテム", description: "そばに雷のトーテムを立て、届く範囲で一番近い敵を毎秒数回打つ。同時に二本まで。" },
-  blade_storm: { name: "ブレードストーム", description: "周りを回る刃の輪に霊刃を一本足して輪全体を更新する。最大六本。刃は触れた敵を切る。" },
+  blade_storm: { name: "ブレードストーム", description: "周りを回る刃の輪に霊刃を一本足す。刃が増えるほど輪は広く速くなり、六本目で全ての刃が外へ飛び、近くの敵を貫く。" },
   blade_rift: { name: "ブレードリフト", description: "前方の床に三本の霊刃の渦を開き、その場で回り続けて中に立つ敵をすべて切る。やがて閉じる。" },
   mortar: { name: "モーター", description: "すべてを越えて近くの敵へ砲弾を投げ、落ちた所で弾ける。敵は逃げられる。" },
   void_ray: { name: "ヴォイドレイ", description: "押している間、狙いの方向の敵を最初の壁まで焼く。押している間は遅くなる。" },

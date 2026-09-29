@@ -58,7 +58,7 @@ export const ZH_CONTENT: ContentTable = {
   blizzard: { name: "暴风雪", description: "在最近的敌人脚下铺开一片冰霜，减速其中的敌人，并不断累积冰冻。" },
   serpent_fang: { name: "蛇牙", description: "掷出一枚弯牙，飞出后折返回到你身边，往返各命中并毒害敌人一次。" },
   storm_totem: { name: "风暴图腾", description: "在身边立起一根雷电图腾，每秒数次电击射程内最近的敌人，直到消散；最多同时存在两根。" },
-  blade_storm: { name: "剑刃风暴", description: "在环绕你的刀环上加一把灵刃并刷新整个刀环，最多六把；每把刀都会切过接触到的敌人。" },
+  blade_storm: { name: "剑刃风暴", description: "在环绕你的刀环上加一把灵刃，刀越多环越大、转得越快；第六把时整圈刀刃向外飞出，扑向附近的敌人并贯穿。" },
   blade_rift: { name: "刀锋裂隙", description: "在前方地面撕开一团三把灵刃组成的旋涡，原地旋转，切割站在里面的每个敌人，直到闭合。" },
   mortar: { name: "迫击", description: "越过一切把石弹抛向最近的敌人，落地爆开。敌人可以提前走开。" },
   void_ray: { name: "虚空射线", description: "按住时，光束沿瞄准方向灼烧第一面墙前的所有敌人。按住期间移动变慢。" },

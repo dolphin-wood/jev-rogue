@@ -1957,6 +1957,8 @@ export class PlayScene extends Phaser.Scene {
   /** Projectiles that read as matter rather than light (a rock), in normal blend. */
   private projGfx!: Phaser.GameObjects.Graphics;
   private fxSparks: FxSpark[] = [];
+  /** When a Blade Storm's burst was last heard, so its six blades sound as one. */
+  private bladeBurstHeardAt = -Infinity;
   /** The rifts open on the floor (`drawBladeWinds`), by spell and centre, so each opens and closes with a burst once. */
   private rifts = new Map<string, { x: number; y: number; glow: number; core: number }>();
   /** Burning ground and burning bodies, as persistent layered particles (`fire-fx.ts`). */
@@ -8042,6 +8044,8 @@ export class PlayScene extends Phaser.Scene {
       // `repulse`: the air thrown off the caster, flat and out to the shove's reach.
       else if (ev.kind === "shot" && ev.what === "repulse") this.burst(ev.x, ev.y, 0xe8f0ff, 16, 260, undefined, Math.PI * 2, 0.8);
       // `intercept`: an enemy shot put out where it met the spell — a puff of its own sparks.
+      // A full Blade Storm flung outward: a streak of light off each blade along its way out.
+      else if (ev.kind === "shot" && ev.what === "blade_burst") this.burst(ev.x, ev.y, 0xe6ddff, 6, 240, ev.facing, 0.45, 0.85);
       else if (ev.kind === "shot" && ev.what === "intercept") this.burst(ev.x, ev.y, 0xf4fbff, 7, 120, undefined, Math.PI * 2, 0.7);
       // `overload`: the strike coming down on the body, and its light thrown off.
       else if (ev.kind === "enemy_hit" && ev.what === "overload") {
@@ -8958,6 +8962,10 @@ export class PlayScene extends Phaser.Scene {
            * off the body that died.
            */
           else if (what === "free_strike") sfx.play("dash_strike", 1.1);
+          // Six blades leave in one step: one rush of steel for the burst, not six.
+          else if (what === "blade_burst") {
+            if (this.time.now - this.bladeBurstHeardAt > 80) { sfx.play("dash_strike", 1.25); this.bladeBurstHeardAt = this.time.now; }
+          }
           else if (what === "land") sfx.play("impact_stone", 0.72);
           else if (what === "emit_burst") sfx.play("cast_nova", 1.2);
           else if (what === "contagion") sfx.play("cast_venom", 1.3);

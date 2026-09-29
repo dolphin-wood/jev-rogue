@@ -59,7 +59,7 @@ export const PLAYER_TEXT: Readonly<Record<string, string>> = {
   blizzard: "Lays frost under the nearest enemy that slows enemies inside it and builds toward freezing them.",
   serpent_fang: "Throws a fang that flies out and comes back to you, poisoning each enemy it cuts both ways.",
   storm_totem: "Sets a totem beside you that zaps the nearest enemy in reach several times a second. Up to two at once.",
-  blade_storm: "Adds a blade to a ring circling you and renews the ring, up to six blades.",
+  blade_storm: "Adds a blade to a ring circling you that grows wider and faster; the sixth flings every blade out at nearby foes.",
   blade_rift: "Opens a whirl of blades on the floor ahead that spins in place, cutting anything standing in it.",
   mortar: "Lobs a shell over everything to the nearest enemy, bursting where it lands. Enemies can walk out.",
   void_ray: "Hold to burn every enemy along your aim, up to the first wall. You move slowly while holding.",

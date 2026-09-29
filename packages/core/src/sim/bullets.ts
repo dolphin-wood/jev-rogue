@@ -23,6 +23,7 @@ function blankBullet(): Bullet {
     affixes: [], spellIndex: -1, manaSpent: 0, weight: 1, arcLeft: 0,
     originX: 0, originY: 0, targetId: -1, seekDegPerS: 0, seekMs: 0,
     orbitMs: 0, orbitAngle: 0, orbitRadius: 0, orbitDegPerS: 0, rehitMs: 0,
+    burstMs: 0, burstSpeed: 0, burstLifeMs: 0, burstDamage: 0,
     anchored: false, orbitX: 0, orbitY: 0, lobMs: 0, lift: 0, lobRadius: 0,
     lifeMs: 0, pierce: 0, bounce: 0, homing: 0, split: 0,
     element: "none", elementPower: 0, powers: noPowers(), proc: 1, statusMult: 1, hitIds: [],
@@ -86,6 +87,10 @@ function reset(b: Bullet): void {
   b.orbitAngle = 0;
   b.orbitRadius = 0;
   b.orbitDegPerS = 0;
+  b.burstMs = 0;
+  b.burstSpeed = 0;
+  b.burstLifeMs = 0;
+  b.burstDamage = 0;
   b.rehitMs = 0;
   b.anchored = false;
   b.orbitX = 0;

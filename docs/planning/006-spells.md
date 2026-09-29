@@ -155,7 +155,13 @@ roster's standard status), `speed`, `windup_ms`, `recover_ms`, `move_scale`,
   flight (`pierce`, `seek`, `ricochet`, `shatter`, `fork`) are not dealt to it.
 - **`stack_max` (orbit).** A recast adds its blades to the ring instead of
   replacing it and renews every blade, up to `stack_max`, past which the oldest
-  go; the ring is re-spaced evenly each time.
+  go; the ring is re-spaced evenly each time and widens and quickens by
+  `orbit_grow` px and `spin_grow` °/s a blade. With `burst_speed`, the cast
+  that fills the ring bursts it `burst_ms` later: each blade leaves the circle
+  outward and curls onto a body within `burst_reach` (the one the fewest
+  blades of the burst went for, then the nearest), piercing, at `burst_scale`
+  of its damage; the next cast starts a new ring. The ring is the build, the
+  burst the release — where Spirit Blades is a ring that is simply there.
 - **`anchor_reach` (orbit).** The ring turns round a point on the floor — the
   body the cast sought, or the aim's point at `anchor_reach` — and stays there
   as the caster moves.
@@ -241,7 +247,7 @@ style it is tagged with; its first row is its primary style.
 | Counter Stance `counter_stance` | spirit | uncommon | stance | a short guard that cancels the next hit and answers with a spin slash |
 | Serpent Fang `serpent_fang` | venom | uncommon | boomerang | a fang thrown out and back that poisons each body it cuts on both passes |
 | Dash Slash `dash_slash` | spirit | uncommon | dash + wake | a run through the bodies ahead whose wake cuts those to either side |
-| Blade Storm `blade_storm` | spirit | rare | orbit + `stack_max` | each cast adds a blade to the ring round the caster and renews it, up to six (also Barrage) |
+| Blade Storm `blade_storm` | spirit | rare | orbit + `stack_max` | each cast adds a blade to a ring round the caster that widens and quickens; the sixth flings them all out at nearby bodies (also Barrage) |
 | Blade Rift `blade_rift` | spirit | uncommon | orbit + `anchor_reach` | a whirl of three blades set spinning on the floor ahead, cutting what stands in it (also Crowd) |
 | Stone Ward `stone_ward` | stone | common | pillar | a pillar between the caster and what they face that blocks bodies and shots |
 | Spark Spray, Blink Strike, Frost Nova, Quake Ring, Leap Slam | | | | see above |

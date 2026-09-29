@@ -59,19 +59,44 @@ function run(w: World, frames: number, input: (t: number) => Input): void {
 }
 
 describe("Blade Storm", () => {
-  it("adds a blade each cast and renews the ring, up to six", () => {
+  const ring = (w: World) => w.playerBullets.filter((b) => b.alive && b.orbitMs > 0);
+  const press = (w: World) => { run(w, 1, () => ({ ...aimRight, spell: 0 })); run(w, 40, () => aimRight); };
+
+  it("adds a blade each cast, and the ring widens and quickens as it grows", () => {
     const w = world("blade_storm");
-    const ring = () => w.playerBullets.filter((b) => b.alive && b.orbitMs > 0).length;
-    // A press, let the key come up, and again: each cast is one more blade.
-    const counts: number[] = [];
-    for (let n = 0; n < 8; n++) {
-      run(w, 1, () => ({ ...aimRight, spell: 0 }));
-      run(w, 40, () => aimRight);
-      counts.push(ring());
+    const seen: { n: number; r: number; spin: number }[] = [];
+    for (let n = 0; n < 5; n++) {
+      press(w);
+      const r = ring(w);
+      seen.push({ n: r.length, r: r[0]!.orbitRadius, spin: r[0]!.orbitDegPerS });
     }
-    expect(counts.slice(0, 3)).toEqual([1, 2, 3]);
-    expect(Math.max(...counts)).toBe(6);
-    expect(counts.at(-1)).toBe(6);
+    expect(seen.map((s) => s.n)).toEqual([1, 2, 3, 4, 5]);
+    for (let i = 1; i < seen.length; i++) {
+      expect(seen[i]!.r).toBeGreaterThan(seen[i - 1]!.r);
+      expect(seen[i]!.spin).toBeGreaterThan(seen[i - 1]!.spin);
+    }
+  });
+
+  it("flings the whole ring outward on the sixth, and the next cast starts a new one", () => {
+    const w = world("blade_storm");
+    for (let n = 0; n < 5; n++) press(w);
+    run(w, 1, () => ({ ...aimRight, spell: 0 }));
+    expect(ring(w).length).toBe(6);
+    run(w, 30, () => aimRight);
+    expect(ring(w).length).toBe(0);
+    const flung = w.playerBullets.filter((b) => b.alive && b.spellIndex === 0);
+    expect(flung.length).toBe(6);
+    for (const b of flung) expect(Math.hypot(b.x - w.player.x, b.y - w.player.y)).toBeGreaterThan(70);
+    press(w);
+    expect(ring(w).length).toBe(1);
+  });
+
+  it("cuts a body standing beyond the ring with the burst", () => {
+    const w = world("blade_storm");
+    const e = body(w, 100, 0);
+    for (let n = 0; n < 6; n++) press(w);
+    run(w, 30, () => aimRight);
+    expect(e.hp).toBeLessThan(e.maxHp);
   });
 });
 

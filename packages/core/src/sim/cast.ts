@@ -464,17 +464,31 @@ export function fireUnit(
      * **A stacking ring** (`stack_max`, Blade Storm) is the exception: each
      * cast adds its blades to the ring and renews every one, up to the cap,
      * past which the oldest go. The ring is re-spaced evenly each time, so
-     * it reads as one ring growing rather than as blades piling up.
+     * it reads as one ring growing rather than as blades piling up, and it
+     * widens and quickens with each blade (`orbit_grow`, `spin_grow`).
+     *
+     * With `burst_speed` the cap is not a ceiling but a payoff: the cast that
+     * fills the ring sets every blade to burst `burst_ms` later, flying
+     * straight out through everything for `burst_reach` at `burst_scale` of
+     * its damage. A bursting ring is no longer the key's ring, so the next
+     * press starts a new one.
      */
     const stackMax = Math.round(num(base.params, "stack_max", 0));
-    const ring = world.playerBullets.filter((b) => b.alive && b.orbitMs > 0 && b.spellIndex === mods.spellIndex);
+    const ring = world.playerBullets.filter((b) => b.alive && b.orbitMs > 0 && b.burstMs <= 0 && b.spellIndex === mods.spellIndex);
     let kept: typeof ring = [];
     if (stackMax > 0) {
       kept = ring.sort((a, b) => b.orbitMs - a.orbitMs).slice(0, Math.max(0, stackMax - count));
       for (const b of ring) if (!kept.includes(b)) b.alive = false;
     } else for (const b of ring) b.alive = false;
-    const orbitRadius = num(base.params, "orbit_radius", 40) * mods.radiusMult;
-    const spin = num(base.params, "spin", 300);
+    const total = kept.length + count;
+    const grown = stackMax > 0 ? Math.max(0, total - 1) : 0;
+    const orbitRadius = (num(base.params, "orbit_radius", 40) + grown * num(base.params, "orbit_grow", 0)) * mods.radiusMult;
+    const spin = num(base.params, "spin", 300) + grown * num(base.params, "spin_grow", 0);
+    const burstSpeed = num(base.params, "burst_speed", 0);
+    const bursts = stackMax > 0 && burstSpeed > 0 && total >= stackMax;
+    const burstMs = bursts ? Math.max(1, num(base.params, "burst_ms", 0)) : 0;
+    const burstLifeMs = burstSpeed > 0 ? (num(base.params, "burst_reach", 120) / burstSpeed) * 1000 : 0;
+    const burstDamage = damage * num(base.params, "burst_scale", 1);
     /*
      * **An anchored ring** (`anchor_reach`, Blade Rift) turns round a point
      * on the floor — the body the cast sought, or the aim's point at the
@@ -485,12 +499,20 @@ export function fireUnit(
       ? (placed ?? { x: from.x + aim.x * anchorReach, y: from.y + aim.y * anchorReach })
       : null;
     const cx = anchor?.x ?? world.player.x, cy = anchor?.y ?? world.player.y;
-    const total = kept.length + count;
     const start = kept[0]?.orbitAngle ?? world.player.facing;
+    const arm = (b: (typeof ring)[number]): void => {
+      b.orbitRadius = orbitRadius;
+      b.orbitDegPerS = spin;
+      b.burstMs = burstMs;
+      b.burstSpeed = burstSpeed;
+      b.burstLifeMs = burstLifeMs;
+      b.burstDamage = burstDamage;
+    };
     kept.forEach((b, k) => {
       b.orbitMs = lifetime * 1000;
       b.lifeMs = lifetime * 1000;
       b.orbitAngle = start + (k / total) * Math.PI * 2;
+      arm(b);
     });
     for (let i = 0; i < count; i++) {
       const b = acquire(world.playerBullets, true);
@@ -498,8 +520,7 @@ export function fireUnit(
       const angle = start + ((kept.length + i) / total) * Math.PI * 2;
       b.orbitMs = lifetime * 1000;
       b.orbitAngle = angle;
-      b.orbitRadius = orbitRadius;
-      b.orbitDegPerS = spin;
+      arm(b);
       b.rehitMs = 0;
       b.anchored = anchor !== null;
       b.orbitX = cx;
