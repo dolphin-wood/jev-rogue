@@ -4649,8 +4649,8 @@ function stepBeams(w: World, dtMs: number): void {
 /**
  * **A spin fires a beam's rays one after another** (`whirl` on a `beam`): not
  * at the bodies, as it casts every other spell, but a flash along the blade
- * as it points at each moment, spaced evenly over the turning, so the rays
- * come out of the spin in turn and the room round the caster is raked.
+ * as it points at each moment, the moments drawn at random over the turning,
+ * so the rays come out of the spin in turn and never at the same angles twice.
  */
 const beamSpells = (w: World) => w.spells.map((s) => String(ITEMS.get(s?.item.base ?? "")?.params["shape"] ?? "") === "beam");
 
@@ -4660,8 +4660,10 @@ function queueSpinRays(w: World): void {
     if (!slot || !beams[i]) return;
     const n = whirlTargets(slot);
     if (n <= 0) return;
+    const from = SWING_WINDUP_MS * w.player.swingStretch;
     const turning = SWING_ACTIVE_MS * w.player.swingStretch;
-    w.spinRays.push({ spellIndex: i, left: n, clockMs: SWING_WINDUP_MS * w.player.swingStretch, everyMs: turning / n });
+    const inMs = Array.from({ length: n }, () => from + w.rng.next() * turning).sort((a, b) => a - b);
+    w.spinRays.push({ spellIndex: i, inMs });
   });
 }
 
@@ -4671,15 +4673,14 @@ function stepSpinRays(w: World, dtMs: number): void {
   if (p.swingMs <= 0 || p.swingStretch <= 1) { w.spinRays.length = 0; return; }
   const sim = hookSim(w);
   for (const r of w.spinRays) {
-    r.clockMs -= dtMs;
-    while (r.clockMs <= 0 && r.left > 0) {
+    r.inMs = r.inMs.map((ms) => ms - dtMs);
+    while (r.inMs.length > 0 && r.inMs[0]! <= 0) {
       const a = bladeAngle(w.swing, p);
       sim.fire(r.spellIndex, p, { x: p.x + Math.cos(a) * 100, y: p.y + Math.sin(a) * 100 });
-      r.left--;
-      r.clockMs += r.everyMs;
+      r.inMs.shift();
     }
   }
-  w.spinRays = w.spinRays.filter((r) => r.left > 0);
+  w.spinRays = w.spinRays.filter((r) => r.inMs.length > 0);
 }
 
 /** How fast a channelled line turns onto the body it follows. */
