@@ -34,3 +34,12 @@ Then read the PNG. Shots go under `local/` (git-ignored).
   `freeze`, `advance(steps)`, `frames(n)`, `invincible`, `bodies`, `player`,
   `place`, `set`, `movePlayer`, `toScreen`, and `world()` for anything else.
   Freeze before posing, or the bodies walk off the pose before the shot.
+- **Playing a scene.** `equip(["mortar+cull", "void_ray"])` puts spells on
+  the keys (affixes after `+`); `press`/`release`/`hold(action, steps)` drive
+  a bound action (`spell1`, `dash`, `swing`, `spin`…) through the real
+  keyboard path — frozen, `hold` runs its steps one by one; `pin()` holds the
+  bodies still and stops them attacking; `mana()` fills the bar.
+
+```bash
+pnpm dbg eval "lab.equip(['ball_lightning']); lab.pin(); lab.freeze(); lab.mana(); await lab.hold('spell1', 3); await lab.advance(14)"
+```

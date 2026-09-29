@@ -2290,6 +2290,19 @@ export class PlayScene extends Phaser.Scene {
       if (!e) throw new Error(`__lab: no body ${i} (the room has ${this.world?.enemies.length ?? 0})`);
       return e;
     };
+    /*
+     * A key as the player presses it: a keyboard event with the code the
+     * action is bound to, so a script drives the same input path a hand does
+     * and a rebound key is still the key pressed.
+     */
+    // What `pin` took off each body, to give back.
+    const pinned = new Map<Enemy, { speed: number; cooldown: number }>();
+    const keyEvent = (type: "keydown" | "keyup", action: string): void => {
+      if (!isAction(action)) throw new Error(`__lab: no action "${action}" (one of ${ACTIONS.join(", ")})`);
+      const code = this.key(action)?.keyCode;
+      if (code === undefined) throw new Error(`__lab: "${action}" is not bound`);
+      window.dispatchEvent(new KeyboardEvent(type, { keyCode: code, bubbles: true }));
+    };
     return {
       ready: () => !!this.world && !this.entering && !this.modalOpen,
       freeze: (on = true) => this.setLabSpeed(on ? 0 : 1),
@@ -2305,6 +2318,24 @@ export class PlayScene extends Phaser.Scene {
       place: (i, x, y) => { const e = body(i); e.x = x; e.y = y; e.vx = 0; e.vy = 0; },
       set: (i, patch) => { Object.assign(body(i), patch); },
       movePlayer: (x, y) => { this.world.player.x = x; this.world.player.y = y; },
+      equip: (keys) => this.debugSpells(keys),
+      press: (action) => keyEvent("keydown", action),
+      release: (action) => keyEvent("keyup", action),
+      hold: async (action, steps = 3) => {
+        keyEvent("keydown", action);
+        // Frozen, the steps are run one by one; running, they are frames.
+        if (this.labSpeed === 0) { this.labSteps += Math.max(1, Math.floor(steps)); await frames(2); }
+        else await frames(steps);
+        keyEvent("keyup", action);
+      },
+      pin: (on = true) => {
+        for (const e of this.world.enemies) {
+          const was = pinned.get(e);
+          if (on && !was) { pinned.set(e, { speed: e.speed, cooldown: e.attackCooldownMs }); e.speed = 0; e.attackCooldownMs = 1e9; }
+          if (!on && was) { e.speed = was.speed; e.attackCooldownMs = was.cooldown; pinned.delete(e); }
+        }
+      },
+      mana: () => { this.world.player.mana = this.world.staff.mana_max; },
       toScreen: (x, y, w, h) => {
         const cam = this.cameras.main;
         const rect = this.game.canvas.getBoundingClientRect();
@@ -20447,6 +20478,17 @@ interface LabApi {
   place(i: number, x: number, y: number): void;
   set(i: number, patch: Partial<Enemy>): void;
   movePlayer(x: number, y: number): void;
+  /** Puts spells on the keys, in order, each with its affixes after `+`: `["mortar+cull", "void_ray"]`. */
+  equip(keys: readonly string[]): void;
+  /** Presses or lets go of a bound action (`spell1`, `dash`, `swing`, `spin`…), as the keyboard would. */
+  press(action: string): void;
+  release(action: string): void;
+  /** Holds an action for this many steps (frozen) or frames (running), then lets go. */
+  hold(action: string, steps?: number): Promise<void>;
+  /** Holds every body where it stands and stops it attacking, or lets it go again. */
+  pin(on?: boolean): void;
+  /** Fills the mana bar. */
+  mana(): void;
   /** A world rectangle in page CSS pixels, for cropping a screenshot to it. */
   toScreen(x: number, y: number, w: number, h: number): { x: number; y: number; w: number; h: number };
 }
