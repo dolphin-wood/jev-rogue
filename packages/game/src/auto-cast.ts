@@ -32,6 +32,12 @@
  * a key whose cost would take the bar below that share, so a spell the
  * player reaches for is still paid for.
  *
+ * **A ring built by pressing again is built whole** (`stacks`, Blade
+ * Storm). Once the draw casts it, the assist presses it again at
+ * `AUTO_CAST_RUN_MS` until it is full and flung, waiting a moment on its
+ * short cooldown, and then goes back to the draw. On the ordinary beat, a
+ * turn in three, its blades ran out as fast as they were added.
+ *
  * **It does not break the player's stride.** A spell's windup and recovery
  * slow the caster, and a slow the player did not choose, dropped into a
  * walk or a run of swings, is a stumble. So the press goes as
@@ -161,6 +167,21 @@ export const AUTO_CAST_START_WEIGHT = 1;
 export const AUTO_CAST_MISS_WEIGHT = 0.5;
 /** The most a key's weight grows to. */
 export const AUTO_CAST_MAX_WEIGHT = 4;
+/**
+ * **The beat of a ring being built** (`AutoCastKey.stacks`, Blade Storm): once
+ * the draw casts a key that grows with each press, the assist presses it
+ * again this soon after the hands are free, until the ring is full and flung
+ * — the spell is a cheap key pressed again and again to build to a release,
+ * and on the ordinary beat, a turn in three, its blades ran out as fast as
+ * they were added and it never got past two.
+ */
+export const AUTO_CAST_RUN_MS = 150;
+/**
+ * How long the run waits on its key coming back — its short cooldown, the
+ * bar, a body stepping out of reach — before it gives the turn back to the
+ * draw. A run held for a key that cannot go would hold every other key too.
+ */
+export const AUTO_CAST_RUN_WAIT_MS = 1000;
 
 /** What the scene says about one key on this step. */
 export interface AutoCastKey {
@@ -178,6 +199,10 @@ export interface AutoCastKey {
   readonly ready: boolean;
   /** What a cast of it takes off the bar. */
   readonly cost: number;
+  /** Whether it grows with each press (`stack_max`): drawn, it is pressed again at `AUTO_CAST_RUN_MS`. */
+  readonly stacks?: boolean;
+  /** Whether it is part built: some of it up and not yet full. The run goes on while this holds. */
+  readonly building?: boolean;
 }
 
 /** The bar on this step: what is in it, the reserve it keeps, and all it can hold. */
@@ -198,6 +223,8 @@ export class AutoCaster {
    * same keys and weights is the same key.
    */
   private roll: number | null = null;
+  /** The key being built at the run's beat (`AUTO_CAST_RUN_MS`), or null. */
+  private running: number | null = null;
 
   constructor(private readonly random: () => number = Math.random) {}
 
@@ -210,12 +237,15 @@ export class AutoCaster {
   noteManual(key: number): void {
     this.weights[key] = AUTO_CAST_MIN_WEIGHT;
     this.next = null;
+    // The player pressing another key has taken the hands: the run is over.
+    if (key !== this.running) this.running = null;
   }
 
   /** Forgets the beat and every weight: a new room, a paused fight, the assist switched off. */
   reset(): void {
     this.next = null;
     this.roll = null;
+    this.running = null;
     this.weights.length = 0;
   }
 
@@ -228,6 +258,7 @@ export class AutoCaster {
    */
   peek(keys: readonly AutoCastKey[], bar: AutoCastBar, now: boolean): number | null {
     if (now) return this.draw(keys, { ...bar, floor: 0 }, false);
+    if (this.running !== null && keys[this.running]?.building) return this.running;
     const saved = this.savedFor(keys, bar);
     return saved ?? this.draw(keys, bar, false);
   }
@@ -241,14 +272,44 @@ export class AutoCaster {
    */
   pick(now: number, keys: readonly AutoCastKey[], free: boolean, bar: AutoCastBar): number | null {
     if (!free) return null;
+    // A ring being built is pressed again at the run's beat, and no weight moves: it is one turn, taken whole.
+    if (this.running !== null) {
+      const k = keys[this.running];
+      if (k?.building) {
+        if (this.next === null) { this.next = now + AUTO_CAST_RUN_MS; return null; }
+        if (now < this.next) return null;
+        if (this.runGoesOn(keys, bar)) {
+          this.next = null;
+          return this.running;
+        }
+        // Not back yet: wait on it a while, and then let the draw have the turn.
+        if (now < this.next + AUTO_CAST_RUN_WAIT_MS) return null;
+      }
+      this.running = null;
+      this.next = null;
+    }
     // The beat is counted from the hands coming free.
     if (this.next === null) { this.next = now + AUTO_CAST_DELAY_MS + this.random() * AUTO_CAST_SPREAD_MS; return null; }
     if (now < this.next) return null;
     if (this.savedFor(keys, bar) !== null) return null;
     const key = this.draw(keys, bar, true);
     // Nothing can go: the beat waits on, and no weight moves.
-    if (key !== null) this.next = null;
+    if (key !== null) {
+      this.next = null;
+      if (keys[key]!.stacks) this.running = key;
+    }
     return key;
+  }
+
+  /**
+   * Whether the run's key can be pressed now: part built (some of it up,
+   * not yet full), back, and paid for. A ring full and flung is no longer
+   * building, and the run ends with it.
+   */
+  private runGoesOn(keys: readonly AutoCastKey[], bar: AutoCastBar): boolean {
+    if (this.running === null) return false;
+    const k = keys[this.running];
+    return !!k && !!k.building && k.ready && bar.mana - k.cost >= bar.floor;
   }
 
   /**

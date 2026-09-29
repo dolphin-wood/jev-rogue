@@ -17021,10 +17021,14 @@ export class PlayScene extends Phaser.Scene {
        * there. It sits the draws out meanwhile, and comes back owed for them.
        */
       const inReach = autoCastAnyReach(params) ? fight : !!target && dist <= autoCastReach(params);
+      // A ring built by pressing again (`stack_max`): how much of it is up, for the run that builds it (`AUTO_CAST_RUN_MS`).
+      const stackMax = Number(params["stack_max"] ?? 0);
+      const up = stackMax > 0 ? w.playerBullets.filter((b) => b.alive && b.orbitMs > 0 && b.burstMs <= 0 && b.spellIndex === i).length : 0;
       return {
         held,
         ready: held && inReach && this.keyRunningMs(i) <= 0 && spellReady(slot, ITEMS) && this.recallDue(i),
         cost: slotCost(slot, ITEMS, w.staff),
+        ...(stackMax > 0 ? { stacks: true, building: up > 0 && up < stackMax } : {}),
       };
     });
     return { keys, free, bar: { mana: p.mana, floor, max: w.staff.mana_max }, target };

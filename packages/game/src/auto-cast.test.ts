@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AUTO_CAST_DELAY_MS, AUTO_CAST_MAX_WEIGHT, AUTO_CAST_MIN_WEIGHT, AUTO_CAST_MISS_WEIGHT, AUTO_CAST_SPREAD_MS,
-  AUTO_CAST_START_WEIGHT, AUTO_CAST_MAX_REACH_PX, AUTO_RECALL_LAPSE_MS, AutoCaster, autoCastable, autoCastAnyReach, autoCastModeOf, autoCastReach,
+  AUTO_CAST_START_WEIGHT, AUTO_CAST_MAX_REACH_PX, AUTO_CAST_RUN_MS, AUTO_RECALL_LAPSE_MS, AutoCaster, autoCastable, autoCastAnyReach, autoCastModeOf, autoCastReach,
   autoRecallDue,
 } from "./auto-cast.ts";
 import type { AutoCastBar } from "./auto-cast.ts";
@@ -226,6 +226,32 @@ describe("auto-cast", () => {
     a.pick(AUTO_CAST_DELAY_MS, [on, out], true, full);
     const dear = { held: true, ready: true, cost: 50 };
     expect(a.peek([on, dear], { mana: 60, floor: 30, max: 100 }, false)).toBe(1);
+  });
+
+  it("builds a ring that grows with each press at the run's beat, until it is full, then goes back to the draw", () => {
+    const a = new AutoCaster(() => 0);
+    const bar = { mana: 100, floor: 30, max: 100 };
+    const ring = (building: boolean) => ({ held: true, ready: true, cost: 2, stacks: true, building });
+    const other = { held: true, ready: true, cost: 10 };
+    // The draw casts the ring (roll 0: the first key).
+    expect(a.pick(0, [ring(false), other], true, bar)).toBeNull();
+    const t0 = AUTO_CAST_DELAY_MS;
+    expect(a.pick(t0, [ring(false), other], true, bar)).toBe(0);
+    // Part built: pressed again at the run's beat, not the draw's.
+    expect(a.pick(t0 + 10, [ring(true), other], true, bar)).toBeNull();
+    expect(a.pick(t0 + 10 + AUTO_CAST_RUN_MS - 1, [ring(true), other], true, bar)).toBeNull();
+    expect(a.pick(t0 + 10 + AUTO_CAST_RUN_MS, [ring(true), other], true, bar)).toBe(0);
+    expect(a.peek([ring(true), other], bar, false)).toBe(0);
+    // Back from a short cooldown: the run waits on it rather than giving the turn away.
+    const cooling = { ...ring(true), ready: false };
+    const t2 = t0 + 10 + AUTO_CAST_RUN_MS + 20;
+    expect(a.pick(t2, [cooling, other], true, bar)).toBeNull();
+    expect(a.pick(t2 + AUTO_CAST_RUN_MS + 50, [cooling, other], true, bar)).toBeNull();
+    expect(a.pick(t2 + AUTO_CAST_RUN_MS + 100, [ring(true), other], true, bar)).toBe(0);
+    // Full and flung: the run is over, and the next cast waits on the ordinary beat.
+    const t1 = t2 + 800;
+    expect(a.pick(t1, [ring(false), other], true, bar)).toBeNull();
+    expect(a.pick(t1 + AUTO_CAST_RUN_MS, [ring(false), other], true, bar)).toBeNull();
   });
 
   it("reads the setting it was: off and on keep their meaning, and none is Space", () => {
