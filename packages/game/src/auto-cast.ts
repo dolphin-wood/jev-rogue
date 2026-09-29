@@ -139,14 +139,17 @@ export type AutoCastMode = "off" | "space" | "auto";
 export const AUTO_CAST_MODES: readonly AutoCastMode[] = ["off", "space", "auto"];
 
 /**
- * The mode a saved setting names, `space` for none. `"0"` and `"1"` are the
- * on/off switch it was, and keep their meaning: a player who turned the
- * assist on keeps it on.
+ * The mode a saved setting names, and for none, the style's own: `auto` for
+ * the spell spammer, whose run is many keys cast often, and `space` for the
+ * rest. `"0"` and `"1"` are the on/off switch it was, and keep their
+ * meaning: a player who turned the assist on keeps it on. A setting the
+ * player picked is theirs whatever the style.
  */
-export function autoCastModeOf(saved: string | null): AutoCastMode {
+export function autoCastModeOf(saved: string | null, style?: string): AutoCastMode {
   if (saved === "0" || saved === "off") return "off";
   if (saved === "1" || saved === "auto") return "auto";
-  return "space";
+  if (saved === "space") return "space";
+  return style === "spam" ? "auto" : "space";
 }
 
 /** The farthest any key reaches for auto-cast: about what the screen shows round the player. */

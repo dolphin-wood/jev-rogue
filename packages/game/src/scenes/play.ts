@@ -2105,7 +2105,7 @@ export class PlayScene extends Phaser.Scene {
       floorGrain: () => floorGrain,
       setFloorGrain: (grain) => this.setFloorGrain(grain),
       resetFirstLaunch: () => {
-        try { localStorage.removeItem(SEEN_CONTROLS_KEY); localStorage.removeItem(SOUND_KEY); } catch { /* nothing to forget */ }
+        try { localStorage.removeItem(SEEN_CONTROLS_KEY); localStorage.removeItem(SOUND_KEY); localStorage.removeItem(AUTO_CAST_KEY); } catch { /* nothing to forget */ }
       },
       skipRoom: () => { if (!this.entering) void this.enterRoom(this.roomIndex + 1); },
       // The king's two meetings (doc 022), on the build held now; the title is put away if it is up.
@@ -4944,6 +4944,8 @@ export class PlayScene extends Phaser.Scene {
     const text = ui.text.trim();
     this.intent = { preset: STYLES[ui.selected]!.id, ...(text ? { free_text: text } : {}) };
     this.rerollsThisRun = 0;
+    // A player who never picked an auto-cast setting gets the style's own.
+    try { this.autoCastMode = autoCastModeOf(localStorage.getItem(AUTO_CAST_KEY), this.intent.preset); } catch { /* keeps the one it has */ }
     // The playtest log is of this run alone, and says who planned it.
     playtestLog.startRun({ director: directorArm(), style: this.intent.preset, ...(text ? { words: text } : {}) });
     this.hideIntent();

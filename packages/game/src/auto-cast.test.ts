@@ -236,6 +236,12 @@ describe("auto-cast", () => {
     expect(autoCastModeOf("garbled")).toBe("space");
   });
 
+  it("casts by itself for a spell spammer who has not picked a setting, and keeps a setting picked", () => {
+    expect(autoCastModeOf(null, "spam")).toBe("auto");
+    expect(autoCastModeOf(null, "melee")).toBe("space");
+    for (const m of ["off", "space", "auto"] as const) expect(autoCastModeOf(m, "spam")).toBe(m);
+  });
+
   it("gives every spell a reach of its own, short spells short and none past the screen", () => {
     const reach = (id: string) => autoCastReach(ITEMS.get(id)!.params!);
     // An enchant and a companion are cast at the fight, whatever their reach says.
