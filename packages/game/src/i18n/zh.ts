@@ -84,6 +84,7 @@ export const ZH: Table = {
   "head.paused": "已暂停",
   "head.settings": "设置",
   "head.controls": "操作",
+  "head.newControls": "新操作",
   "head.character": "角色",
   "head.gameOver": "游戏结束",
   "head.runComplete": "通关",

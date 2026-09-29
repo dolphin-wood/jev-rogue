@@ -111,6 +111,7 @@ import { layoutDecisionTable, maxScrollFor } from "../ui/plan-table.ts";
 import { questionAsked, questionBase, questionName } from "../ui/question-names.ts";
 import type { TableRow } from "../ui/plan-table.ts";
 import type { AtlasJson } from "../assets/atlas.ts";
+import { LEGACY_HINTS, seenHintsOf, withShown } from "../seen-hints.ts";
 import { autoRecallDue, AUTO_CAST_MAX_REACH_PX, AUTO_CAST_MODES, AUTO_CAST_RESERVE, AutoCaster, autoCastable, autoCastAnyReach, autoCastModeOf, autoCastReach, type AutoCastKey, type AutoCastMode } from "../auto-cast.ts";
 import { freshRerollPool, rerollPrice } from "../offer-reroll.ts";
 
@@ -2105,7 +2106,7 @@ export class PlayScene extends Phaser.Scene {
       floorGrain: () => floorGrain,
       setFloorGrain: (grain) => this.setFloorGrain(grain),
       resetFirstLaunch: () => {
-        try { localStorage.removeItem(SEEN_CONTROLS_KEY); localStorage.removeItem(SOUND_KEY); localStorage.removeItem(AUTO_CAST_KEY); } catch { /* nothing to forget */ }
+        try { localStorage.removeItem(SEEN_CONTROLS_KEY); localStorage.removeItem(SEEN_HINTS_KEY); localStorage.removeItem(SOUND_KEY); localStorage.removeItem(AUTO_CAST_KEY); } catch { /* nothing to forget */ }
       },
       skipRoom: () => { if (!this.entering) void this.enterRoom(this.roomIndex + 1); },
       // The king's two meetings (doc 022), on the build held now; the title is put away if it is up.
@@ -4956,11 +4957,9 @@ export class PlayScene extends Phaser.Scene {
     await this.enterRoom(1, MAX_HEARTS + this.liveMods().maxHearts);
     if (this.showRoomParams) this.showRoomPlan();
     else this.hideTransition();
-    // The first room of a first run opens with the key guide over it — after
-    // the room plan, when the room plan is on.
-    let seen = true;
-    try { seen = localStorage.getItem(SEEN_CONTROLS_KEY) === "1"; } catch { /* show it */ }
-    if (!seen) { if (this.transitionUi) this.pendingHints = true; else this.showFirstLaunchHints(); }
+    // The first room opens with whatever of the key guide the player has not
+    // seen — all of it on a first run — after the room plan, when the room plan is on.
+    if (this.hintsDue()) { if (this.transitionUi) this.pendingHints = true; else this.showFirstLaunchHints(); }
   }
 
   /** The title card, over the first room, which stands still behind it. */
@@ -5377,40 +5376,71 @@ export class PlayScene extends Phaser.Scene {
   }
 
   /**
-   * The key guide, once, at the start of a player's first run.
+   * The key guide's rows, each with the id its "seen" record goes by
+   * (`seen-hints.ts`). A row added later takes a new id, and a returning
+   * player is shown it the next run.
    *
    * Grouped by what the keys are for rather than listed in key order: a
    * first-time player is asking "how do I move, how do I hit things, how do I
    * cast" — three questions — not "what does K do".
    */
+  private hintGroups(): [string, [id: string, keys: string, text: string][]][] {
+    // Actions as `@action`, so the card reads the keys the player has bound (`keybinds.ts`).
+    return [
+      [t("first.move"), [["walk", "@up @left @down @right", t("first.walk")], ["dodge", "@dash", t("first.dodge")]]],
+      [t("first.fight"), [["sword", "@attack", t("first.sword")], ["spin", "@spin", t("first.spin")]]],
+      // The assist's key first while it casts: the key a player would not guess, and the one the default leans on.
+      [t("first.spells"), this.autoCastMode === "space"
+        ? [["castAuto", "@autoCast", t("first.castAuto")], ["cast", "@spell1 @spell2 @spell3", t("first.cast")]]
+        : [["cast", "@spell1 @spell2 @spell3", t("first.cast")]]],
+      [t("first.menus"), [["use", "@interact", t("first.use")], ["character", "@character", t("first.character")], ["menu", "Esc", t("first.menu")]]],
+    ];
+  }
+
+  private seenHints(): Set<string> {
+    try { return seenHintsOf(localStorage.getItem(SEEN_HINTS_KEY), localStorage.getItem(SEEN_CONTROLS_KEY)); } catch { return new Set(LEGACY_HINTS); }
+  }
+
+  private markHintsSeen(ids: Iterable<string>): void {
+    try { localStorage.setItem(SEEN_HINTS_KEY, withShown(this.seenHints(), ids)); } catch { /* shown again next time */ }
+  }
+
+  /** Whether any of the guide, or the assist page after it, is still to be shown. */
+  private hintsDue(): boolean {
+    const seen = this.seenHints();
+    return !seen.has("assists") || this.hintGroups().some(([, rows]) => rows.some(([id]) => !seen.has(id)));
+  }
+
+  /**
+   * The key guide at the start of a run: the rows the player has not seen —
+   * the whole guide on a first run, and what was added since on a later one,
+   * under a heading that says so.
+   */
   private showFirstLaunchHints(): void {
     if (this.hintsUi) return;
+    const seen = this.seenHints();
+    const groups = this.hintGroups()
+      .map(([head, rows]) => [head, rows.filter(([id]) => !seen.has(id))] as const)
+      .filter(([, rows]) => rows.length > 0);
+    // Only the assist page is new: straight to it.
+    if (groups.length === 0) { if (!seen.has("assists")) this.showFirstAssists(); return; }
+    const fresh = seen.size === 0;
     const o: Phaser.GameObjects.GameObject[] = [];
     const cx = UI_W / 2;
     const cy = UI_H / 2;
-    // Actions as `@action`, so the card reads the keys the player has bound (`keybinds.ts`).
-    const groups: [string, [string, string][]][] = [
-      [t("first.move"), [["@up @left @down @right", t("first.walk")], ["@dash", t("first.dodge")]]],
-      [t("first.fight"), [["@attack", t("first.sword")], ["@spin", t("first.spin")]]],
-      // The assist's key first while it casts: the key a player would not guess, and the one the default leans on.
-      [t("first.spells"), this.autoCastMode === "space"
-        ? [["@autoCast", t("first.castAuto")], ["@spell1 @spell2 @spell3", t("first.cast")]]
-        : [["@spell1 @spell2 @spell3", t("first.cast")]]],
-      [t("first.menus"), [["@interact", t("first.use")], ["@character", t("first.character")], ["Esc", t("first.menu")]]],
-    ];
     const lines = groups.reduce((n, [, rows]) => n + rows.length, 0);
     const panelW = 320;
     const panelH = 66 + groups.length * 12 + lines * 13;
     o.push(...this.modalPanel(panelW, panelH, { depth: 228, cy }));
     const top = cy - panelH / 2;
-    o.push(this.menuText(cx, top + 18, `—  ${t("head.controls")}  —`, 12, "#ffe9a8").setDepth(229));
+    o.push(this.menuText(cx, top + 18, `—  ${t(fresh ? "head.controls" : "head.newControls")}  —`, 12, "#ffe9a8").setDepth(229));
     o.push(this.add.rectangle(cx, top + 30, panelW - 28, 1, 0x2a2750, 1).setDepth(228.5));
     let y = top + 44;
     const capsX = cx - panelW / 2 + 118;
     for (const [head, rows] of groups) {
       o.push(this.uiText(cx - panelW / 2 + 20, y, head.toUpperCase(), 6.5, "#8fdcff").setOrigin(0, 0.5).setDepth(229));
       y += 12;
-      for (const [k, v] of rows) {
+      for (const [, k, v] of rows) {
         const caps = k.split(/\s+/).map((tk) => `[${tk}]`).join("");
         o.push(this.keys_(capsX, y, caps, 7, "#8792b5", 229, 1));
         o.push(this.uiText(capsX + 10, y, v, 7, "#c9cfe8").setOrigin(0, 0.5).setDepth(229));
@@ -5424,7 +5454,10 @@ export class PlayScene extends Phaser.Scene {
      * pointer rather than polled, so the press that closes it cannot also be
      * read by the game underneath as a cast.
      */
-    const close = () => this.hideFirstLaunchHints();
+    const close = () => {
+      this.markHintsSeen(groups.flatMap(([, rows]) => rows.map(([id]) => id)));
+      this.hideFirstLaunchHints(!seen.has("assists"));
+    };
     const kb = this.input.keyboard!;
     kb.once("keydown", close);
     this.input.once("pointerdown", close);
@@ -5434,11 +5467,15 @@ export class PlayScene extends Phaser.Scene {
     };
   }
 
-  private hideFirstLaunchHints(): void {
+  private hideFirstLaunchHints(assists: boolean): void {
     if (!this.hintsUi) return;
     for (const g of this.hintsUi.objects) g.destroy();
     this.hintsUi.off();
     this.hintsUi = null;
+    if (assists) this.showFirstAssists();
+  }
+
+  private showFirstAssists(): void {
     this.pauseUi = { page: "firstAssist", selected: 4, tab: 0, objects: [] };
     this.firstAssistInputGuard = true;
     this.renderPause();
@@ -5447,7 +5484,7 @@ export class PlayScene extends Phaser.Scene {
   private confirmFirstLaunchAssists(): void {
     if (this.pauseUi?.page !== "firstAssist") return;
     this.hidePause();
-    try { localStorage.setItem(SEEN_CONTROLS_KEY, "1"); } catch { /* shown again next time */ }
+    this.markHintsSeen(["assists"]);
   }
 
   /**
@@ -19934,8 +19971,10 @@ const ROOM_PARAMS_KEY = "jr-room-params";
 const SLAM_KINDS = new Set<MeleeKind>(["slam", "cleave", "bash", "whirlwind", "sweep", "greatsweep", "greatcleave"]);
 
 const SOUND_KEY = "jr.sound";
-/** Set once the first-launch key guide has been seen. */
+/** The one flag the key guide was, before each row had its own: read, never written (`seen-hints.ts`). */
 const SEEN_CONTROLS_KEY = "jr.seenControls";
+/** The ids of the key guide's rows a player has been shown. */
+const SEEN_HINTS_KEY = "jr.seenHints";
 
 /** The stored sound setting. The old on/off switch stored "1" for on, which is read as the default style. */
 function soundStyle(): SoundStyle {

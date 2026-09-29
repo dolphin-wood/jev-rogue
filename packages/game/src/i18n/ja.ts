@@ -83,6 +83,7 @@ export const JA: Table = {
   "head.paused": "ポーズ",
   "head.settings": "設定",
   "head.controls": "操作",
+  "head.newControls": "新しい操作",
   "head.character": "キャラクター",
   "head.gameOver": "ゲームオーバー",
   "head.runComplete": "クリア",

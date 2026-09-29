@@ -84,6 +84,7 @@ export const EN = {
   "head.paused": "PAUSED",
   "head.settings": "SETTINGS",
   "head.controls": "CONTROLS",
+  "head.newControls": "NEW CONTROLS",
   "head.character": "CHARACTER",
   "head.gameOver": "GAME OVER",
   "head.runComplete": "RUN COMPLETE",
