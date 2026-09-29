@@ -243,11 +243,12 @@ const ATTACKS: readonly BaseItem[] = [
      * gauge that needed three hits, a body died on the hit that would have
      * lit it — the burn this spell is named for never happened, which is the
      * report. The direct damage is now a third of what a burn is worth, so
-     * the spell's value is the status: 3 + 3 up front, then fifteen over the
+     * the spell's value is the status: two small hits up front, then fifteen over the
      * three seconds it burns.
      *
      * **The second hit may come up to about two and a half seconds after the
-     * first** (`element_power` 2.4, was 1.6). At 1.6 a hit filled 0.58 of the
+     * first** (`element_power` 2.1, was 1.6; at 2.4, with the hit at 2.1,
+     * the bench had the dart over the sword). At 1.6 a hit filled 0.58 of the
      * gauge, which drains from 0.6 s after a hit, so the second had to land
      * inside a second or the first was wasted: the bench's key, pressed on
      * every cooldown, always made it, and a player pressing about once a
@@ -255,7 +256,7 @@ const ATTACKS: readonly BaseItem[] = [
      * room 1 took 36 s and 17 HP on a dart that never lit. It still lights on
      * the second hit, never the first.
      */
-    params: { damage: 2.1, speed: 560, radius: 4, count: 1, spread: 0, lifetime: 1.2, pierce: 0, element: "fire", element_power: 2.4, seek: 90, curve: 18, weight: 0.8 },
+    params: { damage: 1.7, speed: 560, radius: 4, count: 1, spread: 0, lifetime: 1.2, pierce: 0, element: "fire", element_power: 2.1, seek: 90, curve: 18, weight: 0.8 },
     description:
       "Ember Dart fires a curving dart that fills the burn gauge of the body it hits until it catches fire.",
   },
@@ -649,7 +650,7 @@ const ATTACKS: readonly BaseItem[] = [
        * ceiling. The bench's bodies are pinned and cannot walk out, so it
        * measures the landing that a moving room will sometimes refuse.
        */
-      damage: 24, speed: 0, radius: 34, count: 1, spread: 0, lifetime: 0.4, pierce: 0, element: "fire",
+      damage: 21.5, speed: 0, radius: 34, count: 1, spread: 0, lifetime: 0.4, pierce: 0, element: "fire",
       element_power: 0.4, seek: 0, curve: 0, weight: 2.2, shape: "eruption", eruption: "fire", pattern: "scatter",
       reach: 5, area: 0, delay_ms: 0, telegraph_ms: 700, burn_ms: 500, windup_ms: 250, recover_ms: 300,
       move_scale: 0.5, cooldown_scale: 4,
@@ -771,12 +772,13 @@ const ATTACKS: readonly BaseItem[] = [
        * past the swing and through every body it crosses; the sword's own
        * figures do not change. `speed` flies that in a quarter second;
        * `radius` is half the band's thickness, so a body at the swing's edge
-       * is crossed by both. Lower half of the band, since it works off swings the player
-       * makes anyway, and measured in the bench's swinging scenario on the
-       * waves alone. Its cooldown outlasts the enchant (`lastingMs`), so a
+       * is crossed by both. Measured in the bench's swinging scenario on the
+       * waves alone, where at 0.85 of a swing it sat under the band and
+       * stretched the generalists' spread past its cap; at 1.15 it is in the
+       * band's lower half, since it works off swings the player makes anyway. Its cooldown outlasts the enchant (`lastingMs`), so a
        * held key keeps one up.
        */
-      shape: "enchant", damage: swordShare(0.85), sword: 0.85, speed: 320, radius: 12, count: 1, spread: 0, lifetime: 5, pierce: 0,
+      shape: "enchant", damage: swordShare(1.15), sword: 1.15, speed: 320, radius: 12, count: 1, spread: 0, lifetime: 5, pierce: 0,
       element: "none", seek: 0, curve: 0, weight: 0.6, enchant_ms: 5000, wave_reach: 80,
       windup_ms: 0, recover_ms: 80, move_scale: 1,
     },
@@ -799,7 +801,7 @@ const ATTACKS: readonly BaseItem[] = [
        * — measured in the bench's attacked scenario. Thrown seldom, so its
        * one cut is a slow nuke's.
        */
-      shape: "stance", damage: 21.6, speed: 0, radius: 56, answer_radius: 56, count: 1, spread: 0, lifetime: 0.7,
+      shape: "stance", damage: 19.8, speed: 0, radius: 56, answer_radius: 56, count: 1, spread: 0, lifetime: 0.7,
       pierce: 0, element: "none", seek: 0, curve: 0, weight: 1.6, stance_ms: 700, expire_share: 0.4,
       windup_ms: 0, recover_ms: 60, move_scale: 0.45, cooldown_scale: 2.2,
     },
