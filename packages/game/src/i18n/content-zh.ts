@@ -77,6 +77,7 @@ export const ZH_CONTENT: ContentTable = {
   slipstream: { name: "尾流", description: "冲刺穿过敌人时，对其施放此法术。" },
   pierce: { name: "穿透", description: "弹丸可穿透命中的敌人。" },
   expanse: { name: "扩域", description: "法术覆盖的一切都大约扩大三分之一：弹体、地面、刀环和射程。" },
+  linger: { name: "持久", description: "法术留下的东西持续时间延长一半：刀环、地面、引力、伙伴、法球、足迹和附魔。" },
   seek: { name: "追踪", description: "弹丸会转向最近的敌人。" },
   ricochet: { name: "弹跳", description: "弹丸撞到墙壁时会反弹。" },
   kindle: { name: "引燃", description: "命中时额外叠加灼烧，不影响法术原有的元素；火焰法术会更快点燃敌人。同时带有两种元素状态的敌人会受到更多伤害。" },

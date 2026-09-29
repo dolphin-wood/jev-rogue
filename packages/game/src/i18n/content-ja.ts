@@ -75,6 +75,7 @@ export const JA_CONTENT: ContentTable = {
   slipstream: { name: "スリップストリーム", description: "ダッシュで敵をすり抜けるとき、ついでに攻撃する。" },
   pierce: { name: "ピアース", description: "弾が敵を貫いて飛び続ける。" },
   expanse: { name: "エクスパンス", description: "呪文の及ぶ範囲が三分の一ほど広がる。弾も地面も刃の輪も射程も。" },
+  linger: { name: "リンガー", description: "呪文が残すものが五割長く続く。刃の輪も地面も引力も仲間も法球も足跡も付与も。" },
   seek: { name: "シーク", description: "弾が一番近い敵へ曲がる。" },
   ricochet: { name: "リコシェ", description: "弾が壁で跳ね返り、部屋に戻ってくる。" },
   kindle: { name: "キンドル", description: "元の属性はそのままに、当てると燃焼も溜まる。もともと炎の呪文なら燃え上がりが速くなる。異なる属性を二つ抱えた敵は、受けるダメージがすべて増える。" },

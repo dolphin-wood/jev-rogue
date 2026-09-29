@@ -78,6 +78,7 @@ export const PLAYER_TEXT: Readonly<Record<string, string>> = {
   slipstream: "Dashing through an enemy casts this spell at it.",
   pierce: "The shot passes through enemies it hits.",
   expanse: "Everything the spell covers is a third larger: its shots, its ground, its ring, its reach.",
+  linger: "What the spell leaves lasts half as long again: its ring, its ground, its pull, its companion, its orb, its trail, its enchant.",
   seek: "The shot curves toward the nearest enemy.",
   ricochet: "The shot bounces off walls.",
   kindle: "This spell deals fire: its hits build up burn.",

@@ -34,6 +34,8 @@ export interface ScopeMods {
   damageMult: number;
   speedMult: number;
   radiusMult: number;
+  /** How much longer what the cast leaves lasts (`linger`); a shot's flight is not a time it stays, and is not stretched. */
+  durationMult: number;
   pierceAdd: number;
   homing: number;
   bounce: number;
@@ -79,7 +81,7 @@ export interface ScopeMods {
 
 export function emptyScope(): ScopeMods {
   return {
-    damageMult: 1, speedMult: 1, radiusMult: 1,
+    damageMult: 1, speedMult: 1, radiusMult: 1, durationMult: 1,
     pierceAdd: 0, homing: 0, bounce: 0, split: 0,
     elements: noPowers(), element: "none", elementPower: 0,
     procMult: 1,
@@ -524,7 +526,7 @@ export function fireUnit(
       const b = acquire(world.playerBullets, true);
       if (!b) return;
       const angle = start + ((kept.length + i) / total) * Math.PI * 2;
-      b.orbitMs = lifetime * 1000;
+      b.orbitMs = lifetime * 1000 * mods.durationMult;
       b.orbitAngle = angle;
       arm(b);
       b.rehitMs = 0;
@@ -539,7 +541,7 @@ export function fireUnit(
       b.vy = 0;
       b.radius = radius;
       b.damage = damage;
-      b.lifeMs = lifetime * 1000;
+      b.lifeMs = lifetime * 1000 * mods.durationMult;
       // Never spent on a hit: the ring hits what walks into it for as long
       // as it turns, and the rehit clock is what keeps that a rate.
       b.pierce = 1e9;
@@ -586,7 +588,7 @@ export function fireUnit(
     const ground = clonePowers(powers);
     ground[kind] = mods.elements[kind];
     lightFire(world, spot.x, spot.y, "player", {
-      radius, lifeMs: lifetime * 1000, damage, statusMult, powers: ground, proc, element: kind,
+      radius, lifeMs: lifetime * 1000 * mods.durationMult, damage, statusMult, powers: ground, proc, element: kind,
     });
     shots.push({ x: spot.x, y: spot.y, family: base.id });
     return;
@@ -717,7 +719,7 @@ export function fireUnit(
     orb.vx = dir.x * speed;
     orb.vy = dir.y * speed;
     orb.radius = radius;
-    orb.lifeMs = lifetime * 1000;
+    orb.lifeMs = lifetime * 1000 * mods.durationMult;
     orb.maxLifeMs = orb.lifeMs;
     // The first strike half a beat after it leaves the hand, so it is seen
     // to arrive before it strikes.
@@ -753,7 +755,7 @@ export function fireUnit(
    */
   if (shape === "trail") {
     const p = world.player;
-    const ms = num(base.params, "trail_ms", 4000);
+    const ms = num(base.params, "trail_ms", 4000) * mods.durationMult;
     const kind = groundOf(base.params);
     const ground = clonePowers(powers);
     ground[kind] = mods.elements[kind];
@@ -773,7 +775,7 @@ export function fireUnit(
 
   if (shape === "enchant") {
     const p = world.player;
-    const ms = num(base.params, "enchant_ms", 5000);
+    const ms = num(base.params, "enchant_ms", 5000) * mods.durationMult;
     p.enchant = {
       ms, maxMs: ms, damage, radius, speed: Math.max(1, speed), reachPx: num(base.params, "wave_reach", 90) * mods.radiusMult,
       weight, element, elementPower: powers[element as "fire"] ?? 0, powers: clonePowers(powers), proc, statusMult,
@@ -1028,7 +1030,7 @@ export function fireUnit(
     slot.x = spot.x;
     slot.y = spot.y;
     slot.radius = radius;
-    slot.lifeMs = lifetime * 1000;
+    slot.lifeMs = lifetime * 1000 * mods.durationMult;
     slot.maxLifeMs = slot.lifeMs;
     slot.pull = num(base.params, "pull", 140);
     slot.tickMs = 0;
@@ -1062,7 +1064,7 @@ export function fireUnit(
       pet.vy = 0;
       pet.facing = world.player.facing;
     }
-    pet.lifeMs = lifetime * 1000;
+    pet.lifeMs = lifetime * 1000 * mods.durationMult;
     pet.maxLifeMs = pet.lifeMs;
     pet.echo = world.castingEcho === true;
     pet.fireMs = 300;

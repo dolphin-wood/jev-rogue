@@ -445,7 +445,7 @@ export const MANIFEST: FrameSpec[] = (() => {
   for (const id of [
     "repulse", "parting", "aftershock", "whirl", "spillover", "drag", "lodestar", "intercept", "cull", "overload", "slam", "afterimage",
     // And the seven that had none, drawn at last: the infusions, the trajectories and Haste.
-    "kindle", "rime", "blight", "pierce", "seek", "ricochet", "haste", "expanse",
+    "kindle", "rime", "blight", "pierce", "seek", "ricochet", "haste", "expanse", "linger",
   ])
     out.push(frame(`icon_affix_${id}`, "s32", true, false, [16, 16]));
   for (const id of [

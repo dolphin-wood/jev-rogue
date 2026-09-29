@@ -918,8 +918,8 @@ export interface CardPool {
 const AFFIX_STYLE: Readonly<Record<string, readonly string[]>> = {
   spam: ["repeat", "fork", "seek", "ricochet", "parting", "overload", "intercept", "afterimage"],
   nuke: ["haste", "shatter", "fork", "brand", "rime", "aftershock", "repulse", "cull", "lodestar"],
-  area: ["scatter", "chain", "harvest", "pierce", "aftershock", "lodestar", "slam", "afterimage", "expanse"],
-  dot: ["kindle", "blight", "bloom", "brand", "spillover", "parting"],
+  area: ["scatter", "chain", "harvest", "pierce", "aftershock", "lodestar", "slam", "afterimage", "expanse", "linger"],
+  dot: ["kindle", "blight", "bloom", "brand", "spillover", "parting", "linger"],
   melee: ["resonance", "retort", "slipstream", "ward", "momentum", "undertow", "finale", "whirl", "drag", "repulse", "intercept", "slam"],
 };
 

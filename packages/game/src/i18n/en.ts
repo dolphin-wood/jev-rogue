@@ -530,6 +530,7 @@ export const EN = {
   "affixtier.slipstream": "dashing through a body casts",
   "affixtier.pierce": "passes through one body",
   "affixtier.expanse": "a larger area",
+  "affixtier.linger": "lasts longer",
   "affixtier.seek": "hunts bodies down",
   "affixtier.ricochet": "bounces once off walls",
   "affixtier.kindle": "burns what it hits",

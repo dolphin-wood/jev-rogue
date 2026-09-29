@@ -167,6 +167,8 @@ export function castAdditions(affixes: readonly AttachedAffix[]): {
   /** What the `shape` affixes do to the projectile, as scope changes. */
   mods: {
     pierceAdd: number; homing: number; bounce: number; damageMult: number; radiusMult: number; speedMult: number;
+    /** How much longer what the spell leaves lasts (`linger`). */
+    durationMult: number;
     /** Every element the affixes grant, by power: `kindle` **and** `blight`. */
     elements: ElementPowers;
     element: Element | null; elementPower: number;
@@ -176,7 +178,7 @@ export function castAdditions(affixes: readonly AttachedAffix[]): {
   let split = 0;
   let spreadDirs = 0;
   const mods = {
-    pierceAdd: 0, homing: 0, bounce: 0, damageMult: 1, radiusMult: 1, speedMult: 1,
+    pierceAdd: 0, homing: 0, bounce: 0, damageMult: 1, radiusMult: 1, speedMult: 1, durationMult: 1,
     elements: noPowers(), element: null as Element | null, elementPower: 0,
   };
   for (const a of affixes) {
@@ -188,6 +190,7 @@ export function castAdditions(affixes: readonly AttachedAffix[]): {
     mods.damageMult *= e.damage ?? 1;
     mods.radiusMult *= e.radius ?? 1;
     mods.speedMult *= e.speed ?? 1;
+    mods.durationMult *= e.duration ?? 1;
     /*
      * **Two element affixes are two elements**, and two of the same are one
      * element twice as strong. `kindle` used to overwrite `rime`, so the

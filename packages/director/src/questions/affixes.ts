@@ -97,12 +97,12 @@ export const AFFIX_LANES: Readonly<Record<AffixIntent, Lane>> = {
     fits: [["keys_lean", "nuke"], ["intent_preset", "nuke"], ["damage_rate", "low"]],
   },
   wider: {
-    affixes: ["scatter", "repeat", "bloom", "chain", "harvest", "slam", "expanse"],
+    affixes: ["scatter", "repeat", "bloom", "chain", "harvest", "slam", "expanse", "linger"],
     words: ["area", "wide", "spread", "crowd", "group", "surrounded", "many", "swarm", "chain", "chains", "wall", "walls"],
     phrases: ["get surrounded", "all at once"],
     text: "More of the room reached from one cast: Scatter casts outward, Repeat casts again, Bloom leaves "
       + "burning ground, Chain jumps to the next body, Harvest makes a kill burst, Slam hurts a body thrown into "
-      + "a wall, Expanse makes everything the spell covers larger.",
+      + "a wall, Expanse makes everything the spell covers larger, Linger makes what it leaves last longer.",
     fits: [["keys_lean", "area", "spam"], ["intent_preset", "area", "spam"], ["movement_pressure_recent", "heavy"]],
   },
   survival: {

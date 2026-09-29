@@ -427,8 +427,9 @@ function bare(spell: string, scenario: Scenario, alongside: readonly string[] = 
 
 describe("every affix does something on every shape it lists", () => {
   for (const a of SPELL_AFFIXES) {
-    // A larger area is not a damage figure on every shape: `expanse` is measured by the sizes it makes (affix-review.test.ts).
-    if (a.id === "expanse") continue;
+    // A larger area is not a damage figure on every shape: `expanse` is measured by the sizes it makes (affix-review.test.ts);
+    // nor is a longer life inside a window shorter than the life: `linger` is measured by the times it makes.
+    if (a.id === "expanse" || a.id === "linger") continue;
     for (const shape of a.shapes) {
       const spell = RUN_REPRESENTATIVE[a.id] ?? REPRESENTATIVE[shape];
       it(`${a.id} on ${shape} (${spell})`, () => {

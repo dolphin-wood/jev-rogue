@@ -477,6 +477,7 @@ dead draw dressed as a choice is worse than a smaller pool.
 | Scatter | cast | bolt, field, pillar, vortex, dash, eruption, boomerang |
 | Repulse, Aftershock | cast | any spell; an aftershock bursts for a share of one of the spell's own hits, so it is as heavy as the spell |
 | Expanse | cast | any spell but a companion: everything the spell covers is a third larger — a shot's size, a field's, a pull's, a landing, a line, a beam's width, a ring's blades (not its reach, which would leave the bodies at arm's length), a guard's answer, a run's wake, an orb's strike, a pillar's shove |
+| Linger | cast | the spells that leave something lasting (ring, field, pull, companion, orb, trail, enchant): what it leaves lasts half as long again (`LINGER_DURATION`). Not a shot, whose lifetime is its range. Expanse's other half: more from one cast in time rather than space |
 | Kindle, Rime, Blight | cast | any spell but a pillar, which strikes nothing to put an element on |
 | Ward, Retort, Slipstream | cast / hurt / dash | any spell but a stance: cast free, a guard puts the sword away where it stands, and a ward's rune eats the hit the guard is up to answer |
 | Parting Shot | dash | the same, and not a beam or any spell tagged `long`: casting behind on a dash away is a close-quarters answer |

@@ -13,7 +13,7 @@ import { attachAffix } from "./spells.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
 import { plainInstance } from "../spells/index.ts";
 import { ITEMS } from "../spells/items.ts";
-import { EXPANSE_RADIUS, SPELL_AFFIXES, affixFitsSpell } from "../spells/affixes.ts";
+import { EXPANSE_RADIUS, LINGER_DURATION, SPELL_AFFIXES, affixFitsSpell } from "../spells/affixes.ts";
 import { RngSource } from "../rng.ts";
 import { GRID_W, GRID_H, Tile } from "../types.ts";
 
@@ -178,3 +178,39 @@ describe("expanse makes the spell's area larger, whatever its shape", () => {
   });
 });
 
+describe("linger makes what a spell leaves last longer, whatever its shape", () => {
+  /** How long the thing one cast of each lasting shape leaves has to live, read the moment it is there. */
+  const TIME: readonly [string, (w: World) => number | undefined][] = [
+    ["spirit_blades", (w) => w.playerBullets.find((b) => b.alive && b.orbitMs > 0)?.orbitMs],
+    ["wildfire_field", (w) => w.fires.find((f) => f.alive)?.lifeMs],
+    ["void_maw", (w) => w.vortices.find((v) => v.alive)?.lifeMs],
+    ["spirit_ally", (w) => w.pets.find((p) => p.alive)?.lifeMs],
+    ["ball_lightning", (w) => w.orbs.find((o) => o.alive)?.lifeMs],
+    ["cinder_stride", (w) => w.player.trail?.ms],
+    ["crescent_edge", (w) => w.player.enchant?.ms],
+  ];
+  const timeOf = (spell: string, read: (w: World) => number | undefined, affixes: readonly string[]) => {
+    const w = world(spell, affixes);
+    body(w, 110, 0);
+    for (let t = 0; t < 40; t++) {
+      w.player.mana = w.staff.mana_max;
+      step(w, t === 0 ? { ...aim, spell: 0 } : aim);
+      const a = read(w);
+      if (a !== undefined && a > 0) return a;
+    }
+    return 0;
+  };
+
+  for (const [spell, read] of TIME)
+    it(`on ${spell}`, () => {
+      expect(fits("linger", spell)).toBe(true);
+      const bare = timeOf(spell, read, []);
+      expect(bare).toBeGreaterThan(0);
+      // Read on the same step of the cast, so the one step's run-down is on both sides.
+      expect(timeOf(spell, read, ["linger"]) / bare).toBeCloseTo(LINGER_DURATION, 1);
+    });
+
+  it("is dealt to no shot, whose lifetime is its range", () => {
+    for (const id of ["magic_bolt", "stone_shard", "returning_edge", "earth_spikes", "dash_slash"]) expect(fits("linger", id), id).toBe(false);
+  });
+});

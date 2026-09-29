@@ -94,6 +94,15 @@ export type SpellShape =
   | "boomerang" | "orb" | "trail" | "enchant" | "stance" | "beam";
 /** How much larger `expanse` makes a spell's area, as a multiple of its radius. */
 export const EXPANSE_RADIUS = 1.35;
+/** How much longer `linger` makes what a spell leaves last, as a multiple of its time. */
+export const LINGER_DURATION = 1.5;
+/**
+ * The shapes whose spell is a thing that lasts: a ring round the caster, a
+ * patch of ground, a pull, a companion, an orb or a totem, a trail, an
+ * enchant on the sword. A shot's `lifetime` is its range, not a time it
+ * stays, so a bolt is not among them.
+ */
+export const LASTING_SHAPES: readonly SpellShape[] = ["orbit", "field", "vortex", "summon", "orb", "trail", "enchant"];
 
 export const SPELL_SHAPES: readonly SpellShape[] = [
   "bolt", "orbit", "field", "pillar", "dash", "vortex", "summon", "eruption",
@@ -155,6 +164,8 @@ export type AffixEffect =
     readonly kind: "shape";
     readonly pierce?: number; readonly homing?: number; readonly bounce?: number;
     readonly damage?: number; readonly radius?: number; readonly speed?: number;
+    /** How much longer what the spell leaves lasts (`linger`). */
+    readonly duration?: number;
     readonly element?: Element; readonly power?: number;
   }
   /** A kill with this spell takes `fraction` off its cooldown. */
@@ -432,6 +443,19 @@ BASE_AFFIXES.push(
     effect: { kind: "shape", radius: EXPANSE_RADIUS },
     text: "a larger area",
     description: "Everything the spell covers is a third larger: its shots, its ground, its ring, its reach.",
+  },
+  {
+    /*
+     * `linger`: what the spell leaves lasts half as long again — its ring,
+     * its ground, its pull, its companion, its orb, its trail, its enchant.
+     * Every hit those make over their life is one more pass of the same
+     * thing, so it is Expanse's other half: more from one cast in time, where
+     * Expanse is more in space.
+     */
+    id: "linger", name: "Linger", hook: "cast", shapes: LASTING_SHAPES, element: null,
+    effect: { kind: "shape", duration: LINGER_DURATION },
+    text: "lasts longer",
+    description: "What the spell leaves lasts half as long again: its ring, its ground, its pull, its companion, its orb, its trail, its enchant.",
   },
   {
     id: "seek", name: "Seek", hook: "cast", shapes: ["bolt"], element: null,
@@ -862,6 +886,8 @@ const STRENGTH_FLOOR: Readonly<Record<string, 2 | 3>> = {
   repeat: 3, chain: 3, brand: 3, haste: 3,
   // More of the room from one cast: a rare card.
   expanse: 2,
+  // More of the same from one cast, in time rather than space: Expanse's other half.
+  linger: 2,
   scatter: 2, resonance: 2, fork: 2,
   momentum: 2, undertow: 2, finale: 2,
   // A second landing and three free casts a spin: both multiply what one press or one spin is worth.

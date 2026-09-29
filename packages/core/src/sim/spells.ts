@@ -1005,6 +1005,7 @@ function shaped(scope: ReturnType<typeof emptyScope>, mods: ReturnType<typeof ca
     bounce: scope.bounce + mods.bounce,
     radiusMult: scope.radiusMult * mods.radiusMult,
     speedMult: scope.speedMult * mods.speedMult,
+    durationMult: scope.durationMult * mods.durationMult,
     // The affixes' elements add to whatever the scope already carried.
     ...(elements ? { elements, element: dominantElement(elements), elementPower: elements[dominantElement(elements) as "fire"] ?? 0 } : {}),
   };

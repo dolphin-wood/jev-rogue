@@ -523,6 +523,7 @@ export const ZH: Table = {
   "affixtier.slipstream": "冲刺穿过敌人时施放",
   "affixtier.pierce": "穿透 1 个敌人",
   "affixtier.expanse": "范围扩大",
+  "affixtier.linger": "持续更久",
   "affixtier.seek": "追踪敌人",
   "affixtier.ricochet": "撞墙反弹 1 次",
   "affixtier.kindle": "灼烧命中的敌人",
