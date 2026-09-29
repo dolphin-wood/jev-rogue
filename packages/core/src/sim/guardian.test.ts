@@ -11,7 +11,7 @@ import type { Enemy, World } from "./types.ts";
 import { WORLD_H, WORLD_W } from "./collide.ts";
 import {
   GUARDIAN_POWER,
-  GUARDIAN_POISE, GUARDIAN_CALL_MS, GUARDIAN_INTRO_MS, GUARDIAN_INTRO_NOTICE_MS, GUARDIAN_INTRO_PRE_MS, GUARDIAN_INTRO_RECOVERY_MS, GUARDIAN_MID_CALL_DELAY_MS, GUARDIAN_HEARTS, GUARDIAN_HP, GUARDIAN_ACTION_GAP_MS, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_SCALE, GUARDIAN_SHOT_EVERY, GUARDIAN_SQUAD, GUARDIAN_STAKES_TELE_MS, GUARDIAN_VOLLEY_TELE_MS, GUARDIAN_VOLLEY_MS, GUARDIAN_XP, GUARDIAN_STANCE, GUARDIAN_BROKEN_MS, GUARDIAN_BROKEN_TAKEN, makeGuardian, stepGuardian,
+  GUARDIAN_POISE, GUARDIAN_CALL_MS, GUARDIAN_INTRO_MS, GUARDIAN_INTRO_NOTICE_MS, GUARDIAN_INTRO_PRE_MS, GUARDIAN_INTRO_RECOVERY_MS, GUARDIAN_MID_CALL_DELAY_MS, GUARDIAN_HEARTS, GUARDIAN_HP, GUARDIAN_ACTION_GAP_MS, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_SCALE, GUARDIAN_SHOT_EVERY, GUARDIAN_SQUAD, GUARDIAN_STAKES_TELE_MS, GUARDIAN_VOLLEY_TELE_MS, GUARDIAN_VOLLEY_MS, GUARDIAN_XP, GUARDIAN_STANCE, GUARDIAN_BROKEN_MS, GUARDIAN_BROKEN_MIN_MS, GUARDIAN_BROKEN_TAKEN, makeGuardian, stepGuardian, stanceToBreak, wearStance,
 } from "./guardian.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
 import { GRID_W, TILE_PX, Tile } from "../types.ts";
@@ -293,6 +293,30 @@ describe("the Frontier Veteran: the room", () => {
     expect(g.guardian!.brokenMs).toBeLessThanOrEqual(0);
     expect(g.stunMs).toBeLessThanOrEqual(0);
     expect(w.enemies.length).toBe(before);
+  });
+
+  it("grows used to being broken: each break takes more stance and keeps it down for less", () => {
+    const w = guardianWorld("stance-resist");
+    const g = guardianOf(w);
+    const steps = (ms: number) => Math.ceil(ms / (1000 / 60));
+    const needs: number[] = [], downs: number[] = [];
+    for (let n = 0; n < 5; n++) {
+      const need = stanceToBreak(g.guardian!);
+      needs.push(need);
+      expect(wearStance(w, g, need - 1)).toBe(false);
+      expect(wearStance(w, g, 1)).toBe(true);
+      downs.push(g.guardian!.brokenMs);
+      // Up again before the next: the break's own hitstop holds the clock a little behind the steps.
+      for (let i = 0; i < steps(4000) && g.guardian!.brokenMs > 0; i++) step(w, NO_INPUT);
+      expect(g.guardian!.brokenMs).toBeLessThanOrEqual(0);
+    }
+    expect(downs[0]).toBe(GUARDIAN_BROKEN_MS);
+    for (let n = 1; n < 5; n++) {
+      expect(needs[n]!).toBeGreaterThan(needs[n - 1]!);
+      expect(downs[n]!).toBeLessThanOrEqual(downs[n - 1]!);
+    }
+    expect(downs[1]!).toBeLessThan(downs[0]!);
+    expect(downs[4]).toBe(GUARDIAN_BROKEN_MIN_MS);
   });
 
   it("has no poise under its stance: short of the stance, no blow interrupts it, and each one fills the bar", () => {

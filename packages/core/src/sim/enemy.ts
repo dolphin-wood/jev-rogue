@@ -15,7 +15,7 @@ import type { Enemy, World } from "./types.ts";
 import {
   ENEMY_BULLET_CAP, SUMMONER_INTERVAL_S, SUMMONER_MINION_CAP, MAX_CONCURRENT_ENEMIES, BOSS_PHASES, bossPhaseAt, kingHp, KING_RETREAT_AT } from "../encounters/enemies.ts";
 import type { BossScript } from "../encounters/enemies.ts";
-import { GUARDIAN_ATTACK_GAP_MULT, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_CHARGE_GAP_MULT, GUARDIAN_SHOT_EVERY, GUARDIAN_STANCE, GUARDIAN_WALL_STANCE, wearStance } from "./guardian.ts";
+import { GUARDIAN_ATTACK_GAP_MULT, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_CHARGE_GAP_MULT, GUARDIAN_SHOT_EVERY, GUARDIAN_WALL_STANCE, stanceToBreak, wearStance } from "./guardian.ts";
 
 const SUMMONER_INTERVAL_MS = SUMMONER_INTERVAL_S * 1000;
 /**
@@ -3552,7 +3552,7 @@ export function stepEnemy(world: World, e: Enemy, dtMs: number): void {
           e.poiseBreakMs = POISE_BREAK_MS;
           world.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: `poise_break:${e.archetype}` });
           // And it wears its stance deep: the wall is the surest way to its knees (`wearStance`).
-          wearStance(world, e, GUARDIAN_STANCE * GUARDIAN_WALL_STANCE);
+          wearStance(world, e, stanceToBreak(e.guardian!) * GUARDIAN_WALL_STANCE);
         }
       }
     }

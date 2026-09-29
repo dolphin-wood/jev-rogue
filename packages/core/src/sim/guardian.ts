@@ -181,10 +181,33 @@ export const GUARDIAN_SINK_MS = 400;
  *
  * About 300 is eight seconds of a room-10 build's steady damage, so a
  * player who stays on it breaks it two or three times a fight.
+ *
+ * **It grows used to it.** Each break makes the next harder to reach — the
+ * bar a share longer (`GUARDIAN_STANCE_GROWTH`) — and shorter on the floor
+ * (`GUARDIAN_BROKEN_DECAY`, down to `GUARDIAN_BROKEN_MIN_MS`). A veteran
+ * knocked down once is not knocked down the same way three times, and a
+ * build that breaks it over and over does not keep it on its knees for half
+ * the fight.
  */
 export const GUARDIAN_STANCE = 300;
 export const GUARDIAN_WALL_STANCE = 0.35;
-export const GUARDIAN_BROKEN_MS = 3200;
+/** The first break's time on its knees. */
+export const GUARDIAN_BROKEN_MS = 2200;
+/** Each later break's time as a share of the one before, and the least it comes down to. */
+export const GUARDIAN_BROKEN_DECAY = 0.75;
+export const GUARDIAN_BROKEN_MIN_MS = 1000;
+/** How much longer the stance bar is for each break already taken, as a share of `GUARDIAN_STANCE`. */
+export const GUARDIAN_STANCE_GROWTH = 0.35;
+
+/** The stance that breaks it now: `GUARDIAN_STANCE`, a share longer for each break it has taken. */
+export function stanceToBreak(g: { readonly breaks: number }): number {
+  return GUARDIAN_STANCE * (1 + GUARDIAN_STANCE_GROWTH * g.breaks);
+}
+
+/** How long a break keeps it down, after `breaks` breaks already taken. */
+export function brokenMsFor(breaks: number): number {
+  return Math.max(GUARDIAN_BROKEN_MIN_MS, GUARDIAN_BROKEN_MS * Math.pow(GUARDIAN_BROKEN_DECAY, breaks));
+}
 export const GUARDIAN_BROKEN_TAKEN = 1.5;
 const STANCE_HOLD_MS = 3000;
 const STANCE_DRAIN = 30;
@@ -222,8 +245,11 @@ export interface GuardianState {
   stance: number;
   /** Time since a hit last wore its stance; past `STANCE_HOLD_MS` it steadies. */
   stanceIdleMs: number;
-  /** While its stance is broken: on its knees, counting down. */
+  /** While its stance is broken: on its knees, counting down; and how long this break is in all. */
   brokenMs: number;
+  brokenFor: number;
+  /** Breaks it has taken this fight (`stanceToBreak`, `brokenMsFor`). */
+  breaks: number;
   /** The two one-shot beats of the entrance cutscene. */
   introNoticeSent: boolean;
   introVolleyArmed: boolean;
@@ -241,7 +267,7 @@ export function makeGuardian(id: number, x: number, y: number, _roomIndex: numbe
   e.guardian = {
     callMs: GUARDIAN_MID_CALL_DELAY_MS, stakesMs: GUARDIAN_STAKES_EVERY_MS / 2, volleyMs: GUARDIAN_VOLLEY_EVERY_MS * 0.6,
     called: false, chained: false, chainNext: false, wasCharging: false, calling: false, answer: entrance.slice(0, GUARDIAN_ENTRANCE_MAX), spots: [],
-    stance: 0, stanceIdleMs: 0, brokenMs: 0, introNoticeSent: false, introVolleyArmed: false, introGraceMs: 0,
+    stance: 0, stanceIdleMs: 0, brokenMs: 0, brokenFor: 0, breaks: 0, introNoticeSent: false, introVolleyArmed: false, introGraceMs: 0,
     actionGapMs: 0, wasAttacking: false };
   e.hp = e.maxHp = GUARDIAN_HP;
   e.poise = e.maxPoise = GUARDIAN_POISE;
@@ -501,19 +527,22 @@ export function wearStance(w: World, e: Enemy, amount: number): boolean {
   if (!g || g.brokenMs > 0 || e.hp <= 0 || amount <= 0) return false;
   g.stanceIdleMs = 0;
   g.stance += amount;
-  if (g.stance < GUARDIAN_STANCE) return false;
+  if (g.stance < stanceToBreak(g)) return false;
   breakStance(w, e, g);
   return true;
 }
 
 /**
- * **Broken**: on its knees for `GUARDIAN_BROKEN_MS`, stars over its head,
- * everything it had in hand dropped. A call it was making goes unanswered.
- * It cannot be broken or interrupted again while it is down.
+ * **Broken**: on its knees for `brokenMsFor` its breaks so far, stars over
+ * its head, everything it had in hand dropped. A call it was making goes
+ * unanswered. It cannot be broken or interrupted again while it is down.
  */
 function breakStance(w: World, e: Enemy, g: GuardianState): void {
+  const down = brokenMsFor(g.breaks);
+  g.breaks++;
   g.stance = 0;
-  g.brokenMs = GUARDIAN_BROKEN_MS;
+  g.brokenMs = down;
+  g.brokenFor = down;
   g.chained = false;
   g.chainNext = false;
   // The knockdown itself is already the long punish window; do not stack a
@@ -525,8 +554,8 @@ function breakStance(w: World, e: Enemy, g: GuardianState): void {
     g.spots = [];
     g.callMs = Number.POSITIVE_INFINITY;
   }
-  e.staggerMs = Math.max(e.staggerMs, GUARDIAN_BROKEN_MS);
-  e.stunMs = Math.max(e.stunMs, GUARDIAN_BROKEN_MS);
+  e.staggerMs = Math.max(e.staggerMs, down);
+  e.stunMs = Math.max(e.stunMs, down);
   e.attack = "approach";
   e.attackMs = 0;
   e.swing.active = false;
@@ -539,7 +568,7 @@ function breakStance(w: World, e: Enemy, g: GuardianState): void {
   e.poseMs = 0;
   e.velX = 0;
   e.velY = 0;
-  e.poiseGuardMs = GUARDIAN_BROKEN_MS + POISE_GUARD_MS;
+  e.poiseGuardMs = down + POISE_GUARD_MS;
   e.poise = e.maxPoise;
   e.poiseBreakMs = POISE_BREAK_MS;
   dropToken(w, e);

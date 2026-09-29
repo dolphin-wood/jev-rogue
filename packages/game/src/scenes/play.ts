@@ -9,7 +9,7 @@ import {
   RngSource, createWorld, step, worldCleared, plainInstance,
   generateRoom, toRoomPlan, throneHall, merchantHall, THRONE_CELLS, biomeFor,
   moodTransform, tintRGBA, dashInvulnerable, MELEE, POISE_BREAK_MS, POISE_BREAK_STAGGER_MS, POISE_GUARD_MS, brakeFraction, ENEMIES,
-  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_MUSKET_SPREAD_MULT, GUARDIAN_CALL_MS, GUARDIAN_STANCE, GUARDIAN_BROKEN_MS, GUARDIAN_SINK_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, plated, showsPoise, breakStaggerMs, seenPlayer, beamAim, BEAM_LOCK_MS, lineToWall, burstCoins, ERUPTION_SHOW_MS,
+  BOSS_ARCHETYPES, makeEnemy, makeKing, GUARDIAN_SCALE, GUARDIAN_ATTACK_RANGE_MULT, GUARDIAN_MUSKET_SPREAD_MULT, GUARDIAN_CALL_MS, stanceToBreak, GUARDIAN_SINK_MS, hasChest, chestInReach, openChest, CHEST_SALT, CHEST_GOLD, holdLeftS, targetsLeft, kingMarks, kingPhaseStart, kingFloorHp, ENEMY_IDS, isSubspecies, baseArchetype, plated, showsPoise, breakStaggerMs, seenPlayer, beamAim, BEAM_LOCK_MS, lineToWall, burstCoins, ERUPTION_SHOW_MS,
   pickupFading, STAGGER_MS, ruleOffer, emptyHistory, GOLD_CARD_VALUE,
   BLADE_REACH, noMods, applyStat, stageFor, isAudienceRoom, isGuardianRoom, isFixedFightRoom, audienceGrade, audienceRoomFor, RUN_GUARDIAN_ROOM, attachAffix, AFFIX_SLOTS, spellAffixById, offerStats, angleDelta,
   affixFits, affixFitsPart, affixTextKey, affixFitsSpell, itemShape,
@@ -19205,7 +19205,8 @@ function drawEnemy(
      * time left on its knees, draining.
      */
     const g = e.guardian;
-    const sk = g.brokenMs > 0 ? g.brokenMs / GUARDIAN_BROKEN_MS : Math.min(1, g.stance / GUARDIAN_STANCE);
+    // Against this break's own length and the stance that breaks it now: both change with each break (`stanceToBreak`).
+    const sk = g.brokenMs > 0 ? g.brokenMs / Math.max(1, g.brokenFor) : Math.min(1, g.stance / stanceToBreak(g));
     const hot = g.brokenMs > 0 || sk > 0.75;
     const flash = hot ? 0.65 + 0.35 * Math.sin(scene.time.now / (g.brokenMs > 0 ? 60 : 90)) : 1;
     group.rectangle(e.x - W / 2 - 1, y + 4, W + 2, 3, 0x0d0b1f, 0.9).setOrigin(0, 0.5).setDepth(9);

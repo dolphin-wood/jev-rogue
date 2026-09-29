@@ -135,13 +135,20 @@ half a heart, so a player plays at or above `expert`. As tuned now:
 | `GUARDIAN_ACTION_GAP_MS` | 1.8 s shared rest after every action |
 | `GUARDIAN_STAKES_EVERY_MS` | 8 s |
 | `GUARDIAN_VOLLEY_EVERY_MS` | 16 s, so a fight sees two |
+| `GUARDIAN_BROKEN_MS` | 2.2 s on its knees for the first break; each later one ×0.75 (`GUARDIAN_BROKEN_DECAY`), never under 1 s |
+| `GUARDIAN_STANCE_GROWTH` | each break makes the next stance bar 35% of `GUARDIAN_STANCE` longer |
 
 | profile | won | mean | hearts lost a fight |
 |---|---|---|---|
-| `expert` | 8 / 8 | 26 s | 1.3 |
-| `player` | 8 / 8 | 34 s | 2.2 |
-| `average` | 8 / 8 | 46 s | 4.7 |
-| `novice` | 0 / 8 | 89 s | the run |
+| `expert` | 8 / 8 | 29 s | 1.9 |
+| `player` | 8 / 8 | 38 s | 3.4 |
+| `average` | 8 / 8 | 51 s | 5.8 |
+| `novice` | 0 / 8 | 79 s | the run |
+
+**It grows used to being broken.** A break that kept it down 3.2 s, every
+time, let a build that breaks it often keep it on its knees for a good part
+of the fight. Now each break takes more stance to reach and is shorter on the
+floor: 2.2 s, 1.65 s, 1.24 s, then 1 s.
 
 It is the run's second-hardest room. A good player pays a heart or two, and
 an average one a real share of the bar. `novice`, which already lost six
