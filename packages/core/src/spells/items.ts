@@ -953,7 +953,7 @@ const ATTACKS: readonly BaseItem[] = [
        * fights round it rather than sending it off. Two at most.
        */
       shape: "orb", damage: 2.6, speed: 0, radius: 8, count: 1, spread: 0, lifetime: 5, pierce: 0,
-      element: "none", seek: 0, curve: 0, weight: 0.3, zap_ms: 420, zap_reach: 185, max_alive: 2,
+      element: "none", seek: 0, curve: 0, weight: 0.3, zap_ms: 420, zap_reach: 185, max_alive: 2, place_px: 30,
       windup_ms: 80, recover_ms: 160, move_scale: 0.8,
     },
     description:

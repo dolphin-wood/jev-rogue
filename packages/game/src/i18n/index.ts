@@ -18,6 +18,7 @@
  * are English identifiers and stay that way (`docs/planning/002`): a run
  * planned in Chinese must be the same run planned in English.
  */
+import { spellAffixById } from "@jr/core";
 import { EN } from "./en.ts";
 import { ZH } from "./zh.ts";
 import { JA } from "./ja.ts";
@@ -172,7 +173,8 @@ function localizeArg(name: string, value: string | number): string | number {
   if (name === "element") return lookup(`element.${value}`) ?? value;
   if (name === "label") return lookup(`statlabel.${value}`) ?? value;
   // An affix travels as its id and is named from the content table.
-  if (name === "affix") return contentName(value, value);
+  // English names live in core, not in the content table, so core's is the fallback.
+  if (name === "affix") return contentName(value, spellAffixById(value)?.name ?? value);
   if (name === "shapes")
     return value.split(",").map((s) => lookup(`shape.${s}`) ?? s).join(lookup("list.sep") ?? ", ");
   return value;

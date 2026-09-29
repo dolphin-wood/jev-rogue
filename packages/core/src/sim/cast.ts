@@ -632,7 +632,9 @@ export function fireUnit(
     const mine = world.orbs.filter((o) => o.alive && o.spellIndex === mods.spellIndex).sort((a, b) => a.born - b.born);
     while (mine.length >= max) mine.shift()!.alive = false;
     const orb = world.orbs.find((o) => !o.alive) ?? world.orbs.reduce((a, b) => (a.born <= b.born ? a : b));
-    const x = from.x + dir.x * ORB_OFFSET_PX, y = from.y + dir.y * ORB_OFFSET_PX;
+    // Where it leaves the hand, or where a still one is set down (`place_px`): clear of the caster's body.
+    const off = num(base.params, "place_px", ORB_OFFSET_PX);
+    const x = from.x + dir.x * off, y = from.y + dir.y * off;
     const clear = hasLineOfSight(world.room.grid, from.x, from.y, x, y);
     const zapMs = num(base.params, "zap_ms", 300);
     orb.alive = true;

@@ -8310,7 +8310,9 @@ export class PlayScene extends Phaser.Scene {
       const totem = w.spells[o.spellIndex]?.item.base === "storm_totem";
       const fx = o.x, fy = totem ? o.y - TOTEM_ORB_LIFT : o.y;
       if (o.lifeMs > 500 || ((tick >> 2) & 1) === 0) {
-        if (totem) this.spellSprite(`vfx_storm_totem_${Math.floor(tick / 6) % 4}`, o.x, o.y + TOTEM_CENTRE_DROP, 9.1);
+        // Standing among the bodies, sorted by its plinth's foot like one of them.
+        if (totem) this.spellSprite(`vfx_storm_totem_${Math.floor(tick / 6) % 4}`, o.x, o.y + TOTEM_CENTRE_DROP,
+          bodyDepth(o.y + TOTEM_CENTRE_DROP + 16, 0));
         else this.spellSprite(`vfx_ball_lightning_${Math.floor(tick / 5) % 4}`, o.x, o.y, 9.1);
       }
       const struck = o.lastTargetId >= 0 && o.zapClockMs > o.zapMs - 90 ? w.enemies.find((e) => e.id === o.lastTargetId && e.hp > 0) : undefined;

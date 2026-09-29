@@ -66,7 +66,7 @@ not others"). Parameters listed under a shape are read only by that shape.
 | `summon` | one companion that follows and fires on its own clock; a recast renews it | `interval`, `reach` |
 | `eruption` | ground cells that burst after a beat, in a line, a scatter or a ring | `pattern` (`line`, `scatter`, `ring`), `step`, `first`, `delay_ms`, `reach`, `area`, `burn_ms`; optional `telegraph_ms` (below) |
 | `boomerang` | a thrown blade that flies out, slows, and returns to the caster | `reach`, `return_speed` |
-| `orb` | a sphere, drifting or at `speed` 0 set down beside the caster, that strikes the nearest body in reach on its own clock | `zap_ms`, `zap_reach`, `max_alive` |
+| `orb` | a sphere, drifting or at `speed` 0 set down beside the caster, that strikes the nearest body in reach on its own clock | `zap_ms`, `zap_reach`, `max_alive`; `place_px`, how far from the caster it starts |
 | `trail` | for a while, the ground the caster walks over catches | `trail_ms`, `drop_px`, `patch_ms` |
 | `enchant` | for a while, every sword swing also throws a wave | `enchant_ms`, `wave_reach` |
 | `stance` | a short guard; a hit taken during it is cancelled and answered | `stance_ms`, `answer_radius`, `expire_share` |
