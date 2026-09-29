@@ -472,7 +472,10 @@ export const MANIFEST: FrameSpec[] = (() => {
   for (let i = 0; i < 4; i++) {
     out.push(frame(`vfx_meteor_rock_${i}`, "s32"));
     out.push(frame(`vfx_frost_orb_${i}`, "s32"));
-    out.push(frame(`vfx_ball_lightning_${i}`, "s32"));
+    // Half again the size it was drawn at: at 16 px it read as a spark, not as the orb the spell is.
+    out.push(frame(`vfx_ball_lightning_${i}`, "s64", true, false, [48, 48]));
+    // Storm Totem: a plinth, a bronze pole and a gold orb between two prongs, 20 x 32 world px.
+    out.push(frame(`vfx_storm_totem_${i}`, "s64", false, false, [40, 64]));
     out.push(frame(`vfx_arc_seg_${i}`, "s32", false, false, [32, 16]));
     out.push(frame(`vfx_doom_burst_${i}`, "s96"));
     out.push(frame(`vfx_vortex_${i}`, "s256", false, false, [128, 128]));

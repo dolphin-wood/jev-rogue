@@ -952,6 +952,14 @@ interface RoomSoFar {
   readonly history: RunHistory;
 }
 
+/**
+ * Where a Storm Totem's sprite sits against its orb's point: the frame's
+ * centre this far below it, which puts the plinth on the floor about 8 px
+ * under the point and the gold orb this far above it, where strikes leave from.
+ */
+const TOTEM_CENTRE_DROP = -6;
+const TOTEM_ORB_LIFT = 17;
+
 export class PlayScene extends Phaser.Scene {
   private atlas!: RecolourableAtlas;
   private textureKey = "sheet_mood";
@@ -8149,11 +8157,19 @@ export class PlayScene extends Phaser.Scene {
      */
     for (const o of w.orbs) {
       if (!o.alive) continue;
+      /*
+       * **A Storm Totem** stands where it was set: its plinth on the floor a
+       * little below the orb's point and its gold orb above, which is where
+       * its strikes leave from. Everything else is the drifting ball.
+       */
+      const totem = w.spells[o.spellIndex]?.item.base === "storm_totem";
+      const fx = o.x, fy = totem ? o.y - TOTEM_ORB_LIFT : o.y;
       if (o.lifeMs > 500 || ((tick >> 2) & 1) === 0) {
-        this.spellSprite(`vfx_ball_lightning_${Math.floor(tick / 5) % 4}`, o.x, o.y, 9.1);
+        if (totem) this.spellSprite(`vfx_storm_totem_${Math.floor(tick / 6) % 4}`, o.x, o.y + TOTEM_CENTRE_DROP, 9.1);
+        else this.spellSprite(`vfx_ball_lightning_${Math.floor(tick / 5) % 4}`, o.x, o.y, 9.1);
       }
       const struck = o.lastTargetId >= 0 && o.zapClockMs > o.zapMs - 90 ? w.enemies.find((e) => e.id === o.lastTargetId && e.hp > 0) : undefined;
-      if (struck) this.spellArc(o.x, o.y, struck.x, struck.y - 4, Math.floor(tick / 5) % 4);
+      if (struck) this.spellArc(fx, fy, struck.x, struck.y - 4, Math.floor(tick / 5) % 4);
     }
 
     // The meteor: its mark, and the rock coming down on it.
