@@ -4,7 +4,7 @@
  * bar. What each asserts is a promise the document makes to the player.
  */
 import { describe, expect, it } from "vitest";
-import { beginKingEntrance, createWorld, hurtEnemy, step, worldCleared } from "./world.ts";
+import { KING_AUDIENCE_FIRST_TURN_MS, beginKingEntrance, createWorld, hurtEnemy, step, worldCleared } from "./world.ts";
 import { kingFloorHp, makeKing } from "./enemy.ts";
 import { NO_INPUT, noMods } from "./types.ts";
 import type { World } from "./types.ts";
@@ -154,9 +154,10 @@ describe("the king's scripts: the entrance", () => {
     expect(k.airborne).toBe(false);
     expect(w.shockwaves).toHaveLength(0);
     expect(w.player.hearts).toBe(hearts);
-    // He drives the sword in and kneels on it, rises, and comes on a beat later: no standing about.
+    // He drives the sword in and kneels on it, rises, and gives the player, let go at his landing, three beats.
     stepUntil(w, () => k.bossCast === "none");
     expect(k.bossEntrance).toBe(false);
-    expect(k.bossMoveMs).toBeLessThan(500);
+    expect(k.bossMoveMs).toBe(KING_AUDIENCE_FIRST_TURN_MS);
+    expect(KING_AUDIENCE_FIRST_TURN_MS).toBeLessThan(1500);
   });
 });

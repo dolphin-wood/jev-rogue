@@ -132,6 +132,40 @@ describe("the drop-in: the roof gives", () => {
   });
 });
 
+describe("the drop-in: the player", () => {
+  it("reels from the rumble until he lands, unhurt, and has time to find their feet before his first move", () => {
+    const w = audienceWorld("held", 3, 0);
+    const walk = { ...NO_INPUT, moveX: 1 };
+    let landedAt = -1, firstMoveAt = -1, heldSteps = 0, movedWhileHeld = false;
+    const hearts = () => w.player.hearts;
+    let lowest = Infinity;
+    for (let i = 0; i < 60 * 40 && firstMoveAt < 0; i++) {
+      const phase = w.audience!.phase;
+      const king = w.enemies.find((e) => e.archetype === "boss");
+      const held = phase === "rumble" || phase === "stones" || (phase === "fight" && !!king?.bossEntrance && king.airborne);
+      const x = w.player.x, y = w.player.y;
+      step(w, walk);
+      if (held && w.audience!.phase !== "setup") {
+        heldSteps++;
+        if (Math.hypot(w.player.x - x, w.player.y - y) > 0.5 && w.player.stunMs > 0 && w.player.dashMs <= 0) movedWhileHeld = true;
+        expect(w.player.stunMs).toBeGreaterThan(0);
+      }
+      if (w.audience!.phase !== "setup") lowest = Math.min(lowest, hearts());
+      const k = w.enemies.find((e) => e.archetype === "boss");
+      if (k && landedAt < 0 && !k.airborne) landedAt = i;
+      if (k && landedAt >= 0 && !k.bossEntrance && k.bossCast !== "none") firstMoveAt = i;
+    }
+    expect(heldSteps).toBeGreaterThan(60);
+    expect(movedWhileHeld).toBe(false);
+    expect(landedAt).toBeGreaterThan(0);
+    // Free within a few frames of the landing.
+    expect(w.player.stunMs).toBeLessThanOrEqual(0);
+    // At least a second and a half from the landing to his first move.
+    expect((firstMoveAt - landedAt) * (1000 / 60)).toBeGreaterThanOrEqual(1500);
+    expect(lowest).toBeGreaterThanOrEqual(3);
+  });
+});
+
 describe("the drop-in: the hearts", () => {
   it("fills the bar and leaves exactly the spare on the floor, which a full bar does not take and time does not spoil", () => {
     for (const seed of ["k", "l", "m"]) {

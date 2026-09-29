@@ -6,7 +6,9 @@
  *
  * 1. **The rumble** (`AUDIENCE_RUMBLE_MS`): the room shakes, every body staggers
  *    where it stands and is shoved a step away from the player, and the room's
- *    later waves are never called.
+ *    later waves are never called. The player reels too, stars and all, and
+ *    stays so until he lands (`holdPlayer`): nothing falls on them, and a
+ *    player who cannot run off watches the room come down.
  * 2. **The stones**: each body gets a falling stone of its own, the meteor's
  *    rock, marked on it and landing `BOSS_METEOR_MARK_MS` later, a few a beat.
  *    Or, on a coin flip as they begin, every one of them is a bolt of his
@@ -54,6 +56,8 @@ const RUMBLE_TRAUMA = 0.6;
 /** How far his mark stays off the side and bottom walls, and off the top one, where his body rises, in cells. */
 const DROP_SIDE_MARGIN = 3;
 const DROP_TOP_MARGIN = 4;
+/** How long each step's hold on the player lasts: they are let go within this of his landing. */
+const PLAYER_HOLD_MS = 100;
 /** A beat after the last stone before his mark goes down. */
 const DROP_AFTER_STONES_MS = BEAT_MS;
 
@@ -116,17 +120,23 @@ export function stepAudience(w: World, dtMs: number): void {
     case "rumble":
       w.trauma = Math.max(w.trauma, RUMBLE_TRAUMA);
       holdBodies(w);
+      holdPlayer(w);
       if (since >= AUDIENCE_RUMBLE_MS) beginStones(w, a);
       return;
     case "stones":
       holdBodies(w);
+      holdPlayer(w);
       stepStones(w, a);
       if (a.stones.every((s) => s.landed) && a.ms >= lastLanding(a) + DROP_AFTER_STONES_MS) beginDrop(w, a);
       return;
-    case "fight":
+    case "fight": {
+      // Held through his fall, let go as he lands: his first turn waits on the kneel and `KING_AUDIENCE_FIRST_TURN_MS`.
+      const king = w.enemies.find((e) => e.id === a.king);
+      if (king?.bossEntrance && king.airborne) holdPlayer(w);
       keepSpareOffHazards(w);
-      if (!w.enemies.some((e) => e.id === a.king)) finish(w, a);
+      if (!king) finish(w, a);
       return;
+    }
   }
 }
 
@@ -173,6 +183,16 @@ function holdBodies(w: World): void {
     e.telegraphMs = 0;
     e.awake = true;
   }
+}
+
+/**
+ * The player reels with the room, shown with the stun's stars: no walk, no
+ * swing, no cast, no dash. Nothing reaches them meanwhile — the room's shots
+ * were spent at the rumble and no stone is marked over them — so it costs
+ * nothing, and it keeps them from running under a mark or off to where he lands.
+ */
+function holdPlayer(w: World): void {
+  w.player.stunMs = Math.max(w.player.stunMs, PLAYER_HOLD_MS);
 }
 
 function beginStones(w: World, a: AudienceState): void {

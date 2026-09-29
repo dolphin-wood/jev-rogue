@@ -4041,12 +4041,14 @@ function stepBossMeteor(w: World, e: Enemy, before: number): void {
  */
 
 /**
- * How long he stands after coming down before his first turn. The landing is
- * already its own beat — the sword driven into the floor, then knelt on over
- * it (`BOSS_KNEEL_MS`) — so he rises and comes on a beat later; standing
- * through his whole name read as him waiting to be hit.
+ * How long he stands after the kneel (`BOSS_KNEEL_MS`) before his first turn.
+ * The player has been held since the rumble and is let go as he lands
+ * (`audience.ts`), so the kneel and these three beats are theirs to find
+ * their feet and read him: about 1.8 s from the landing to his first move's
+ * own tell. Much longer and standing through his name read as him waiting to
+ * be hit.
  */
-export const KING_AUDIENCE_FIRST_TURN_MS = BEAT_MS;
+export const KING_AUDIENCE_FIRST_TURN_MS = BEAT_MS * 3;
 
 /**
  * Puts the king above his mark, falling: he lands after the landing's tell
@@ -4097,7 +4099,7 @@ function stepKingEntrance(w: World, e: Enemy, before: number): void {
     w.flow = null;
     w.flowTile = null;
   }
-  // The sword driven in and knelt on, then up, and a beat later his first turn (`KING_AUDIENCE_FIRST_TURN_MS`).
+  // The sword driven in and knelt on, then up, and three beats later his first turn (`KING_AUDIENCE_FIRST_TURN_MS`).
   if (e.bossCastMs <= -BOSS_KNEEL_MS) {
     finishBossMove(e);
     e.bossEntrance = false;

@@ -96,6 +96,12 @@ reward badge like any other, and the room fills like any other.
      staggers where it stands and is **shoved a step away from the player**
      (the stagger's knockback, aimed). No body is in contact with the player
      when its stone comes down.
+   - **The player reels too.** They are stunned, with the stun's stars, from
+     the rumble until he lands: no walking, swinging, casting or dashing.
+     Nothing reaches them meanwhile. The room's shots are spent as the rumble
+     begins and no stone is marked over them, so the stun costs nothing. What
+     it stops is a player running under a mark or off to where he will land,
+     when they should be watching the room come down.
    - **The stones.** Each body gets a falling stone of its own. It is the
      meteor's rock (`BOSS_METEOR_MARK_MS`, two beats of mark, then the fall),
      marked **on that body**, a few at a time and a beat apart, so the player
@@ -113,6 +119,10 @@ reward badge like any other, and the room fills like any other.
    arrival, far enough away that nothing about it could have reached the
    player. The first band in the room is the one his first slam throws in
    phase I, and that one hurts.
+   - **The player is let go as he lands**, and his first turn waits: the kneel
+     (`BOSS_KNEEL_MS`, two beats) and then `KING_AUDIENCE_FIRST_TURN_MS`
+     (three beats). That gives the player about 1.8 s from the landing to his
+     first move's own tell, to find their feet and read him.
    - Bodies the stones kill pay **no experience**, the same rule as a summoned
      body (`xpForKill`). The player did not kill them.
 4. **The hearts.** Out of the bodies comes **enough health to fill the
