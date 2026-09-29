@@ -173,8 +173,9 @@ the portal promises **one card** of it; the other cards are drawn from the
 whole pool as any offer's are, so a school of three spells does not deal the
 same three cards every time. Families: movement, survival,
 mana, sword, three stats each. The badge shows the school or family in its
-colour under the portal and the grade as stars, and the prompt reads
-"E  ELITE flame spell ★★". A graded-up reward is why an elite portal is worth
+colour under the portal and the rarity as stars: none on a common door (grade
+1), one on a rare (2), two on a legendary (3). A star is a find, so an
+ordinary door shows none. The prompt reads "E  ELITE flame spell ★". A graded-up reward is why an elite portal is worth
 taking.
 
 How many portals there are is drawn, not fixed: three 55% of the time, two 35%,

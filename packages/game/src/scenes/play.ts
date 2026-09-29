@@ -635,6 +635,10 @@ const BOSS_CHAIN_LINK_PITCH_PX = 7;
 const BOSS_PLACED_SWORD = false;
 /** How long his crescent lasts into the recovery, fading, ms. */
 const BOSS_CRESCENT_TAIL_MS = 200;
+/** A door's stars from its grade: none for common (I), one for rare (II), two for legendary (III). */
+function doorStars(grade: number): number {
+  return Math.max(0, Math.min(2, grade - 1));
+}
 /** The charge's shield round the body, px: a little wider than the body, so it reads as round it. */
 const CHARGE_SHIELD_PX = 14;
 
@@ -3718,13 +3722,13 @@ export class PlayScene extends Phaser.Scene {
         this.eliteMarks.push({ portal, mark });
       }
       /*
-       * **The door's strength, as stars on the arch's top-right corner**: one
-       * for each strength, I to III, the number the cards behind it say
-       * (`card.rarity*`: common, rare, legendary). A door's strength rises with the run
-       * (`baseStrength`), so every door shows at least one. Kept with the
-       * elite marks, which show and fade as the door does.
+       * **The door's rarity, as stars on the arch's top-right corner**
+       * (`doorStars`): none on a common door, one on a rare, two on a
+       * legendary — the cards behind it say the same (`card.rarity*`). A star
+       * is a find, so an ordinary door shows none. Kept with the elite marks,
+       * which show and fade as the door does.
        */
-      for (let k = 0; k < (portal.onward || portal.npc ? 0 : portal.grade ?? 1); k++) {
+      for (let k = 0; k < (portal.onward || portal.npc ? 0 : doorStars(portal.grade ?? 1)); k++) {
         const star = this.add.star(portal.x + 10, portal.y - 9 + k * 8.5, 5, 1.9, 4.2, 0xffd45e)
           .setStrokeStyle(0.8, 0x0d0b1f).setDepth(8.7).setVisible(false);
         this.eliteMarks.push({ portal, mark: star });
@@ -13268,7 +13272,8 @@ export class PlayScene extends Phaser.Scene {
           : near.families?.length ? t("prompt.familyStat", { family: doorTypes(near)! })
             : term(near.reward ?? "", "reward_kind");
       const mark = near.onward || !near.elite ? "" : `${t("roomType.elite")} `;
-      const pips = near.onward || near.npc ? "" : ` ${"★".repeat(near.grade ?? 1)}`;
+      const stars = near.onward || near.npc ? 0 : doorStars(near.grade ?? 1);
+      const pips = stars > 0 ? ` ${"★".repeat(stars)}` : "";
       this.prompt.setText(t("prompt.portal", { what: `${mark}${what}${pips}` }));
       /*
        * Above the door's own badges — the reward or vendor icon, and the
