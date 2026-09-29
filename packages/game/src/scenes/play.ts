@@ -1957,6 +1957,8 @@ export class PlayScene extends Phaser.Scene {
   /** Projectiles that read as matter rather than light (a rock), in normal blend. */
   private projGfx!: Phaser.GameObjects.Graphics;
   private fxSparks: FxSpark[] = [];
+  /** The rifts open on the floor (`drawBladeWinds`), by spell and centre, so each opens and closes with a burst once. */
+  private rifts = new Map<string, { x: number; y: number; glow: number; core: number }>();
   /** Burning ground and burning bodies, as persistent layered particles (`fire-fx.ts`). */
   private fireFx!: FireFx;
   private fxSlashes: { x: number; y: number; angle: number; ms: number; colour: number; len: number }[] = [];
@@ -7082,19 +7084,33 @@ export class PlayScene extends Phaser.Scene {
       if (tags.length > 0 || sentences.length > 0) rule();
       const GUTTER = 14;
       const colW = columns === 2 ? (width - GUTTER) / 2 : width;
-      for (let i = 0; i < rows.length; i += columns) {
-        let lineH = rowH;
-        for (let c = 0; c < columns && i + c < rows.length; c++) {
-          const r = rows[i + c]!;
-          const x0 = c * (colW + GUTTER);
-          const l = this.add.text(x0, y, r.label, style("#8792b5")).setOrigin(0, 0).setScale(1 / ZOOM);
-          const v = this.add.text(x0 + colW, y, r.value, style(TONE_COLOUR[r.tone] ?? "#f5a623")).setOrigin(1, 0).setScale(1 / ZOOM);
-          box.add([l, v]);
-          // A figure too long to share the row takes the next one, still on the right.
-          if (l.width / ZOOM + 6 + v.width / ZOOM > colW) { v.setY(y + rowH); lineH = rowH * 2; }
+      /*
+       * Two abreast where they fit; a row too long for its column takes the
+       * whole line, and one too long even for that puts its figure on the
+       * line under, on the right. A long figure right-aligned in a half
+       * column ran out of the panel's left edge (Glacial Guard's freeze).
+       */
+      let col = 0;
+      const newLine = (): void => { if (col > 0) { y += rowH; col = 0; } };
+      for (const r of rows) {
+        const l = this.add.text(0, 0, r.label, style("#8792b5")).setOrigin(0, 0).setScale(1 / ZOOM);
+        const v = this.add.text(0, 0, r.value, style(TONE_COLOUR[r.tone] ?? "#f5a623")).setOrigin(1, 0).setScale(1 / ZOOM);
+        box.add([l, v]);
+        const need = l.width / ZOOM + 6 + v.width / ZOOM;
+        if (need <= colW) {
+          const x0 = col * (colW + GUTTER);
+          l.setPosition(x0, y);
+          v.setPosition(x0 + colW, y);
+          col++;
+          if (col >= columns) { y += rowH; col = 0; }
+          continue;
         }
-        y += lineH;
+        newLine();
+        l.setPosition(0, y);
+        if (need <= width) { v.setPosition(width, y); y += rowH; }
+        else { v.setPosition(width, y + rowH); y += rowH * 2; }
       }
+      newLine();
     }
     // And a rule under it all, before the prose.
     if (y > 0) { y += 1; rule(); }
@@ -8416,6 +8432,8 @@ export class PlayScene extends Phaser.Scene {
       const struck = o.lastTargetId >= 0 && o.zapClockMs > o.zapMs - 90 ? w.enemies.find((e) => e.id === o.lastTargetId && e.hp > 0) : undefined;
       if (struck) this.spellArc(fx, fy, struck.x, struck.y - 4, Math.floor(tick / 5) % 4);
     }
+
+    this.drawBladeWinds(floor, air, tick);
 
     // The meteor: its mark, and the rock coming down on it.
     for (const c of w.eruptions) {
@@ -13317,6 +13335,121 @@ export class PlayScene extends Phaser.Scene {
           .setAlpha?.(on ? 1 : 0.58);
     });
     this.paintAffixTip(ui);
+  }
+
+  /**
+   * **The wind a ring of blades makes** (Blade Storm, Blade Rift, and any
+   * orbit): the blades themselves are the shots' own sprites, and what made
+   * them read as a few shards lying about was that nothing said they turn.
+   *
+   * - Each blade drags a trail back along its orbit, bright at the blade and
+   *   thinning behind — light, not a drawn outline — longer the more blades
+   *   the ring holds, so a stacked Blade Storm is a whirl of steel.
+   * - Motes are torn off the ring and flung along it.
+   * - An anchored ring is a **rift**: a dark tear in the floor under it with
+   *   bright arms turning in it, grit drawn in to its middle, and a burst as
+   *   it opens and as it closes. No ring outline and no hatching — those are
+   *   what an enemy's warning looks like.
+   */
+  private drawBladeWinds(floor: Phaser.GameObjects.Graphics, air: Phaser.GameObjects.Graphics, tick: number): void {
+    const w = this.world;
+    const p = w.player;
+    type Ring = { cx: number; cy: number; r: number; dir: number; blades: typeof w.playerBullets; anchored: boolean; spell: number; life: number };
+    const rings = new Map<string, Ring>();
+    for (const b of w.playerBullets) {
+      if (!b.alive || b.orbitMs <= 0) continue;
+      const key = b.anchored ? `r:${b.spellIndex}:${Math.round(b.orbitX)}:${Math.round(b.orbitY)}` : `o:${b.spellIndex}`;
+      let ring = rings.get(key);
+      if (!ring) {
+        ring = {
+          cx: b.anchored ? b.orbitX : p.x, cy: b.anchored ? b.orbitY : p.y, r: b.orbitRadius,
+          dir: Math.sign(b.orbitDegPerS) || 1, blades: [], anchored: b.anchored, spell: b.spellIndex, life: b.orbitMs,
+        };
+        rings.set(key, ring);
+      }
+      ring.blades.push(b);
+      ring.life = Math.max(ring.life, b.orbitMs);
+    }
+    const seen = new Set<string>();
+    for (const [key, ring] of rings) {
+      const look = spellLookOf(ring.spell >= 0 ? w.spells[ring.spell]?.item.base ?? null : null, "none");
+      const n = ring.blades.length;
+      // Fades over its last half second, as the ring winds down.
+      const fade = Math.min(1, ring.life / 500);
+      if (ring.anchored) {
+        seen.add(key);
+        if (!this.rifts.has(key)) {
+          this.rifts.set(key, { x: ring.cx, y: ring.cy, glow: look.glow, core: look.core });
+          this.burst(ring.cx, ring.cy - 2, look.core, 14, 180, undefined, Math.PI * 2, 1, -20);
+        }
+        // The tear: a dark bed in the floor's own perspective, and three arms turning in it.
+        const rx = ring.r + 10, ry = (ring.r + 10) * 0.55;
+        floor.fillStyle(0x0d0b1f, 0.5 * fade);
+        floor.fillEllipse(ring.cx, ring.cy + 2, rx * 2, ry * 2);
+        floor.fillStyle(look.glow, 0.12 * fade);
+        floor.fillEllipse(ring.cx, ring.cy + 2, rx * 1.3, ry * 1.3);
+        const spin = tick * 0.12 * ring.dir;
+        for (let k = 0; k < 3; k++) {
+          floor.lineStyle(2, look.glow, 0.45 * fade);
+          floor.beginPath();
+          for (let s2 = 0; s2 <= 10; s2++) {
+            const t = s2 / 10;
+            const a = spin + (k / 3) * Math.PI * 2 + t * 2.2 * ring.dir;
+            const rr = 3 + t * (rx - 4);
+            const x = ring.cx + Math.cos(a) * rr, y = ring.cy + 2 + Math.sin(a) * rr * 0.55;
+            if (s2 === 0) floor.moveTo(x, y); else floor.lineTo(x, y);
+          }
+          floor.strokePath();
+        }
+        floor.fillStyle(look.core, 0.7 * fade);
+        floor.fillCircle(ring.cx, ring.cy + 2, 2.5);
+        // Grit drawn in from the rim toward the middle.
+        if (Math.random() < 0.6 * fade) {
+          const a = Math.random() * Math.PI * 2;
+          const x = ring.cx + Math.cos(a) * rx, y = ring.cy + 2 + Math.sin(a) * ry;
+          const tx = -Math.sin(a) * ring.dir, ty = Math.cos(a) * ring.dir * 0.55;
+          this.shed({ x, y, vx: (ring.cx - x) * 1.6 + tx * 40, vy: (ring.cy - y) * 1.6 + ty * 40, ms: 0, life: 420, size: 1, colour: Math.random() < 0.5 ? look.core : look.glow, gravity: -10 });
+        }
+      }
+      // Each blade's trail, back along the orbit: a wide soft band and a thin bright core, in steps that thin behind it.
+      /*
+       * Never so long the trails meet: a full ring of them is a drawn circle,
+       * which is an enemy's warning, and the gaps are what read as blades turning.
+       */
+      const len = Math.min(Math.min(1.5, 0.45 + 0.16 * n) * (ring.anchored ? 1.2 : 1), (Math.PI * 2 / n) * 0.6);
+      const STEPS = 6;
+      for (const b of ring.blades) {
+        for (let i = 0; i < STEPS; i++) {
+          const a1 = b.orbitAngle - ring.dir * len * (i / STEPS);
+          const a0 = b.orbitAngle - ring.dir * len * ((i + 1) / STEPS);
+          const k = 1 - i / STEPS;
+          const wide = Math.max(1, b.radius * 1.6 * k);
+          air.lineStyle(wide, look.glow, 0.22 * k * fade);
+          air.beginPath();
+          air.arc(ring.cx, ring.cy, ring.r, Math.min(a0, a1), Math.max(a0, a1), false);
+          air.strokePath();
+          air.lineStyle(Math.max(1, wide * 0.35), look.core, 0.5 * k * fade);
+          air.beginPath();
+          air.arc(ring.cx, ring.cy, ring.r, Math.min(a0, a1), Math.max(a0, a1), false);
+          air.strokePath();
+        }
+        // Motes torn off the blade and flung on along the ring.
+        if (Math.random() < 0.35 * fade) {
+          const tx = -Math.sin(b.orbitAngle) * ring.dir, ty = Math.cos(b.orbitAngle) * ring.dir;
+          const out = 0.4 + Math.random() * 0.4;
+          this.shed({
+            x: b.x, y: b.y, vx: tx * 90 + Math.cos(b.orbitAngle) * 40 * out, vy: ty * 90 + Math.sin(b.orbitAngle) * 40 * out,
+            ms: 0, life: 260 + Math.random() * 180, size: 1, colour: Math.random() < 0.5 ? look.core : look.glow, gravity: 0,
+          });
+        }
+      }
+    }
+    // A rift that has closed goes out in a burst of its own light.
+    for (const [key, rift] of this.rifts) {
+      if (seen.has(key)) continue;
+      this.burst(rift.x, rift.y - 2, rift.glow, 12, 150, undefined, Math.PI * 2, 1, -30);
+      this.rifts.delete(key);
+    }
   }
 
   /**
