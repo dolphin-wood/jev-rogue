@@ -7088,7 +7088,7 @@ export class PlayScene extends Phaser.Scene {
        * Two abreast where they fit; a row too long for its column takes the
        * whole line, and one too long even for that puts its figure on the
        * line under, on the right. A long figure right-aligned in a half
-       * column ran out of the panel's left edge (Glacial Guard's freeze).
+       * column ran out of the panel's left edge (a freeze's line).
        */
       let col = 0;
       const newLine = (): void => { if (col > 0) { y += rowH; col = 0; } };

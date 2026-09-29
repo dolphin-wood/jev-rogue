@@ -884,8 +884,8 @@ const ATTACKS: readonly BaseItem[] = [
   /*
    * **The shapes that had one spell each, and the two thin elements.** Frost
    * and venom had four spells apiece and nine shapes had exactly one; these
-   * four put a second spell on a field, a boomerang, a stance and an orb, in
-   * the elements and styles that were short of one.
+   * three put a second spell on a field, a boomerang and an orb, in the
+   * elements and styles that were short of one.
    */
   {
     id: "blizzard",
@@ -923,24 +923,7 @@ const ATTACKS: readonly BaseItem[] = [
     description:
       "Serpent Fang throws a curved fang ahead that turns and comes back to the caster, cutting and poisoning each body once on the way out and once on the way back.",
   },
-  {
-    id: "glacial_guard",
-    rarity: "uncommon",
-    tags: ["attack", "short", "ice", "melee", "nuke"],
-    mana: 4,
-    params: {
-      /*
-       * Counter Stance's guard with frost in its answer: the spin that answers
-       * the blow lands smaller and fills the chill gauge of every body round
-       * the caster toward a freeze, so the answer is a setup for the next hit.
-       */
-      shape: "stance", damage: 14, speed: 0, radius: 60, answer_radius: 60, count: 1, spread: 0, lifetime: 0.7,
-      pierce: 0, element: "ice", element_power: 2.2, seek: 0, curve: 0, weight: 1.4, stance_ms: 700, expire_share: 0.4,
-      windup_ms: 0, recover_ms: 60, move_scale: 0.45, cooldown_scale: 2.2,
-    },
-    description:
-      "Glacial Guard raises a short guard that holds the sword; the next hit that would land is cancelled and answered with a freezing spin that chills every body round the caster. Untouched, it answers for less as it ends.",
-  },
+
   {
     id: "storm_totem",
     rarity: "uncommon",

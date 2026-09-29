@@ -162,7 +162,7 @@ roster's standard status), `speed`, `windup_ms`, `recover_ms`, `move_scale`,
 
 ## The roster
 
-Forty-eight spells. ★ marks each style's starter. A spell appears under every
+Forty-seven spells. ★ marks each style's starter. A spell appears under every
 style it is tagged with; its first row is its primary style.
 
 ### Barrage (`spam`)
@@ -194,7 +194,6 @@ style it is tagged with; its first row is its primary style.
 | Arcane Cannon `arcane_cannon` | void | rare | bolt + `charge` | hold to charge, release to fire a piercing shot that grows with the charge |
 | Doom Sigil `doom_sigil` | void | uncommon | bolt + `doom` | a hit marks the body, and the mark bursts a few seconds later (also Affliction) |
 | Leap Slam `leap_slam` | stone | uncommon | dash + `land` | leaps at a body and lands in a ring of broken ground (also Blade) |
-| Glacial Guard `glacial_guard` | frost | uncommon | stance | see Blade |
 | Mortar `mortar` | stone | rare | bolt + `lob` | a shell lobbed over everything to the body it seeks, bursting where it lands (also Crowd) |
 | Void Ray `void_ray` | void | rare | beam | held: a line of void light along the aim to the first wall, burning every body across it |
 
@@ -240,7 +239,6 @@ style it is tagged with; its first row is its primary style.
 | Spirit Blades `spirit_blades` | spirit | common | orbit | three blades circling the caster for a while |
 | Returning Edge `returning_edge` | spirit | common | boomerang | a spectral sword thrown ahead that comes back, cutting on both passes |
 | Counter Stance `counter_stance` | spirit | uncommon | stance | a short guard that cancels the next hit and answers with a spin slash |
-| Glacial Guard `glacial_guard` | frost | uncommon | stance | the same guard, answered with a freezing spin that chills every body round the caster (also Heavy) |
 | Serpent Fang `serpent_fang` | venom | uncommon | boomerang | a fang thrown out and back that poisons each body it cuts on both passes |
 | Dash Slash `dash_slash` | spirit | uncommon | dash + wake | a run through the bodies ahead whose wake cuts those to either side |
 | Blade Storm `blade_storm` | spirit | rare | orbit + `stack_max` | each cast adds a blade to the ring round the caster and renews it, up to six (also Barrage) |
@@ -279,7 +277,7 @@ card.
 | School | Spells |
 |---|---|
 | flame | ember_dart, cinder_burst, wildfire_field, flame_pillars, cinder_geysers, meteor, cinder_stride |
-| frost | frost_needle, glacier_spike, frost_nova, frozen_orb, blizzard, glacial_guard |
+| frost | frost_needle, glacier_spike, frost_nova, frozen_orb, blizzard |
 | venom | venom_spit, plague_bloom, toxic_cloud, contagion, serpent_fang |
 | storm | shock_arc, spark_spray, arc_lance, seeker_swarm, ball_lightning, storm_totem |
 | void | magic_bolt, void_orb, void_maw, mana_darts, arcane_cannon, doom_sigil, void_ray |

@@ -11,15 +11,15 @@ import { BASE_ITEMS, ITEMS, STYLE_START, plainInstance } from "./items.ts";
  * sigil, frozen orb, contagion, meteor, quake ring, leap slam) and the six
  * on its newer shapes (ball lightning, returning edge, crescent edge, counter
  * stance, cinder stride, toxic cloud), Dash Slash, and a second spell on four
- * shapes that had one (blizzard, serpent fang, glacial guard, storm totem),
+ * shapes that had one (blizzard, serpent fang, storm totem),
  * and four on machinery of their own (blade storm, blade rift, mortar, void
  * ray). Every item is a self-contained spell: nothing in the pool modifies
  * another.
  */
-const ATTACKS = 48;
+const ATTACKS = 47;
 
 describe("base items (doc 013 and doc 010)", () => {
-  it("ships exactly the forty-eight attacks", () => {
+  it("ships exactly the forty-seven attacks", () => {
     expect(BASE_ITEMS).toHaveLength(ATTACKS);
     expect(ITEMS.size).toBe(ATTACKS);
   });

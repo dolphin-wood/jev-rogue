@@ -58,7 +58,6 @@ export const PLAYER_TEXT: Readonly<Record<string, string>> = {
   toxic_cloud: "Releases a cloud of poison under the nearest enemy that poisons and slows enemies inside it.",
   blizzard: "Lays frost under the nearest enemy that slows enemies inside it and builds toward freezing them.",
   serpent_fang: "Throws a fang that flies out and comes back to you, poisoning each enemy it cuts both ways.",
-  glacial_guard: "A brief guard: the next hit on you is cancelled and answered with a spin that chills everything around you.",
   storm_totem: "Sets a totem beside you that zaps the nearest enemy in reach several times a second. Up to two at once.",
   blade_storm: "Adds a blade to a ring circling you and renews the ring, up to six blades.",
   blade_rift: "Opens a whirl of blades on the floor ahead that spins in place, cutting anything standing in it.",

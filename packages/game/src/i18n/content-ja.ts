@@ -55,7 +55,6 @@ export const JA_CONTENT: ContentTable = {
   toxic_cloud: { name: "トキシッククラウド", description: "いちばん近い敵の足元に毒の霧を広げ、中にいる敵を毒で侵して足を遅くする。" },
   blizzard: { name: "ブリザード", description: "一番近い敵の足元に霜を広げ、中にいる敵を鈍らせながら凍結へと冷やしていく。" },
   serpent_fang: { name: "サーペントファング", description: "曲がった牙を投げ、飛んだ先で折り返して手元に戻る。行きと帰りで一度ずつ敵を切って毒を与える。" },
-  glacial_guard: { name: "グレイシャルガード", description: "短い構え。次の攻撃を打ち消し、凍てつく回転斬りで返す。" },
   storm_totem: { name: "ストームトーテム", description: "そばに雷のトーテムを立て、届く範囲で一番近い敵を毎秒数回打つ。同時に二本まで。" },
   blade_storm: { name: "ブレードストーム", description: "周りを回る刃の輪に霊刃を一本足して輪全体を更新する。最大六本。刃は触れた敵を切る。" },
   blade_rift: { name: "ブレードリフト", description: "前方の床に三本の霊刃の渦を開き、その場で回り続けて中に立つ敵をすべて切る。やがて閉じる。" },

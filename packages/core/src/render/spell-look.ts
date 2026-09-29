@@ -89,7 +89,6 @@ export const SPELL_LOOK: Readonly<Record<string, SpellLook>> = {
    * fallback; neither flies.
    */
   counter_stance: { core: 0xf0fffb, glow: 0x9ff0e0, shape: "blade" },
-  glacial_guard: { core: 0xf2fbff, glow: 0x7fd0ff, shape: "blade" },
   blink_strike: { core: 0xf0fffb, glow: 0x8fe8d8, shape: "dart" },
   // The run's wake is drawn as standing edges in this light (`drawShockwaves`).
   dash_slash: { core: 0xffffff, glow: 0xc3d2ee, shape: "blade" },
