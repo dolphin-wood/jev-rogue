@@ -967,6 +967,9 @@ const TOTEM_CENTRE_DROP = -6;
 const LODGED_BODY_LIFT = 6;
 /** How far above its landing point Mortar's impact is drawn: the painting's debris pile sits low in its frame. */
 const MORTAR_IMPACT_LIFT = 14;
+/** A stone out of the roof (`rock` rifts): Mortar's shell at twice its size, near the mark's width, and its impact at the mark's. */
+const ROCKFALL_STONE_SCALE = 2;
+const ROCKFALL_IMPACT_SCALE = 0.75;
 const TOTEM_ORB_LIFT = 17;
 /** How long a Storm Totem's bolts hang after a discharge, and how long before the next it is seen charging, ms. */
 const TOTEM_BOLT_MS = 180;
@@ -9852,6 +9855,8 @@ export class PlayScene extends Phaser.Scene {
          */
         // A stone out of the roof landing: chips and dust off the mark, and the floor cracked under it.
         if (ev.kind === "hazard_tick" && ev.what === "rockfall") {
+          // The stone's own breaking (Mortar's impact), sized to the stone's mark rather than the shell's.
+          this.playSpell("vfx_stone_impact", ev.x, ev.y - MORTAR_IMPACT_LIFT * ROCKFALL_IMPACT_SCALE, 4, 1000 / 12, 7.1, ROCKFALL_IMPACT_SCALE);
           for (let k = 0; k < 5; k++) this.shards.push({ x: ev.x, y: ev.y, a: (k / 5) * Math.PI * 2 + 0.3, ms: 0 });
           this.burst(ev.x, ev.y - 3, 0x9a8a78, 6, 150, -Math.PI / 2, 1.6, 1.2, 200);
           this.eruptCracks.push({ x: ev.x, y: ev.y, ms: 0, variant: 1 });
@@ -15886,10 +15891,12 @@ export class PlayScene extends Phaser.Scene {
         continue;
       }
       /*
-       * **A stone out of the roof** (the fall into phase III): marked as a
-       * bolt is, with the stone's shadow growing in it; then the stone, a
-       * grey block dropping out of the top of the view onto the mark, and
-       * dust and chips where it lands (`hazard_tick` "rockfall").
+       * **A stone out of the roof** (the fall into phase III, the audience):
+       * marked as a bolt is, with the stone's shadow growing in it; then the
+       * stone, Mortar's painted shell at the mark's size, dropping out of the
+       * top of the view onto it, and breaking in the stone's impact where it
+       * lands (`hazard_tick` "rockfall"). A grey block drawn in code stood
+       * there before, and read as a placeholder beside the painted art.
        */
       if (r.rock) {
         const rad = r.width / 2;
@@ -15904,12 +15911,16 @@ export class PlayScene extends Phaser.Scene {
           if (fall > 0) {
             const top = this.cameras.main.worldView.y - rad;
             const y = top + (r.y - rad * 0.6 - top) * fall * fall;
+            const stone = this.spellSprite(`vfx_stone_shell_${(tick >> 2) & 3}`, r.x, y, 7.2, ROCKFALL_STONE_SCALE);
+            if (stone) continue;
             this.hazardGfx.fillStyle(0x6f6252, 1);
             this.hazardGfx.fillRoundedRect(r.x - rad * 0.6, y - rad * 0.5, rad * 1.2, rad, 3);
             this.hazardGfx.fillStyle(0x9a8a78, 1);
             this.hazardGfx.fillRoundedRect(r.x - rad * 0.5, y - rad * 0.5, rad, rad * 0.35, 2);
           }
         } else if (r.activeMs > 0) {
+          // Landed: the painted impact (`rockfall`) is the stone breaking; the block only where there is no art.
+          if (this.atlas.has("vfx_stone_impact_0")) continue;
           const t = Math.max(0, Math.min(1, 1 - r.activeMs / 230));
           this.hazardGfx.fillStyle(0x6f6252, 1 - t);
           this.hazardGfx.fillRoundedRect(r.x - rad * 0.6, r.y - rad * 0.6, rad * 1.2, rad, 3);
