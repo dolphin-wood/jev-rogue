@@ -424,7 +424,7 @@ export function fireUnit(
       const fresh = {
         alive: false, x0: 0, y0: 0, x1: 0, y1: 0, reach: 0, width: 0, damage: 0, tickMs: 0, clockMs: 0,
         lifeMs: 0, maxLifeMs: 0, channel: false, element: "none" as Element, powers: noPowers(), proc: 1,
-        statusMult: 1, weight: 1, spellIndex: -1, angle: 0, drain: 0,
+        statusMult: 1, weight: 1, spellIndex: -1, angle: 0, drain: 0, lockId: -1,
       };
       world.beams.push(fresh);
       return fresh;

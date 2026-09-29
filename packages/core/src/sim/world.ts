@@ -4626,17 +4626,34 @@ function stepBeams(w: World, dtMs: number): void {
         if (p.mana <= 0) { p.mana = 0; beam.alive = false; p.channelKey = -1; continue; }
       }
       /*
-       * **It follows the bodies, not the four ways.** The facing is snapped
-       * to four, and a line held along it missed everything off the axis. So
-       * it turns toward the body the aim would seek within its reach — the
-       * nearest the facing, in its cone — at a bounded rate, so it is seen
-       * swinging onto the body and a body can outrun it; with none, back to
-       * the facing.
+       * **It locks on, and holds.** The facing is snapped to four and follows
+       * the walk, so a line that chose its body by the facing let go of it
+       * the moment the player moved. Now the body it is on is kept for as
+       * long as it lives and stands in reach, whichever way the player goes;
+       * with none, it takes the one the aim would seek in its cone, and else
+       * the nearest in reach all round. It turns onto it quickly
+       * (`BEAM_TURN_DEG_PER_S`), fast enough to hold a body on the run; with
+       * nobody in reach, back to the facing.
        */
       const ax = p.aim.x - p.x, ay = p.aim.y - p.y;
       const al = Math.hypot(ax, ay) || 1;
-      const mark = seekTargets(w, p.x, p.y, ax / al, ay / al)
-        .find((t) => Math.hypot(t.x - p.x, t.y - p.y) <= beam.reach);
+      const inReach = (t: Enemy) => isActive(t) && t.hp > 0 && Math.hypot(t.x - p.x, t.y - p.y) <= beam.reach + t.radius;
+      let mark = beam.lockId >= 0 ? w.enemies.find((t) => t.id === beam.lockId && inReach(t)) ?? null : null;
+      if (!mark) {
+        for (const t of seekTargets(w, p.x, p.y, ax / al, ay / al)) {
+          const body = w.enemies.find((e) => e.id === t.id);
+          if (body && inReach(body)) { mark = body; break; }
+        }
+      }
+      if (!mark) {
+        let best = Infinity;
+        for (const t of w.enemies) {
+          if (!inReach(t)) continue;
+          const dist = Math.hypot(t.x - p.x, t.y - p.y);
+          if (dist < best) { best = dist; mark = t; }
+        }
+      }
+      beam.lockId = mark ? mark.id : -1;
       const want = mark ? Math.atan2(mark.y - p.y, mark.x - p.x) : Math.atan2(ay, ax);
       let d = (want - beam.angle) % (Math.PI * 2);
       if (d > Math.PI) d -= Math.PI * 2;
@@ -4659,6 +4676,8 @@ function stepBeams(w: World, dtMs: number): void {
     beam.clockMs += beam.tickMs;
     const lx = beam.x1 - beam.x0, ly = beam.y1 - beam.y0;
     const l2 = lx * lx + ly * ly || 1;
+    // The first body the tick burns, where its hit is heard (`beam_hit`): one a tick, however many it crosses.
+    let heard: Enemy | null = null;
     for (const e of w.enemies) {
       if (!isActive(e) || e.hp <= 0) continue;
       const t = Math.max(0, Math.min(1, ((e.x - beam.x0) * lx + (e.y - beam.y0) * ly) / l2));
@@ -4671,7 +4690,9 @@ function stepBeams(w: World, dtMs: number): void {
       if (!blocked) applyElementsTo(e, beam.powers, beam.statusMult, beam.proc, beam.damage);
       w.stats.damageDealt += beam.damage;
       e.hitFlashMs = HIT_FLASH_MS;
+      heard ??= e;
     }
+    if (heard) w.events.push({ kind: "spell", x: heard.x, y: heard.y, what: "beam_hit" });
   }
 }
 
@@ -4692,7 +4713,7 @@ function queueSpinRays(w: World): void {
     const from = SWING_WINDUP_MS * w.player.swingStretch;
     const turning = SWING_ACTIVE_MS * w.player.swingStretch;
     const inMs = Array.from({ length: n }, () => from + w.rng.next() * turning).sort((a, b) => a - b);
-    w.spinRays.push({ spellIndex: i, inMs });
+    w.spinRays.push({ spellIndex: i, inMs, aimed: [] });
   });
 }
 
@@ -4704,8 +4725,28 @@ function stepSpinRays(w: World, dtMs: number): void {
   for (const r of w.spinRays) {
     r.inMs = r.inMs.map((ms) => ms - dtMs);
     while (r.inMs.length > 0 && r.inMs[0]! <= 0) {
-      const a = bladeAngle(w.swing, p);
-      sim.fire(r.spellIndex, p, { x: p.x + Math.cos(a) * 100, y: p.y + Math.sin(a) * 100 });
+      /*
+       * **Each ray goes for a body**: the one in the line's reach this spin
+       * has gone for least, and of those the nearest, so three rays over
+       * three bodies burn all three. With nobody in reach it goes out along
+       * the blade as it points, as the spin's own flash.
+       */
+      const reach = Number(ITEMS.get(w.spells[r.spellIndex]?.item.base ?? "")?.params["reach"] ?? 220);
+      let pick: Enemy | null = null, best = Infinity;
+      for (const e of w.enemies) {
+        if (!isActive(e) || e.hp <= 0) continue;
+        const d = Math.hypot(e.x - p.x, e.y - p.y);
+        if (d > reach + e.radius) continue;
+        const score = r.aimed.filter((id) => id === e.id).length * 1e4 + d;
+        if (score < best) { best = score; pick = e; }
+      }
+      if (pick) {
+        r.aimed.push(pick.id);
+        sim.fire(r.spellIndex, p, { x: pick.x, y: pick.y });
+      } else {
+        const a = bladeAngle(w.swing, p);
+        sim.fire(r.spellIndex, p, { x: p.x + Math.cos(a) * 100, y: p.y + Math.sin(a) * 100 });
+      }
       r.inMs.shift();
     }
   }
@@ -4713,7 +4754,7 @@ function stepSpinRays(w: World, dtMs: number): void {
 }
 
 /** How fast a channelled line turns onto the body it follows. */
-const BEAM_TURN_DEG_PER_S = 200;
+const BEAM_TURN_DEG_PER_S = 720;
 
 /** How often an orbiting blade may hit the same body: about twice a second. */
 const ORBIT_REHIT_MS = 450;

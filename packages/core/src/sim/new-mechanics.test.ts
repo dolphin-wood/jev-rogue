@@ -280,6 +280,46 @@ describe("Void Ray", () => {
     expect(dry.beams.some((b) => b.alive && b.channel)).toBe(false);
   });
 
+  it("holds on its body while the caster walks the other way", () => {
+    const w = world("void_ray");
+    const e = body(w, 110, 0);
+    run(w, 20, () => ({ ...aimRight, spell: 0 }));
+    const locked = w.beams.find((b) => b.alive && b.channel)!.lockId;
+    expect(locked).toBe(e.id);
+    const hp = e.hp;
+    // Walking away, left, the aim and the facing with the walk: the line stays on the body behind.
+    run(w, 40, () => ({ ...aimRight, aimX: w.player.x - 200, moveX: -1, spell: 0 }));
+    const beam = w.beams.find((b) => b.alive && b.channel)!;
+    expect(beam.lockId).toBe(e.id);
+    expect(Math.cos(beam.angle)).toBeGreaterThan(0.9);
+    expect(e.hp).toBeLessThan(hp);
+  });
+
+  it("is heard on every tick that burns a body", () => {
+    const w = world("void_ray");
+    body(w, 110, 0);
+    let heard = 0;
+    for (let t = 0; t < 60; t++) {
+      w.player.mana = w.staff.mana_max;
+      step(w, { ...aimRight, spell: 0 });
+      heard += w.events.filter((ev) => ev.kind === "spell" && ev.what === "beam_hit").length;
+    }
+    // A tick every 120 ms over a second, one hit heard each however many it crosses.
+    expect(heard).toBeGreaterThanOrEqual(6);
+    expect(heard).toBeLessThanOrEqual(10);
+  });
+
+  it("sends a spin's rays at the bodies round the caster, a different one each", () => {
+    const w = world("void_ray", ["whirl"]);
+    const round = [body(w, 90, 0), body(w, -90, 0), body(w, 0, 90)];
+    // The spin is paid in rage.
+    w.player.rage = 100;
+    run(w, 1, () => ({ ...aimRight, spin: true }));
+    expect(w.spinRays.length).toBe(1);
+    run(w, 60, () => aimRight);
+    for (const e of round) expect(e.hp, `${e.x - PX},${e.y - PY}`).toBeLessThan(e.maxHp);
+  });
+
   it("is stopped by the first wall", () => {
     const wallGx = Math.floor((PX + 80) / TILE_PX);
     const w = world("void_ray", [], (c) => { for (let gy = 1; gy < GRID_H - 1; gy++) c[gy * GRID_W + wallGx] = Tile.Wall; });

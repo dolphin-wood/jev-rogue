@@ -1025,7 +1025,7 @@ const ATTACKS: readonly BaseItem[] = [
        * cost and the bar pays `drain_per_s` on for as long as it is held; the
        * caster moves slowly, and letting go, dashing or a dry bar puts it out.
        */
-      shape: "beam", damage: 1.2, speed: 0, radius: 7, count: 1, spread: 0, lifetime: 3, reach: 220, tick_ms: 120, drain_per_s: 9,
+      shape: "beam", damage: 1.6, speed: 0, radius: 7, count: 1, spread: 0, lifetime: 3, reach: 220, tick_ms: 120, drain_per_s: 9,
       pierce: 0, element: "none", seek: 0, curve: 0, weight: 0.4, flash_ms: 360,
       windup_ms: 0, recover_ms: 200, move_scale: 0.4, cooldown_scale: 3,
     },

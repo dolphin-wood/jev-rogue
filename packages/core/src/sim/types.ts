@@ -377,6 +377,8 @@ export interface Beam {
   angle: number;
   /** Mana a second the channel costs while it is held (`drain_per_s`), on top of the press; 0 for a flash. */
   drain: number;
+  /** The body a channelled line is locked on (`Enemy.id`), held while it lives and stands in reach; -1 for none. */
+  lockId: number;
 }
 
 /**
@@ -2466,7 +2468,7 @@ export interface World {
    * blade at each of `inMs`, the moments left before each, drawn at random
    * over the turning; the spin ending drops the rest.
    */
-  spinRays: { spellIndex: number; inMs: number[] }[];
+  spinRays: { spellIndex: number; inMs: number[]; /** The bodies this spin's rays went for, so the next goes for another. */ aimed: number[] }[];
   /** The blades the sword has left in bodies for a `lodge_max` key to recall (`recall.ts`). */
   lodged: LodgedBlade[];
   /**

@@ -194,6 +194,8 @@ export function spellSound(itemId: string): SpellSound {
  *   did not land, and the player has to hear that it did not;
  * - the answer is the spin's whoosh, and the weak answer of a guard that ran
  *   out is the same whoosh, higher and lighter;
+ * - a beam's tick burning into a body is the void's own impact, high and
+ *   light: it comes eight times a second, so it is a sizzle, not a blow;
  * - a charge's shield going up is a breath of light; a blow it holds rings
  *   thinner than a guard's; and it breaking is the frost's shatter, high and
  *   sharp — something brittle giving way, which the player has to hear
@@ -211,6 +213,7 @@ export function shapeEventSound(what: string, share = 1): ShapeEventSound {
     case "wave": return { name: "cast_spirit", pitch: share >= 2 ? 0.95 : 1.45 };
     case "stance_guard": return { name: "hit_armour", pitch: 1.15 };
     case "stance_answer": return { name: "swing_spin", pitch: share >= 1 ? 1 : 1.25 };
+    case "beam_hit": return { name: "impact_void", pitch: 1.6 };
     case "charge_shield": return { name: "cast_spirit", pitch: 1.75 };
     case "charge_shield_hit": return { name: "hit_armour", pitch: 1.45 };
     case "charge_shield_break": return { name: "impact_frost", pitch: 1.3 };

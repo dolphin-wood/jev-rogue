@@ -10,7 +10,7 @@ import { SFX_NAMES } from "./sfx.ts";
 const SHAPE_EVENTS = [
   "orb", "orb_strike", "boomerang_turn", "boomerang_caught", "trail", "enchant",
   "wave", "stance", "stance_guard", "stance_answer",
-  "charge_shield", "charge_shield_hit", "charge_shield_break",
+  "charge_shield", "charge_shield_hit", "charge_shield_break", "beam_hit",
 ] as const;
 
 describe("shape event sounds", () => {
