@@ -61,7 +61,7 @@ export const ZH_CONTENT: ContentTable = {
   blade_storm: { name: "剑刃风暴", description: "在环绕你的刀环上加一把灵刃，刀越多环越大、转得越快；第六把时整圈刀刃向外飞出，扑向附近的敌人并贯穿。" },
   blade_rift: { name: "刀锋裂隙", description: "在前方地面撕开一团三把灵刃组成的旋涡，原地旋转，切割站在里面的每个敌人，直到闭合。" },
   mortar: { name: "迫击", description: "越过一切把石弹抛向最近的敌人，落地爆开。敌人可以提前走开。" },
-  void_ray: { name: "虚空射线", description: "按住时，光束沿瞄准方向灼烧第一面墙前的所有敌人。按住期间移动变慢。" },
+  void_ray: { name: "虚空射线", description: "按住时射出一道光束，灼烧第一面墙前的所有敌人，并会转向面前最近的敌人。按住期间移动变慢，并持续消耗法力。" },
 
   /* -------------------------------- affixes ------------------------------ */
   fork: { name: "分叉", description: "命中后分裂成数块碎片，继续向前飞行。" },

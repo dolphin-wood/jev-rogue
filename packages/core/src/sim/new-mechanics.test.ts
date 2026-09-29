@@ -225,7 +225,7 @@ describe("Mortar", () => {
 });
 
 describe("Void Ray", () => {
-  it("burns what it crosses for as long as the key is held, and pays once", () => {
+  it("burns what it crosses for as long as the key is held, paying at the press and on while held", () => {
     const w = world("void_ray");
     const e = body(w, 120, 0);
     let spent = 0;
@@ -236,8 +236,9 @@ describe("Void Ray", () => {
       w.player.hearts = 6;
     }
     expect(e.hp).toBeLessThan(e.maxHp);
-    // Ninety frames held, one beam: its cost once, less the trickle of regeneration.
-    const cost = 5 + 2.5 * ITEMS.get("void_ray")!.mana;
+    // Ninety frames held, one beam: the press's cost, and the drain for the second and a half it burned.
+    const ray = ITEMS.get("void_ray")!;
+    const cost = 5 + 2.5 * ray.mana + Number(ray.params["drain_per_s"]) * 1.5;
     expect(spent).toBeLessThan(cost * 1.3);
     expect(spent).toBeGreaterThan(cost * 0.5);
   });
@@ -255,6 +256,20 @@ describe("Void Ray", () => {
     run(d, 1, () => ({ ...aimRight, spell: 0, moveX: 1, dash: true }));
     run(d, 1, () => ({ ...aimRight, moveX: 1 }));
     expect(d.beams.some((b) => b.alive && b.channel)).toBe(false);
+  });
+
+  it("turns after a body off the facing's axis, and the bar running dry puts it out", () => {
+    const w = world("void_ray");
+    // Up and to the right: nowhere on the four ways the facing snaps to.
+    const e = body(w, 110, -55);
+    run(w, 60, () => ({ ...aimRight, spell: 0 }));
+    expect(e.hp).toBeLessThan(e.maxHp);
+    const dry = world("void_ray");
+    body(dry, 110, 0);
+    dry.player.mana = 12;
+    for (let t = 0; t < 200 && (t === 0 || dry.player.channelKey >= 0); t++) step(dry, { ...aimRight, spell: 0 });
+    expect(dry.player.channelKey).toBe(-1);
+    expect(dry.beams.some((b) => b.alive && b.channel)).toBe(false);
   });
 
   it("is stopped by the first wall", () => {

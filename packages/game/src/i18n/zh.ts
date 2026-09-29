@@ -448,6 +448,7 @@ export const ZH: Table = {
   "stat.orbitStack": "每次施放加一把刀",
   "stat.fieldIce": "冰霜地面",
   "stat.beam": "按住引导",
+  "stat.drain": "按住时每秒 {n} 法力",
   "stat.lob": "越过墙壁抛射",
   "stat.chains": "连锁 ×{n}",
   "stat.gold": "金币 +{n}",

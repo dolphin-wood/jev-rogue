@@ -41,7 +41,7 @@ function verdictsIn(text: string): string[] {
  * unit or by the thing it counts, or a cap ("up to 3"). A bare number that
  * counts nothing is a leak from a template.
  */
-const FIGURE = /(?:up to )?\d+(?:\.\d+)?(?:°| ?%| (?:ms|s|px)\b| (?:damage|more|bod(?:y|ies)|shards?|projectiles|blades|rings|eruptions|shots|from the key)\b)/g;
+const FIGURE = /(?:up to )?\d+(?:\.\d+)?(?:°| ?%| (?:ms|s|px)\b| (?:damage|more|bod(?:y|ies)|shards?|projectiles|blades|rings|eruptions|shots|from the key|mana)\b)/g;
 
 /** Every level a key can be held at, and a spread of affixes that fit it. */
 function heldLines(item: BaseItem): string[] {

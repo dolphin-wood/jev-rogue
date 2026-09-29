@@ -14054,6 +14054,28 @@ export class PlayScene extends Phaser.Scene {
     if (!h) return null;
     const sprite = this.spriteGripToCrystal();
     const w = this.world;
+    /*
+     * **Channelling, the staff points down the beam**: held out from the
+     * fist at the line's own angle and turning with it as it follows a body,
+     * so the light visibly leaves the crystal.
+     */
+    const beam = w.player.channelKey >= 0 ? w.beams.find((b) => b.alive && b.channel && b.spellIndex === w.player.channelKey) : undefined;
+    if (beam && swingPhase(w.player) === "none") {
+      const box = this.frameStaff;
+      const cut = swingStaff({
+        centre: [w.player.x, w.player.y - BODY_LIFT],
+        grip: [h.x, h.y],
+        angle: beam.angle,
+        reach: box.gripToCrystal + FOCUS_HAND_R + 4,
+        gripToCrystal: box.gripToCrystal,
+      });
+      const at = staffSpriteCentre(cut, box.gripToCrystal, sprite);
+      return {
+        gripX: cut.gripX, gripY: cut.gripY, angle: cut.angle,
+        crystalX: cut.crystalX, crystalY: cut.crystalY,
+        spriteX: at.x, spriteY: at.y,
+      };
+    }
     if (swingPhase(w.player) !== "none") {
       const box = w.swing;
       const cut = this.swingStaffAt(this.conjuredPose().angle, Math.max(box.reach, box.bladeReach));
@@ -17142,12 +17164,15 @@ export class PlayScene extends Phaser.Scene {
       const look = spellLookOf(beam.spellIndex >= 0 ? w.spells[beam.spellIndex]?.item.base ?? null : null, beam.element);
       const fade = beam.channel ? 1 : Math.max(0.3, beam.lifeMs / Math.max(1, beam.maxLifeMs));
       const wob = 0.85 + 0.15 * Math.sin(w.tick * 0.9);
+      // Held, it leaves the staff's crystal, which points down it (`heldStaffNow`); a flash leaves the body.
+      const x0 = beam.channel && this.frameCrystal ? this.frameCrystal.x : beam.x0;
+      const y0 = beam.channel && this.frameCrystal ? this.frameCrystal.y : beam.y0;
       this.fxGfx.lineStyle(beam.width * 2.6 * wob, look.glow, 0.18 * fade);
-      this.fxGfx.lineBetween(beam.x0, beam.y0, beam.x1, beam.y1);
+      this.fxGfx.lineBetween(x0, y0, beam.x1, beam.y1);
       this.fxGfx.lineStyle(beam.width * 1.2 * wob, look.glow, 0.45 * fade);
-      this.fxGfx.lineBetween(beam.x0, beam.y0, beam.x1, beam.y1);
+      this.fxGfx.lineBetween(x0, y0, beam.x1, beam.y1);
       this.fxGfx.lineStyle(Math.max(1.5, beam.width * 0.45), look.core, 0.9 * fade);
-      this.fxGfx.lineBetween(beam.x0, beam.y0, beam.x1, beam.y1);
+      this.fxGfx.lineBetween(x0, y0, beam.x1, beam.y1);
       if ((w.tick & 1) === 0) this.burst(beam.x1, beam.y1, look.glow, 2, 70, undefined, Math.PI * 2, 0.8);
     }
     for (const b of w.playerBullets) {

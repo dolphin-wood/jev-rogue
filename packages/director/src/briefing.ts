@@ -359,9 +359,12 @@ export function spellBehaviour(item: BaseItem | undefined, level = 1): string {
       else bits.push(`${count} blades orbit the player for ${num("lifetime") ?? 0} s`, `${round1(damage)} damage a pass`);
       break;
     case "beam":
-      bits.push(`held: while the key stays down, for up to ${num("lifetime") ?? 0} s, a line runs ${num("reach") ?? 0} px along the aim to the first wall`,
+      bits.push(`held: while the key stays down${(num("drain_per_s") ?? 0) > 0 ? ", for as long as the bar lasts" : `, for up to ${num("lifetime") ?? 0} s`}, a line runs ${num("reach") ?? 0} px to the first wall, turning after the nearest body the player faces`,
         `${round1(damage)} damage every ${num("tick_ms") ?? 0} ms to each body across it`,
-        "the cost is paid once, at the press", "the player moves slowly while it is held, and a dash ends it");
+        (num("drain_per_s") ?? 0) > 0
+          ? `the press pays the cost and it drains ${num("drain_per_s")} mana a second on while held, ending when the bar is dry`
+          : "the cost is paid once, at the press",
+        "the player moves slowly while it is held, and a dash ends it");
       break;
     case "field":
       bits.push(str("element") === "poison"

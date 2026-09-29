@@ -380,6 +380,14 @@ export interface Beam {
   statusMult: number;
   weight: number;
   spellIndex: number;
+  /**
+   * Which way a channelled line points now, radians: it turns toward the
+   * body nearest the aim at a bounded rate rather than snapping to the
+   * facing's four ways (`stepBeams`).
+   */
+  angle: number;
+  /** Mana a second the channel costs while it is held (`drain_per_s`), on top of the press; 0 for a flash. */
+  drain: number;
 }
 
 /**

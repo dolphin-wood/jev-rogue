@@ -63,7 +63,7 @@ import type { PortalSpec, RoomOffer } from "./exits.ts";
 import type { Destructible } from "./props.ts";
 import type { SpellSlot } from "./spells.ts";
 import type { BulletEmission } from "../encounters/patterns.ts";
-import { turnToward } from "./aim.ts";
+import { turnToward, seekTargets } from "./aim.ts";
 import { ARM_TELE_MS, castArm, castRift, castRanged, castShockwave, dragStep, flameCovers, interruptToll, layWake, lineToWall, onExpansionDeath, riftHits, shockwaveHits, stepAttacks } from "./attacks.ts";
 import type { AttackHooks } from "./attacks.ts";
 import { computeFlowField, tileOf } from "./flow.ts";
@@ -4560,11 +4560,34 @@ function stepBeams(w: World, dtMs: number): void {
       continue;
     }
     if (beam.channel) {
-      const dir = { x: p.aim.x - p.x, y: p.aim.y - p.y };
-      const len = Math.hypot(dir.x, dir.y) || 1;
+      /*
+       * Held, the bar pays on as it burns, a little every step; dry, it goes out.
+       */
+      if (beam.drain > 0) {
+        p.mana -= beam.drain * (dtMs / 1000);
+        if (p.mana <= 0) { p.mana = 0; beam.alive = false; p.channelKey = -1; continue; }
+      }
+      /*
+       * **It follows the bodies, not the four ways.** The facing is snapped
+       * to four, and a line held along it missed everything off the axis. So
+       * it turns toward the body the aim would seek within its reach — the
+       * nearest the facing, in its cone — at a bounded rate, so it is seen
+       * swinging onto the body and a body can outrun it; with none, back to
+       * the facing.
+       */
+      const ax = p.aim.x - p.x, ay = p.aim.y - p.y;
+      const al = Math.hypot(ax, ay) || 1;
+      const mark = seekTargets(w, p.x, p.y, ax / al, ay / al)
+        .find((t) => Math.hypot(t.x - p.x, t.y - p.y) <= beam.reach);
+      const want = mark ? Math.atan2(mark.y - p.y, mark.x - p.x) : Math.atan2(ay, ax);
+      let d = (want - beam.angle) % (Math.PI * 2);
+      if (d > Math.PI) d -= Math.PI * 2;
+      if (d < -Math.PI) d += Math.PI * 2;
+      const turn = (BEAM_TURN_DEG_PER_S * Math.PI / 180) * (dtMs / 1000);
+      beam.angle += Math.sign(d) * Math.min(Math.abs(d), turn);
       beam.x0 = p.x; beam.y0 = p.y;
-      beam.x1 = p.x + (dir.x / len) * beam.reach;
-      beam.y1 = p.y + (dir.y / len) * beam.reach;
+      beam.x1 = p.x + Math.cos(beam.angle) * beam.reach;
+      beam.y1 = p.y + Math.sin(beam.angle) * beam.reach;
     }
     // Stopped by the first wall along it.
     const dx = beam.x1 - beam.x0, dy = beam.y1 - beam.y0;
@@ -4592,6 +4615,9 @@ function stepBeams(w: World, dtMs: number): void {
     }
   }
 }
+
+/** How fast a channelled line turns onto the body it follows. */
+const BEAM_TURN_DEG_PER_S = 200;
 
 /** How often an orbiting blade may hit the same body: about twice a second. */
 const ORBIT_REHIT_MS = 450;

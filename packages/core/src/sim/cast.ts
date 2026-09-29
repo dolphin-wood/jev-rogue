@@ -420,7 +420,7 @@ export function fireUnit(
       const fresh = {
         alive: false, x0: 0, y0: 0, x1: 0, y1: 0, reach: 0, width: 0, damage: 0, tickMs: 0, clockMs: 0,
         lifeMs: 0, maxLifeMs: 0, channel: false, element: "none" as Element, powers: noPowers(), proc: 1,
-        statusMult: 1, weight: 1, spellIndex: -1,
+        statusMult: 1, weight: 1, spellIndex: -1, angle: 0, drain: 0,
       };
       world.beams.push(fresh);
       return fresh;
@@ -443,6 +443,14 @@ export function fireUnit(
     beam.statusMult = statusMult;
     beam.weight = weight;
     beam.spellIndex = mods.spellIndex;
+    // Pressed on the body it sought, if one; it turns after bodies from there (`stepBeams`).
+    const lit = !free && marks[0] ? normalise(marks[0].x - from.x, marks[0].y - from.y) : dir;
+    beam.angle = Math.atan2(lit.y, lit.x);
+    beam.x1 = from.x + lit.x * reach; beam.y1 = from.y + lit.y * reach;
+    // The press pays the key's cost; held, the bar pays `drain_per_s` on top for as long as it burns.
+    beam.drain = free ? 0 : num(base.params, "drain_per_s", 0);
+    // A channel the bar pays for by the second has no clock of its own: it lasts as long as the bar does.
+    if (beam.drain > 0) { beam.lifeMs = Infinity; beam.maxLifeMs = Infinity; }
     if (!free && mods.spellIndex >= 0) world.player.channelKey = mods.spellIndex;
     world.events.push({ kind: "spell", x: from.x, y: from.y, what: "beam" });
     shots.push({ x: beam.x1, y: beam.y1, family: base.id });

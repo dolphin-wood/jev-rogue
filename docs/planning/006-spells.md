@@ -142,11 +142,15 @@ roster's standard status), `speed`, `windup_ms`, `recover_ms`, `move_scale`,
   drops the stance and answers at once at `expire_share`, because the dash
   keeps its priority over everything. The stance guards against bodies and
   projectiles, not against the room's own hazards.
-- **`beam`.** Channelled: the key's cost is paid at the press, and the beam
-  holds for as long as the key stays down, up to `lifetime`, following the
-  caster and the aim; the caster moves at `move_scale`, nothing else is cast
-  meanwhile, and the key coming up, another key, a dash or a stun puts it
-  out. It fires none of the projectile hooks. Cast free by an affix it is a
+- **`beam`.** Channelled: the press pays the key's cost, and the beam holds
+  for as long as the key stays down while the bar pays `drain_per_s` on
+  continuously, with no clock of its own, going out when the bar is dry (a
+  beam with no drain holds for `lifetime`). It leaves the
+  caster toward the body the press sought, and turns after the body nearest
+  the facing within its reach at a bounded rate (back to the facing with none),
+  since a line held along one of four ways missed everything off the axis. The
+  caster moves at `move_scale`, nothing else is cast meanwhile, and the key
+  coming up, another key, a dash or a stun puts it out. It fires none of the projectile hooks. Cast free by an affix it is a
   `flash_ms` flash at the body the affix names.
 - **`lob` (bolt).** The shell flies in an arc over every body and wall to the
   body it seeks, or the aim's point at `reach`, for `lob` seconds, and lands
@@ -211,7 +215,7 @@ style it is tagged with; its first row is its primary style.
 | Doom Sigil `doom_sigil` | void | uncommon | bolt + `doom` | a hit marks the body, and the mark bursts a few seconds later (also Affliction) |
 | Leap Slam `leap_slam` | stone | uncommon | dash + `land` | leaps at a body and lands in a ring of broken ground (also Blade) |
 | Mortar `mortar` | stone | rare | bolt + `lob` | a shell lobbed over everything to the body it seeks, bursting where it lands (also Crowd) |
-| Void Ray `void_ray` | void | rare | beam | held: a line of void light along the aim to the first wall, burning every body across it |
+| Void Ray `void_ray` | void | rare | beam | held: a line of void light to the first wall, turning after the nearest body faced and burning every body across it; drains mana while held |
 
 ### Crowd (`area`)
 

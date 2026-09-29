@@ -62,7 +62,7 @@ export const PLAYER_TEXT: Readonly<Record<string, string>> = {
   blade_storm: "Adds a blade to a ring circling you that grows wider and faster; the sixth flings every blade out at nearby foes.",
   blade_rift: "Opens a whirl of blades on the floor ahead that spins in place, cutting anything standing in it.",
   mortar: "Lobs a shell over everything to the nearest enemy, bursting where it lands. Enemies can walk out.",
-  void_ray: "Hold to burn every enemy along your aim, up to the first wall. You move slowly while holding.",
+  void_ray: "Hold to burn a line of enemies up to the first wall; it turns after the nearest enemy you face. Drains mana while held.",
 
   /* -------------------------------- affixes ------------------------------ */
   fork: "On hit, the shot splits into shards that keep flying forward.",

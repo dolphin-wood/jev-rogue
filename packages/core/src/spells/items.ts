@@ -1011,20 +1011,22 @@ const ATTACKS: readonly BaseItem[] = [
     id: "void_ray",
     rarity: "rare",
     tags: ["attack", "long", "none", "nuke"],
-    mana: 5,
+    mana: 2,
     params: {
       /*
-       * `beam`, channelled: held on its key for up to `lifetime`, a line out
-       * along the aim to the first wall that hurts every body across it each
-       * `tick_ms`. The key's cost is paid once, at the press; the caster
-       * moves slowly while it is held, and letting go or dashing puts it out.
+       * `beam`, channelled: held on its key for as long as the bar lasts
+       * (`lifetime` is only a free cast's flash then), a line out
+       * toward the body nearest the aim, turning after it, to the first wall,
+       * hurting every body across it each `tick_ms`. The press pays the key's
+       * cost and the bar pays `drain_per_s` on for as long as it is held; the
+       * caster moves slowly, and letting go, dashing or a dry bar puts it out.
        */
-      shape: "beam", damage: 1.4, speed: 0, radius: 7, count: 1, spread: 0, lifetime: 2.2, reach: 220, tick_ms: 120,
+      shape: "beam", damage: 1.2, speed: 0, radius: 7, count: 1, spread: 0, lifetime: 3, reach: 220, tick_ms: 120, drain_per_s: 9,
       pierce: 0, element: "none", seek: 0, curve: 0, weight: 0.4, flash_ms: 360,
       windup_ms: 0, recover_ms: 200, move_scale: 0.4, cooldown_scale: 3,
     },
     description:
-      "Void Ray is held: for as long as its key stays down, a line of void light runs from the caster along the aim to the first wall, burning every body across it. The caster moves slowly while it is held.",
+      "Void Ray is held: a line of void light from the caster to the first wall, turning after the nearest body they face, burns every body across it. The caster moves slowly and the bar drains while held.",
   },
 ];
 
