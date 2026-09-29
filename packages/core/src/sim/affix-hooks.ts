@@ -45,6 +45,7 @@ import type { Bullet, Enemy, World } from "./types.ts";
 import type { SpellSlot } from "./spells.ts";
 import { acquire } from "./bullets.ts";
 import { lightFire } from "./fire.ts";
+import { circleHitsWall } from "./collide.ts";
 
 /** One affix on one spell, at one of its three tiers. */
 export interface AttachedAffix {
@@ -79,6 +80,8 @@ export interface HookSim {
   fire(spellIndex: number, origin: { x: number; y: number }, target: { x: number; y: number }): void;
   /** Puts `power` of an element's gauge on a body, as a hit carrying it would (`spillover`). */
   status(e: Enemy, element: "fire" | "ice" | "poison", power: number): void;
+  /** Staggers a body as a spell of this weight would (`slam`). */
+  stagger(e: Enemy, weight: number): void;
 }
 
 /** A rune left on the floor by `ward`, which stops enemy projectiles. */
@@ -234,6 +237,7 @@ export function onCast(w: World, slot: SpellSlot, spellIndex = -1, cost = 0): vo
       const push = repulse.push / Math.max(1, e.radius / 10);
       e.knockX += (dx / d) * push;
       e.knockY += (dy / d) * push;
+      armSlam(slot.affixes, e);
       shoved++;
     }
     if (shoved > 0) w.events.push({ kind: "shot", x: p.x, y: p.y, what: "repulse" });
@@ -254,6 +258,78 @@ export function onCast(w: World, slot: SpellSlot, spellIndex = -1, cost = 0): vo
       w.events.push({ kind: "hazard_tick", x: t.x, y: t.y, what: "aftershock_mark" });
     }
   }
+}
+
+/**
+ * `lodestar`: where the cast lands instead of the aim — the nearest body in
+ * reach of the caster — or null for a slot without it or a room with no
+ * body in reach, where the cast goes where it was aimed.
+ */
+export function lodestarTarget(w: World, slot: SpellSlot): { x: number; y: number } | null {
+  const l = find(at(slot.affixes, "cast"), "lodestar");
+  if (!l || l.kind !== "lodestar") return null;
+  const [t] = nearestN(w, w.player.x, w.player.y, 1);
+  return t && Math.hypot(t.x - w.player.x, t.y - w.player.y) <= l.rangePx ? { x: t.x, y: t.y } : null;
+}
+
+/** Whether this shot puts out the enemy shots it touches (`intercept`). */
+export function intercepts(b: Bullet): boolean {
+  return find(at(b.affixes, "cast"), "intercept") !== null;
+}
+
+/** The share of its health under which a hit from this shot fells a body (`cull`), or 0. */
+export function cullShare(b: Bullet): number {
+  const c = find(at(b.affixes, "hit"), "cull");
+  return c && c.kind === "cull" ? c.share : 0;
+}
+
+/** Arms a `slam` on a body just thrown by a spell carrying it. */
+function armSlam(affixes: readonly AttachedAffix[], e: Enemy): void {
+  const slam = find(at(affixes, "hit"), "slam");
+  if (!slam || slam.kind !== "slam") return;
+  e.slamMs = Math.max(e.slamMs, slam.windowMs);
+  e.slamImpact = Math.max(e.slamImpact, slam.impact);
+}
+
+/** The knockback, px/s, under which a body meeting a wall is only stopped, not slammed. */
+const SLAM_MIN_SPEED = 60;
+/** How heavy a slam is, as a spell's weight, for the stagger. */
+const SLAM_WEIGHT = 2;
+
+/**
+ * `slam`: a body thrown while its window runs, and stopped by a wall or a prop
+ * in the direction it is thrown, takes the blow and staggers. Once a throw:
+ * the window closes on the impact.
+ */
+export function stepSlams(w: World, dtMs: number, sim: HookSim): void {
+  for (const e of w.enemies) {
+    if (e.slamMs <= 0) continue;
+    e.slamMs -= dtMs;
+    if (e.hp <= 0) { e.slamMs = 0; continue; }
+    const v = Math.hypot(e.knockX, e.knockY);
+    if (v < SLAM_MIN_SPEED) continue;
+    const ux = e.knockX / v, uy = e.knockY / v;
+    if (!circleHitsWall(w.room.grid, e.x + ux * 3, e.y + uy * 3, e.radius)) continue;
+    e.slamMs = 0;
+    sim.hurt(e, e.slamImpact);
+    sim.stagger(e, SLAM_WEIGHT);
+    e.knockX = 0;
+    e.knockY = 0;
+    w.events.push({ kind: "enemy_hit", x: e.x + ux * e.radius, y: e.y + uy * e.radius, what: "slam", amount: e.slamImpact });
+  }
+}
+
+/** A spell's `afterimage`, for the world to read when one of its pulls, companions or orbs runs out. */
+export function afterimageOf(slot: SpellSlot | null | undefined): number {
+  if (!slot) return 0;
+  const a = find(at(slot.affixes, "end"), "afterimage");
+  return a && a.kind === "afterimage" ? a.rangePx : 0;
+}
+
+/** The nearest body to a point within `range`, for a free cast from there. */
+export function nearestWithin(w: World, x: number, y: number, range: number): Enemy | null {
+  const [t] = nearestN(w, x, y, 1);
+  return t && Math.hypot(t.x - x, t.y - y) <= range ? t : null;
 }
 
 /**
@@ -420,6 +496,23 @@ export function onHit(w: World, b: Bullet, e: Enemy, sim: HookSim): void {
   }
 
   if (hits.length === 0) return;
+
+  // `slam`: the throw this hit is about to give arms the wall.
+  armSlam(b.affixes, e);
+
+  /*
+   * `overload`: the hit's damage charges the body, a pellet's by its proc
+   * share like any on-hit trigger; at the charge, lightning strikes it and
+   * what stands beside it, and the charge starts again.
+   */
+  const over = find(hits, "overload");
+  if (over && over.kind === "overload") {
+    e.overload += b.damage * Math.min(1, b.proc || 1);
+    if (e.overload >= over.charge) {
+      e.overload = 0;
+      burst(w, e.x, e.y, over.radiusPx, over.strike, sim, "overload");
+    }
+  }
 
   const mark = find(hits, "mark");
   // A pellet of a cone marks a body a fraction as often as a bolt does: an

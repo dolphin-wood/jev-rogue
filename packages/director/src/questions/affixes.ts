@@ -17,7 +17,7 @@ import { grounded } from "./fits.ts";
 import type { Fit } from "./fits.ts";
 import type { OptionSpec } from "../types.ts";
 
-export type AffixIntent = "homing" | "cheaper" | "elemental" | "heavier" | "wider" | "survival";
+export type AffixIntent = "homing" | "freecast" | "elemental" | "heavier" | "wider" | "survival";
 
 interface Lane {
   readonly affixes: readonly string[];
@@ -39,39 +39,45 @@ interface Lane {
  * wake takes, belong to none), so an answer moves a real
  * set rather than a fuzzy one. Their fit clauses are disjoint too — `archetype`
  * names one lane each, never three — because a lane that matches twice on one
- * underlying fact wins on the count rather than on the merits. `cheaper` said
- * both "mana sustain is starved or tight" and "archetype is spam", which for
- * every spam build with a tight bar is the same sentence twice, and it beat a
- * lane the player had asked for in words. The ids are the ones the control's table
- * already used, because the room plan page keys its translations off them;
- * `survival` is new, and is the lane a melee or a hurt build was missing.
+ * underlying fact wins on the count rather than on the merits: a lane that
+ * said both "mana is tight" and "the keys lean spam" said the same sentence
+ * twice for every spam build with a tight bar, and beat a lane the player had
+ * asked for in words. Every lane holds something for every shape at some
+ * strength, so no answer reweights an empty set.
  */
 export const AFFIX_LANES: Readonly<Record<AffixIntent, Lane>> = {
   homing: {
-    affixes: ["seek", "ricochet"],
+    /*
+     * Every shape has an aiming answer: a shot that bends or comes back off
+     * a wall, and ground, a pull or a wall that lands under the nearest body.
+     */
+    affixes: ["seek", "ricochet", "lodestar"],
     // Not "hit": "one big hit" is a damage sentence, and it read as an aiming one.
-    words: ["aim", "accuracy", "miss", "missing", "track", "home", "homing", "bounce", "curve"],
+    words: ["aim", "accuracy", "miss", "missing", "track", "home", "homing", "bounce", "curve", "target"],
     phrases: ["never hit", "cant hit", "can't hit", "keep missing", "hard to aim", "trouble aiming"],
-    text: "Shots that find the body themselves: Seek curves onto the nearest one, Ricochet comes back off the walls.",
+    text: "Casts that find the body themselves: Seek curves a shot onto the nearest one, Ricochet brings it back off "
+      + "the walls, Lodestar lands ground, a pull or a wall under the nearest body.",
     fits: [["hits_per_shot", "few"], ["sword_share", "none"]],
   },
-  cheaper: {
+  freecast: {
     /*
-     * Haste: the kill hands the cast back sooner, by taking cooldown off.
-     * Echo sat here too and gave mana back on a kill; it is gone, since
-     * nothing on a spell may pay for spells (the sword and the mana upgrades
-     * do). So this lane answers a slow cast rate, not an empty bar — a player
-     * short of mana is the stat door's to answer. Harvest used to sit here,
-     * on the reading that a kill that bursts leaves the next cast less to
-     * do — an inference, where what Harvest does is hit the bodies round a
-     * kill, which is `wider`'s event (more of the room reached from one cast).
+     * **Casts the key did not have to be pressed for.** This lane was
+     * `cheaper`, Haste alone: a kill hands the cast back sooner. But most keys
+     * wait on the bar, not on a cooldown, and nothing on a spell may pay for
+     * spells, so a lane about the cast rate had one card at strength III and
+     * nothing on most shapes. What does raise how often a spell goes off is
+     * the spell going off on its own — from a hit taken, a dash, the sword, its
+     * spin, a pull running out — and those were scattered over `survival`,
+     * which is where the lane's answers now come from.
      */
-    affixes: ["haste"],
+    affixes: ["haste", "retort", "slipstream", "parting", "resonance", "whirl", "afterimage"],
     // Not "fast": "clear rooms fast" is a sentence about pace, not about the cast rate.
-    words: ["often", "cooldown", "spam"],
-    phrases: ["cast more", "cast faster"],
-    text: "A kill that hands a cast back sooner: Haste takes cooldown off the spell on a kill.",
-    fits: [["cast_rate", "slow"]],
+    words: ["often", "cooldown", "spam", "free", "automatic", "auto", "proc", "trigger"],
+    phrases: ["cast more", "cast faster", "casts itself", "on its own"],
+    text: "Casts that go off without a press: Haste hands one back on a kill, Retort casts at a hit taken, "
+      + "Slipstream through a dashed body and Parting Shot from where a dash began, Resonance from the sword and "
+      + "Whirl from its spin, Afterimage when a pull, a companion or an orb runs out.",
+    fits: [["cast_rate", "slow"], ["sword_share", "most"]],
   },
   elemental: {
     affixes: ["kindle", "rime", "blight", "spillover"],
@@ -82,30 +88,30 @@ export const AFFIX_LANES: Readonly<Record<AffixIntent, Lane>> = {
     fits: [["keys_lean", "dot", "area"], ["intent_preset", "dot", "area"]],
   },
   heavier: {
-    affixes: ["fork", "pierce", "shatter", "brand", "aftershock"],
-    words: ["damage", "big", "hard", "heavy", "hurt", "nuke", "pierce", "through"],
+    affixes: ["fork", "pierce", "shatter", "brand", "aftershock", "cull", "overload"],
+    words: ["damage", "big", "hard", "heavy", "hurt", "nuke", "pierce", "through", "execute", "finish"],
     phrases: ["big hit", "one shot", "hits hard", "one big"],
-    text: "A cast that lands more than once: Fork splits on impact, Pierce passes through, Brand sets off a mark "
-      + "on the next hit, Shatter splits on a wall, Aftershock bursts the ground under a body a beat after the cast.",
+    text: "A cast that lands more than once, or ends it: Fork splits on impact, Pierce passes through, Brand sets "
+      + "off a mark on the next hit, Shatter splits on a wall, Aftershock bursts the ground under a body a beat "
+      + "after the cast, Overload strikes a body the spell keeps hitting, Cull fells one left nearly dead.",
     fits: [["keys_lean", "nuke"], ["intent_preset", "nuke"], ["damage_rate", "low"]],
   },
   wider: {
-    affixes: ["scatter", "repeat", "bloom", "chain", "harvest"],
-    words: ["area", "wide", "spread", "crowd", "group", "surrounded", "many", "swarm", "chain", "chains"],
+    affixes: ["scatter", "repeat", "bloom", "chain", "harvest", "slam"],
+    words: ["area", "wide", "spread", "crowd", "group", "surrounded", "many", "swarm", "chain", "chains", "wall", "walls"],
     phrases: ["get surrounded", "all at once"],
     text: "More of the room reached from one cast: Scatter casts outward, Repeat casts again, Bloom leaves "
-      + "burning ground, Chain jumps to the next body, Harvest makes a kill burst.",
+      + "burning ground, Chain jumps to the next body, Harvest makes a kill burst, Slam hurts a body thrown into "
+      + "a wall.",
     fits: [["keys_lean", "area", "spam"], ["intent_preset", "area", "spam"], ["movement_pressure_recent", "heavy"]],
   },
   survival: {
-    affixes: ["ward", "retort", "slipstream", "resonance", "repulse", "parting", "whirl", "drag"],
-    words: ["survive", "safe", "defend", "block", "shield", "melee", "sword", "dash", "tank", "spin", "knockback", "pull"],
+    affixes: ["ward", "repulse", "drag", "intercept"],
+    words: ["survive", "safe", "defend", "block", "shield", "melee", "sword", "tank", "knockback", "pull", "bullets", "shots"],
     phrases: ["stay alive", "keep dying", "sword range", "up close"],
-    text: "Casts fired off the fight at close quarters: Ward leaves a rune that stops shots, Retort casts back "
-      + "at a hit, Slipstream casts through a dashed body, Parting Shot casts back from where a dash began, "
-      + "Resonance casts from the sword and Whirl from its spin, Repulse throws back what is close, and Drag "
-      + "pulls a hit body into sword reach.",
-    fits: [["health", "low", "critical"], ["hurt_by", "blades"], ["intent_preset", "melee"]],
+    text: "Room held at close quarters: Ward leaves a rune that stops shots, Intercept has the spell's shots and "
+      + "blades put out enemy ones, Repulse throws back what is close, Drag pulls a hit body into sword reach.",
+    fits: [["health", "low", "critical"], ["hurt_by", "blades", "shots"], ["intent_preset", "melee"]],
   },
 };
 
@@ -123,15 +129,15 @@ export function laneOf(affixId: string): AffixIntent | null {
  *
  * Measured on the live model, the free text alone did not reach this question.
  * A player who typed "I want to freeze things and shatter them" into a build
- * with tight mana and an accuracy bottleneck got `cheaper` in four offers of
- * four, with `elemental` at about 0.2: `cheaper` and `homing` each matched a
+ * with tight mana and an accuracy bottleneck got the cast-rate lane in four offers of
+ * four, with `elemental` at about 0.2: it and `homing` each matched a
  * label exactly, and the typed sentence was prose competing against two exact
  * matches and an instruction telling Jev to prefer it. Jev matches labels, so
  * the words have to arrive as one — `typed_intent`, the lane the player's own
  * words name, alongside the sentence itself.
  *
  * This does not decide the question. The label is one signal among four, and
- * Jev is still free to answer `cheaper` to a build that cannot cast; it means
+ * Jev is still free to answer `freecast` to a build that cannot cast; it means
  * only that the player's sentence competes on the same footing as the labels
  * inferred from their build.
  */
@@ -157,9 +163,9 @@ export const LANE_SPEC: Readonly<Record<AffixIntent, OptionSpec>> = {
     what: AFFIX_LANES.homing.text,
     not_for: "A build whose shots land on a body with most casts, or one that fights at sword range.",
   },
-  cheaper: {
-    what: AFFIX_LANES.cheaper.text,
-    not_for: "A build that already casts each key as often as it wants, and a spell that seldom lands the kill.",
+  freecast: {
+    what: AFFIX_LANES.freecast.text,
+    not_for: "A build that already has each key doing what it wants when pressed, and a player who seldom takes a hit, dashes or swings.",
   },
   elemental: {
     what: AFFIX_LANES.elemental.text,
@@ -176,7 +182,7 @@ export const LANE_SPEC: Readonly<Record<AffixIntent, OptionSpec>> = {
   },
   survival: {
     what: AFFIX_LANES.survival.text,
-    not_for: "A player on a full bar who has lost little health and seldom stands at sword range.",
+    not_for: "A player on a full bar who has lost little health, in rooms with few shots and nobody at sword range.",
   },
 };
 

@@ -163,7 +163,7 @@ const PATHS: Record<FallbackPath, true> = {
   commit_check: true, deadline: true, no_history: true,
 };
 const LANES: Record<AffixIntent, true> = {
-  homing: true, cheaper: true, elemental: true, heavier: true, wider: true, survival: true,
+  homing: true, freecast: true, elemental: true, heavier: true, wider: true, survival: true,
 };
 
 /** Slots and spawn groups are declared per archetype rather than centrally. */

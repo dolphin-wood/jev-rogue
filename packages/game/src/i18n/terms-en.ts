@@ -210,7 +210,7 @@ export const EN_TERMS = {
 
   /* ---------------------------- the affix lanes -------------------------- */
   "term.homing": "homing",
-  "term.cheaper": "cheaper",
+  "term.freecast": "free casts",
   "term.wider": "wider",
   "term.heavier": "heavier",
   "term.elemental": "elemental",

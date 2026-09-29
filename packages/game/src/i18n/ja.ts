@@ -489,4 +489,10 @@ export const JA: Table = {
   "affixtier.whirl": "回転斬りで詠唱",
   "affixtier.spillover": "撃破で状態異常が広がる",
   "affixtier.drag": "当てた敵を引き寄せる",
+  "affixtier.lodestar": "一番近い敵の足元に落ちる",
+  "affixtier.intercept": "触れた敵弾を消す",
+  "affixtier.cull": "瀕死の敵を仕留める",
+  "affixtier.overload": "当て続けた敵に雷が落ちる",
+  "affixtier.slam": "壁に叩きつけた敵が傷つく",
+  "affixtier.afterimage": "消えるともう一度詠唱",
 };

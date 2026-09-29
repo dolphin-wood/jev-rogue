@@ -86,6 +86,12 @@ export const PLAYER_TEXT: Readonly<Record<string, string>> = {
   whirl: "Your spin attack casts this spell at up to three nearby enemies at no mana cost.",
   spillover: "Enemies killed by this spell pass their burn, chill and poison to enemies nearby.",
   drag: "Hits pull enemies toward you instead of knocking them away.",
+  lodestar: "The spell lands under the nearest enemy instead of where you aim.",
+  intercept: "This spell's shots and blades destroy enemy shots they touch.",
+  cull: "Hits finish off enemies left at a sixth of their health or less. Bosses are immune.",
+  overload: "Enemies this spell keeps hitting get struck by lightning, hitting whatever is next to them.",
+  slam: "Enemies this spell knocks into a wall take damage and stagger.",
+  afterimage: "When the pull, companion or orb runs out, it is cast once more at the nearest enemy at no mana cost.",
 
   /* --------------------------------- stats ------------------------------- */
   fleet: "Move faster.",

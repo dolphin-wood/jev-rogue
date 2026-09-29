@@ -361,17 +361,17 @@ describe("firstSentence", () => {
 
 describe("the affix lanes describe their own contents correctly", () => {
   it("does not claim any affix gives mana back: none does", () => {
-    const cheaper = AFFIX_LANES.cheaper.text;
-    expect(cheaper).not.toMatch(/mana/i);
-    expect(cheaper).not.toMatch(/Harvest/);
+    const freecast = AFFIX_LANES.freecast.text;
+    expect(freecast).not.toMatch(/mana/i);
+    expect(freecast).not.toMatch(/Harvest/);
     // Harvest's event is a burst round a kill: more of the room from one cast.
-    expect(AFFIX_LANES.cheaper.affixes).not.toContain("harvest");
+    expect(AFFIX_LANES.freecast.affixes).not.toContain("harvest");
     expect(AFFIX_LANES.wider.affixes).toContain("harvest");
     expect(AFFIX_LANES.wider.text).toMatch(/Harvest makes a kill burst/);
   });
   it("reads a sentence about pace as a sentence about pace", () => {
     // "clear rooms fast" took a chain-lightning player to the mana lane.
-    expect(AFFIX_LANES.cheaper.words).not.toContain("fast");
+    expect(AFFIX_LANES.freecast.words).not.toContain("fast");
   });
 });
 

@@ -151,15 +151,16 @@ describe("the eruption shape", () => {
     expect([bare.wards, bare.burn, bare.poison, bare.chill]).toEqual([0, 0, 0, 0]);
     const listed = SPELL_AFFIXES.filter((a) => a.shapes.includes("eruption"));
     expect(listed.map((a) => a.id).sort()).toEqual(
-      ["aftershock", "blight", "kindle", "parting", "repeat", "repulse", "resonance", "retort", "rime", "scatter",
-        "slipstream", "ward", "whirl"]);
+      ["aftershock", "blight", "kindle", "lodestar", "parting", "repeat", "repulse", "resonance", "retort", "rime",
+        "scatter", "slipstream", "ward", "whirl"]);
     /*
      * The cast-time ones here, on a press. `retort`, `slipstream`,
      * `parting`, `resonance` and `whirl` fire the eruption free from a hit
      * taken, a dash, the sword and its spin, which this press cannot set off; `affix-shapes.test.ts` sets off
      * each of them on every shape they list, this one included.
      */
-    for (const a of listed.filter((x) => x.hook === "cast")) {
+    // `lodestar` changes where the ground lands, which a press at bodies already aimed at cannot show; `affix-shapes.test.ts` aims away.
+    for (const a of listed.filter((x) => x.hook === "cast" && x.id !== "lodestar")) {
       const seen = observable(a, bare, cast(a.id));
       expect({ affix: a.id, seen }).toEqual({ affix: a.id, seen: true });
     }

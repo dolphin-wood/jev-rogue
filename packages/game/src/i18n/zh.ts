@@ -490,4 +490,10 @@ export const ZH: Table = {
   "affixtier.whirl": "回旋斩时施放",
   "affixtier.spillover": "击杀时状态蔓延",
   "affixtier.drag": "命中时把敌人拉近",
+  "affixtier.lodestar": "落在最近的敌人脚下",
+  "affixtier.intercept": "抵消碰到的敌方子弹",
+  "affixtier.cull": "斩杀残血的敌人",
+  "affixtier.overload": "持续命中的敌人遭雷击",
+  "affixtier.slam": "撞墙的敌人受伤",
+  "affixtier.afterimage": "结束时再施放一次",
 };

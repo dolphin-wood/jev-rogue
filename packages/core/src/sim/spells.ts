@@ -33,7 +33,7 @@ import type { BaseItem, ItemInstance, Staff } from "../types.ts";
 import type { ItemRegistry } from "../spells/items.ts";
 import { num, str } from "../spells/items.ts";
 import { emptyScope, fireUnit, freeCastReach } from "./cast.ts";
-import { castAdditions, onCast, spreadDirections } from "./affix-hooks.ts";
+import { castAdditions, lodestarTarget, onCast, spreadDirections } from "./affix-hooks.ts";
 import { addPowers, dominantElement, noPowers } from "../content/tags.ts";
 import { affixCostMult } from "../spells/affixes.ts";
 import {
@@ -872,7 +872,16 @@ function fireSpread(
   items: ItemRegistry, shots: FiredShot[], spreadDirs: number,
 ): void {
   const p = world.player;
+  /*
+   * `lodestar`: the cast is aimed at the nearest body in reach rather than
+   * where the caster aims — the aim itself, for this one cast, so the spell
+   * places its ground, its pull or its wall there as a press aimed at it would.
+   */
+  const lode = lodestarTarget(world, slot);
+  const aimed = { x: p.aim.x, y: p.aim.y };
+  if (lode) { p.aim.x = lode.x; p.aim.y = lode.y; }
   fireUnit(world, slot.item, scope, items, shots);
+  if (lode) { p.aim.x = aimed.x; p.aim.y = aimed.y; }
   if (spreadDirs > 0) {
     const ax = p.aim.x - p.x;
     const ay = p.aim.y - p.y;

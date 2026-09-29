@@ -686,15 +686,15 @@ const GAP_SPELL_TAGS: Readonly<Record<string, readonly string[]>> = {
   damage: ["nuke", "area"], cast_frequency: ["spam"], mana: ["spam"], accuracy: ["tracking", "area"],
 };
 const GAP_AFFIXES: Readonly<Record<string, readonly string[]>> = {
-  damage: ["brand", "fork", "pierce", "kindle", "blight", "harvest", "aftershock"],
-  cast_frequency: ["haste", "repeat", "resonance", "whirl", "parting"],
-  mana: [], accuracy: ["seek", "chain", "scatter"],
+  damage: ["brand", "fork", "pierce", "kindle", "blight", "harvest", "aftershock", "cull", "overload"],
+  cast_frequency: ["haste", "repeat", "resonance", "whirl", "parting", "afterimage"],
+  mana: [], accuracy: ["seek", "chain", "scatter", "lodestar"],
 };
 const GAP_FAMILIES: Readonly<Record<string, readonly string[]>> = {
   damage: ["sword"], cast_frequency: ["mana"], mana: ["mana"], accuracy: ["movement"],
 };
 /** The affixes a hurt run is short of: a rune, a riposte, room cleared round the caster, a retreat that fires. */
-const HURT_AFFIXES: readonly string[] = ["ward", "retort", "repulse", "parting"];
+const HURT_AFFIXES: readonly string[] = ["ward", "retort", "repulse", "parting", "intercept"];
 /** The infusion affix for each element, for `synergy`. */
 const INFUSION: Readonly<Record<string, string>> = { fire: "kindle", ice: "rime", poison: "blight" };
 
@@ -786,16 +786,23 @@ export interface CardPool {
  *   (Affliction); `whirl` and `drag` are the sword's: the spin casts, and a
  *   hit pulls the body into reach.
  *
+ * - The third reads so too: `overload` pays cadence (Barrage); `cull` ends
+ *   a committed hit's work (Heavy); `lodestar` lands ground and pulls on the
+ *   body (Heavy, Crowd); `slam` turns the room's walls on a pack (Crowd) and
+ *   is the sword's shove made to hurt (Blade); `intercept` is a ring of
+ *   blades or a stream of shots that guards (Blade, Barrage); `afterimage`
+ *   keeps pulls and companions coming (Crowd, Barrage).
+ *
  * Every affix reads as at least one style, so a taken affix always counts
  * toward something; `fork`, `brand`, `parting`, `aftershock` and `repulse`
  * read as two, because their event works two verbs.
  */
 const AFFIX_STYLE: Readonly<Record<string, readonly string[]>> = {
-  spam: ["repeat", "fork", "seek", "ricochet", "parting"],
-  nuke: ["haste", "shatter", "fork", "brand", "rime", "aftershock", "repulse"],
-  area: ["scatter", "chain", "harvest", "pierce", "aftershock"],
+  spam: ["repeat", "fork", "seek", "ricochet", "parting", "overload", "intercept", "afterimage"],
+  nuke: ["haste", "shatter", "fork", "brand", "rime", "aftershock", "repulse", "cull", "lodestar"],
+  area: ["scatter", "chain", "harvest", "pierce", "aftershock", "lodestar", "slam", "afterimage"],
   dot: ["kindle", "blight", "bloom", "brand", "spillover", "parting"],
-  melee: ["resonance", "retort", "slipstream", "ward", "momentum", "undertow", "finale", "whirl", "drag", "repulse"],
+  melee: ["resonance", "retort", "slipstream", "ward", "momentum", "undertow", "finale", "whirl", "drag", "repulse", "intercept", "slam"],
 };
 
 /**

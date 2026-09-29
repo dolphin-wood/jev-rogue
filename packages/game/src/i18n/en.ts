@@ -497,4 +497,10 @@ export const EN = {
   "affixtier.whirl": "the spin casts it round you",
   "affixtier.spillover": "a kill spreads its statuses",
   "affixtier.drag": "hits pull bodies in",
+  "affixtier.lodestar": "lands under the nearest body",
+  "affixtier.intercept": "puts out the enemy shots it touches",
+  "affixtier.cull": "fells a body left nearly dead",
+  "affixtier.overload": "a body it keeps hitting is struck",
+  "affixtier.slam": "bodies thrown into walls are hurt",
+  "affixtier.afterimage": "cast again when it runs out",
 } as const;

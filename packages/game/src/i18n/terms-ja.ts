@@ -198,7 +198,7 @@ export const JA_TERMS = {
 
   /* ---------------------------- the affix lanes -------------------------- */
   "term.homing": "追尾",
-  "term.cheaper": "低コスト",
+  "term.freecast": "自動詠唱",
   "term.wider": "拡散",
   "term.heavier": "一撃重視",
   "term.elemental": "属性",

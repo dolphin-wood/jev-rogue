@@ -263,8 +263,8 @@ export const ruleTable: WeightTable = (scopedQuestion, option, scopedState) => {
       const preset = label(state, "intent.preset");
       let w = 1;
       if (option === "homing") w = hits === "few" ? 3 : 0.5;
-      // Haste takes cooldown off, not mana: a slow cast rate, not an empty bar.
-      else if (option === "cheaper") w = casts === "slow" ? 2 : 0.5;
+      // Casts that go off without a press: a slow cast rate, or a build that lives on the sword.
+      else if (option === "freecast") w = casts === "slow" ? 2 : label(state, "sword_share") === "most" ? 1.6 : 0.5;
       else if (option === "elemental") w = lean === "dot" || lean === "area" ? 2.5
         : preset === "dot" || preset === "area" ? 1.8 : 0.8;
       else if (option === "heavier") w = lean === "nuke" ? 2

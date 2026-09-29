@@ -36,6 +36,7 @@
  * | `dash` | the player dashes through a body |
  * | `swing` | the sword connects |
  * | `spin` | the sword's spin starts |
+ * | `end` | a placed effect — a pull, a companion, an orb — runs out |
  *
  * ### Two things are called "affix" in this repository
  *
@@ -101,7 +102,7 @@ export const SPELL_SHAPES: readonly SpellShape[] = [
 const HITTING: readonly SpellShape[] = ["bolt", "orbit", "boomerang", "orb", "enchant"];
 
 /** The moments an affix can attach to. Every one already exists in `sim`. */
-export type AffixHook = "hit" | "expire" | "wall" | "kill" | "cast" | "hurt" | "dash" | "swing" | "spin";
+export type AffixHook = "hit" | "expire" | "wall" | "kill" | "cast" | "hurt" | "dash" | "swing" | "spin" | "end";
 
 /**
  * What happens at the hook.
@@ -161,7 +162,19 @@ export type AffixEffect =
   /** Draws the body `px` toward the caster. */
   | { readonly kind: "drag"; readonly px: number }
   /** The ground under the nearest body within `rangePx` bursts for `radiusPx`, `delayMs` after the cast. */
-  | { readonly kind: "aftershock"; readonly rangePx: number; readonly radiusPx: number; readonly delayMs: number };
+  | { readonly kind: "aftershock"; readonly rangePx: number; readonly radiusPx: number; readonly delayMs: number }
+  /** Lands the cast under the nearest body within `rangePx` instead of at the aim. */
+  | { readonly kind: "lodestar"; readonly rangePx: number }
+  /** The spell's projectiles put out the enemy shots they touch. */
+  | { readonly kind: "intercept"; readonly shots: number }
+  /** A hit that leaves a body at or under `share` of its health fells it. */
+  | { readonly kind: "cull"; readonly share: number }
+  /** A body this spell has hurt for `charge` in all is struck for `strike`, over `radiusPx`. */
+  | { readonly kind: "overload"; readonly charge: number; readonly strike: number; readonly radiusPx: number }
+  /** A body this spell throws into a wall within `windowMs` takes `impact` and staggers. */
+  | { readonly kind: "slam"; readonly impact: number; readonly windowMs: number }
+  /** When the effect runs out, it is cast once more, free, at the nearest body within `rangePx`. */
+  | { readonly kind: "afterimage"; readonly rangePx: number };
 
 export interface SpellAffix {
   readonly id: string;
@@ -708,6 +721,103 @@ BASE_AFFIXES.push(
   },
 );
 
+/*
+ * **The lanes the Director could not fill** (the third expansion). The affix
+ * intent tilts an offer toward a lane, and on a staff with no projectile
+ * several lanes held nothing at a strength-I door: `homing` was two bolt-only
+ * affixes, the cadence lane was Haste alone at strength III, and every
+ * strength III affix needed a projectile, so a legendary door for a staff of
+ * ground, pulls and companions fell back a grade. These six fill those cells:
+ *
+ * - `lodestar` — ground, a pull or a pillar lands under the nearest body:
+ *   the aiming answer for a spell that does not fly.
+ * - `intercept` — the spell's shots and blades put out enemy shots: a ring of
+ *   blades or a thrown edge that guards.
+ * - `cull` — a hit that leaves a body nearly dead fells it.
+ * - `overload` — a body the spell keeps hitting is struck by lightning once
+ *   it has taken enough: cadence paid out, whatever the hit's size.
+ * - `slam` — a body the spell throws into a wall is hurt and staggered: the
+ *   room's walls as a weapon, with Repulse and every knockback shot.
+ * - `afterimage` — a pull, a companion or an orb that runs out is cast once
+ *   more at the nearest body: the placed shapes' strength III.
+ */
+BASE_AFFIXES.push(
+  {
+    id: "lodestar",
+    name: "Lodestar",
+    hook: "cast",
+    // What lands somewhere: ground, a pull, a patch, a wall. A companion is called to the caster, a trail laid under them.
+    shapes: ["eruption", "field", "vortex", "pillar"],
+    element: null,
+    effect: { kind: "lodestar", rangePx: 260 },
+    text: "lands under the nearest body",
+    description:
+      "The cast lands under the nearest body within reach instead of where the caster aims, so ground and "
+      + "pulls find their mark.",
+  },
+  {
+    id: "intercept",
+    name: "Intercept",
+    hook: "cast",
+    // What flies or turns and stays a projectile: an orb is no projectile, and never meets a shot.
+    shapes: ["bolt", "orbit", "boomerang", "enchant"],
+    element: null,
+    effect: { kind: "intercept", shots: 1 },
+    text: "puts out the enemy shots it touches",
+    description:
+      "The spell's shots, blades and waves put out any enemy shot they pass through, and fly on.",
+  },
+  {
+    id: "cull",
+    name: "Cull",
+    hook: "hit",
+    shapes: [...HITTING],
+    element: null,
+    effect: { kind: "cull", share: 0.15 },
+    text: "fells a body left nearly dead",
+    description:
+      "A hit that leaves a body at a sixth of its health or less fells it outright; a boss and a guardian are "
+      + "not felled.",
+  },
+  {
+    id: "overload",
+    name: "Overload",
+    hook: "hit",
+    shapes: [...HITTING],
+    element: null,
+    effect: { kind: "overload", charge: 40, strike: 16, radiusPx: 30 },
+    text: "a body it keeps hitting is struck",
+    description:
+      "Each hit charges the body it lands on; once this spell has dealt it enough, lightning strikes it and "
+      + "whatever stands beside it, and the charge starts again.",
+  },
+  {
+    id: "slam",
+    name: "Slam",
+    hook: "hit",
+    // What shoves the body it hits. An orb's strike is lightning, and moves nothing.
+    shapes: ["bolt", "orbit", "boomerang", "enchant"],
+    element: null,
+    effect: { kind: "slam", impact: 8, windowMs: 450 },
+    text: "bodies thrown into walls are hurt",
+    description:
+      "A body this spell knocks back into a wall or a prop takes a blow from the impact and staggers; Repulse "
+      + "on the same spell throws with it.",
+  },
+  {
+    id: "afterimage",
+    name: "Afterimage",
+    hook: "end",
+    shapes: ["vortex", "summon", "orb"],
+    element: null,
+    effect: { kind: "afterimage", rangePx: 260 },
+    text: "cast again when it runs out",
+    description:
+      "When the pull, the companion or the orb runs out, the spell is cast once more, free, at the nearest "
+      + "body; that second one runs out for good.",
+  },
+);
+
 /** The affixes that change a run, and need its wake to mean anything. */
 const RUN_AFFIXES: ReadonlySet<string> = new Set(["momentum", "undertow", "finale"]);
 
@@ -727,6 +837,8 @@ const STRENGTH_FLOOR: Readonly<Record<string, 2 | 3>> = {
   momentum: 2, undertow: 2, finale: 2,
   // A second landing and three free casts a spin: both multiply what one press or one spin is worth.
   aftershock: 2, whirl: 2,
+  // A kill from any hit, and a strike on a body kept under fire; the placed shapes' own III.
+  cull: 2, overload: 3, afterimage: 3,
 };
 for (const a of BASE_AFFIXES) {
   const floor = STRENGTH_FLOOR[a.id];

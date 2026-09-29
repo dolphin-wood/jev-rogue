@@ -446,6 +446,7 @@ pool from a wishlist:
 | `dash` | the player dashes |
 | `swing` | a sword hit connects |
 | `spin` | the sword's spin starts |
+| `end` | a placed pull, companion or orb runs out |
 
 The simulation already fires a spell's effect at a position and at a body, so
 an affix is a *use* of existing machinery rather than a request for new
@@ -465,7 +466,11 @@ dead draw dressed as a choice is worse than a smaller pool.
 |---|---|---|
 | Fork, Shatter, Pierce, Seek, Ricochet | hit / wall / cast | bolt |
 | Chain | hit | bolt, boomerang, orb |
-| Brand, Harvest, Haste, Drag | hit / kill | bolt, orbit, boomerang, orb, enchant |
+| Brand, Harvest, Haste, Drag, Cull, Overload | hit / kill | bolt, orbit, boomerang, orb, enchant |
+| Slam | hit | bolt, orbit, boomerang, enchant: a body the spell throws into a wall is hurt and staggered |
+| Intercept | cast | bolt, orbit, boomerang, enchant: the spell's shots and blades put out enemy shots |
+| Lodestar | cast | eruption, field, vortex, pillar: the cast lands under the nearest body |
+| Afterimage | end | vortex, summon, orb: the effect is cast once more when it runs out |
 | Spillover | kill | the same, on a spell that carries an element of its own or an infusion: a kill hands the body's burn, chill and poison, and the killing hit's element, to the bodies near it |
 | Bloom | expire | bolt, orbit |
 | Repeat | cast | bolt, eruption, boomerang |
@@ -506,14 +511,18 @@ Four things the composition of the pool is doing deliberately:
   repeat. What sizes the pool is how many affix cards a run meets — measured
   on the Jev arm, about seventeen, against the thirteen a build could be dealt
   when the pool held twenty-two — and a pool smaller than that is a run that
-  sees all of it, and the next run seeing the same. The pool is twenty-eight,
+  sees all of it, and the next run seeing the same. The pool is thirty-four,
   and **every shape gets a share of it**: fourteen of the first twenty-two
   hung on a projectile's hooks, so a staff of ground, a run or a guard drew
   the same six any-shape cards, three of them the infusions, on every
   strength-I door. `repulse`, `aftershock`, `parting` and `whirl` act at
-  moments every shape reaches; `drag` and `spillover` give the projectile
-  keys a pull and a spread. A bolt starter can now be dealt twenty-three,
-  Earth Spikes thirteen and Crescent Edge fifteen.
+  moments every shape reaches; `drag`, `spillover`, `cull`, `overload`,
+  `slam` and `intercept` give the projectile keys a pull, a spread, a
+  finish, a cadence payout, the walls and a guard; `lodestar` is the aiming
+  answer for ground and pulls, and `afterimage` the strength III of the
+  placed shapes. Every lane of the Director's affix intent (007) holds
+  something for every shape. A bolt starter can be dealt twenty-seven, Earth
+  Spikes fourteen, Crescent Edge nineteen.
 
 The implementation follows the same rule. A spell's affixes ride the cast scope
 onto every projectile it fires, so a bullet knows what it carries when it hits,

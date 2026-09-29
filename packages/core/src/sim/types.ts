@@ -426,6 +426,8 @@ export interface Vortex {
   proc: number;
   statusMult: number;
   spellIndex: number;
+  /** Cast by `afterimage` when the first ran out: this one runs out for good. */
+  echo?: boolean;
   /**
    * What it deals, once, to every body still inside `radius` when the pull
    * ends (`collapse`, doc 006); 0 for a vortex that simply lets go.
@@ -525,6 +527,8 @@ export interface Pet {
   proc: number;
   statusMult: number;
   spellIndex: number;
+  /** Cast by `afterimage` when the first ran out: this one runs out for good. */
+  echo?: boolean;
   /** Counts down after a shot, for the attack pose. */
   attackMs: number;
   /** Where round the player it is wandering to, and when it picks the next spot. */
@@ -564,6 +568,8 @@ export interface Orb {
   statusMult: number;
   affixes: readonly AttachedAffix[];
   spellIndex: number;
+  /** Cast by `afterimage` when the first ran out: this one runs out for good. */
+  echo?: boolean;
   manaSpent: number;
   /** When it was cast, in world ticks: the oldest of a key's orbs is the one a new one replaces. */
   born: number;
@@ -1522,6 +1528,11 @@ export interface Enemy {
   /** Knockback impulse, decaying; hits have to push or they read as nothing. */
   knockX: number;
   knockY: number;
+  /** A `slam` hit's window (`slamMs`) and blow: a wall met while it runs hurts the body and staggers it. */
+  slamMs: number;
+  slamImpact: number;
+  /** What `overload` spells have dealt the body since its last strike. */
+  overload: number;
   blockedMs: number;
   /**
    * How long this body has failed to get any closer to the player, in ms, and
@@ -2356,6 +2367,8 @@ export interface World {
   freeStrikes: FreeStrike[];
   /** `doom` marks whose bodies died first, still counting down; see `LooseDoom`. */
   dooms: LooseDoom[];
+  /** Set while an `afterimage` casts, so what it places is marked as the last of its line (`echo`). */
+  castingEcho?: boolean;
   /** Marks left where fire burned out or lightning landed. */
   scorches: Scorch[];
   /** The expansion's attack kinds (`attacks.ts`). Small, so plain arrays pruned each step. */

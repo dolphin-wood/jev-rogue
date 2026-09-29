@@ -7769,6 +7769,17 @@ export class PlayScene extends Phaser.Scene {
       }
       // `repulse`: the air thrown off the caster, flat and out to the shove's reach.
       else if (ev.kind === "shot" && ev.what === "repulse") this.burst(ev.x, ev.y, 0xe8f0ff, 16, 260, undefined, Math.PI * 2, 0.8);
+      // `intercept`: an enemy shot put out where it met the spell — a puff of its own sparks.
+      else if (ev.kind === "shot" && ev.what === "intercept") this.burst(ev.x, ev.y, 0xf4fbff, 7, 120, undefined, Math.PI * 2, 0.7);
+      // `overload`: the strike coming down on the body, and its light thrown off.
+      else if (ev.kind === "enemy_hit" && ev.what === "overload") {
+        this.spellArc(ev.x + (Math.random() - 0.5) * 8, ev.y - 70, ev.x, ev.y - 4, Math.floor(this.time.now / 80) % 4);
+        this.burst(ev.x, ev.y - 4, 0xcfe8ff, 12, 170, undefined, Math.PI * 2, 0.9);
+      }
+      // `slam`: grit off the wall where the body met it.
+      else if (ev.kind === "enemy_hit" && ev.what === "slam") this.burst(ev.x, ev.y, 0xd8c8a8, 10, 140, undefined, Math.PI * 2, 1, 200);
+      // `cull`: the finishing blow, a short spray off the felled body.
+      else if (ev.kind === "damage" && ev.what === "hp:cull") this.burst(ev.x, ev.y + 4, 0xffe0e0, 10, 190, undefined, Math.PI * 2, 0.9);
       // `spillover`: what the fallen body carried, flung to its neighbours.
       else if (ev.kind === "hazard_tick" && ev.what === "spillover") this.burst(ev.x, ev.y - 4, 0xffc27a, 12, 170, undefined, Math.PI * 2, 1);
       else if (ev.kind === "eruption" && ev.what === "collapse") this.collapseAt(ev.x, ev.y);
@@ -7910,6 +7921,8 @@ export class PlayScene extends Phaser.Scene {
         this.answers.push({ x: ev.x, y: ev.y, r, share, ms: 0, turn: p.facing });
         break;
       }
+      // `afterimage`: where the spent effect was, a pale shimmer as its echo leaves for the next body.
+      case "afterimage": this.burst(ev.x, ev.y - 4, 0xe8e0ff, 10, 90, undefined, Math.PI * 2, 1.1, -40); break;
       default: break;
     }
   }

@@ -198,7 +198,7 @@ export const ZH_TERMS = {
 
   /* ---------------------------- the affix lanes -------------------------- */
   "term.homing": "追踪",
-  "term.cheaper": "低耗",
+  "term.freecast": "自动施放",
   "term.wider": "扩散",
   "term.heavier": "重击",
   "term.elemental": "元素",

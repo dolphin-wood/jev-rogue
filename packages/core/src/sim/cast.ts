@@ -538,6 +538,7 @@ export function fireUnit(
     orb.proc = proc;
     orb.statusMult = statusMult;
     orb.affixes = mods.affixes;
+    orb.echo = world.castingEcho === true;
     orb.spellIndex = mods.spellIndex;
     orb.manaSpent = mods.manaSpent;
     orb.born = world.tick;
@@ -842,6 +843,7 @@ export function fireUnit(
     slot.proc = proc;
     slot.statusMult = statusMult;
     slot.spellIndex = mods.spellIndex;
+    slot.echo = world.castingEcho === true;
     // `collapse` (doc 006): what the pull deals as it ends, scaled as its hits are.
     slot.collapseDamage = num(base.params, "collapse_damage", 0) * mods.damageMult * SPELL_DAMAGE_SCALE;
     shots.push({ x: spot.x, y: spot.y, family: base.id });
@@ -866,6 +868,7 @@ export function fireUnit(
     }
     pet.lifeMs = lifetime * 1000;
     pet.maxLifeMs = pet.lifeMs;
+    pet.echo = world.castingEcho === true;
     pet.fireMs = 300;
     pet.intervalMs = num(base.params, "interval", 0.7) * 1000;
     pet.damage = damage;

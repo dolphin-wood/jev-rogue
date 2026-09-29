@@ -36,7 +36,7 @@ import { CLOUD_TICK_MS, FIRE_ENEMY_DAMAGE, FIRE_TICK_MS, GROUND_STATUS_POWER, li
 import { eruptRing, fireUnit, PROC_MIN } from "./cast.ts";
 import { stepBoomerangs, stepEnchant, stepOrbs, stepTrail, stepWaves, waveCentre, waveHits } from "./shapes.ts";
 import {
-  dragPull, effectOf, onDashStart, onDashThrough, onExpire, onHit, onHurt, onKill, onSpin, stepWards,
+  afterimageOf, cullShare, dragPull, effectOf, intercepts, nearestWithin, onDashStart, onDashThrough, stepSlams, onExpire, onHit, onHurt, onKill, onSpin, stepWards,
   wallSplitCount, wardStops,
 } from "./affix-hooks.ts";
 import type { HookSim } from "./affix-hooks.ts";
@@ -1053,6 +1053,8 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
     return false;
   });
 
+  // What is placed and alive before its clock runs, for `afterimage` to see which ran out this step.
+  const placedBefore = placedAlive(w);
   // Before the shots: an orb's strike is born on its body and lands this step.
   stepOrbs(w, dtMs);
   stepPlayerBullets(w, dtMs, items);
@@ -1079,6 +1081,8 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   stepEruptions(w, dtMs);
   stepDooms(w, dtMs);
   stepPets(w, dtMs, items);
+  afterimages(w, placedBefore);
+  stepSlams(w, dtMs, hookSim(w));
   stepWards(w, dtMs);
   slipstream(w);
   stepParticles(w, dtMs);
@@ -4419,7 +4423,43 @@ function hookSim(w: World): HookSim {
       fireUnit(w, slot.item, freeCastScope(slot, spellIndex), ITEMS, [], origin, target);
     },
     status: (e, element, power) => applyElementTo(e, element, power, e.statusMult || 1),
+    stagger: (e, weight) => spellStagger(w, e, weight),
   };
+}
+
+/** Which placed things — orbs, pulls, companions — are alive, by pool index. */
+function placedAlive(w: World): { orbs: boolean[]; vortices: boolean[]; pets: boolean[] } {
+  return {
+    orbs: w.orbs.map((o) => o.alive), vortices: w.vortices.map((v) => v.alive), pets: w.pets.map((p) => p.alive),
+  };
+}
+
+/**
+ * `afterimage`: an orb, a pull or a companion that ran out this step — its
+ * clock, not a recast writing over it — is cast once more, free, from where
+ * it was at the nearest body in reach. What that cast places is an `echo`,
+ * and an echo runs out for good.
+ */
+function afterimages(w: World, before: ReturnType<typeof placedAlive>): void {
+  const ended: { x: number; y: number; spellIndex: number }[] = [];
+  const see = <T extends { alive: boolean; lifeMs: number; spellIndex: number; echo?: boolean; x: number; y: number }>(
+    xs: readonly T[], was: readonly boolean[],
+  ) => xs.forEach((x, i) => {
+    if (was[i] && !x.alive && x.lifeMs <= 0 && !x.echo && x.spellIndex >= 0) ended.push({ x: x.x, y: x.y, spellIndex: x.spellIndex });
+  });
+  see(w.orbs, before.orbs);
+  see(w.vortices, before.vortices);
+  see(w.pets, before.pets);
+  for (const end of ended) {
+    const range = afterimageOf(w.spells[end.spellIndex]);
+    if (range <= 0) continue;
+    const t = nearestWithin(w, end.x, end.y, range);
+    if (!t) continue;
+    w.castingEcho = true;
+    hookSim(w).fire(end.spellIndex, { x: end.x, y: end.y }, t);
+    w.castingEcho = false;
+    w.events.push({ kind: "spell", x: end.x, y: end.y, what: "afterimage" });
+  }
 }
 
 /**
@@ -4538,6 +4578,16 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
         // gauge too — at a fraction of a blow's rate, since it pierces a crowd.
         if (b.delivery === "wave" && !blocked)
           gainRage(w, (e.hp <= 0 ? RAGE_PER_KILL : RAGE_PER_HIT) * WAVE_RAGE_MULT);
+        /*
+         * `cull`: a hit that leaves the body at or under its share of health
+         * fells it — never a boss, a guardian or the king roaring.
+         */
+        const cull = cullShare(b);
+        if (cull > 0 && !blocked && e.hp > 0 && e.hp <= e.maxHp * cull && e.archetype !== "boss" && !e.guardian) {
+          w.events.push({ kind: "damage", x: e.x, y: e.y - e.radius, what: "hp:cull", amount: Math.ceil(e.hp) });
+          w.stats.damageDealt += e.hp;
+          e.hp = 0;
+        }
         if (e.hp <= 0) onKill(w, b, e, hookSim(w));
         w.stats.damageDealt += b.damage;
         // A shot that arrived: the numerator of "how often the player hits".
@@ -4706,6 +4756,19 @@ function stepEnemyBullets(w: World, dtMs: number): void {
     if (!b.alive) continue;
     if (wardStops(w, b)) b.alive = false;
   }
+  /*
+   * `intercept`: an enemy shot that meets one of the player's shots, blades
+   * or waves carrying it is put out, and the player's flies on.
+   */
+  const guards = w.playerBullets.filter((b) => b.alive && b.affixes.length > 0 && intercepts(b));
+  if (guards.length > 0)
+    for (const b of w.enemyBullets) {
+      if (!b.alive) continue;
+      const g = guards.find((x) => circlesOverlap(x.x, x.y, x.radius + 2, b.x, b.y, b.radius));
+      if (!g) continue;
+      b.alive = false;
+      w.events.push({ kind: "shot", x: b.x, y: b.y, what: "intercept" });
+    }
   // A thrown flame is an ordinary bullet whose ending differs: where it stops,
   // it burns. Reusing the bullet path means the throw arcs, collides and is
   // capped like everything else, and only the last frame is new.

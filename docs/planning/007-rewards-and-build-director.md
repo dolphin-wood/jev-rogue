@@ -224,7 +224,7 @@ being used for its own sake.
 
 **Card selection is the part that is genuinely semantic**, and it is where the
 Director's judgement should be spent. Choosing between thirty spell
-descriptions, twenty-eight affix descriptions or twelve stat descriptions,
+descriptions, thirty-four affix descriptions or twelve stat descriptions,
 weighed against a staff written out key by key and against a sentence the
 player typed in their own words, is reading and judging fit. No weight table
 reads "Shock Arc, level 5, storm school, no element, dear to cast, carries rime,
@@ -379,19 +379,23 @@ real set:
 
 | Lane | Affixes | Fits |
 |---|---|---|
-| `homing` | seek, ricochet | few bodies hit per shot, a run in which the sword has done nothing |
-| `cheaper` | haste | a slow cast rate (no affix gives mana back; running dry is the mana family's) |
+| `homing` | seek, ricochet, lodestar | few bodies hit per shot, a run in which the sword has done nothing |
+| `freecast` | haste, retort, slipstream, parting, resonance, whirl, afterimage | a slow cast rate, a run the sword carries (casts that go off without a press; no affix gives mana back) |
 | `elemental` | kindle, rime, blight, spillover | keys leaning, or a stated style of, dot or area |
-| `heavier` | fork, pierce, shatter, brand, aftershock | keys leaning, or a stated style of, nuke; a low damage rate |
-| `wider` | scatter, repeat, bloom, chain, harvest | keys leaning, or a stated style of, area or spam; heavy movement pressure |
-| `survival` | ward, retort, slipstream, resonance, repulse, parting, whirl, drag | health low or critical, hurt most by blades, a stated melee style |
+| `heavier` | fork, pierce, shatter, brand, aftershock, cull, overload | keys leaning, or a stated style of, nuke; a low damage rate |
+| `wider` | scatter, repeat, bloom, chain, harvest, slam | keys leaning, or a stated style of, area or spam; heavy movement pressure |
+| `survival` | ward, repulse, drag, intercept | health low or critical, hurt most by blades or shots, a stated melee style |
+
+Every lane holds something for every spell shape at some strength, so the
+lane the Director picks always reweights a real set on the staff in front of
+it.
 
 **The pool is sized against what a run is shown, build by build.** An offer
 deals only the affixes some held key can take (013), and a key that holds an
-affix is not dealt it again, so what matters is not the twenty-eight in the
+affix is not dealt it again, so what matters is not the thirty-four in the
 roster but the part of them one staff can be dealt, against the affix cards one
 run meets — about seventeen on the Jev arm. A bolt starter can be dealt
-twenty-three, Earth Spikes thirteen, Crescent Edge fifteen: every shape has
+twenty-seven, Earth Spikes fourteen, Crescent Edge nineteen: every shape has
 affixes at the moments it reaches (the cast, the dash, the spin), not only the
 projectile's. A pool a run can exhaust repeats whatever the Director does
 (jev-findings 36); inside a run, the repeat penalty and the unshown card in

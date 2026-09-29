@@ -85,6 +85,12 @@ export const ZH_CONTENT: ContentTable = {
   whirl: { name: "旋风", description: "回旋斩开始时，向最近的至多三个敌人各施放一次此法术，不消耗法力。" },
   spillover: { name: "蔓延", description: "被此法术击杀的敌人倒下时，把身上的灼烧、冰冻和中毒传给附近的敌人。" },
   drag: { name: "牵引", description: "命中时把敌人拉向你，而不是击退，拉进挥剑范围。" },
+  lodestar: { name: "锁定", description: "法术落在射程内最近的敌人脚下，而不是你瞄准的地方，让地面、漩涡和石柱都能找准目标。" },
+  intercept: { name: "拦截", description: "此法术的弹丸、刀刃和剑气会抵消穿过的敌方子弹，并继续飞行。" },
+  cull: { name: "斩杀", description: "命中后若敌人剩余生命不超过六分之一，直接将其击倒；首领和守卫不受影响。" },
+  overload: { name: "过载", description: "每次命中都会给敌人充能；此法术对它造成的伤害够多时，落雷击中它和身旁的敌人，然后重新充能。" },
+  slam: { name: "撞墙", description: "被此法术击退撞上墙壁或障碍物的敌人会受到冲击伤害并硬直；同一法术上的震退也算。" },
+  afterimage: { name: "残像", description: "漩涡、召唤物或法球结束时，向最近的敌人免费再施放一次；这第二次结束后不会再重复。" },
 
   /* --------------------------------- stats ------------------------------- */
   fleet: { name: "轻盈", description: "移动更快。" },

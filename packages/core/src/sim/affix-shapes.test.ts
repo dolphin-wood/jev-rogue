@@ -63,6 +63,17 @@ function onFloor(x: number, y: number): [number, number] {
 
 const [PX, PY] = onFloor(300, 300);
 
+/*
+ * The same floor with a wall standing a little to the caster's right, for
+ * `slam`: bodies are set against it, so a shove to the right meets stone.
+ */
+const WALL_GX = Math.floor((PX + 64) / TILE_PX);
+const wallGrid = room.grid.slice();
+for (let gy = 1; gy < GRID_H - 1; gy++) wallGrid[gy * GRID_W + WALL_GX] = Tile.Wall;
+const wallRoom = { ...room, grid: wallGrid };
+/** Where a body of the rusher's size stands flush against that wall, as an offset from the caster. */
+const AGAINST = WALL_GX * TILE_PX - 11 - PX;
+
 /** One spell of each shape: the one every affix that lists the shape is cast on. */
 const REPRESENTATIVE: Readonly<Record<SpellShape, string>> = {
   bolt: "magic_bolt", orbit: "spirit_blades", field: "wildfire_field", pillar: "stone_ward",
@@ -108,13 +119,23 @@ const swings = (spell: string) => itemShape(ITEMS.get(spell)) === "enchant";
  * - `dash`: the player dashes through a body; the key is not pressed.
  * - `swing`: the sword swung into a body; the key is not pressed.
  * - `spin`: the sword's spin, again each time it ends; the key is not pressed.
+ * - `aside`: the key held while aimed away from the bodies, which stand to one side.
+ * - `shots`: the key held at the group, with an enemy shot flying in at the caster every few frames.
+ * - `worn`: the key held at bodies already down to a fifth of their health.
+ * - `slam`: the key held at bodies standing against a wall.
+ * - `once`: one cast at the group, let run out.
  */
-type Scenario = "press" | "kill" | "wall" | "far" | "hurt" | "dash" | "swing" | "spin";
+type Scenario = "press" | "kill" | "wall" | "far" | "hurt" | "dash" | "swing" | "spin"
+  | "aside" | "shots" | "worn" | "slam" | "once";
 
 function scenarioOf(a: SpellAffix): Scenario {
   // A shot that bends onto bodies shows it on a shot that was not aimed at one.
   const e = a.effect;
   if (e.kind === "shape" && e.homing) return "far";
+  if (e.kind === "lodestar") return "aside";
+  if (e.kind === "intercept") return "shots";
+  if (e.kind === "cull") return "worn";
+  if (e.kind === "slam") return "slam";
   switch (a.hook) {
     case "kill": return "kill";
     case "expire": case "wall": return "wall";
@@ -122,6 +143,7 @@ function scenarioOf(a: SpellAffix): Scenario {
     case "dash": return "dash";
     case "swing": return "swing";
     case "spin": return "spin";
+    case "end": return "once";
     default: return "press";
   }
 }
@@ -144,6 +166,11 @@ const BODIES: Readonly<Record<Scenario, readonly [number, number][]>> = {
   dash: [[40, 0], [80, 30]],
   swing: [[20, 0], [40, 24]],
   spin: [[30, 0], [0, 40], [-50, 0]],
+  aside: [[120, 0], [140, 30], [100, -30]],
+  shots: GROUP,
+  worn: GROUP,
+  slam: [[AGAINST, 0], [AGAINST, 24], [AGAINST, -24]],
+  once: GROUP,
 };
 
 /** Ten seconds: long enough for a ring of blades to run out and an on-hit roll to come up. */
@@ -185,11 +212,17 @@ interface Seen {
   spills: number;
   /** Damage the delayed bursts under a body dealt (`aftershock`). */
   aftershock: number;
+  /** Enemy shots put out (`intercept`), bodies felled (`cull`), strikes (`overload`), wall impacts (`slam`), recasts (`afterimage`). */
+  intercepts: number;
+  culls: number;
+  overloads: number;
+  slams: number;
+  afterimages: number;
 }
 
 function run(spell: string, scenario: Scenario, affix?: SpellAffix, alongside: readonly string[] = []): Seen {
   const w: World = createWorld({
-    room, encounter: null, props: 0,
+    room: scenario === "slam" ? wallRoom : room, encounter: null, props: 0,
     staff: { slots: 6, mana_max: 120 },
     slots: [plainInstance(spell), null, null, null, null, null],
     hearts: 6, rng: src.stream("w", spell, scenario, affix?.id ?? "bare"),
@@ -202,14 +235,14 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix, alongside: r
     slot = attachAffix(slot, id) ?? slot;
     w.spells[0] = slot;
   }
-  const hp = scenario === "kill" ? 1 : 100_000;
+  const hp = scenario === "kill" ? 1 : scenario === "worn" ? 1000 : 100_000;
   // Exactly where the scenario says: the floor is empty, and a body snapped
   // to a tile centre sat just outside the blades' ring.
   const bodies: Enemy[] = BODIES[scenario].map(([dx, dy]) => {
     const e = makeEnemy(w.nextEnemyId++, "rusher", PX + dx, PY + dy, []);
     e.spawnFadeMs = 0;
     e.awake = true;
-    e.hp = hp;
+    e.hp = scenario === "worn" ? hp / 5 : hp;
     e.maxHp = hp;
     e.speed = 0;
     e.attackCooldownMs = 1e9;
@@ -217,11 +250,12 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix, alongside: r
     return e;
   });
   const home = bodies.map((e) => ({ x: e.x, y: e.y }));
-  const aim = scenario === "wall" ? { x: PX - 600, y: PY } : scenario === "far" ? { x: PX + 700, y: PY } : { x: PX + 150, y: PY };
+  const aim = scenario === "wall" ? { x: PX - 600, y: PY } : scenario === "far" ? { x: PX + 700, y: PY }
+    : scenario === "aside" ? { x: PX, y: PY - 150 } : { x: PX + 150, y: PY };
   const seen: Seen = {
     damage: 0, made: 0, splits: 0, arcs: 0, brands: 0, harvests: 0, hastes: 0, fires: 0,
     wards: 0, burn: 0, poison: 0, chill: 0, airborne: 0, stationary: 0, momentum: 0, finales: 0, inward: 0,
-    toward: 0, repulses: 0, spills: 0, aftershock: 0,
+    toward: 0, repulses: 0, spills: 0, aftershock: 0, intercepts: 0, culls: 0, overloads: 0, slams: 0, afterimages: 0,
   };
   /*
    * A pool slot counts as a birth when it comes alive **or is renewed** —
@@ -264,6 +298,11 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix, alongside: r
       if (ev.kind === "shot" && ev.what === "repulse") seen.repulses++;
       if (ev.kind === "hazard_tick" && ev.what === "spillover") seen.spills++;
       if (ev.kind === "damage" && ev.what === "hp:aftershock") seen.aftershock += ev.amount ?? 0;
+      if (ev.kind === "shot" && ev.what === "intercept") seen.intercepts++;
+      if (ev.kind === "damage" && ev.what === "hp:cull") seen.culls++;
+      if (ev.kind === "enemy_hit" && ev.what === "overload") seen.overloads++;
+      if (ev.kind === "enemy_hit" && ev.what === "slam") seen.slams++;
+      if (ev.kind === "spell" && ev.what === "afterimage") seen.afterimages++;
     }
     seen.wards = Math.max(seen.wards, w.wards.length);
     let still = 0;
@@ -294,7 +333,8 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix, alongside: r
     const walk = walking ? { moveX: Math.floor(t / 60) % 2 === 0 ? 1 : -1 } : {};
     const base = { ...NO_INPUT, aimX: aim.x, aimY: aim.y, ...walk, ...(swings(spell) ? { swing: true } : {}) };
     switch (scenario) {
-      case "press": case "kill": return { ...base, spell: 0 };
+      case "press": case "kill": case "aside": case "shots": case "worn": case "slam": return { ...base, spell: 0 };
+      case "once": return t === 0 ? { ...base, spell: 0 } : base;
       // One cast, let run out: a held ring or pull is renewed, never expires.
       case "wall": case "far": return t === 0 ? { ...base, spell: 0 } : base;
       case "dash": return t === 0 ? { ...base, moveX: 1, dash: true } : t < 14 ? { ...base, moveX: 1 } : base;
@@ -306,6 +346,14 @@ function run(spell: string, scenario: Scenario, affix?: SpellAffix, alongside: r
   for (let t = 0; t < FRAMES; t++) {
     w.player.mana = w.staff.mana_max;
     if (scenario === "spin") w.player.rage = Math.max(w.player.rage, 1);
+    // A shot at the caster every eight frames, from the group's side, for `intercept` to meet.
+    if (scenario === "shots" && t % 8 === 0) {
+      const b = w.enemyBullets.find((x) => !x.alive);
+      if (b) {
+        b.alive = true; b.x = PX + 170; b.y = PY + ((t / 8) % 3 - 1) * 20; b.vx = -240; b.vy = 0;
+        b.radius = 4; b.lifeMs = 3000; b.damage = 1; b.from = "shooter";
+      }
+    }
     if (scenario === "hurt" && t === 0) {
       w.player.invulnMs = 0;
       const b = w.enemyBullets.find((x) => !x.alive)!;
@@ -341,6 +389,12 @@ function observable(a: SpellAffix, bare: Seen, withIt: Seen): boolean {
     case "drag": return withIt.toward > bare.toward;
     case "aftershock": return withIt.aftershock > bare.aftershock;
     case "whirl": return withIt.made > bare.made || withIt.damage > bare.damage;
+    case "lodestar": return withIt.damage > bare.damage;
+    case "intercept": return withIt.intercepts > bare.intercepts;
+    case "cull": return withIt.culls > bare.culls;
+    case "overload": return withIt.overloads > bare.overloads;
+    case "slam": return withIt.slams > bare.slams;
+    case "afterimage": return withIt.afterimages > bare.afterimages;
     case "field": return withIt.fires > bare.fires;
     case "ward": return withIt.wards > bare.wards;
     case "repeat": case "spread": return withIt.made > bare.made;

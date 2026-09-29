@@ -109,7 +109,7 @@ describe("the affix intent (doc 007)", () => {
     expect(laneFromText("burn everything down")).toBe("elemental");
     // No affix gives mana back, so running dry names no affix lane: it is the stat door's.
     expect(laneFromText("I keep running out of mana")).toBeNull();
-    expect(laneFromText("I want to cast more")).toBe("cheaper");
+    expect(laneFromText("I want to cast more")).toBe("freecast");
     expect(laneFromText("I can never hit anything")).toBe("homing");
     expect(laneFromText("get me in sword range")).toBe("survival");
     expect(laneFromText("one big hit")).toBe("heavier");
