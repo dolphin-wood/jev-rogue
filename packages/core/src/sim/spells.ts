@@ -679,6 +679,21 @@ export function chargeMsOf(items: ItemRegistry, base: string): number {
   return Number.isFinite(v) && v > 0 ? v : 0;
 }
 
+/**
+ * **Whether auto-cast may ever press this spell** (the game's assist).
+ * Only one that casts on a tap: a `charge` spell is a hold and a `stance` a
+ * guard, both the player's call; a `beam` is held on its key, and the
+ * assist's press is a tap; and never a `dash` — Blink Strike, Leap Slam,
+ * Dash Slash — which moves the body: the game throwing the player across
+ * the room is the one thing an assist must not do. The card says so of the
+ * rest (`stat.manualCast`), or a key the assist never presses reads as broken.
+ */
+export function castsItself(params: Readonly<Record<string, unknown>>): boolean {
+  const charge = Number(params["charge"]);
+  const shape = params["shape"];
+  return !(Number.isFinite(charge) && charge > 0) && shape !== "stance" && shape !== "dash" && shape !== "beam";
+}
+
 /** The most charges a `charges` spell banks, or 0 for a spell without a bank. */
 export function chargesOf(items: ItemRegistry, base: string): number {
   const v = Number((items.get(base)?.params as Record<string, unknown> | undefined)?.charges);

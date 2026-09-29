@@ -459,6 +459,7 @@ export const EN = {
   "stat.drain": "{n} mana/s held",
   "stat.lob": "lobbed over walls",
   "stat.chains": "chains x{n}",
+  "stat.manualCast": "never auto-cast",
   "stat.gold": "+{n} gold",
   "stat.status.fire": "Burn · {hits} hits · {dmg} dmg / {s} s",
   "stat.status.poison": "Poison · {hits} hits · {dmg} dmg / {s} s",

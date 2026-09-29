@@ -452,6 +452,7 @@ export const ZH: Table = {
   "stat.drain": "按住时每秒 {n} 法力",
   "stat.lob": "越过墙壁抛射",
   "stat.chains": "连锁 ×{n}",
+  "stat.manualCast": "不会自动施法",
   "stat.gold": "金币 +{n}",
   "stat.status.fire": "灼烧 · 命中 {hits} 次触发 · {s} 秒共 {dmg} 伤害",
   "stat.status.poison": "中毒 · 命中 {hits} 次触发 · {s} 秒共 {dmg} 伤害",

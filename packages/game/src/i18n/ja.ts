@@ -451,6 +451,7 @@ export const JA: Table = {
   "stat.drain": "押している間 毎秒{n}マナ",
   "stat.lob": "壁越しに投げる",
   "stat.chains": "連鎖 ×{n}",
+  "stat.manualCast": "自動詠唱されない",
   "stat.gold": "ゴールド +{n}",
   "stat.status.fire": "燃焼 · {hits}ヒットで発動 · {s}秒で{dmg}ダメージ",
   "stat.status.poison": "毒 · {hits}ヒットで発動 · {s}秒で{dmg}ダメージ",

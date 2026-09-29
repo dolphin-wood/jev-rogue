@@ -19,7 +19,7 @@ import type { ItemRegistry } from "../spells/items.ts";
 import type { Rng } from "../rng.ts";
 import type { OfferCard, PortalSpec, RewardCardKind } from "../sim/exits.ts";
 import { SPELL_DAMAGE_SCALE } from "../sim/cast.ts";
-import { AFFIX_SLOTS, SPELL_SLOTS, levelDamageMult, levelManaMult, spellCost, statusForecast, statusPerHit } from "../sim/spells.ts";
+import { AFFIX_SLOTS, SPELL_SLOTS, castsItself, levelDamageMult, levelManaMult, spellCost, statusForecast, statusPerHit } from "../sim/spells.ts";
 import { num } from "../spells/items.ts";
 import { STAT_UPGRADES, statLine, statLinePart } from "./stats.ts";
 import { AFFIX_SURCHARGE_KEY, SPELL_AFFIXES, spellAffixById, affixFitsLine, affixStrengthFloor, affixFitsSpell, affixSurchargePct, affixSurchargeText, affixTextKey, itemShape } from "../spells/affixes.ts";
@@ -295,6 +295,7 @@ export function offerStatParts(item: BaseItem, level = 1): StatPart[] {
   if (shape === "summon") push("summons an ally", "trait", "stat.summon");
   const chain = item.params.chain;
   if (typeof chain === "number" && chain > 0) push(`chains x${chain}`, "trait", "stat.chains", { n: chain });
+  if (!castsItself(item.params)) push("never auto-cast", "trait", "stat.manualCast");
   return parts;
 }
 

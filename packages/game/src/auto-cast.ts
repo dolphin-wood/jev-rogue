@@ -41,7 +41,7 @@
  * the simulation sees a press, exactly as if the player had made it.
  */
 
-import { TILE_PX } from "@jr/core";
+import { TILE_PX, castsItself } from "@jr/core";
 
 
 /**
@@ -87,17 +87,9 @@ export function autoCastReach(params: Readonly<Record<string, number | string>>)
   return Math.min(AUTO_CAST_MAX_REACH_PX, reach);
 }
 
-/**
- * **Whether a spell may ever press itself.** Only one that casts on a tap:
- * a `charge` spell is a hold and a `stance` a guard, both the player's call;
- * and never a `dash` — Blink Strike, Leap Slam, Dash Slash — which moves the
- * body: the game throwing the player across the room is the one thing an
- * assist must not do.
- */
+/** **Whether a spell may ever press itself**: core's `castsItself`, which the spell's card quotes too. */
 export function autoCastable(params: Readonly<Record<string, number | string>>, chargeMs: number): boolean {
-  const shape = params["shape"];
-  // A channel is held on its key, and the assist's press is a tap: the beam would go out as it lit.
-  return chargeMs === 0 && shape !== "stance" && shape !== "dash" && shape !== "beam";
+  return chargeMs === 0 && castsItself(params);
 }
 
 /**
