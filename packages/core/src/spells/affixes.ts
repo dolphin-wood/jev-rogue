@@ -931,8 +931,17 @@ export function affixFitsSpell(affix: SpellAffix, item: Pick<BaseItem, "params">
    * walls, split on a wall or on a body it flies into — has no way to happen.
    */
   if (Number(item?.params["lob"] ?? 0) > 0 && LOB_DEAD.includes(affix.id)) return false;
+  /*
+   * A recall (`lodge_max`) cast free has only the blades the sword already
+   * left to call: a cast on being struck, on a dash or off to the side
+   * finds none out as often as not, and does nothing when it does.
+   */
+  if (Number(item?.params["lodge_max"] ?? 0) > 0 && RECALL_DEAD.includes(affix.id)) return false;
   return true;
 }
+
+/** The free casts a recall has nothing to answer with. */
+const RECALL_DEAD: readonly string[] = ["retort", "slipstream", "scatter"];
 
 /** The affixes a lob has no way to set off: they act on a shot's flight. */
 const LOB_DEAD: readonly string[] = ["pierce", "seek", "ricochet", "shatter", "fork"];

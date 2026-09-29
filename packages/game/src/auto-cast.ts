@@ -96,7 +96,8 @@ export function autoCastReach(params: Readonly<Record<string, number | string>>)
  */
 export function autoCastable(params: Readonly<Record<string, number | string>>, chargeMs: number): boolean {
   const shape = params["shape"];
-  return chargeMs === 0 && shape !== "stance" && shape !== "dash";
+  // A channel is held on its key, and the assist's press is a tap: the beam would go out as it lit.
+  return chargeMs === 0 && shape !== "stance" && shape !== "dash" && shape !== "beam";
 }
 
 /**
@@ -108,7 +109,21 @@ export function autoCastable(params: Readonly<Record<string, number | string>>, 
  * beside it (Meteor) took every turn first.
  */
 export function autoCastAnyReach(params: Readonly<Record<string, number | string>>): boolean {
-  return params["shape"] === "enchant" || params["shape"] === "summon";
+  // A recall's blades come home from wherever the sword left them (`lodge_max`).
+  return params["shape"] === "enchant" || params["shape"] === "summon" || Number(params["lodge_max"] ?? 0) > 0;
+}
+
+/**
+ * **A recall is cast with blades to call** (`lodge_max`): half its most, or
+ * any blade about to run out. One blade called home as each lands spends a
+ * press on every blow; waiting for the whole six lets the oldest lapse.
+ */
+export const AUTO_RECALL_SHARE = 0.5;
+/** How near its end a lone blade is called home anyway, ms. */
+export const AUTO_RECALL_LAPSE_MS = 1500;
+export function autoRecallDue(out: number, max: number, soonestLeftMs: number): boolean {
+  if (max <= 0) return true;
+  return out >= Math.ceil(max * AUTO_RECALL_SHARE) || (out > 0 && soonestLeftMs <= AUTO_RECALL_LAPSE_MS);
 }
 
 /**

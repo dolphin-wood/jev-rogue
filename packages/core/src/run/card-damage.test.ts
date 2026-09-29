@@ -18,6 +18,7 @@ import { GRID_H, GRID_W, Tile } from "../types.ts";
 import { NO_INPUT, STEP_MS } from "../sim/types.ts";
 import { offerStatParts } from "./offer.ts";
 import { SPELL_DAMAGE_SCALE } from "../sim/cast.ts";
+import { lodgeBlades, lodgeMaxOf } from "../sim/recall.ts";
 
 const src = new RngSource("card-damage");
 const g = generateRoom(
@@ -65,6 +66,8 @@ function firstHit(id: string): number | null {
    * weaker one a guard that runs out gives.
    */
   let struck = false;
+  // A recall is loaded by the sword: one blow's blade in the body first.
+  if (lodgeMaxOf(ITEMS, id) > 0) lodgeBlades(w, e);
   for (let t = 0; t < 2500; t += STEP_MS) {
     const fired = w.stats.shotsFired;
     const letGo = cast || (charge > 0 && w.player.chargeKey === 0 && w.player.chargeMs >= charge);

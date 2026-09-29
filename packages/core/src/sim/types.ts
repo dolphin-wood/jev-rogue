@@ -6,6 +6,7 @@
  * Entities are mutated in place and recycled through pools: at 900 player and
  * 600 enemy bullets, allocating per frame would dominate the step.
  */
+import type { LodgedBlade } from "./recall.ts";
 import type {
   Element, ElementPowers, EliteAffix, EnemyId, ItemInstance, RoomPlan, Staff, MeleeKind } from "../types.ts";
 import type { Rng } from "../rng.ts";
@@ -2410,6 +2411,8 @@ export interface World {
 
   /** Sword hits counted toward each spell's `resonance` cast. */
   resonance: number[];
+  /** The blades the sword has left in bodies for a `lodge_max` key to recall (`recall.ts`). */
+  lodged: LodgedBlade[];
   /**
    * Casts owed by the `repeat` affix, each fired a beat after the last. A
    * repeat used to recurse inside the cast, which put the second copy in

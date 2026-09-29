@@ -12,6 +12,7 @@ import type { Element, ElementPowers, ItemInstance } from "../types.ts";
 import type { Bullet, Enemy, Landing, PlayerWakeCut, World } from "./types.ts";
 import { DASH_SPEED, PLAYER_RADIUS } from "./types.ts";
 import { ORB_OFFSET_PX } from "./shapes.ts";
+import { takeLodged } from "./recall.ts";
 import { acquire } from "./bullets.ts";
 import { hasLineOfSight, normalise, tileAt } from "./collide.ts";
 import { GRID_H, GRID_W, TILE_PX, Tile } from "../types.ts";
@@ -585,6 +586,53 @@ export function fireUnit(
       radius: radius * mods.radiusMult, lifeMs: lifetime * 1000, damage, statusMult, powers: ground, proc, element: kind,
     });
     shots.push({ x: spot.x, y: spot.y, family: base.id });
+    return;
+  }
+
+  if (shape === "boomerang" && num(base.params, "lodge_max", 0) > 0) {
+    /*
+     * **The blades come home** (`lodge_max`, Blade Recall; `recall.ts`):
+     * every blade the sword left out for this key rips free at once — a cut
+     * on the body it was in, as it leaves — and flies to the caster as a
+     * boomerang already on its way back, through everything between. Cast
+     * free with no blade out, as a `resonance` may be, it does nothing.
+     */
+    for (const lodged of takeLodged(world, mods.spellIndex)) {
+      const b = acquire(world.playerBullets, true);
+      if (!b) return;
+      const home = normalise(world.player.x - lodged.x, world.player.y - lodged.y);
+      b.delivery = "boomerang";
+      b.returning = true;
+      b.x = lodged.x;
+      b.y = lodged.y;
+      b.originX = lodged.x;
+      b.originY = lodged.y;
+      b.launchSpeed = speed;
+      b.returnSpeed = num(base.params, "return_speed", speed) * mods.speedMult;
+      b.vx = home.x * speed * 0.35;
+      b.vy = home.y * speed * 0.35;
+      b.outPx = 0;
+      b.outLeftPx = 0;
+      b.radius = radius;
+      b.damage = damage;
+      b.lifeMs = Math.max(lifetime * 1000, 400);
+      b.pierce = 1e9;
+      b.bounce = 0;
+      b.homing = 0;
+      b.split = 0;
+      b.affixes = mods.affixes;
+      b.spellIndex = mods.spellIndex;
+      b.manaSpent = mods.manaSpent;
+      b.weight = weight;
+      b.arcLeft = arcJumps(mods.affixes);
+      b.element = element;
+      b.elementPower = powers[element as "fire"] ?? 0;
+      copyPowers(b.powers, powers);
+      b.proc = proc;
+      b.statusMult = statusMult;
+      world.events.push({ kind: "shot", x: lodged.x, y: lodged.y, what: "recall" });
+      shots.push({ x: b.x, y: b.y, family: base.id });
+    }
     return;
   }
 

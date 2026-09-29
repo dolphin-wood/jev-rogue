@@ -438,6 +438,7 @@ export const ZH: Table = {
   "stat.fieldPoison": "毒雾",
   "stat.orb": "每秒电击 {n} 次",
   "stat.boomerang": "往返各斩一次",
+  "stat.recall": "剑命中时装填",
   "stat.trail": "燃烧足迹",
   "stat.trailPoison": "剧毒足迹",
   "stat.enchant": "剑气持续 {s} 秒",

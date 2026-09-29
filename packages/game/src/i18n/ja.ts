@@ -437,6 +437,7 @@ export const JA: Table = {
   "stat.fieldPoison": "毒の霧",
   "stat.orb": "毎秒 {n} 回撃つ",
   "stat.boomerang": "行きと帰りで斬る",
+  "stat.recall": "剣を当てて装填",
   "stat.trail": "燃える足跡",
   "stat.trailPoison": "毒の足跡",
   "stat.enchant": "剣気 {s} 秒",

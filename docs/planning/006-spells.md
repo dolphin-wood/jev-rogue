@@ -65,7 +65,7 @@ not others"). Parameters listed under a shape are read only by that shape.
 | `vortex` | a pull under the nearest body | `reach`, `pull`; optional `collapse` (below) |
 | `summon` | one companion that follows and fires on its own clock; a recast renews it | `interval`, `reach` |
 | `eruption` | ground cells that burst after a beat, in a line, a scatter or a ring | `pattern` (`line`, `scatter`, `ring`), `step`, `first`, `delay_ms`, `reach`, `area`, `burn_ms`; optional `telegraph_ms` (below) |
-| `boomerang` | a thrown blade that flies out, slows, and returns to the caster | `reach`, `return_speed` |
+| `boomerang` | a thrown blade that flies out, slows, and returns to the caster | `reach`, `return_speed`; optional `lodge_max` (below) |
 | `orb` | a sphere, drifting or at `speed` 0 set down beside the caster, that strikes the nearest body in reach on its own clock | `zap_ms`, `zap_reach`, `max_alive`; `place_px`, how far from the caster it starts |
 | `trail` | for a while, the ground the caster walks over catches | `trail_ms`, `drop_px`, `patch_ms` |
 | `enchant` | for a while, every sword swing also throws a wave | `enchant_ms`, `wave_reach` |
@@ -165,10 +165,20 @@ roster's standard status), `speed`, `windup_ms`, `recover_ms`, `move_scale`,
 - **`anchor_reach` (orbit).** The ring turns round a point on the floor — the
   body the cast sought, or the aim's point at `anchor_reach` — and stays there
   as the caster moves.
+- **`lodge_max` (boomerang).** Loaded by the sword, not thrown: while a key
+  holds it, every connecting sword blow leaves one of its blades in the body
+  struck, up to `lodge_max` out at once (the oldest goes), each for
+  `lodge_ms`; a blade whose body dies stays where it fell. The press rips every
+  blade out at once and flies it home as a boomerang already on its way back,
+  cutting the body it was in and everything between. With no blade out the key
+  does nothing and costs nothing, and is shown cooling. The free casts that
+  would find none out (`retort`, `slipstream`, `scatter`) are not dealt to it;
+  the assist calls the blades home with half of them out, or one about to
+  lapse.
 
 ## The roster
 
-Forty-seven spells. ★ marks each style's starter. A spell appears under every
+Forty-eight spells. ★ marks each style's starter. A spell appears under every
 style it is tagged with; its first row is its primary style.
 
 ### Barrage (`spam`)
@@ -248,6 +258,7 @@ style it is tagged with; its first row is its primary style.
 | Serpent Fang `serpent_fang` | venom | uncommon | boomerang | a fang thrown out and back that poisons each body it cuts on both passes |
 | Dash Slash `dash_slash` | spirit | uncommon | dash + wake | a run through the bodies ahead whose wake cuts those to either side |
 | Blade Storm `blade_storm` | spirit | rare | orbit + `stack_max` | each cast adds a blade to a ring round the caster that widens and quickens; the sixth flings them all out at nearby bodies (also Barrage) |
+| Blade Recall `blade_recall` | spirit | uncommon | boomerang + `lodge_max` | each sword blow leaves a blade in the body struck, up to six; the press calls them all home through everything between |
 | Blade Rift `blade_rift` | spirit | uncommon | orbit + `anchor_reach` | a whirl of three blades set spinning on the floor ahead, cutting what stands in it (also Crowd) |
 | Stone Ward `stone_ward` | stone | common | pillar | a pillar between the caster and what they face that blocks bodies and shots |
 | Spark Spray, Blink Strike, Frost Nova, Quake Ring, Leap Slam | | | | see above |
@@ -287,7 +298,7 @@ card.
 | venom | venom_spit, plague_bloom, toxic_cloud, contagion, serpent_fang |
 | storm | shock_arc, spark_spray, arc_lance, seeker_swarm, ball_lightning, storm_totem |
 | void | magic_bolt, void_orb, void_maw, mana_darts, arcane_cannon, doom_sigil, void_ray |
-| spirit | spirit_blades, spirit_ally, blink_strike, returning_edge, crescent_edge, counter_stance, dash_slash, blade_storm, blade_rift |
+| spirit | spirit_blades, spirit_ally, blink_strike, returning_edge, crescent_edge, counter_stance, dash_slash, blade_storm, blade_recall, blade_rift |
 | stone | stone_shard, stone_ward, scatter_shot, fault_line, earth_spikes, quake_ring, leap_slam, mortar |
 
 `STYLE_SCHOOLS` (`run/doors.ts`), the schools a style's door may promise, is

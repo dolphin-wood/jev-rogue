@@ -10,6 +10,7 @@ import { NO_INPUT } from "./types.ts";
 import type { Enemy, Input, World } from "./types.ts";
 import { makeEnemy } from "./enemy.ts";
 import { attachAffix } from "./spells.ts";
+import { lodgeBlades } from "./recall.ts";
 import { generateRoom, toRoomPlan } from "../rooms/index.ts";
 import { plainInstance } from "../spells/index.ts";
 import { ITEMS } from "../spells/items.ts";
@@ -97,6 +98,51 @@ describe("Blade Storm", () => {
     for (let n = 0; n < 6; n++) press(w);
     run(w, 30, () => aimRight);
     expect(e.hp).toBeLessThan(e.maxHp);
+  });
+});
+
+describe("Blade Recall", () => {
+  it("does nothing, and spends nothing, with no blade out", () => {
+    const w = world("blade_recall");
+    body(w, 60, 0);
+    w.player.mana = 50;
+    step(w, { ...aimRight, spell: 0 });
+    expect(w.player.mana).toBeGreaterThanOrEqual(50);
+    expect(w.playerBullets.some((b) => b.alive)).toBe(false);
+  });
+
+  it("keeps one blade out per blow, up to six, and one outlives its body where it fell", () => {
+    const w = world("blade_recall");
+    const e = body(w, 30, 0);
+    for (let n = 0; n < 8; n++) lodgeBlades(w, e);
+    expect(w.lodged.length).toBe(6);
+    e.hp = 0;
+    run(w, 2, () => aimRight);
+    expect(w.lodged.length).toBe(6);
+    expect(w.lodged.every((b) => b.enemyId === -1)).toBe(true);
+  });
+
+  it("rips every blade out on the press and cuts what stands between it and the caster", () => {
+    const w = world("blade_recall");
+    const far = body(w, 150, 0);
+    const between = body(w, 75, 0);
+    for (let n = 0; n < 3; n++) lodgeBlades(w, far);
+    // The press, and its windup.
+    run(w, 1, () => ({ ...aimRight, spell: 0 }));
+    run(w, 6, () => aimRight);
+    expect(w.lodged.length).toBe(0);
+    run(w, 60, () => aimRight);
+    expect(far.hp).toBeLessThan(far.maxHp);
+    expect(between.hp).toBeLessThan(between.maxHp);
+    // Every blade was caught: none left flying.
+    expect(w.playerBullets.some((b) => b.alive && b.delivery === "boomerang")).toBe(false);
+  });
+
+  it("is loaded by the sword's own blows", () => {
+    const w = world("blade_recall");
+    body(w, 22, 0);
+    run(w, 40, () => ({ ...aimRight, swing: true }));
+    expect(w.lodged.length).toBeGreaterThan(0);
   });
 });
 

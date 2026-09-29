@@ -25,7 +25,7 @@
  */
 import {
   createWorld, step, makeEnemy, generateRoom, toRoomPlan,
-  plainInstance, RngSource, NO_INPUT, ITEMS, STEP_MS, GRID_W, GRID_H, TILE_PX, Tile,
+  plainInstance, RngSource, NO_INPUT, ITEMS, STEP_MS, GRID_W, GRID_H, TILE_PX, Tile, lodgeBlades, lodgeMaxOf,
 } from "@jr/core";
 import type { BaseItem, World } from "@jr/core";
 import { holdsKey } from "../play/hands.ts";
@@ -226,6 +226,8 @@ function fire(base: BaseItem): Result {
     // The press is an edge, which is what the scene sends: holding a key must
     // not buy a cast per frame.
     w.player.mana = w.staff.mana_max;
+    // A recall is loaded by the sword (`lodge_max`): two blows' blades in the dummy before each press.
+    if (lodgeMaxOf(ITEMS, base.id) > 0) { lodgeBlades(w, dummy, ITEMS); lodgeBlades(w, dummy, ITEMS); }
     /*
      * A `charge` spell is held to a full charge and then let go, which is
      * the cast; the mana is read after the release, which is when it is
@@ -298,7 +300,10 @@ function fire(base: BaseItem): Result {
   if (Number(p.collapse_damage ?? 0) > 0 && !whats.has("eruption:collapse")) notes.push("NEVER COLLAPSED");
   // Doc 006's newer shapes, each by the rule it is said with.
   if (shape === "orb" && !whats.has("spell:orb_strike")) notes.push("ORB NEVER STRUCK");
-  if (shape === "boomerang" && (!whats.has("spell:boomerang_turn") || !whats.has("spell:boomerang_caught"))) notes.push("BLADE NEVER CAME BACK");
+  // A recall's blades leave already on their way home: ripped out, and caught.
+  if (shape === "boomerang" && Number(p.lodge_max ?? 0) > 0) {
+    if (!whats.has("shot:recall") || !whats.has("spell:boomerang_caught")) notes.push("BLADE NEVER CAME BACK");
+  } else if (shape === "boomerang" && (!whats.has("spell:boomerang_turn") || !whats.has("spell:boomerang_caught"))) notes.push("BLADE NEVER CAME BACK");
   if (shape === "enchant" && !whats.has("spell:wave")) notes.push("NO WAVE THROWN");
   if (shape === "trail") {
     if (patchesLaid === 0) notes.push("NO GROUND LAID");

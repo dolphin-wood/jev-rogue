@@ -43,6 +43,7 @@ import {
 import type { AttachedAffix } from "./affix-hooks.ts";
 import type { FiredShot } from "./cast.ts";
 import type { World } from "./types.ts";
+import { lodgeMaxOf, lodgedOn } from "./recall.ts";
 import { GROUND_STATUS_POWER } from "./fire.ts";
 
 /** Spells the player may hold at once, bound to keys in order. */
@@ -599,6 +600,8 @@ export function stepSpells(
   const banked = chargesOf(items, slot.item.base) > 0;
   if (banked && bankOf(slot, items) < 1)
     return wait("cooldown", chargeIntervalMs(items, slot.item.base) - (slot.bankMs ?? 0));
+  // So is a recall with no blade out (`recall.ts`): it waits on the sword, not on a clock.
+  if (lodgeMaxOf(items, slot.item.base) > 0 && lodgedOn(world, key) < 1) return wait("cooldown", Infinity);
   if (p.mana < cost) { if (key === buffered) p.spellBuffer = -1; return { shots: [], refused: "mana", key }; }
   // The cast goes: whatever was kept for it is spent.
   if (key === p.spellBuffer) p.spellBuffer = -1;

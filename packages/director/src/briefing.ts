@@ -378,6 +378,12 @@ export function spellBehaviour(item: BaseItem | undefined, level = 1): string {
         `up to ${num("max_alive") ?? 1} from the key at once, a new one replacing the oldest`);
       break;
     case "boomerang":
+      if ((num("lodge_max") ?? 0) > 0) {
+        bits.push(`each connecting sword hit leaves a blade in the body struck, up to ${num("lodge_max")} blades out at once, each lasting ${round1((num("lodge_ms") ?? 0) / 1000)} s`,
+          `the press rips every blade out and flies it back to the player: ${round1(damage)} damage to the body it was in and to each body on the way`,
+          "does nothing with no blade out: it is loaded by swinging the sword, not by the mana bar alone");
+        break;
+      }
       bits.push(`a blade thrown ${num("reach") ?? 0} px ahead that turns and returns to where the player is`,
         `${round1(damage)} damage to each body once on the way out and once on the way back`);
       break;

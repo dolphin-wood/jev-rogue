@@ -53,7 +53,7 @@ import {
   BOSS_POWER,
   withLevel, levelDamageMult, dismantleValue, baseStrength, affixStrengthFloor, spellDetail, offerStatParts, slotStatParts, statusForecast, SPELL_DAMAGE_SCALE, rarityOf, STAT_UPGRADES, statById, SPELL_LEVEL_MAX, SCHOOL_COLOUR, schoolOf, spellSound, shapeEventSound, offerCards,
   slotCooldownMs, DASH_COOLDOWN_MS, DASH_MS,
-  chargeShare, chargesOf, bankOf, chargeIntervalMs, chargeMsOf, DASH_SPEED, acquire,
+  chargeShare, chargesOf, bankOf, chargeIntervalMs, chargeMsOf, lodgeMaxOf, DASH_SPEED, acquire,
 } from "@jr/core";
 import { DebugPanel, playtestLog } from "../debug-panel.ts";
 import type { DebugSnapshot, FloorGrain } from "../debug-panel.ts";
@@ -111,7 +111,7 @@ import { layoutDecisionTable, maxScrollFor } from "../ui/plan-table.ts";
 import { questionAsked, questionBase, questionName } from "../ui/question-names.ts";
 import type { TableRow } from "../ui/plan-table.ts";
 import type { AtlasJson } from "../assets/atlas.ts";
-import { AUTO_CAST_MAX_REACH_PX, AUTO_CAST_MODES, AUTO_CAST_RESERVE, AutoCaster, autoCastable, autoCastAnyReach, autoCastModeOf, autoCastReach, type AutoCastKey, type AutoCastMode } from "../auto-cast.ts";
+import { autoRecallDue, AUTO_CAST_MAX_REACH_PX, AUTO_CAST_MODES, AUTO_CAST_RESERVE, AutoCaster, autoCastable, autoCastAnyReach, autoCastModeOf, autoCastReach, type AutoCastKey, type AutoCastMode } from "../auto-cast.ts";
 import { freshRerollPool, rerollPrice } from "../offer-reroll.ts";
 
 /**
@@ -959,6 +959,8 @@ interface RoomSoFar {
  * under the point and the gold orb this far above it, where strikes leave from.
  */
 const TOTEM_CENTRE_DROP = -6;
+/** How far above a body's point a blade lodged in it is drawn: about the middle of the figure. */
+const LODGED_BODY_LIFT = 6;
 /** How far above its landing point Mortar's impact is drawn: the painting's debris pile sits low in its frame. */
 const MORTAR_IMPACT_LIFT = 14;
 const TOTEM_ORB_LIFT = 17;
@@ -1959,7 +1961,7 @@ export class PlayScene extends Phaser.Scene {
   /** Projectiles that read as matter rather than light (a rock), in normal blend. */
   private projGfx!: Phaser.GameObjects.Graphics;
   private fxSparks: FxSpark[] = [];
-  /** When a Blade Storm's burst was last heard, so its six blades sound as one. */
+  /** When a Blade Storm's burst or a recall was last heard, so its six blades sound as one. */
   private bladeBurstHeardAt = -Infinity;
   /** The rifts open on the floor (`drawBladeWinds`), by spell and centre, so each opens and closes with a burst once. */
   private rifts = new Map<string, { x: number; y: number; glow: number; core: number }>();
@@ -3898,9 +3900,15 @@ export class PlayScene extends Phaser.Scene {
        * the next one filling; an empty bank also covers the key, as a
        * cooldown does, because until a dart lands the key does nothing.
        */
-      const max = chargesOf(ITEMS, slot.item.base);
-      const bank = max > 0 ? bankOf(slot, ITEMS) : 0;
-      const nextShare = max > 0 && bank < max ? Math.min(1, (slot.bankMs ?? 0) / chargeIntervalMs(ITEMS, slot.item.base)) : 0;
+      const lodgeMax = lodgeMaxOf(ITEMS, slot.item.base);
+      const max = lodgeMax > 0 ? lodgeMax : chargesOf(ITEMS, slot.item.base);
+      /*
+       * A recall's pips are the blades the sword has left out (`recall.ts`),
+       * and with none out the key is covered as an empty bank is: it waits
+       * on a blow, not on a clock, so there is no next pip filling.
+       */
+      const bank = lodgeMax > 0 ? w.lodged.filter((b) => b.spellIndex === i).length : max > 0 ? bankOf(slot, ITEMS) : 0;
+      const nextShare = lodgeMax <= 0 && max > 0 && bank < max ? Math.min(1, (slot.bankMs ?? 0) / chargeIntervalMs(ITEMS, slot.item.base)) : 0;
       const bankEmpty = max > 0 && bank < 1 ? 1 - nextShare : 0;
       const tint = spellLookOf(slot.item.base, "none").glow;
       slots.push({
@@ -8048,6 +8056,8 @@ export class PlayScene extends Phaser.Scene {
       else if (ev.kind === "shot" && ev.what === "repulse") this.burst(ev.x, ev.y, 0xe8f0ff, 16, 260, undefined, Math.PI * 2, 0.8);
       // `intercept`: an enemy shot put out where it met the spell — a puff of its own sparks.
       // A full Blade Storm flung outward: a streak of light off each blade along its way out.
+      // A blade ripped out of its body by a recall: a spurt of the spirit's light off it.
+      else if (ev.kind === "shot" && ev.what === "recall") this.burst(ev.x, ev.y - LODGED_BODY_LIFT, 0xe6ddff, 7, 150, undefined, Math.PI * 2, 0.8);
       else if (ev.kind === "shot" && ev.what === "blade_burst") this.burst(ev.x, ev.y, 0xe6ddff, 6, 240, ev.facing, 0.45, 0.85);
       else if (ev.kind === "shot" && ev.what === "intercept") this.burst(ev.x, ev.y, 0xf4fbff, 7, 120, undefined, Math.PI * 2, 0.7);
       // `overload`: the strike coming down on the body, and its light thrown off.
@@ -8533,6 +8543,7 @@ export class PlayScene extends Phaser.Scene {
 
     this.drawChargeGather();
     this.drawBankedDarts();
+    this.drawLodgedBlades();
     this.drawSpellAnims(dt);
   }
 
@@ -8605,6 +8616,45 @@ export class PlayScene extends Phaser.Scene {
    * per banked dart turning round it, so the player sees the key filling
    * while they do other things, as the key's pips on the HUD say too.
    */
+  /**
+   * **The blades the sword has left** (`recall.ts`): a spectral knife in
+   * each body it struck, hilt out and point in at its own slant, and one
+   * standing point down where a body fell. Additive, over the bodies, so a
+   * body carrying three reads as carrying three.
+   */
+  private drawLodgedBlades(): void {
+    const w = this.world;
+    if (w.lodged.length === 0) return;
+    const g = this.fxTopGfx;
+    for (const b of w.lodged) {
+      const slot = w.spells[b.spellIndex];
+      const look = spellLookOf(slot?.item.base ?? "blade_recall", "none");
+      // A blade in a body goes in from its slant toward the middle; one on the floor stands point down.
+      const inBody = b.enemyId >= 0;
+      const e = inBody ? w.enemies.find((x) => x.id === b.enemyId) : null;
+      const r = e ? e.radius : 0;
+      const a = inBody ? b.angle : Math.PI / 2 + (b.angle + Math.PI / 2) * 0.3;
+      const cx = b.x, cy = inBody ? b.y - Math.max(LODGED_BODY_LIFT, r * 0.9) : b.y - 5;
+      const hx = cx + Math.cos(a) * (r * 0.5 + 6), hy = cy + Math.sin(a) * (r * 0.5 + 6);
+      const fade = Math.min(1, b.ms / 600);
+      const pulse = 0.8 + 0.2 * Math.sin(w.tick / 6 + b.angle * 3);
+      const dir = a + Math.PI;
+      const knife: [number, number][] = [[7, 0], [1, 1.6], [-5, 1], [-6, 0], [-5, -1], [1, -1.6]];
+      const place = (pts: [number, number][], k: number) => pts.map(([x, y]) => [
+        hx + (x * Math.cos(dir) - y * Math.sin(dir)) * k, hy + (x * Math.sin(dir) + y * Math.cos(dir)) * k,
+      ] as [number, number]);
+      const fill = (pts: [number, number][], colour: number, alpha: number) => {
+        g.fillStyle(colour, alpha * fade);
+        g.beginPath(); g.moveTo(pts[0]![0], pts[0]![1]);
+        for (let i = 1; i < pts.length; i++) g.lineTo(pts[i]![0], pts[i]![1]);
+        g.closePath(); g.fillPath();
+      };
+      fill(place(knife, 2), look.glow, 0.22 * pulse);
+      fill(place(knife, 1.5), look.glow, 0.7 * pulse);
+      fill(place([[7, 0], [1, 0.5], [-4, 0], [1, -0.5]], 1.5), 0xffffff, 0.9);
+    }
+  }
+
   private drawBankedDarts(): void {
     const w = this.world;
     const hand = this.handAt;
@@ -8984,6 +9034,10 @@ export class PlayScene extends Phaser.Scene {
            */
           else if (what === "free_strike") sfx.play("dash_strike", 1.1);
           // Six blades leave in one step: one rush of steel for the burst, not six.
+          // Every blade ripped out at once: one rush, not one a blade.
+          else if (what === "recall") {
+            if (this.time.now - this.bladeBurstHeardAt > 80) { sfx.play("dash_strike", 1.4); sfx.play("cast_spirit", 1.2); this.bladeBurstHeardAt = this.time.now; }
+          }
           else if (what === "blade_burst") {
             if (this.time.now - this.bladeBurstHeardAt > 80) { sfx.play("dash_strike", 1.25); this.bladeBurstHeardAt = this.time.now; }
           }
@@ -16814,11 +16868,22 @@ export class PlayScene extends Phaser.Scene {
       const inReach = autoCastAnyReach(params) ? fight : !!target && dist <= autoCastReach(params);
       return {
         held,
-        ready: held && inReach && this.keyRunningMs(i) <= 0 && spellReady(slot, ITEMS),
+        ready: held && inReach && this.keyRunningMs(i) <= 0 && spellReady(slot, ITEMS) && this.recallDue(i),
         cost: slotCost(slot, ITEMS, w.staff),
       };
     });
     return { keys, free, bar: { mana: p.mana, floor, max: w.staff.mana_max }, target };
+  }
+
+  /** Whether a recall key has blades enough out to be worth its press (`autoRecallDue`); true for any other key. */
+  private recallDue(key: number): boolean {
+    const w = this.world;
+    const slot = w.spells[key];
+    const max = slot ? lodgeMaxOf(ITEMS, slot.item.base) : 0;
+    if (max <= 0) return true;
+    let out = 0, soonest = Infinity;
+    for (const b of w.lodged) if (b.spellIndex === key) { out++; soonest = Math.min(soonest, b.ms); }
+    return autoRecallDue(out, max, soonest);
   }
 
   /**

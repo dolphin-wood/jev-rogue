@@ -445,6 +445,7 @@ export const EN = {
   "stat.fieldPoison": "poison cloud",
   "stat.orb": "{n} strikes a second",
   "stat.boomerang": "cuts out and back",
+  "stat.recall": "sword hits load it",
   "stat.trail": "burning trail",
   "stat.trailPoison": "poison trail",
   "stat.enchant": "sword waves {s} s",

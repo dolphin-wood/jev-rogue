@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   AUTO_CAST_DELAY_MS, AUTO_CAST_MAX_WEIGHT, AUTO_CAST_MIN_WEIGHT, AUTO_CAST_MISS_WEIGHT, AUTO_CAST_SPREAD_MS,
-  AUTO_CAST_START_WEIGHT, AUTO_CAST_MAX_REACH_PX, AutoCaster, autoCastable, autoCastAnyReach, autoCastModeOf, autoCastReach,
+  AUTO_CAST_START_WEIGHT, AUTO_CAST_MAX_REACH_PX, AUTO_RECALL_LAPSE_MS, AutoCaster, autoCastable, autoCastAnyReach, autoCastModeOf, autoCastReach,
+  autoRecallDue,
 } from "./auto-cast.ts";
 import type { AutoCastBar } from "./auto-cast.ts";
 import { ITEMS, TILE_PX } from "@jr/core";
@@ -22,6 +23,21 @@ describe("auto-cast", () => {
     expect(dashes).toEqual(expect.arrayContaining(["blink_strike", "leap_slam", "dash_slash"]));
     for (const id of dashes) expect(autoCastable(ITEMS.get(id)!.params, 0), id).toBe(false);
     expect(autoCastable(ITEMS.get("magic_bolt")!.params, 0)).toBe(true);
+  });
+
+  it("never presses a channel: its press is a tap, and a held beam would go out as it lit", () => {
+    const beams = [...ITEMS.values()].filter((i) => i.params["shape"] === "beam").map((i) => i.id);
+    expect(beams).toContain("void_ray");
+    for (const id of beams) expect(autoCastable(ITEMS.get(id)!.params, 0), id).toBe(false);
+  });
+
+  it("calls a recall's blades home with half of them out, or one about to lapse, and from any reach", () => {
+    const recall = ITEMS.get("blade_recall")!.params;
+    expect(autoCastAnyReach(recall)).toBe(true);
+    expect(autoRecallDue(0, 6, Infinity)).toBe(false);
+    expect(autoRecallDue(2, 6, 5000)).toBe(false);
+    expect(autoRecallDue(3, 6, 5000)).toBe(true);
+    expect(autoRecallDue(1, 6, AUTO_RECALL_LAPSE_MS)).toBe(true);
   });
 
   it("waits a random beat before a key presses itself, never pressing it at once", () => {

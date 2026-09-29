@@ -5,6 +5,7 @@
  */
 import { BAR_MS, BEAT_MS, beats, pastGrid, untilGrid } from "./beat.ts";
 import { AFFIXES, ENEMIES, affixesFor, baseArchetype, rampFor, rampMinimum, rampRoster, resistOf, threatWeight } from "../encounters/index.ts";
+import { lodgeBlades, stepLodged } from "./recall.ts";
 import { ITEMS, plainInstance } from "../spells/index.ts";
 import { KING_AUDIENCE_XP, LEVEL_HEARTS, levelAt, withLevels, xpForKill } from "../run/levels.ts";
 import type { ItemRegistry } from "../spells/items.ts";
@@ -690,6 +691,7 @@ function buildWorld(input: CreateWorldOptions): World {
     affixPlaced: {},
     dealtMult: o.dealtMult ?? 1,
     resonance: [],
+    lodged: [],
     takenMult: o.takenMult ?? 1,
     invincible: o.invincible ?? false,
     viewHalf: o.viewHalf ?? DEFAULT_VIEW_HALF,
@@ -1581,6 +1583,7 @@ function resolveSwing(w: World, dtMs: number): void {
     if (w.player.swingStretch === 1)
       gainRage(w, e.hp <= 0 ? RAGE_PER_KILL : RAGE_PER_HIT);
     resonate(w, e);
+    lodgeBlades(w, e);
 
     // Knockback away from the swing's origin, scaled down for heavy bodies so
     // a tank is shoved and a rusher is thrown.
@@ -4677,6 +4680,8 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
     }
   }
 
+  // The blades the sword left follow their bodies (`recall.ts`).
+  stepLodged(w, dtMs);
   // The thrown blades fly out and home on their own path; see `stepBoomerangs`.
   stepBoomerangs(w, dtMs);
   // An enchant's waves fly forward as arcs, over whatever the room holds; see `stepWaves`.

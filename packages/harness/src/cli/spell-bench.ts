@@ -190,7 +190,8 @@ function scenarioOf(i: BaseItem | undefined): Scenario {
     case "trail": return "walking";
     case "stance": return "attacked";
     case "enchant": return "swinging";
-    default: return "pinned";
+    // A recall is loaded by the sword's blows (`lodge_max`): measured swinging, as the enchant is.
+    default: return Number(i?.params["lodge_max"] ?? 0) > 0 ? "swinging" : "pinned";
   }
 }
 /** How often the attacked scenario's body lands a strike on the caster. */
