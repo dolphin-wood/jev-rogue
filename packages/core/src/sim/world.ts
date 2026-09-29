@@ -213,8 +213,20 @@ const TRAUMA_SKY_LANDING = 0.5;
 /** Linear, and fast enough that a quiet second returns the camera to still. */
 const TRAUMA_DECAY_PER_S = 1.5;
 
+/**
+ * **One freeze per flurry.** After a freeze ends, the player's own blows —
+ * every stop up to a kill's — land without freezing for this long. A swing
+ * through a pack or a chain jumping body to body hits on consecutive steps,
+ * and each hit froze the world one step after the last freeze let go: a
+ * pack read `###.###`, a chain `.#.#.#`, and the fight looked like dropped
+ * frames. The first blow of a flurry keeps its weight; the rest ride on it.
+ * Longer stops — the player hurt, a boss's landing — are never held back.
+ */
+const HITSTOP_REST_MS = FRAME_MS * 9;
+
 function impact(w: World, stopMs: number, trauma: number): void {
-  w.hitstopMs = Math.min(HITSTOP_CAP, Math.max(w.hitstopMs, stopMs));
+  if (stopMs > HITSTOP_KILL || w.hitstopRestMs <= 0)
+    w.hitstopMs = Math.min(HITSTOP_CAP, Math.max(w.hitstopMs, stopMs));
   w.trauma = Math.min(1, w.trauma + trauma);
 }
 /** Doc 008 item 1: a sprite that does not react to a hit did not get hit. */
@@ -713,6 +725,7 @@ function buildWorld(input: CreateWorldOptions): World {
     flightBudget: o.flightBudget ?? FLIGHT_BUDGET,
     hazardTimerMs: HAZARD_DAMAGE_INTERVAL_MS - HAZARD_GRACE_MS,
     hitstopMs: 0,
+    hitstopRestMs: 0,
     trauma: 0,
     fires: makeFirePool(),
     grass: grassOf(o.room),
@@ -915,8 +928,10 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
     if (e.archetype === "boss" && e.hp > 0 && (isActive(e) || e.airborne) && e.awake) e.bossFightMs += dtMs * bossTempo(e);
   if (w.hitstopMs > 0) {
     w.hitstopMs -= dtMs;
+    if (w.hitstopMs <= 0) w.hitstopRestMs = HITSTOP_REST_MS;
     return w;
   }
+  if (w.hitstopRestMs > 0) w.hitstopRestMs -= dtMs;
   /*
    * The boss's blade is held to its line here, before the bodies move, so the
    * windup that comes due in this step commits in this step — `stepEnemy`

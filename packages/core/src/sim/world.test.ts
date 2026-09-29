@@ -631,6 +631,38 @@ describe("impact feedback", () => {
     expect(w.hitstopMs).toBeLessThanOrEqual(0);
   });
 
+  it("freezes once for a flurry of blows, not once a step", () => {
+    // A pack the sword kills through: bodies on consecutive steps used to
+    // re-freeze the world one step after each freeze let go (`###.###.###`).
+    const w = world({ invincible: true });
+    w.player.x = 300;
+    w.player.y = 200;
+    const spawn = () => {
+      for (const [dx, dy] of [[22, 0], [26, 10], [26, -10], [34, 4], [34, -6], [40, 0]] as const) {
+        const e = makeEnemy(w.nextEnemyId++, "rusher", 300 + dx, 200 + dy, []);
+        e.spawnFadeMs = 0;
+        e.speed = 0;
+        e.awake = true;
+        e.attackCooldownMs = 1e9;
+        w.enemies.push(e);
+      }
+    };
+    spawn();
+    let freezes = 0, gapAfterFreeze = Infinity, sinceFreeze = Infinity, was = false;
+    for (let i = 0; i < 600; i++) {
+      if (w.enemies.every((e) => e.hp <= 0)) { w.enemies.length = 0; spawn(); }
+      w.player.x = 300;
+      w.player.y = 200;
+      const frozen = w.hitstopMs > 0;
+      if (frozen && !was) { freezes++; gapAfterFreeze = Math.min(gapAfterFreeze, sinceFreeze); }
+      sinceFreeze = frozen ? 0 : sinceFreeze + 1;
+      was = frozen;
+      step(w, input({ swing: true, aimX: 330, aimY: 200 }));
+    }
+    expect(freezes).toBeGreaterThan(3);
+    expect(gapAfterFreeze).toBeGreaterThanOrEqual(8);
+  });
+
   it("caps the freeze however much lands at once", () => {
     const w = world();
     for (let i = 0; i < 20; i++) w.trauma = 0;

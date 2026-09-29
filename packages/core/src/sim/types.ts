@@ -2398,6 +2398,13 @@ export interface World {
    */
   hitstopMs: number;
   /**
+   * Time left after a freeze in which the player's own blows do not freeze
+   * again, in ms (`HITSTOP_REST_MS`). A swing through a pack or a chain
+   * jumping body to body lands on consecutive steps; each re-froze the world
+   * a step after the last freeze ended, and the fight played at stop-go.
+   */
+  hitstopRestMs: number;
+  /**
    * Camera shake as a single accumulator in [0, 1], after Eiserloh's trauma
    * model. Events add to it and it decays; the renderer squares it. One
    * accumulator rather than a shake per event is what stops a busy moment
