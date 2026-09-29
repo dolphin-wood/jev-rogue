@@ -1590,8 +1590,7 @@ function resolveSwing(w: World, dtMs: number): void {
     if (w.player.swingStretch === 1)
       gainRage(w, e.hp <= 0 ? RAGE_PER_KILL : RAGE_PER_HIT);
     resonate(w, e);
-    // A key the blow filled calls its blades home on its own, free (`recall.ts`).
-    for (const i of lodgeBlades(w, e)) hookSim(w).fire(i, w.player, w.player);
+    lodgeBlades(w, e);
 
     // Knockback away from the swing's origin, scaled down for heavy bodies so
     // a tank is shoved and a rusher is thrown.

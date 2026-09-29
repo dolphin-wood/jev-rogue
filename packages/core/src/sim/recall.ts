@@ -9,9 +9,7 @@
  * kill does not waste it. The key's press rips every blade out at once and
  * flies it home to the caster (`cast.ts`), through the body it was in and
  * everything between. With no blade out the key does nothing, and is shown
- * as cooling, as an empty bank is. The blow that fills the key calls them
- * home by itself, free: the press is for calling them sooner, not a chore
- * every sixth swing.
+ * as cooling, as an empty bank is.
  *
  * The one spell that is loaded by the sword rather than by the bar: the
  * swings are the ammunition, the press the payoff.
@@ -50,14 +48,8 @@ export function lodgedOn(w: World, spellIndex: number): number {
   return n;
 }
 
-/**
- * A connecting sword blow: each key holding a `lodge_max` spell leaves a
- * blade in the body. Returns the keys this blow filled, whose blades come
- * home on their own (`world.ts`): six blows are a recall without the press,
- * and the key is there to call them sooner.
- */
-export function lodgeBlades(w: World, e: Enemy, items: ItemRegistry = ITEMS): number[] {
-  const full: number[] = [];
+/** A connecting sword blow: each key holding a `lodge_max` spell leaves a blade in the body. */
+export function lodgeBlades(w: World, e: Enemy, items: ItemRegistry = ITEMS): void {
   w.spells.forEach((slot, i) => {
     if (!slot) return;
     const max = lodgeMaxOf(items, slot.item.base);
@@ -75,9 +67,7 @@ export function lodgeBlades(w: World, e: Enemy, items: ItemRegistry = ITEMS): nu
       ms: param(items, slot.item.base, "lodge_ms") || 8000,
     });
     w.events.push({ kind: "spell", x: e.x, y: e.y, what: "lodge" });
-    if (mine.length + 1 >= max) full.push(i);
   });
-  return full;
 }
 
 /** The blades follow their bodies, lie where a body fell, and run out. */

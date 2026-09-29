@@ -176,9 +176,8 @@ roster's standard status), `speed`, `windup_ms`, `recover_ms`, `move_scale`,
   struck, up to `lodge_max` out at once (the oldest goes), each for
   `lodge_ms`; a blade whose body dies stays where it fell. The press rips every
   blade out at once and flies it home as a boomerang already on its way back,
-  cutting the body it was in and everything between. The blow that fills the
-  key calls them home by itself, free; the press calls them sooner. With no
-  blade out the key does nothing and costs nothing, and is shown cooling. The free casts that
+  cutting the body it was in and everything between. With no blade out the key
+  does nothing and costs nothing, and is shown cooling. The free casts that
   would find none out (`retort`, `slipstream`, `scatter`) are not dealt to it;
   the assist calls the blades home with half of them out, or one about to
   lapse.
