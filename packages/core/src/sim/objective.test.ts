@@ -54,13 +54,14 @@ describe("a hold", () => {
     expect(holdLeftS(w)).toBe(holdMsFor(7) / 1000);
   });
 
-  it("is met early by killing twice its roster, once half its clock has run", () => {
-    const w = objectiveWorld("hold", "h-quota");
-    w.objective!.kills = w.objective!.quota;
-    run(w, holdMsFor(7) / 2 - 2000);
+  it("is met by its clock alone, however many bodies fall", () => {
+    const w = objectiveWorld("hold", "h-clock");
+    run(w, holdMsFor(7) - 2000);
     expect(w.objective!.done).toBe(false);
-    run(w, 3000);
+    // Hitstop holds the room's clock a little behind the steps run.
+    for (let i = 0; i < 20 && !w.objective!.done; i++) run(w, 500);
     expect(w.objective!.done).toBe(true);
+    expect(w.objective!.ms).toBeGreaterThanOrEqual(w.objective!.holdMs);
   });
 
   it("is not clear while its clock runs, however empty, and keeps sending bodies", () => {

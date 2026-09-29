@@ -15,20 +15,14 @@ import type { RoomObjective } from "../run/objectives.ts";
  * **How long a hold lasts**, by how deep the room is: long enough to make
  * surviving, rather than clearing, the room's focus — 42 s once the run is
  * deep, and less early on, where 42 s against a starter build was the
- * longest room of the run by far. It also ends early for a player killing
- * fast (`HOLD_QUOTA`), so the length follows the build as well as the floor.
+ * longest room of the run by far. The clock is the whole of it: a hold is
+ * survived, not raced, however fast the build kills.
  */
 export const HOLD_MS = 42_000;
 export const HOLD_MS_EARLY = 24_000;
 /** The rooms the hold's length is drawn between: the first a hold can be, and where it reaches its full length. */
 const OBJECTIVE_EARLY_ROOM = 3;
 const OBJECTIVE_FULL_ROOM = 12;
-/**
- * A hold is also met by killing this many times the room's own roster, once
- * half its clock has run: a build that clears the refills as they come is
- * not kept waiting on the timer.
- */
-export const HOLD_QUOTA = 2;
 const depth = (roomIndex: number) =>
   Math.max(0, Math.min(1, (roomIndex - OBJECTIVE_EARLY_ROOM) / (OBJECTIVE_FULL_ROOM - OBJECTIVE_EARLY_ROOM)));
 /** A hold's clock in room `roomIndex`, ms. */
@@ -74,18 +68,15 @@ export interface ObjectiveState {
   readonly waves: readonly PendingWave[];
   refills: number;
   done: boolean;
-  /** A hold's clock (`holdMsFor`), and the kills that meet it early (`HOLD_QUOTA`); a destroy room's emplacements. */
+  /** A hold's clock (`holdMsFor`); a destroy room's emplacements (`destroyTargetsFor`). */
   readonly holdMs: number;
-  readonly quota: number;
-  kills: number;
   readonly targets: number;
 }
 
 export function makeObjective(kind: RoomObjective, waves: readonly PendingWave[], roomIndex: number): ObjectiveState {
-  const roster = waves.reduce((t, wv) => t + wv.spawns.length, 0);
   return {
     kind, ms: 0, waves: waves.map((wv) => ({ ...wv, spawns: wv.spawns.map((sp) => ({ ...sp })) })), refills: 0, done: false,
-    holdMs: holdMsFor(roomIndex), quota: Math.max(1, roster * HOLD_QUOTA), kills: 0, targets: destroyTargetsFor(roomIndex),
+    holdMs: holdMsFor(roomIndex), targets: destroyTargetsFor(roomIndex),
   };
 }
 
@@ -149,7 +140,7 @@ export function stepObjective(w: World, dtMs: number): void {
   if (!o || o.done) return;
   o.ms += dtMs;
   const met = o.kind === "hold"
-    ? o.ms >= o.holdMs || (o.kills >= o.quota && o.ms >= o.holdMs / 2)
+    ? o.ms >= o.holdMs
     : targetsLeft(w) === 0;
   if (met) { finish(w, o); return; }
   // Spent: the room sends its waves again, a beat after the last.
