@@ -774,13 +774,15 @@ const ATTACKS: readonly BaseItem[] = [
        * past the swing and through every body it crosses; the sword's own
        * figures do not change. `speed` flies that in a quarter second;
        * `radius` is half the band's thickness, so a body at the swing's edge
-       * is crossed by both. Measured in the bench's swinging scenario on the
-       * waves alone, where at 0.85 of a swing it sat under the band and
-       * stretched the generalists' spread past its cap; at 1.15 it is in the
-       * band's lower half, since it works off swings the player makes anyway. Its cooldown outlasts the enchant (`lastingMs`), so a
-       * held key keeps one up.
+       * is crossed by both. A wave is **three quarters of a swing**: sword
+       * energy thrown off the blade, never more than the blade — at 1.15 a
+       * played log had the waves out-dealing the sword itself. It rides on
+       * swings the player makes anyway, so it is judged as sword plus waves
+       * (an enchanted sword clearly faster than the bare one), not held to
+       * the pool's floor. Its cooldown outlasts the enchant (`lastingMs`),
+       * so a held key keeps one up.
        */
-      shape: "enchant", damage: swordShare(1.15), sword: 1.15, speed: 320, radius: 12, count: 1, spread: 0, lifetime: 5, pierce: 0,
+      shape: "enchant", damage: swordShare(0.75), sword: 0.75, speed: 320, radius: 12, count: 1, spread: 0, lifetime: 5, pierce: 0,
       element: "none", seek: 0, curve: 0, weight: 0.6, enchant_ms: 5000, wave_reach: 80,
       windup_ms: 0, recover_ms: 80, move_scale: 1,
     },

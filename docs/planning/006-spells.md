@@ -362,7 +362,10 @@ asserted:
   well as on many, and the Affliction style is built of these spells from its
   first room. A dot spell's level is set by its `status_scale`, not its hit,
   so its status share stays above the gate. The generalists' spread, best over worst,
-  is at most 1.45.
+  is at most 1.45. An `enchant` is held to neither: its waves ride on the
+  sword's own swings and add to them, so it is judged as sword plus waves (an
+  enchanted sword clearly faster than the bare one, the waves alone no answer),
+  and a wave is three quarters of a swing, never more than the blade.
 - **One hit**: at most 3 sword swings' worth, or 8 for a slow nuke (a `nuke`
   tag or a `cooldown_scale` of 1.4 or more). Only a slow nuke may kill a
   first-room body with one projectile.

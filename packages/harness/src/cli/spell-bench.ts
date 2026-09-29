@@ -797,7 +797,15 @@ for (const r of [...rows].sort((a, b) => b.single / swordSingle - a.single / swo
       }
     }
     if (s > BASE_HI) flags.push(`OVER ${(s * 100).toFixed(0)}% of the sword a second`);
-    if (s < lo) flags.push(`UNDER ${(s * 100).toFixed(0)}% of the sword a second`);
+    /*
+     * **An enchant is not held to the floor.** Its waves leave from the
+     * sword's own swings and land on top of them, so what it is worth is the
+     * sword plus its waves, not a figure set against the sword: waves as
+     * strong as the blade were a second sword. What it owes is its own gates
+     * — an enchanted sword clearly faster than the bare one, and waves alone
+     * no answer (`ENCHANT_SAVES`, `ENCHANT_WAVES_HI`).
+     */
+    if (s < lo && r.shape !== "enchant") flags.push(`UNDER ${(s * 100).toFixed(0)}% of the sword a second`);
     // An area spell owes a crowd advantage, whatever else it does.
     if (area && pool < AREA_PACK_FLOOR)
       flags.push(`AREA but only ${pool.toFixed(2)}x its own single on a pack`);
@@ -833,7 +841,7 @@ if (swordSwings < SWINGS_LO || swordSwings > SWINGS_HI)
 
 // The cluster's spread, over the generalists: see `SPREAD_MAX`.
 const cluster = rows
-  .filter((r) => !defence(r) && !r.tags.includes("area") && !r.tags.includes("dot"))
+  .filter((r) => !defence(r) && !r.tags.includes("area") && !r.tags.includes("dot") && r.shape !== "enchant")
   .map((r) => r.single / swordSingle);
 const spread = Math.max(...cluster) / Math.min(...cluster);
 console.log(`\nbase dps cluster (generalists): ${(Math.min(...cluster) * 100).toFixed(0)}%-${(Math.max(...cluster) * 100).toFixed(0)}% of the sword, spread x${spread.toFixed(2)} (max x${SPREAD_MAX})`);
