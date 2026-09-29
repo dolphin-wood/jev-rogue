@@ -37,7 +37,10 @@
  */
 import type { Element } from "../types.ts";
 import { addPower, copyPowers, dominantElement, noPowers } from "../content/tags.ts";
-import { PROC_CHAIN } from "./cast.ts";
+import { PROC_CHAIN, SPELL_DAMAGE_SCALE } from "./cast.ts";
+import { ITEMS } from "../spells/items.ts";
+import { SWING_DAMAGE } from "./melee.ts";
+import { levelDamageMult } from "./spells.ts";
 import type { ElementPowers } from "../types.ts";
 import { spellAffixById } from "../spells/affixes.ts";
 import type { AffixEffect } from "../spells/affixes.ts";
@@ -244,8 +247,11 @@ export function onCast(w: World, slot: SpellSlot, spellIndex = -1, cost = 0): vo
   }
   /*
    * `aftershock`: a delayed burst under the nearest body, through the same
-   * loose marks a doom leaves (`World.dooms`), worth a share of what the
-   * press cost — so a cheap key's aftershock is small and a dear one's is not.
+   * loose marks a doom leaves (`World.dooms`), worth a share of **one of the
+   * spell's own hits** at its level. It was a share of the press's mana, the
+   * same whatever the spell did with it, so on a weak or many-piece spell it
+   * was most of the damage — seven times Stone Ward's on a pack — and on
+   * every spell alike it was the best rare affix there was.
    */
   const shock = find(casts, "aftershock");
   if (shock && shock.kind === "aftershock" && cost > 0) {
@@ -253,7 +259,7 @@ export function onCast(w: World, slot: SpellSlot, spellIndex = -1, cost = 0): vo
     if (t && Math.hypot(t.x - w.player.x, t.y - w.player.y) <= shock.rangePx) {
       w.dooms.push({
         x: t.x, y: t.y, ms: shock.delayMs, radius: shock.radiusPx,
-        damage: Math.max(1, Math.round(cost * AFTERSHOCK_PER_MANA)), spellIndex, tag: "aftershock",
+        damage: Math.max(1, Math.round(spellHit(slot) * AFTERSHOCK_SHARE)), spellIndex, tag: "aftershock",
       });
       w.events.push({ kind: "hazard_tick", x: t.x, y: t.y, what: "aftershock_mark" });
     }
@@ -333,11 +339,18 @@ export function nearestWithin(w: World, x: number, y: number, range: number): En
 }
 
 /**
- * What an `aftershock` deals per point of mana the cast cost. A bare bolt
- * costs about eight and lands about fourteen, so the burst is a little over
- * a third of the cast again, on the body and whatever stands beside it.
+ * What an `aftershock` deals, as a share of one of the spell's hits: a
+ * little over a third of it again, on the body and whatever stands beside it.
  */
-export const AFTERSHOCK_PER_MANA = 0.6;
+export const AFTERSHOCK_SHARE = 0.35;
+
+/** One of this key's hits at its level, as the card prints it: a sword-energy spell's in swings of the sword. */
+function spellHit(slot: SpellSlot): number {
+  const params = (ITEMS.get(slot.item.base)?.params ?? {}) as Record<string, unknown>;
+  const sword = Number(params["sword"] ?? 0);
+  const base = sword > 0 ? sword * SWING_DAMAGE : Number(params["damage"] ?? 0) * SPELL_DAMAGE_SCALE;
+  return base * levelDamageMult(slot.level ?? 1);
+}
 
 /**
  * The sword's spin started. Any spell with `whirl` is cast, free, at the

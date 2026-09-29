@@ -24,7 +24,7 @@ import {
   HURT_NUDGE, HURT_NUDGE_MS, INVULN_MS, MAX_HEARTS, PLAYER_RADIUS, PLAYER_SPEED, noMods, HP_PER_HEART, NO_INPUT,
   STEP_MS, STUN_LIGHTNING_MS,
 } from "./types.ts";
-import type { Bullet, DeathBurst, Enemy, GrassCell, Input, Particle, PlayerMods, PlayerWakeCut, World } from "./types.ts";
+import type { Bullet, DeathBurst, DoomCarry, Enemy, GrassCell, Input, Particle, PlayerMods, PlayerWakeCut, World } from "./types.ts";
 import { acquire, makePool, integrate, POOL_SIZES } from "./bullets.ts";
 import {
   circleHitsWall, circlesOverlap, entryPosition, hasLineOfSight, moveSliding, normalise,
@@ -38,7 +38,7 @@ import { eruptRing, fireUnit, PROC_MIN } from "./cast.ts";
 import { stepBoomerangs, stepEnchant, stepOrbs, stepTrail, stepWaves, waveCentre, waveHits } from "./shapes.ts";
 import {
   afterimageOf, cullShare, dragPull, effectOf, intercepts, nearestWithin, onDashStart, onDashThrough, stepSlams, onExpire, onHit, onHurt, onKill, onSpin, stepWards,
-  wallSplitCount, wardStops, whirlTargets,
+  wallSplitCount, wardStops, whirlTargets, arcJumps,
 } from "./affix-hooks.ts";
 import type { HookSim } from "./affix-hooks.ts";
 import {
@@ -2788,8 +2788,9 @@ function onEnemyKilled(w: World, e: Enemy): void {
    * cleared, so a second call for the same death cannot burst it twice.
    */
   if (e.doomMs > 0) {
-    w.dooms.push({ x: e.x, y: e.y, ms: e.doomMs, damage: e.doomDamage, radius: e.doomRadius, spellIndex: e.doomSpell });
+    w.dooms.push({ x: e.x, y: e.y, ms: e.doomMs, damage: e.doomDamage, radius: e.doomRadius, spellIndex: e.doomSpell, carry: e.doomCarry });
     e.doomMs = 0;
+    e.doomCarry = null;
   }
   if (e.contagion > 0) spreadContagion(w, e);
   // Otherwise a room whose attackers all died would have no turns left in it
@@ -4206,7 +4207,7 @@ function stepDeathBursts(w: World, dtMs: number): void {
  */
 
 function applyElement(e: Enemy, b: Bullet): void {
-  applyElementsTo(e, b.powers, b.statusMult || 1, b.proc);
+  applyElementsTo(e, b.powers, b.statusMult || 1, b.proc, b.damage);
 }
 
 /**
@@ -4214,12 +4215,13 @@ function applyElement(e: Enemy, b: Bullet): void {
  * a body hit by a shot that burns and poisons ends up burning and poisoned,
  * and the two run on their own clocks.
  */
-function applyElementsTo(e: Enemy, powers: ElementPowers, mult = 1, proc = 1): void {
+function applyElementsTo(e: Enemy, powers: ElementPowers, mult = 1, proc = 1, hitDamage = 0): void {
+  const heft = heftOf(hitDamage);
   // A piece of a multi-hit fills a gauge by its share, not by a whole hit:
   // see `Bullet.proc`.
   for (const el of STATUS_ELEMENTS) {
     const p = powers[el] * proc;
-    if (p > 0) applyElementTo(e, el, p, mult, el === "fire" && powers.borrowedFire ? BORROWED_BURN_SOURCES : 4);
+    if (p > 0) applyElementTo(e, el, p, mult, el === "fire" && powers.borrowedFire ? BORROWED_BURN_SOURCES : 4, heft);
   }
 }
 
@@ -4230,7 +4232,20 @@ function applyElementsTo(e: Enemy, powers: ElementPowers, mult = 1, proc = 1): v
  * already running keeps the strongest thing feeding it; a fresh one starts at
  * whatever lit it.
  */
-function applyElementTo(e: Enemy, element: string, power: number, mult = 1, burnCap = 4): void {
+/**
+ * **A heavy blow fills a gauge by its weight** (doc 006). A gauge takes about
+ * three hits and drains a beat after the last, which a spell hitting several
+ * times a second fills and a shell landing every three seconds never did: an
+ * element on Mortar, Meteor or Doom Sigil measured as nothing at all. So a
+ * hit fills it by its damage against a light spell's hit, never less than a
+ * hit's share and at most the whole gauge in one.
+ */
+const HEFT_DAMAGE = 6;
+function heftOf(hitDamage: number): number {
+  return Math.max(1, Math.min(1 / ENEMY_BUILD_PER_HIT, hitDamage / HEFT_DAMAGE));
+}
+
+function applyElementTo(e: Enemy, element: string, power: number, mult = 1, burnCap = 4, heft = 1): void {
   /*
    * An immune body takes no status either; a resistant one builds it slower.
    * The king roaring is immune to everything (`hurtEnemy`), and only his
@@ -4241,7 +4256,7 @@ function applyElementTo(e: Enemy, element: string, power: number, mult = 1, burn
   if (e.bossRoarMs > 0) return;
   const resist = resistOf(e.archetype, element);
   if (resist === 0) return;
-  const add = ENEMY_BUILD_PER_HIT * Math.max(0.5, power || 1) * resist;
+  const add = ENEMY_BUILD_PER_HIT * Math.max(0.5, power || 1) * resist * heft;
   const running = e.burnMs > 0 || e.poisonMs > 0;
   e.statusMult = running ? Math.max(e.statusMult, mult) : mult;
   if (element === "fire") {
@@ -4624,7 +4639,7 @@ function stepBeams(w: World, dtMs: number): void {
       wake(w, e);
       const { blocked } = hurtEnemy(w, e, beam.damage, beam.element !== "none" ? beam.element : "", { x: beam.x0, y: beam.y0 },
         beam.damage * poiseOfWeight(beam.weight));
-      if (!blocked) applyElementsTo(e, beam.powers, beam.statusMult, beam.proc);
+      if (!blocked) applyElementsTo(e, beam.powers, beam.statusMult, beam.proc, beam.damage);
       w.stats.damageDealt += beam.damage;
       e.hitFlashMs = HIT_FLASH_MS;
     }
@@ -4851,6 +4866,9 @@ function stepPlayerBullets(w: World, dtMs: number, items: ItemRegistry): void {
           e.doomDamage = b.doomDamage;
           e.doomRadius = b.doomRadius;
           e.doomSpell = b.spellIndex;
+          const powers = noPowers();
+          copyPowers(powers, b.powers);
+          e.doomCarry = { affixes: b.affixes, powers, proc: b.proc, statusMult: b.statusMult, element: b.element, weight: b.weight };
           w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "doom_mark" });
         }
         if (b.contagion > 0 && e.poisonMs > 0 && e.bossRoarMs <= 0) {
@@ -5992,7 +6010,7 @@ function stepDashStrike(w: World, dtMs: number): void {
         wake(w, e);
         hurtEnemy(w, e, s.damage, s.element !== "none" ? s.element : "", s, s.damage * STRIKE_POISE);
         w.stats.damageDealt += s.damage;
-        applyElementsTo(e, s.powers, s.statusMult, s.proc);
+        applyElementsTo(e, s.powers, s.statusMult, s.proc, s.damage);
         e.hitFlashMs = HIT_FLASH_MS;
         impact(w, HITSTOP_HIT, TRAUMA_HIT);
         w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: e.archetype, amount: s.damage });
@@ -6036,7 +6054,7 @@ function stepDashStrike(w: World, dtMs: number): void {
     wake(w, e);
     hurtEnemy(w, e, p.strikeDamage, p.strikeElement !== "none" ? p.strikeElement : "", p, p.strikeDamage * STRIKE_POISE);
     w.stats.damageDealt += p.strikeDamage;
-    applyElementsTo(e, p.strikePowers, p.strikeStatusMult, p.strikeProc);
+    applyElementsTo(e, p.strikePowers, p.strikeStatusMult, p.strikeProc, p.strikeDamage);
     e.hitFlashMs = HIT_FLASH_MS;
     const cut = p.strikeWake?.byPlayer;
     /*
@@ -6124,7 +6142,7 @@ function stepPlayerWakes(w: World): void {
       wake(w, e);
       hurtEnemy(w, e, cut.damage, cut.element !== "none" ? cut.element : "", s, cut.damage * poiseOfWeight(cut.weight));
       w.stats.damageDealt += cut.damage;
-      applyElementsTo(e, cut.powers, cut.statusMult, cut.proc);
+      applyElementsTo(e, cut.powers, cut.statusMult, cut.proc, cut.damage);
       e.hitFlashMs = HIT_FLASH_MS;
       // Out from a crescent's centre (a `finale`); square off the run for a wake's stretch.
       const d = Math.hypot(e.x - s.x, e.y - s.y) || 1;
@@ -6207,7 +6225,7 @@ function stepEruptions(w: World, dtMs: number): void {
       hit = true;
       hurtEnemy(w, e, c.damage, c.element !== "none" ? c.element : "", { x: c.x, y: c.y }, c.damage * poiseOfWeight(c.weight));
       w.stats.damageDealt += c.damage;
-      applyElementsTo(e, c.powers, c.statusMult, c.proc);
+      applyElementsTo(e, c.powers, c.statusMult, c.proc, c.damage);
       e.hitFlashMs = HIT_FLASH_MS;
       const push = (KNOCKBACK * c.weight) / Math.max(1, e.radius / 10);
       const nx = d > 1 ? (e.x - c.x) / d : Math.cos(w.player.facing), ny = d > 1 ? (e.y - c.y) / d : Math.sin(w.player.facing);
@@ -6259,7 +6277,7 @@ function stepVortices(w: World, dtMs: number): void {
         // The maw's pull is a grind, not a blow; its collapse is the blow.
         hurtEnemy(w, e, v.damage, v.element !== "none" ? v.element : "", undefined, v.damage * poiseOfWeight(0));
         w.stats.damageDealt += v.damage;
-        applyElementsTo(e, v.powers, v.statusMult, v.proc);
+        applyElementsTo(e, v.powers, v.statusMult, v.proc, v.damage);
         e.hitFlashMs = HIT_FLASH_MS;
         w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "vortex" });
       }
@@ -6282,7 +6300,7 @@ function collapse(w: World, v: World["vortices"][number]): void {
     hit = true;
     hurtEnemy(w, e, v.collapseDamage, v.element !== "none" ? v.element : "", v, v.collapseDamage * poiseOfWeight(SPELL_STAGGER_WEIGHT));
     w.stats.damageDealt += v.collapseDamage;
-    applyElementsTo(e, v.powers, v.statusMult, v.proc);
+    applyElementsTo(e, v.powers, v.statusMult, v.proc, v.collapseDamage);
     e.hitFlashMs = HIT_FLASH_MS;
     w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: e.archetype, amount: v.collapseDamage });
   }
@@ -6301,12 +6319,14 @@ function stepDooms(w: World, dtMs: number): void {
     e.doomMs -= dtMs;
     if (e.doomMs > 0) continue;
     e.doomMs = 0;
-    doomBurst(w, e.x, e.y, e.doomDamage, e.doomRadius);
+    const carry = e.doomCarry;
+    e.doomCarry = null;
+    doomBurst(w, e.x, e.y, e.doomDamage, e.doomRadius, "dot:doom", e.doomSpell, carry);
   }
   if (w.dooms.length === 0) return;
   for (const d of w.dooms) {
     d.ms -= dtMs;
-    if (d.ms <= 0) doomBurst(w, d.x, d.y, d.damage, d.radius, d.tag);
+    if (d.ms <= 0) doomBurst(w, d.x, d.y, d.damage, d.radius, d.tag, d.spellIndex, d.carry ?? null);
   }
   w.dooms = w.dooms.filter((d) => d.ms > 0);
 }
@@ -6317,11 +6337,39 @@ function stepDooms(w: World, dtMs: number): void {
  * doom burst as the spell's status — the delayed payoff the caster left to
  * work — and the bench's affliction gate reads status damage by that tag.
  */
-function doomBurst(w: World, x: number, y: number, damage: number, radius: number, tag = "dot:doom"): void {
+function doomBurst(
+  w: World, x: number, y: number, damage: number, radius: number, tag = "dot:doom",
+  spellIndex = -1, carry: DoomCarry | null = null,
+): void {
+  /*
+   * **The burst is the spell's hit** when the mark carried one: the marking
+   * shot's affixes fire on every body it reaches and its element goes on
+   * each, as a shot's would. Otherwise Doom Sigil took chain, kindle or fork
+   * on the flick that marks and nothing of it on the burst that is the spell.
+   */
+  const sim = carry ? hookSim(w) : null;
+  const hit = carry ? makePool(1)[0]! : null;
+  if (hit && carry) {
+    hit.alive = true; hit.x = x; hit.y = y; hit.damage = damage; hit.affixes = carry.affixes;
+    copyPowers(hit.powers, carry.powers); hit.proc = carry.proc; hit.statusMult = carry.statusMult;
+    hit.element = carry.element; hit.weight = carry.weight; hit.spellIndex = spellIndex;
+    hit.arcLeft = arcJumps(carry.affixes);
+  }
   for (const e of w.enemies) {
     if (!isActive(e) || e.hp <= 0) continue;
     if (Math.hypot(e.x - x, e.y - y) > radius + e.radius) continue;
+    if (hit && sim && carry) {
+      // Outward from the burst, for whatever the hooks throw off it.
+      const dx = e.x - x, dy = e.y - y, d = Math.hypot(dx, dy) || 1;
+      hit.vx = (dx / d) * 200; hit.vy = (dy / d) * 200;
+      onHit(w, hit, e, sim);
+      hit.hitIds.push(e.id);
+    }
     hurtEnemy(w, e, damage, tag, { x, y }, damage * PROC_POISE);
+    if (hit && carry) {
+      applyElementsTo(e, carry.powers, carry.statusMult, carry.proc, damage);
+      if (e.hp <= 0 && sim) onKill(w, hit, e, sim);
+    }
     w.stats.damageDealt += damage;
     e.hitFlashMs = HIT_FLASH_MS;
     w.events.push({ kind: "enemy_hit", x: e.x, y: e.y, what: e.archetype, amount: damage });
@@ -6704,7 +6752,7 @@ function answerStance(w: World, share: number): void {
     wake(w, e);
     hurtEnemy(w, e, damage, s.element !== "none" ? s.element : "", p, damage * poiseOfWeight(s.weight));
     w.stats.damageDealt += damage;
-    applyElementsTo(e, s.powers, s.statusMult, s.proc);
+    applyElementsTo(e, s.powers, s.statusMult, s.proc, damage);
     e.hitFlashMs = HIT_FLASH_MS;
     if (ENEMIES[e.archetype].behaviour !== "stationary") {
       const push = (KNOCKBACK * s.weight) / Math.max(1, e.radius / 10);

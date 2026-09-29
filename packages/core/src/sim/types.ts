@@ -415,6 +415,20 @@ export interface FreeStrike {
  * killing into it is the play the delay asks for, and a mark that vanished
  * with its body would punish the kill.
  */
+/**
+ * What the hit that laid a `doom` mark carried, so the burst lands as the
+ * spell's own hit: its affixes fire there and its element goes on every body
+ * it reaches (Doom Sigil's hit is a flick; the burst is the spell).
+ */
+export interface DoomCarry {
+  affixes: readonly AttachedAffix[];
+  powers: ElementPowers;
+  proc: number;
+  statusMult: number;
+  element: Element;
+  weight: number;
+}
+
 export interface LooseDoom {
   x: number;
   y: number;
@@ -422,6 +436,8 @@ export interface LooseDoom {
   damage: number;
   radius: number;
   spellIndex: number;
+  /** The marking hit's affixes and element, for a mark handed on by a body that died. */
+  carry?: DoomCarry | null;
   /** What the burst reads as, for the damage number and the bench: a doom's by default. */
   tag?: string;
 }
@@ -1433,6 +1449,8 @@ export interface Enemy {
   doomDamage: number;
   doomRadius: number;
   doomSpell: number;
+  /** What the marking hit carried (`DoomCarry`), null for no mark. */
+  doomCarry: DoomCarry | null;
   /**
    * Carrying `contagion` (doc 006): the most bodies its poison jumps to when
    * it dies, and how far; 0 for none. Lasts while its poison does.

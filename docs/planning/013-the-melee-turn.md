@@ -475,10 +475,19 @@ dead draw dressed as a choice is worse than a smaller pool.
 | Bloom | expire | bolt, orbit |
 | Repeat | cast | bolt, eruption, boomerang |
 | Scatter | cast | bolt, field, pillar, vortex, dash, eruption, boomerang |
-| Ward, Kindle, Rime, Blight, Repulse, Aftershock | cast | any spell |
-| Retort, Slipstream, Parting Shot | hurt / dash | any spell |
+| Repulse, Aftershock | cast | any spell; an aftershock bursts for a share of one of the spell's own hits, so it is as heavy as the spell |
+| Kindle, Rime, Blight | cast | any spell but a pillar, which strikes nothing to put an element on |
+| Ward, Retort, Slipstream | cast / hurt / dash | any spell but a stance: cast free, a guard puts the sword away where it stands, and a ward's rune eats the hit the guard is up to answer |
+| Parting Shot | dash | the same, and not a beam or any spell tagged `long`: casting behind on a dash away is a close-quarters answer |
 | Resonance, Whirl | swing / spin | any spell but a stance, which forbids the swing it counts: every fifth connecting sword hit, or the start of a spin, casts the spell free — the melee build's affixes |
 | Momentum, Undertow, Finale | cast | a dash with a wake (Dash Slash) |
+
+Beside the shape lists, a few pairs are kept apart because the review
+(`pnpm spell-bench matrix`, every spell against every affix it takes)
+measured them making the spell worse: no `fork` or `seek` on a spell that
+passes through bodies (the split ends the pass; the curl turns a line onto one
+body), none of a shot's flight on a lob, and no `repeat`, `retort`,
+`slipstream` or `scatter` on a recall, which finds its blades already home.
 
 A spell cast by an affix — a `scatter` side cast, a `retort`, a `slipstream`,
 a `resonance` — is **the spell's own shape**, fired from the caster toward the
@@ -516,7 +525,7 @@ Four things the composition of the pool is doing deliberately:
   hung on a projectile's hooks, so a staff of ground, a run or a guard drew
   the same six any-shape cards, three of them the infusions, on every
   strength-I door. `repulse`, `aftershock`, `parting` and `whirl` act at
-  moments every shape reaches; `drag`, `spillover`, `cull`, `overload`,
+  moments nearly every shape reaches; `drag`, `spillover`, `cull`, `overload`,
   `slam` and `intercept` give the projectile keys a pull, a spread, a
   finish, a cadence payout, the walls and a guard; `lodestar` is the aiming
   answer for ground and pulls, and `afterimage` the strength III of the
@@ -571,7 +580,11 @@ status, because it already reaches several bodies at once.
 
 Enemies carry the same three gauges from the player's elements and show them:
 warm and flickering while burning, green and bubbling while poisoned, blue while
-slowed. A burning enemy shot adds half a gauge on top of its hit. A poison pool
+slowed. A spell's hit fills an enemy's gauge by its **weight**: about a third
+for a light spell's hit, more for a heavier one in proportion to its damage,
+the whole gauge at most — so a Mortar shell or a Meteor sets a body burning
+as it lands, where a gauge that drains between blows three seconds apart
+would never fill. A burning enemy shot adds half a gauge on top of its hit. A poison pool
 poisons whatever walks in it, not only the player, so a pool between the player
 and a rusher is a place to fight from; the orbiter flies and a leaping boss is
 in the air, so neither is touched. Spikes take a heart on contact.

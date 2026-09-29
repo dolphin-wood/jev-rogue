@@ -494,6 +494,7 @@ export const EN = {
 
   /* where an affix goes */
   "affix.fitsAny": "fits any spell",
+  "affix.fitsAnyBut": "fits any spell but {shapes}",
   "affix.fits": "fits {shapes}",
   "affix.surcharge": "+{pct}% mana cost",
   "affix.costsOn": "{n} mana on this spell",

@@ -170,7 +170,8 @@ describe("the eruption shape", () => {
     for (const id of ["earth_spikes", "flame_pillars", "cinder_geysers", "meteor", "quake_ring"])
       for (const a of SPELL_AFFIXES)
         expect({ id, affix: a.id, fits: affixFitsSpell(a, ITEMS.get(id), []) })
-          .toEqual({ id, affix: a.id, fits: a.shapes.includes("eruption") });
+          // A long spell takes no `parting`: casting behind on a dash away is a close answer.
+          .toEqual({ id, affix: a.id, fits: a.shapes.includes("eruption") && !(a.id === "parting" && ITEMS.get(id)!.tags?.includes("long")) });
   });
 
   it("is not dealt a bolt affix: fork never reaches an eruption-only staff", () => {

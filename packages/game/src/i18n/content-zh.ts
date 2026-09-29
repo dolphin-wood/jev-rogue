@@ -88,7 +88,7 @@ export const ZH_CONTENT: ContentTable = {
   finale: { name: "收势", description: "冲刺结束时，向前甩出一道新月剑气，贯穿范围内的每个敌人。" },
   repulse: { name: "震退", description: "施法时把身边的敌人震退一步，为下一次施法腾出空间。" },
   parting: { name: "回马枪", description: "每次冲刺时，从冲刺起点向最近的敌人施放一次此法术，不消耗法力。" },
-  aftershock: { name: "余震", description: "施法片刻后，最近敌人脚下的地面爆开，伤害周围的敌人；伤害取决于这次施法消耗的法力。" },
+  aftershock: { name: "余震", description: "施法片刻后，最近敌人脚下的地面爆开，伤害周围的敌人；伤害取决于这个法术自身的单次伤害。" },
   whirl: { name: "旋风", description: "回旋斩开始时，向最近的至多三个敌人各施放一次此法术，不消耗法力。" },
   spillover: { name: "蔓延", description: "被此法术击杀的敌人倒下时，把身上的灼烧、冰冻和中毒传给附近的敌人。" },
   drag: { name: "牵引", description: "命中时把敌人拉向你，而不是击退，拉进挥剑范围。" },

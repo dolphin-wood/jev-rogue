@@ -1089,7 +1089,7 @@ export function makeEnemy(
     hitFlashMs: 0,
     eruptionCastId: 0,
     marked: false,
-    doomMs: 0, doomDamage: 0, doomRadius: 0, doomSpell: -1,
+    doomMs: 0, doomDamage: 0, doomRadius: 0, doomSpell: -1, doomCarry: null,
     contagion: 0, contagionReach: 0,
     staggerMs: 0,
     stunMs: 0,

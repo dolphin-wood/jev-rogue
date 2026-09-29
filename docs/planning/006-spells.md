@@ -94,7 +94,9 @@ roster's standard status), `speed`, `windup_ms`, `recover_ms`, `move_scale`,
 - **`doom` (bolt).** A hit marks the body; `doom` ms later the mark bursts for
   the spell's `doom_damage` in a small radius. A marked body cannot be marked
   again until its mark bursts. The delayed burst is the spell's payoff, so the
-  caster is free to leave.
+  caster is free to leave, and it lands as the spell's hit: the marking shot's
+  affixes fire on every body it reaches and its element goes on each (a mark
+  handed on by a body that died keeps them).
 - **`emit` (bolt).** While it flies, the shot throws a small shard every
   `emit_ms` in a direction that turns with each shard, and at the end of its
   life it bursts into a ring of them. The shards are projectiles and carry the

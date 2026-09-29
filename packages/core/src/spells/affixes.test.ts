@@ -122,7 +122,8 @@ describe("the affix pool", () => {
   });
 
   it("says where it fits, in words the card can carry", () => {
-    expect(affixFitsLine(spellAffixById("ward")!)).toBe("fits any spell");
+    expect(affixFitsLine(spellAffixById("repulse")!)).toBe("fits any spell");
+    expect(affixFitsLine(spellAffixById("ward")!)).toBe("fits any spell but stance");
     expect(affixFitsLine(spellAffixById("chain")!)).toBe("fits bolt, boomerang, orb");
   });
 

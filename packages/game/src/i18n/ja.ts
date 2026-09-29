@@ -486,6 +486,7 @@ export const JA: Table = {
 
   /* where an affix goes */
   "affix.fitsAny": "どの呪文にも付く",
+  "affix.fitsAnyBut": "{shapes}以外のどの呪文にも付く",
   "affix.fits": "{shapes}に付く",
   "affix.surcharge": "マナ消費 +{pct}%",
   "affix.costsOn": "付けるとこの呪文のマナは {n}",

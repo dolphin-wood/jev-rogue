@@ -98,6 +98,15 @@ export const SPELL_SHAPES: readonly SpellShape[] = [
 ];
 
 /**
+ * Every shape but the guard (Counter Stance): cast free, a stance puts the
+ * sword away where it stands, and a `ward` rune eats the very hit it is up
+ * to answer — a third of its damage, measured.
+ */
+const NO_GUARD: readonly SpellShape[] = SPELL_SHAPES.filter((s) => s !== "stance");
+/** Every shape that strikes a body, which is what an element is put on: not a pillar (Stone Ward). */
+const STRIKING: readonly SpellShape[] = SPELL_SHAPES.filter((s) => s !== "pillar");
+
+/**
  * The shapes whose projectiles hit and kill: where `chain`, `brand`,
  * `harvest`, `echo` and `haste` do something. See `SpellShape`.
  */
@@ -353,7 +362,7 @@ const BASE_AFFIXES: SpellAffix[] = [
     id: "ward",
     name: "Ward",
     hook: "cast",
-    shapes: [...SPELL_SHAPES],
+    shapes: NO_GUARD,
     element: null,
     effect: { kind: "ward", shots: 1 },
     text: "leaves a rune that eats one shot",
@@ -366,7 +375,7 @@ const BASE_AFFIXES: SpellAffix[] = [
     name: "Retort",
     hook: "hurt",
     // Every shape: a free cast is the spell's own shape at the body (`fireUnit`).
-    shapes: [...SPELL_SHAPES],
+    shapes: NO_GUARD,
     element: null,
     effect: { kind: "riposte", targets: 1 },
     text: "being hit fires back",
@@ -378,7 +387,7 @@ const BASE_AFFIXES: SpellAffix[] = [
     name: "Slipstream",
     hook: "dash",
     // Every shape: a free cast is the spell's own shape at the body (`fireUnit`).
-    shapes: [...SPELL_SHAPES],
+    shapes: NO_GUARD,
     element: null,
     effect: { kind: "riposte", targets: 1 },
     text: "dashing through a body casts",
@@ -422,19 +431,19 @@ BASE_AFFIXES.push(
     description: "The shot bounces off walls back into the room instead of stopping.",
   },
   {
-    id: "kindle", name: "Kindle", hook: "cast", shapes: [...SPELL_SHAPES], element: "fire",
+    id: "kindle", name: "Kindle", hook: "cast", shapes: STRIKING, element: "fire",
     effect: { kind: "shape", element: "fire", power: 0.9 },
     text: "burns what it hits",
     description: "The spell's hits fill the burn gauge, on top of whatever element it already carries." + BREADTH,
   },
   {
-    id: "rime", name: "Rime", hook: "cast", shapes: [...SPELL_SHAPES], element: "ice",
+    id: "rime", name: "Rime", hook: "cast", shapes: STRIKING, element: "ice",
     effect: { kind: "shape", element: "ice", power: 0.9 },
     text: "chills what it hits",
     description: "The spell's hits slow a body and fill its chill gauge toward a freeze, alongside any element it carries; a frozen body's next hit lands for triple." + BREADTH,
   },
   {
-    id: "blight", name: "Blight", hook: "cast", shapes: [...SPELL_SHAPES], element: "poison",
+    id: "blight", name: "Blight", hook: "cast", shapes: STRIKING, element: "poison",
     effect: { kind: "shape", element: "poison", power: 0.9 },
     text: "poisons what it hits",
     description: "The spell's hits fill the poison gauge, alongside any element it already carries; a poisoned body loses health over time." + BREADTH,
@@ -641,7 +650,8 @@ BASE_AFFIXES.push(
  *   that fights. `slipstream` needs the dash to go *through* a body; this
  *   one pays on the way out.
  * - `aftershock` — the ground under the nearest body goes off a beat after
- *   the cast, for what the press cost: a second landing for any shape.
+ *   the cast, for a share of one of the spell's hits: a second landing for
+ *   any shape, as heavy as the spell is.
  * - `whirl` — the spin casts the spell at the bodies round it: the rage
  *   gauge becomes a spell key too.
  * - `spillover` — a kill hands its burn, chill and poison to the bodies near
@@ -666,7 +676,7 @@ BASE_AFFIXES.push(
     name: "Parting Shot",
     hook: "dash",
     // Every shape: a free cast is the spell's own shape at the body (`fireUnit`).
-    shapes: [...SPELL_SHAPES],
+    shapes: NO_GUARD.filter((s) => s !== "beam"),
     element: null,
     effect: { kind: "parting", rangePx: 260 },
     text: "dashing away casts it behind",
@@ -684,7 +694,7 @@ BASE_AFFIXES.push(
     text: "the ground under a body bursts after",
     description:
       "A beat after the cast, the ground under the nearest body bursts, hitting what stands round it for a "
-      + "share of what the cast cost in mana.",
+      + "share of one of the spell's own hits.",
   },
   {
     id: "whirl",
@@ -881,7 +891,9 @@ const STRONG_SEEK = 250;
 /** A spell's own `pierce` that is every body in its path. */
 const PIERCES_ALL = 99;
 
-export function affixFitsSpell(affix: SpellAffix, item: Pick<BaseItem, "params"> | null | undefined, held: readonly string[]): boolean {
+export function affixFitsSpell(
+  affix: SpellAffix, item: (Pick<BaseItem, "params"> & { readonly tags?: readonly string[] }) | null | undefined, held: readonly string[],
+): boolean {
   if (!affixFits(affix, itemShape(item))) return false;
   const count = Number(item?.params["count"] ?? 1);
   if (affix.id === "seek" && (count > 1 || held.includes("scatter"))) return false;
@@ -937,11 +949,29 @@ export function affixFitsSpell(affix: SpellAffix, item: Pick<BaseItem, "params">
    * finds none out as often as not, and does nothing when it does.
    */
   if (Number(item?.params["lodge_max"] ?? 0) > 0 && RECALL_DEAD.includes(affix.id)) return false;
+  /*
+   * **What a spell that passes through bodies gives up to take.** Measured
+   * (`spell-bench matrix`): `fork` split a piercing shot on its first body and
+   * ended the pass, a loss on a pack as well as on one body; `seek` turned a
+   * line through a crowd onto one body of it, half the pack damage on Fault
+   * Line. Each took a slot to make the spell worse.
+   */
+  const piercing = Number(item?.params["pierce"] ?? 0) >= 1;
+  if (piercing && (affix.id === "fork" || affix.id === "seek")) return false;
+  /*
+   * **Casting it behind on a dash away is a close-quarters answer.** A long
+   * spell's key is pressed from afar, and on every one of them `parting` was
+   * one more affix that fitted everything, which is what made the offers
+   * read the same whatever the build. (`whirl` stays: a beam's spin casts
+   * its rays in turn, which is a spell of its own.)
+   */
+  if ((item?.tags ?? []).includes("long") && affix.id === "parting") return false;
   return true;
 }
 
-/** The free casts a recall has nothing to answer with. */
-const RECALL_DEAD: readonly string[] = ["retort", "slipstream", "scatter"];
+/** The free casts a recall has nothing to answer with, and a recast that finds the blades already home. */
+const RECALL_DEAD: readonly string[] = ["retort", "slipstream", "scatter", "repeat"];
+
 
 /** The affixes a lob has no way to set off: they act on a shot's flight. */
 const LOB_DEAD: readonly string[] = ["pierce", "seek", "ricochet", "shatter", "fork"];
@@ -972,6 +1002,11 @@ export function affixFitsPart(affix: SpellAffix): {
 } {
   if (affix.shapes.length >= SPELL_SHAPES.length)
     return { text: "fits any spell", key: "affix.fitsAny" };
+  // One shape short of all: said as the one it does not fit, not as a list of thirteen.
+  if (affix.shapes.length === SPELL_SHAPES.length - 1) {
+    const missing = SPELL_SHAPES.find((s) => !affix.shapes.includes(s))!;
+    return { text: `fits any spell but ${missing}`, key: "affix.fitsAnyBut", args: { shapes: missing } };
+  }
   return {
     text: `fits ${affix.shapes.join(", ")}`,
     key: "affix.fits",

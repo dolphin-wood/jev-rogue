@@ -1218,6 +1218,8 @@ export interface HeldSpell {
   /** Its flight as a lob, s; absent or 0 for a shot that flies (Mortar takes no affix of a shot's flight). */
   readonly lob?: number;
   /** How many blades it leaves out, for a recall (`lodge_max`); absent or 0 for any other spell. */
+  /** Its tags, where the range is (`long`: no affix for dashing away or spinning). */
+  readonly tags?: readonly string[];
   readonly lodge_max?: number;
   /** Affix ids already attached, which both exclude and upgrade. */
   readonly affixes: readonly string[];
@@ -1225,7 +1227,7 @@ export interface HeldSpell {
 
 /** A key as `HeldSpell`, from the item on it and the affixes attached. */
 export function heldSpell(
-  item: (Pick<BaseItem, "params"> & Partial<Pick<BaseItem, "id">>) | null | undefined,
+  item: (Pick<BaseItem, "params"> & Partial<Pick<BaseItem, "id" | "tags">>) | null | undefined,
   affixes: readonly string[] = [],
 ): HeldSpell {
   return {
@@ -1234,7 +1236,7 @@ export function heldSpell(
     spread: Number(item?.params["spread"] ?? 0), wake: Number(item?.params["wake_reach"] ?? 0),
     seek: Number(item?.params["seek"] ?? 0), pierce: Number(item?.params["pierce"] ?? 0),
     element: String(item?.params["element"] ?? "none"), lob: Number(item?.params["lob"] ?? 0),
-    lodge_max: Number(item?.params["lodge_max"] ?? 0), affixes,
+    lodge_max: Number(item?.params["lodge_max"] ?? 0), tags: item?.tags ?? [], affixes,
   };
 }
 
@@ -1259,6 +1261,7 @@ export function affixFitsHeld(affix: SpellAffix, key: HeldSpell): boolean {
       shape: key.shape, count: key.count, spread: key.spread ?? 0, wake_reach: key.wake ?? 0,
       seek: key.seek ?? 0, pierce: key.pierce ?? 0, element: key.element ?? "none", lob: key.lob ?? 0, lodge_max: key.lodge_max ?? 0,
     },
+    tags: key.tags ?? [],
   }, key.affixes);
 }
 

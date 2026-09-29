@@ -487,6 +487,7 @@ export const ZH: Table = {
 
   /* where an affix goes */
   "affix.fitsAny": "适用于所有法术",
+  "affix.fitsAnyBut": "适用于{shapes}以外的所有法术",
   "affix.fits": "适用于{shapes}类法术",
   "affix.surcharge": "法力消耗 +{pct}%",
   "affix.costsOn": "装配后此法术消耗 {n} 法力",
