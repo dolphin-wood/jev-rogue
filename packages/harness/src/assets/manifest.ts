@@ -431,6 +431,9 @@ export const MANIFEST: FrameSpec[] = (() => {
   // And the spells on doc 006's newer shapes: the orb, the boomerang, the enchant, the stance, the trail, the cloud.
   for (const id of ["ball_lightning", "returning_edge", "crescent_edge", "counter_stance", "cinder_stride", "toxic_cloud", "dash_slash"])
     out.push(frame(`icon_${id}`, "s32", true, false, [16, 16]));
+  // And the second spells of four shapes.
+  for (const id of ["blizzard", "serpent_fang", "glacial_guard", "storm_totem"])
+    out.push(frame(`icon_${id}`, "s32", true, false, [16, 16]));
   for (const id of [
     "fork", "chain", "brand", "harvest", "echo", "bloom", "shatter",
     "repeat", "scatter", "ward", "retort", "slipstream",

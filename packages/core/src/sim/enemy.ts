@@ -1084,7 +1084,7 @@ export function makeEnemy(
     windupMs: MELEE.windupMs, strung: false, comboLeft: 0,
     jukeMs: 0, jukeX: 0, jukeY: 0, jukeCooldownMs: 0, plantMs: 0,
     burnMs: 0, burnSources: 0, poisonStacks: 0, poisonMs: 0, slowMs: 0,
-    burnBuild: 0, poisonBuild: 0, lavaMs: 0, groundBurnMs: 0, groundPoisonMs: 0, chillBuild: 0, frozenMs: 0, buildFedMs: 0, statusMult: 1, dotShown: 0, dotShowMs: 0,
+    burnBuild: 0, poisonBuild: 0, lavaMs: 0, groundBurnMs: 0, groundPoisonMs: 0, groundChillMs: 0, chillBuild: 0, frozenMs: 0, buildFedMs: 0, statusMult: 1, dotShown: 0, dotShowMs: 0,
     spawnFadeMs: SPAWN_FADE_MS + SPAWN_TELEGRAPH_MS,
     hitFlashMs: 0,
     eruptionCastId: 0,

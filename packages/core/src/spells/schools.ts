@@ -29,6 +29,7 @@ export const SCHOOL_OF: Readonly<Record<string, SpellSchool>> = {
   quake_ring: "stone", leap_slam: "stone",
   ball_lightning: "storm", returning_edge: "spirit", crescent_edge: "spirit", counter_stance: "spirit", dash_slash: "spirit",
   cinder_stride: "flame", toxic_cloud: "venom",
+  blizzard: "frost", serpent_fang: "venom", glacial_guard: "frost", storm_totem: "storm",
 };
 
 export function schoolOf(itemId: string): SpellSchool | null {

@@ -881,6 +881,84 @@ const ATTACKS: readonly BaseItem[] = [
     description:
       "Toxic Cloud spreads a cloud of poison under the nearest body that poisons and slows everything standing in it until it thins away.",
   },
+  /*
+   * **The shapes that had one spell each, and the two thin elements.** Frost
+   * and venom had four spells apiece and nine shapes had exactly one; these
+   * four put a second spell on a field, a boomerang, a stance and an orb, in
+   * the elements and styles that were short of one.
+   */
+  {
+    id: "blizzard",
+    rarity: "uncommon",
+    tags: ["attack", "mid", "ice", "area"],
+    mana: 5,
+    params: {
+      /*
+       * `field` of `ice`: frost on the floor under the nearest body, which
+       * slows what stands in it harder than a cloud and fills the chill gauge
+       * each tick, so a body kept in it freezes (`frostTick`). The ground's
+       * own toll is small; the freeze and the shatter after it are the spell.
+       */
+      shape: "field", damage: 3.8, speed: 0, radius: 44, count: 1, spread: 0, lifetime: 5, pierce: 0,
+      element: "ice", element_power: 0.5, reach: 120, seek: 0, curve: 0, cooldown_scale: 10.5,
+    },
+    description:
+      "Blizzard lays frost on the floor under the nearest body that slows everything standing in it and chills it toward a freeze until it melts.",
+  },
+  {
+    id: "serpent_fang",
+    rarity: "uncommon",
+    tags: ["attack", "short", "poison", "melee"],
+    mana: 3,
+    params: {
+      /*
+       * Returning Edge's throw with a venom on it: out and back through the
+       * pack, poisoning each body once each way, a little lighter so the
+       * poison can be part of what it is worth.
+       */
+      shape: "boomerang", damage: 3.0, speed: 340, return_speed: 380, reach: 100, radius: 8, count: 1, spread: 0,
+      lifetime: 2.5, pierce: 0, element: "poison", element_power: 1.0, seek: 0, curve: 0, weight: 0.9,
+      windup_ms: 60, recover_ms: 140, move_scale: 0.7, cooldown_scale: 2,
+    },
+    description:
+      "Serpent Fang throws a curved fang ahead that turns and comes back to the caster, cutting and poisoning each body once on the way out and once on the way back.",
+  },
+  {
+    id: "glacial_guard",
+    rarity: "uncommon",
+    tags: ["attack", "short", "ice", "melee", "nuke"],
+    mana: 4,
+    params: {
+      /*
+       * Counter Stance's guard with frost in its answer: the spin that answers
+       * the blow lands smaller and fills the chill gauge of every body round
+       * the caster toward a freeze, so the answer is a setup for the next hit.
+       */
+      shape: "stance", damage: 14, speed: 0, radius: 60, answer_radius: 60, count: 1, spread: 0, lifetime: 0.7,
+      pierce: 0, element: "ice", element_power: 2.2, seek: 0, curve: 0, weight: 1.4, stance_ms: 700, expire_share: 0.4,
+      windup_ms: 0, recover_ms: 60, move_scale: 0.45, cooldown_scale: 2.2,
+    },
+    description:
+      "Glacial Guard raises a short guard that holds the sword; the next hit that would land is cancelled and answered with a freezing spin that chills every body round the caster. Untouched, it answers for less as it ends.",
+  },
+  {
+    id: "storm_totem",
+    rarity: "uncommon",
+    tags: ["attack", "mid", "none", "spam"],
+    mana: 4,
+    params: {
+      /*
+       * An orb that does not drift: set down beside the caster, it strikes
+       * the nearest body in its wider reach until it runs out, so the player
+       * fights round it rather than sending it off. Two at most.
+       */
+      shape: "orb", damage: 2.6, speed: 0, radius: 8, count: 1, spread: 0, lifetime: 5, pierce: 0,
+      element: "none", seek: 0, curve: 0, weight: 0.3, zap_ms: 420, zap_reach: 185, max_alive: 2,
+      windup_ms: 80, recover_ms: 160, move_scale: 0.8,
+    },
+    description:
+      "Storm Totem sets a crackling totem down beside the caster that strikes the nearest body within its reach a few times a second until it fades; two can stand at once.",
+  },
 ];
 
 export const BASE_ITEMS: readonly BaseItem[] = ATTACKS;

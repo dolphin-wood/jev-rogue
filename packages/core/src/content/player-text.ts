@@ -56,6 +56,10 @@ export const PLAYER_TEXT: Readonly<Record<string, string>> = {
   dash_slash: "Dash forward with your sword held out, striking every enemy in your path. Sword energy rolls out on both sides of the dash and strikes what it crosses. Invulnerable during the dash.",
   cinder_stride: "For a few seconds, each step leaves a patch of fire behind you. Standing still leaves nothing. Your own fire can't hurt you.",
   toxic_cloud: "Releases a cloud of poison under the nearest enemy that poisons and slows enemies inside it.",
+  blizzard: "Lays frost under the nearest enemy that slows enemies inside it and builds toward freezing them.",
+  serpent_fang: "Throws a fang that flies out and comes back to you, poisoning each enemy it cuts both ways.",
+  glacial_guard: "A short guard: the next hit on you is blocked and answered with a freezing spin around you.",
+  storm_totem: "Sets a totem beside you that zaps the nearest enemy in reach several times a second. Up to two at once.",
 
   /* -------------------------------- affixes ------------------------------ */
   fork: "On hit, the shot splits into shards that keep flying forward.",

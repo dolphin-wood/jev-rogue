@@ -70,6 +70,9 @@ const BANDS_PLAYER = [0xc26a18, 0xffa630, 0xffd96a, 0xffffff];
 const COOLING = [0xffffff, 0xfff0e0, 0xffb090, 0xd05038];
 /** The bed a cloud sits on: the coals' texture, tinted a dark wet green, not lit. */
 const BED_POISON = 0x6fcf52;
+/** Frost's bed: a pale rime over the floor, and the blue under it. */
+const BED_FROST = 0xd8f4ff;
+const GLOW_FROST = 0x5aa8d8;
 const GLOW_ENEMY = 0xff5a1e;
 const GLOW_PLAYER = 0xffb040;
 
@@ -260,6 +263,13 @@ export class FireFx {
   private readonly gasFront: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly bubbles: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly droplets: Phaser.GameObjects.Particles.ParticleEmitter;
+  /**
+   * **Frost on the floor** (`Fire.element === "ice"`): a pale mist that
+   * creeps low over the patch, and glints of rime winking out of it. Matter
+   * like the cloud, and like the cloud nothing of a fire's.
+   */
+  private readonly mist: Phaser.GameObjects.Particles.ParticleEmitter;
+  private readonly glints: Phaser.GameObjects.Particles.ParticleEmitter;
   /** Flame thrown along a direction: the warden's fire-shot. See `jet`. */
   private readonly jetEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   private jetAngle = 0;
@@ -354,6 +364,23 @@ export class FireFx {
       alpha: { start: 1, end: 0.4 },
       tint: [0xa8f07a, 0x6fdc5a],
     }).setDepth(5.95);
+    this.mist = scene.add.particles(0, 0, TEX, {
+      frame: "smoke", emitting: false,
+      lifespan: { min: 900, max: 1500 },
+      speedX: { min: -7, max: 7 },
+      speedY: { min: -3, max: 1 },
+      scale: { start: PX * 1.1, end: PX * 1.9 },
+      alpha: { start: 0.34, end: 0 },
+      tint: [0xe8f8ff, 0xc8ecff, 0xa8dcff],
+    }).setDepth(5.8);
+    this.glints = scene.add.particles(0, 0, TEX, {
+      frame: "ember", emitting: false,
+      lifespan: { min: 260, max: 520 },
+      speedY: { min: -4, max: 0 },
+      scale: PX,
+      alpha: { onEmit: () => 1, onUpdate: (_p: unknown, _k: string, t: number) => (t < 0.5 ? 1 : t < 0.75 ? 0.5 : 0) },
+      tint: [0xffffff, 0xe0f6ff],
+    }).setDepth(5.95);
     // A bubble popping throws a few droplets where it was.
     this.bubbles.onParticleDeath((p: Phaser.GameObjects.Particles.Particle) => {
       this.droplets.emitParticleAt(p.x, p.y, 3);
@@ -427,6 +454,11 @@ export class FireFx {
           fl.charMs = 0;
           fl.char.setVisible(false);
           this.cloud(fire, fl, dt, share);
+        } else if (fire.element === "ice") {
+          // Nor does frost: it melts where it lay.
+          fl.charMs = 0;
+          fl.char.setVisible(false);
+          this.frost(fire, fl, dt, share);
         } else {
           fl.charMs = CHAR_FADE_MS;
           this.burn(fire, fl, dt, share);
@@ -586,6 +618,44 @@ export class FireFx {
     for (; fl.owedFront >= 1; fl.owedFront--) { const [x, y] = at(1); this.gasFront.emitParticleAt(x, y - 2, 1); }
     // `owedSpark` carries the bubbles here: a cloud throws no sparks.
     for (; fl.owedSpark >= 1; fl.owedSpark--) this.bubbles.emitParticleAt(...at(0, 0.7), 1);
+  }
+
+  /**
+   * Frost on the floor, one frame: a pale bed of rime out to the patch's
+   * radius over a blue under-glow, a low mist crossing it and glints winking
+   * out of it. It forms fast and melts over its last third, the bed paling
+   * first, so frost about to go is seen going.
+   */
+  private frost(fire: Fire, fl: Floor, dt: number, share: number): void {
+    const t = fireProgress(fire);
+    const grow = Math.min(1, t / 0.06);
+    const out = t < 0.66 ? 0 : (t - 0.66) / 0.34;
+    const life = grow * (1 - out * out);
+    const rx = fire.radius;
+    const ry = fire.radius * 0.55;
+    const sx = (rx * 2) / ELLIPSE_W;
+    const sy = (ry * 2) / ELLIPSE_H;
+    fl.glow.setVisible(true).setBlendMode(Phaser.BlendModes.NORMAL).setPosition(fire.x, fire.y)
+      .setScale(sx * 1.08, sy * 1.08)
+      .setTint(GLOW_FROST).setAlpha(Math.min(1, 0.9 * life));
+    fl.coals.setVisible(true).setBlendMode(Phaser.BlendModes.NORMAL).setPosition(fire.x, fire.y + 1)
+      .setFrame("coals0")
+      .setScale(sx * (0.75 + 0.25 * life), sy * (0.75 + 0.25 * life))
+      .setTint(BED_FROST).setAlpha(0.85 * life);
+    const area = rx / 27;
+    const s = dt / 1000;
+    fl.owedBack += 14 * area * life * share * s;
+    fl.owedSpark += 10 * area * life * share * s;
+    const at = (spread = 0.85): [number, number] => {
+      for (;;) {
+        const u = Math.random() * 2 - 1;
+        const v = Math.random() * 2 - 1;
+        if (u * u + v * v > 1) continue;
+        return [fire.x + u * rx * spread, fire.y + v * ry * spread];
+      }
+    };
+    for (; fl.owedBack >= 1; fl.owedBack--) { const [x, y] = at(); this.mist.emitParticleAt(x, y - 2, 1); }
+    for (; fl.owedSpark >= 1; fl.owedSpark--) this.glints.emitParticleAt(...at(0.8), 1);
   }
 
   /** Flames off anything burning: a few tongues from the shoulders, on the body's own layer. */

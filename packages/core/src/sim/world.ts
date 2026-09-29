@@ -1845,6 +1845,7 @@ function resolveFires(w: World, dtMs: number): void {
   if (playerBurning) feedBurn(w, BURN_BUILD_PER_S * (dtMs / 1000));
   for (const e of w.enemies) if (e.groundBurnMs > 0) e.groundBurnMs -= dtMs;
   for (const e of w.enemies) if (e.groundPoisonMs > 0) e.groundPoisonMs -= dtMs;
+  for (const e of w.enemies) if (e.groundChillMs > 0) e.groundChillMs -= dtMs;
   slowInClouds(w);
   for (const { id, damage, owner, statusMult, powers, proc, element } of enemies) {
     const e = w.enemies.find((x) => x.id === id);
@@ -1854,6 +1855,10 @@ function resolveFires(w: World, dtMs: number): void {
     if (ENEMIES[e.archetype].flying && owner !== "player") continue;
     if (element === "poison") {
       poisonCloudTick(w, e, damage, statusMult, powers, proc);
+      continue;
+    }
+    if (element === "ice") {
+      frostTick(w, e, damage, statusMult, powers, proc);
       continue;
     }
     // Already billed this second by some other patch: see above.
@@ -1931,7 +1936,7 @@ const CLOUD_SLOW_MS = 250;
  */
 function slowInClouds(w: World): void {
   for (const f of w.fires) {
-    if (!f.alive || f.element !== "poison" || f.owner !== "player") continue;
+    if (!f.alive || f.element === "fire" || f.owner !== "player") continue;
     for (const e of w.enemies) {
       if (e.hp <= 0 || e.spawnFadeMs > 0) continue;
       if (!circlesOverlap(f.x, f.y, f.radius, e.x, e.y, e.radius)) continue;
@@ -1960,6 +1965,25 @@ function poisonCloudTick(
   e.hitFlashMs = HIT_FLASH_MS;
   w.stats.damageDealt += damage;
   w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "poison" });
+}
+
+/**
+ * **A frost field's tick**: the ground's small toll as ice damage, and its
+ * chill into the body's gauge toward a freeze — the cloud's shape with ice in
+ * it, on its own clock (`groundChillMs`), carrying whatever else the spell holds.
+ */
+function frostTick(
+  w: World, e: Enemy, damage: number, statusMult: number, powers: ElementPowers, proc: number,
+): void {
+  if (e.groundChillMs > 0) return;
+  e.groundChillMs = CLOUD_TICK_MS;
+  hurtEnemy(w, e, damage, "ice");
+  applyElementTo(e, "ice", CLOUD_POISON_POWER + powers.ice * proc, statusMult);
+  if (powers.fire > 0) applyElementTo(e, "fire", powers.fire * proc, statusMult);
+  if (powers.poison > 0) applyElementTo(e, "poison", powers.poison * proc, statusMult);
+  e.hitFlashMs = HIT_FLASH_MS;
+  w.stats.damageDealt += damage;
+  w.events.push({ kind: "hazard_tick", x: e.x, y: e.y, what: "frost" });
 }
 
 /**

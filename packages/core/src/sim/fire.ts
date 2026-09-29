@@ -156,7 +156,7 @@ export function lightFire(
 export interface GroundShape {
   radius?: number; lifeMs?: number; damage?: number; statusMult?: number; powers?: ElementPowers; proc?: number;
   /** What the ground does; see `Fire.element`. Fire unless a spell says otherwise. */
-  element?: "fire" | "poison";
+  element?: "fire" | "poison" | "ice";
 }
 
 /**
@@ -224,8 +224,8 @@ export interface FireToll {
   proc: number;
   /** Anything the patch carries besides its own fire; see `lightFire`. */
   powers: ElementPowers;
-  /** Whether the patch burns or poisons; see `Fire.element`. */
-  element: "fire" | "poison";
+  /** Whether the patch burns, poisons or freezes; see `Fire.element`. */
+  element: "fire" | "poison" | "ice";
 }
 
 /**
@@ -259,7 +259,7 @@ export function stepFires(
 
     f.tickMs -= dtMs;
     if (f.tickMs > 0) continue;
-    f.tickMs = f.element === "poison" ? CLOUD_TICK_MS : FIRE_TICK_MS;
+    f.tickMs = f.element === "fire" ? FIRE_TICK_MS : CLOUD_TICK_MS;
 
     for (const e of w.enemies) {
       if (e.hp <= 0 || e.spawnFadeMs > 0) continue;

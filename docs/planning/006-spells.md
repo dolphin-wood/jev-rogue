@@ -144,7 +144,7 @@ roster's standard status), `speed`, `windup_ms`, `recover_ms`, `move_scale`,
 
 ## The roster
 
-Thirty-nine spells. ★ marks each style's starter. A spell appears under every
+Forty-four spells. ★ marks each style's starter. A spell appears under every
 style it is tagged with; its first row is its primary style.
 
 ### Barrage (`spam`)
@@ -159,6 +159,7 @@ style it is tagged with; its first row is its primary style.
 | Spirit Ally `spirit_ally` | spirit | rare | summon | a companion that follows and shoots the nearest body for a while |
 | Mana Darts `mana_darts` | void | uncommon | bolt + `charges` | banks darts while the key rests; a press looses all of them |
 | Ball Lightning `ball_lightning` | storm | uncommon | orb | a slow orb that strikes the nearest body in reach several times a second; several can be out at once |
+| Storm Totem `storm_totem` | storm | uncommon | orb (still) | a totem set down beside the caster that strikes the nearest body in a wide reach; two at most |
 
 ### Heavy (`nuke`)
 
@@ -174,6 +175,7 @@ style it is tagged with; its first row is its primary style.
 | Arcane Cannon `arcane_cannon` | void | rare | bolt + `charge` | hold to charge, release to fire a piercing shot that grows with the charge |
 | Doom Sigil `doom_sigil` | void | uncommon | bolt + `doom` | a hit marks the body, and the mark bursts a few seconds later (also Affliction) |
 | Leap Slam `leap_slam` | stone | uncommon | dash + `land` | leaps at a body and lands in a ring of broken ground (also Blade) |
+| Glacial Guard `glacial_guard` | frost | uncommon | stance | see Blade |
 
 ### Crowd (`area`)
 
@@ -190,6 +192,7 @@ style it is tagged with; its first row is its primary style.
 | Plague Bloom `plague_bloom` | venom | rare | bolt | a spray of spores that poison on contact (also Affliction) |
 | Flame Pillars `flame_pillars` | flame | uncommon | eruption (line) | see Affliction |
 | Cinder Burst `cinder_burst` | flame | uncommon | bolt | see Affliction |
+| Blizzard `blizzard` | frost | uncommon | field (ice) | frost under the nearest body that slows what stands in it and chills it toward a freeze |
 
 ### Affliction (`dot`)
 
@@ -214,6 +217,9 @@ style it is tagged with; its first row is its primary style.
 | Spirit Blades `spirit_blades` | spirit | common | orbit | three blades circling the caster for a while |
 | Returning Edge `returning_edge` | spirit | common | boomerang | a spectral sword thrown ahead that comes back, cutting on both passes |
 | Counter Stance `counter_stance` | spirit | uncommon | stance | a short guard that cancels the next hit and answers with a spin slash |
+| Glacial Guard `glacial_guard` | frost | uncommon | stance | the same guard, answered with a freezing spin that chills every body round the caster (also Heavy) |
+| Serpent Fang `serpent_fang` | venom | uncommon | boomerang | a fang thrown out and back that poisons each body it cuts on both passes |
+| Dash Slash `dash_slash` | spirit | uncommon | dash + wake | a run through the bodies ahead whose wake cuts those to either side |
 | Stone Ward `stone_ward` | stone | common | pillar | a pillar between the caster and what they face that blocks bodies and shots |
 | Spark Spray, Blink Strike, Frost Nova, Quake Ring, Leap Slam | | | | see above |
 
@@ -248,9 +254,9 @@ card.
 | School | Spells |
 |---|---|
 | flame | ember_dart, cinder_burst, wildfire_field, flame_pillars, cinder_geysers, meteor, cinder_stride |
-| frost | frost_needle, glacier_spike, frost_nova, frozen_orb |
-| venom | venom_spit, plague_bloom, toxic_cloud, contagion |
-| storm | shock_arc, spark_spray, arc_lance, seeker_swarm, ball_lightning |
+| frost | frost_needle, glacier_spike, frost_nova, frozen_orb, blizzard, glacial_guard |
+| venom | venom_spit, plague_bloom, toxic_cloud, contagion, serpent_fang |
+| storm | shock_arc, spark_spray, arc_lance, seeker_swarm, ball_lightning, storm_totem |
 | void | magic_bolt, void_orb, void_maw, mana_darts, arcane_cannon, doom_sigil |
 | spirit | spirit_blades, spirit_ally, blink_strike, returning_edge, crescent_edge, counter_stance |
 | stone | stone_shard, stone_ward, scatter_shot, fault_line, earth_spikes, quake_ring, leap_slam |

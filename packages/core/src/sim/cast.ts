@@ -1044,8 +1044,9 @@ export function fireUnit(
 const STANCE_WEIGHT = 1.2;
 
 /** What a `field` or a `trail` lays: poison ground for a poison spell, fire for every other (doc 006). */
-export function groundOf(params: Readonly<Record<string, number | string>>): "fire" | "poison" {
-  return str(params, "element", "none") === "poison" ? "poison" : "fire";
+export function groundOf(params: Readonly<Record<string, number | string>>): "fire" | "poison" | "ice" {
+  const el = str(params, "element", "none");
+  return el === "poison" ? "poison" : el === "ice" ? "ice" : "fire";
 }
 
 /** How wide a `doom` mark bursts, in px from the marked body, where the spell does not say. */

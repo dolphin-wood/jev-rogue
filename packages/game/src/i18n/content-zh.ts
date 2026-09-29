@@ -55,6 +55,10 @@ export const ZH_CONTENT: ContentTable = {
   dash_slash: { name: "冲刺斩", description: "举剑向前冲刺，斩击沿途的每个敌人。冲刺路径两侧会依次展开剑气，斩击其扫过的敌人。冲刺期间无敌。" },
   cinder_stride: { name: "余烬步", description: "数秒内，你每走一步都会在身后留下一片火焰，站立不动时不会留下。你的火焰不会伤害你自己。" },
   toxic_cloud: { name: "毒雾", description: "在最近的敌人脚下释放一团毒雾，使其中的敌人中毒并减速。" },
+  blizzard: { name: "暴风雪", description: "在最近的敌人脚下铺开一片冰霜，减速其中的敌人，并不断累积冰冻。" },
+  serpent_fang: { name: "蛇牙", description: "掷出一枚弯牙，飞出后折返回到你身边，往返各命中并毒害敌人一次。" },
+  glacial_guard: { name: "冰甲架势", description: "短暂举起架势并收剑；下一次命中你的攻击会被抵消，并以一记冰冻回旋斩反击，冻住身边的敌人。无人攻击时，结束时以较弱的反击收尾。" },
+  storm_totem: { name: "风暴图腾", description: "在身边立起一根雷电图腾，每秒数次电击射程内最近的敌人，直到消散；最多同时存在两根。" },
 
   /* -------------------------------- affixes ------------------------------ */
   fork: { name: "分叉", description: "命中后分裂成数块碎片，继续向前飞行。" },

@@ -972,9 +972,10 @@ export interface Fire {
    * **What the ground does** (doc 006, the `field` shape): `fire` burns what
    * stands in it, as every patch always has; `poison` is a cloud that
    * poisons and slows what stands in it and burns nothing — it lights no
-   * grass, feeds no cinderling and leaves no scorch.
+   * grass, feeds no cinderling and leaves no scorch; `ice` is frost on the
+   * floor that slows harder and chills toward a freeze, the same way.
    */
-  element: "fire" | "poison";
+  element: "fire" | "poison" | "ice";
   /**
    * A fire the grass lit. It does not light grass itself: the grass spreads on
    * its own clock. It burns **everyone**, the player who lit the grass too.
@@ -1320,6 +1321,8 @@ export interface Enemy {
   groundBurnMs: number;
   /** The same toll for the player's poison clouds, on its own clock so a cloud and a fire both bill. */
   groundPoisonMs: number;
+  /** And for the player's frost, on its own clock again, so a cloud and a frost both bill. */
+  groundChillMs: number;
   /** The ice gauge, 0..1: hits fill it and slow the body; full, it freezes. */
   chillBuild: number;
   /** Frozen solid: it cannot move or act. Counts down; the gauge is its clock. */
@@ -1932,8 +1935,8 @@ export interface Trail {
   patch: {
     readonly radius: number; readonly lifeMs: number; readonly damage: number;
     readonly statusMult: number; readonly powers: ElementPowers; readonly proc: number;
-    /** A poison spell's trail is a line of cloud, every other a line of fire; see `Fire.element`. */
-    readonly element: "fire" | "poison";
+    /** A poison spell's trail is a line of cloud, an ice spell's of frost, every other a line of fire; see `Fire.element`. */
+    readonly element: "fire" | "poison" | "ice";
   };
   spellIndex: number;
 }
