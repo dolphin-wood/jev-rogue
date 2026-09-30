@@ -728,8 +728,8 @@ describe("the boss", () => {
       if (b.attack === "windup" && was !== "windup") sweeps.push(b.swing.sweep);
       was = b.attack;
     }
-    // Phase III: x--x--x-----X, four cuts, each the other way from the last.
-    expect(sweeps.length).toBe(4);
+    // Phase III: x--x--x--x-----X, five cuts, each the other way from the last.
+    expect(sweeps.length).toBe(5);
     for (let i = 1; i < sweeps.length; i++) expect(sweeps[i]).toBe(-sweeps[i - 1]!);
   });
 

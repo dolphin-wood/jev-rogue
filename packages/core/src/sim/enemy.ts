@@ -2086,10 +2086,12 @@ function advanceMelee(e: Enemy, world: World, dtMs: number): void {
  * seldom: it is where the slow blade is shown. The odds rise with the phase.
  */
 export type BossBladeTempo = "fast" | "slow" | "even";
+// Raised in II and III (2026-10-01), once the final's phase changes began leaving hearts: with the spares to
+// fall back on, the blades are the fight's exam, and a player has room to learn them.
 const BOSS_BLADE_TEMPO_ODDS: Readonly<Record<number, { fast: number; slow: number }>> = {
   1: { fast: 0, slow: 0.15 },
-  2: { fast: 0.15, slow: 0.25 },
-  3: { fast: 0.2, slow: 0.3 },
+  2: { fast: 0.2, slow: 0.3 },
+  3: { fast: 0.3, slow: 0.35 },
 };
 /** A blow inside a string: the same odds as an opening blow's from phase II, none in phase I. */
 const BOSS_STRING_TEMPO_ODDS: Readonly<Record<number, { fast: number; slow: number }>> = {
@@ -2097,6 +2099,13 @@ const BOSS_STRING_TEMPO_ODDS: Readonly<Record<number, { fast: number; slow: numb
   2: { fast: 0.2, slow: 0.15 },
   3: { fast: 0.25, slow: 0.2 },
 };
+/**
+ * **The final's blades cut harder** than the audience's, by this much: the
+ * sword is what the fight asks the player to learn, so that is where its
+ * weight went when the phase changes began leaving hearts. The ground's bands,
+ * which are hard to read at all, are left as they were.
+ */
+export const KING_FINAL_BLADE_POWER = 1.15;
 /** A fast opening blade's windup, as a share of its own. */
 export const BOSS_FAST_WINDUP = 0.7;
 /** How long a slow blade is held at the top, in beats. */
@@ -2194,6 +2203,7 @@ export function beginWindup(world: World, e: Enemy, target: { x: number; y: numb
   // The king's blow costs what its place in the string says (`bossStringHearts`), not the spec's figure.
   const mult = e.archetype === "boss"
     ? e.damageMult * bossStringHearts(e.bossStringN - 1 - e.bossString.length, e.bossStringN) / Math.max(0.01, spec.damage)
+      * (e.bossScript === "final" ? KING_FINAL_BLADE_POWER : 1)
     : e.damageMult * (e.guardian ? 1 : ENEMY_MELEE_DAMAGE);
   armMeleeAttack(e.swing, spec, e.x, e.y, bossAim(e, v.x, v.y), e.strafe, mult);
   // The Veteran's body is enlarged independently of the warden's attack art.

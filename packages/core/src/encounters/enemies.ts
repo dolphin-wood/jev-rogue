@@ -1008,10 +1008,15 @@ export const BOSS_PHASES: readonly BossPhase[] = [
     ]),
     rate: 1.1, speed: 1.3, melee: { far: "dashcut", near: "greatsweep" }, farPx: 110,
     strings: {
-      // x--x--x-----X: three slashes, and the sweep held a beat longer than phase II's.
-      greatslash: [{ kind: "greatslash", at: 3 }, { kind: "greatslash", at: 6 }, { kind: "greatsweep", at: 12 }],
-      greatsweep: [{ kind: "greatslash", at: 4 }, { kind: "greatsweep", at: 10 }],
-      dashcut: [{ kind: "greatslash", at: 5 }, { kind: "greatsweep", at: 10 }],
+      /*
+       * x--x--x--x-----X: four slashes, and the sweep held a beat longer than
+       * phase II's. Each string is a blow longer than it was (2026-10-01),
+       * with the final's phase changes leaving hearts to learn it on; the
+       * last blow is still the heavy one, and its recovery the opening.
+       */
+      greatslash: [{ kind: "greatslash", at: 3 }, { kind: "greatslash", at: 6 }, { kind: "greatslash", at: 9 }, { kind: "greatsweep", at: 15 }],
+      greatsweep: [{ kind: "greatslash", at: 4 }, { kind: "greatslash", at: 7 }, { kind: "greatsweep", at: 13 }],
+      dashcut: [{ kind: "greatslash", at: 5 }, { kind: "greatslash", at: 8 }, { kind: "greatsweep", at: 13 }],
     },
   },
 ];
