@@ -20,7 +20,7 @@ import {
   MUSKET_RANGE, MUSKET_SPREAD_DEG, MUSKET_WINDUP_MS, FLAME_ROLL_MS, FLAME_LIFE_MS, flameRays, muzzleOf,
   ELEMENT_TINT, spellLookOf, swordEnergyLook, energyElements, energyTurn, WAKE_STRIPE,
   levelAt, withLevels, levelBonus, LEVEL_HP, swordAt,
-  HIT_FLASH_MS, BOSS_ROAR_MS, spellReady, castTiming, hasLineOfSight,
+  HIT_FLASH_MS, BOSS_ROAR_MS, spellReady, castTiming,
 } from "@jr/core";
 import { SPELL_BUFFER_MS } from "@jr/core";
 import type {
@@ -46,6 +46,7 @@ import {
   SMITH_PRICE, MERCHANT_PRICE, FOUNTAIN_HEAL_FRACTION, fountainDrink, fountainWouldHeal, fountainWanted,
   ARCHETYPES, STYLE_CARDS, observedFigures, journalDoor,
   ELITE_AFFIX_IDS, wake, rampFor, circleHitsWall,
+  AUTO_CAST_MODES, AutoCastAssist, autoCastable, autoCastModeOf, type AutoCastMode,
 } from "@jr/core";
 import type { BaseItem, CardNeeds, DoorOffer, NpcKind, OfferPromise, RoomStage, RunShape, WorldEvent } from "@jr/core";
 import {
@@ -112,7 +113,6 @@ import { questionAsked, questionBase, questionName } from "../ui/question-names.
 import type { TableRow } from "../ui/plan-table.ts";
 import type { AtlasJson } from "../assets/atlas.ts";
 import { seenHintsOf, withShown } from "../seen-hints.ts";
-import { autoRecallDue, AUTO_CAST_MAX_REACH_PX, AUTO_CAST_MODES, AUTO_CAST_RESERVE, AutoCaster, autoCastable, autoCastAnyReach, autoCastModeOf, autoCastReach, type AutoCastKey, type AutoCastMode } from "../auto-cast.ts";
 import { freshRerollPool, rerollPrice } from "../offer-reroll.ts";
 
 /**
@@ -1686,7 +1686,7 @@ export class PlayScene extends Phaser.Scene {
   private takenMult = readSetting(TAKEN_KEY, 1);
   private autoMeleeAim = (() => { try { return localStorage.getItem(AUTO_MELEE_AIM_KEY) === "1"; } catch { return false; } })();
   /**
-   * The auto-cast assist (`auto-cast.ts`), in three steps: `off`, the keys
+   * The auto-cast assist (core's `auto-cast.ts`), in three steps: `off`, the keys
    * alone; `space`, the thumb's one cast key, where the player picks the
    * moment and the assist picks the spell; `auto`, the assist picks both.
    * **`space` unless the player chooses otherwise.** It was off by
@@ -1700,7 +1700,7 @@ export class PlayScene extends Phaser.Scene {
   private spaceWantMs = 0;
   /** The key the next auto-cast or Space press would cast, or null: drawn over the head and marked on the bar (`nextAutoKey`). */
   private autoNext: number | null = null;
-  private readonly autoCaster = new AutoCaster();
+  private readonly autoCaster = new AutoCastAssist();
   /** Settings: take no damage at all. For testing a room without dying in it. */
   /** Screen shake: on, reduced (the default) or off. See `holdCamera`. */
   private shakeSetting: ShakeSetting = (() => {
@@ -2435,7 +2435,6 @@ export class PlayScene extends Phaser.Scene {
     this.world = arena;
     // A fresh clock: the assist's beat on the old one starts over (see `enterRoom`).
     this.autoCaster.reset();
-    this.autoTargetId = null;
     this.world.spells.forEach((slot, i) => {
       if (!slot) return;
       let next = slot;
@@ -2685,7 +2684,6 @@ export class PlayScene extends Phaser.Scene {
      * long as the last room had run. A new room starts the beat afresh.
      */
     this.autoCaster.reset();
-    this.autoTargetId = null;
     this.world = createWorld({
       room, encounter, staff, slots,
       /*
@@ -16911,14 +16909,13 @@ export class PlayScene extends Phaser.Scene {
       // The player's own key: the assist's beat starts over (`AutoCaster`),
       // and whatever it was aiming at is let go.
       this.autoCaster.noteManual(i);
-      this.autoTargetId = null;
       return i;
     }
     return null;
   }
 
   /**
-   * The key auto-cast presses on this step, or null (`auto-cast.ts`).
+   * The key auto-cast presses on this step, or null (core's `auto-cast.ts`).
    *
    * Only a key that casts on a tap — a `charge` spell is a hold and a
    * `stance` a guard, both the player's call — and never a `dash`, which
@@ -16998,11 +16995,7 @@ export class PlayScene extends Phaser.Scene {
 
   /** The key the assist casts on this step, or null: on its own beat, or `now` for a Space press. */
   private autoSpell(now: boolean): number | null {
-    const { keys, free, bar, target } = this.autoKeys();
-    const key = now ? this.autoCaster.pickNow(keys, free, bar) : this.autoCaster.pick(this.world.tick * STEP_MS, keys, free, bar);
-    // An enchant or a companion with no body in reach aims nowhere in particular: the facing the player has.
-    if (key !== null) this.autoTargetId = target?.id ?? null;
-    return key;
+    return this.autoCaster.cast(this.world, now, this.world.tick * STEP_MS);
   }
 
   /**
@@ -17014,8 +17007,7 @@ export class PlayScene extends Phaser.Scene {
    */
   private nextAutoKey(): number | null {
     if (this.autoCastMode === "off" || this.modalOpen) return null;
-    const { keys, bar } = this.autoKeys();
-    return this.autoCaster.peek(keys, bar, this.autoCastMode === "space");
+    return this.autoCaster.peek(this.world, this.autoCastMode === "space");
   }
 
   /** Whether key `i` holds a spell the assist may ever cast (`autoCastable`): a tap, not a hold, a guard or a dash. */
@@ -17023,121 +17015,6 @@ export class PlayScene extends Phaser.Scene {
     const slot = this.world.spells[i];
     const params = ITEMS.get(slot?.item.base ?? "")?.params;
     return !!slot && !!params && autoCastable(params, chargeMsOf(ITEMS, slot.item.base));
-  }
-
-  /** What the assist's draw sees on this step: each key, whether the hands are free, the bar, and the body it would aim at. */
-  private autoKeys(): { keys: AutoCastKey[]; free: boolean; bar: { mana: number; floor: number; max: number }; target: Enemy | null } {
-    const w = this.world;
-    const p = w.player;
-    const free = p.castPending < 0 && p.castRecoverMs <= 0 && p.chargeKey < 0 && !p.stance && p.stunMs <= 0 && p.dashMs <= 0;
-    const target = this.autoTarget();
-    // A body awake anywhere in the room: what an enchant or a companion is cast for (`autoCastAnyReach`).
-    const fight = w.enemies.some((e) => e.hp > 0 && e.awake && e.spawnFadeMs <= 0);
-    const floor = w.staff.mana_max * AUTO_CAST_RESERVE;
-    const dist = target ? Math.hypot(target.x - p.x, target.y - p.y) : Infinity;
-    const keys = w.spells.map((slot, i) => {
-      const params = ITEMS.get(slot?.item.base ?? "")?.params;
-      if (!slot || !params) return { held: false, ready: false, cost: 0 };
-      // A tap, never a guard or a move of the body (`autoCastable`).
-      const held = autoCastable(params, chargeMsOf(ITEMS, slot.item.base));
-      /*
-       * Only a key whose own reach the body stands in: a short spell is not
-       * thrown at a far body. An enchant or a companion needs only a fight.
-       * And no spell that is still running (`keyRunningMs`) — an enchant on
-       * the sword, the blades round the body, a trail underfoot, the
-       * companion: recast early, it spends the bar to renew what is already
-       * there. It sits the draws out meanwhile, and comes back owed for them.
-       */
-      const inReach = autoCastAnyReach(params) ? fight : !!target && dist <= autoCastReach(params);
-      // A ring built by pressing again (`stack_max`): how much of it is up, for the run that builds it (`AUTO_CAST_RUN_MS`).
-      const stackMax = Number(params["stack_max"] ?? 0);
-      const up = stackMax > 0 ? w.playerBullets.filter((b) => b.alive && b.orbitMs > 0 && b.spellIndex === i).length : 0;
-      return {
-        held,
-        ready: held && inReach && this.keyRunningMs(i) <= 0 && spellReady(slot, ITEMS) && this.recallDue(i),
-        cost: slotCost(slot, ITEMS, w.staff),
-        ...(stackMax > 0 ? { stacks: true, building: up > 0 && up < stackMax } : {}),
-      };
-    });
-    return { keys, free, bar: { mana: p.mana, floor, max: w.staff.mana_max }, target };
-  }
-
-  /** Whether a recall key has blades enough out to be worth its press (`autoRecallDue`); true for any other key. */
-  private recallDue(key: number): boolean {
-    const w = this.world;
-    const slot = w.spells[key];
-    const max = slot ? lodgeMaxOf(ITEMS, slot.item.base) : 0;
-    if (max <= 0) return true;
-    let out = 0, soonest = Infinity;
-    for (const b of w.lodged) if (b.spellIndex === key) { out++; soonest = Math.min(soonest, b.ms); }
-    return autoRecallDue(out, max, soonest);
-  }
-
-  /**
-   * **How long a key's last cast is still running**, in ms, for the spells
-   * a recast renews rather than adds to: an enchant on the sword, a trail
-   * underfoot, a ring of orbiting blades (not one that grows), a companion. Zero for everything
-   * else, and for a key whose effect has run out.
-   */
-  private keyRunningMs(key: number): number {
-    const w = this.world;
-    const p = w.player;
-    let ms = 0;
-    if (p.enchant?.spellIndex === key) ms = Math.max(ms, p.enchant.ms);
-    if (p.trail?.spellIndex === key) ms = Math.max(ms, p.trail.ms);
-    /*
-     * A ring a recast renews is running; one a recast grows (`stack_max`,
-     * Blade Storm) is not — it is built by pressing again, and a ring held
-     * back as running never got past its first blade.
-     */
-    const stacks = Number(ITEMS.get(w.spells[key]?.item.base ?? "")?.params["stack_max"] ?? 0) > 0;
-    if (!stacks) for (const b of w.playerBullets) if (b.alive && b.orbitMs > 0 && b.spellIndex === key) ms = Math.max(ms, b.orbitMs);
-    for (const pet of w.pets) if (pet.alive && pet.spellIndex === key) ms = Math.max(ms, pet.lifeMs);
-    return Math.max(0, ms);
-  }
-
-  /** The body an auto-cast goes at, from its press until it has left the hand; null for none. */
-  private autoTargetId: number | null = null;
-
-  /**
-   * **What an auto-cast is cast at**: the nearest body awake, within reach,
-   * and in plain sight. A hand press goes the way the player faces, because
-   * they chose the moment and can turn first; the assist chose the moment,
-   * so it has to choose the target too, or a cast fired while the player
-   * walks away from the fight goes into the empty floor ahead. A body behind
-   * a wall is passed over: a bolt spent on stone is the same waste.
-   */
-  private autoTarget(): Enemy | null {
-    const w = this.world;
-    const p = w.player;
-    let best: Enemy | null = null;
-    let bestD = AUTO_CAST_MAX_REACH_PX;
-    for (const e of w.enemies) {
-      if (e.hp <= 0 || !e.awake || e.spawnFadeMs > 0) continue;
-      const d = Math.hypot(e.x - p.x, e.y - p.y);
-      if (d > bestD || !hasLineOfSight(w.room.grid, p.x, p.y, e.x, e.y)) continue;
-      best = e;
-      bestD = d;
-    }
-    return best;
-  }
-
-  /**
-   * The facing an auto-cast aims along on this step, or null to use the
-   * player's own. Held on its body **through the windup**, since the shot
-   * leaves at the end of it and the body keeps moving; a body that dies
-   * first hands the aim to the next nearest. Let go once the cast has left.
-   */
-  private autoAim(pressedNow: boolean): number | null {
-    if (this.autoTargetId === null) return null;
-    const p = this.world.player;
-    if (!pressedNow && p.castPending < 0) { this.autoTargetId = null; return null; }
-    let e = this.world.enemies.find((b) => b.id === this.autoTargetId && b.hp > 0);
-    if (!e) {
-      e = this.autoTarget() ?? undefined;
-      this.autoTargetId = e?.id ?? null;
-    }
-    return e ? Math.atan2(e.y - p.y, e.x - p.x) : null;
   }
 
   /**
@@ -17231,9 +17108,9 @@ export class PlayScene extends Phaser.Scene {
     const y = (down(this.key("down")) || down(k.DOWN) ? 1 : 0) - (down(this.key("up")) || down(k.UP) ? 1 : 0);
 
     // Aim is a point one reach ahead along the facing — or, through an
-    // auto-cast, along the line to the body it was cast at (`autoAim`).
+    // auto-cast, along the line to the body it was cast at (`AutoCastAssist.aim`).
     const spell = this.spellInput();
-    const f = this.autoAim(!!spell.spellAuto) ?? this.world.player.facing;
+    const f = this.autoCaster.aim(this.world, !!spell.spellAuto) ?? this.world.player.facing;
     return {
       moveX: x, moveY: y,
       aimX: this.world.player.x + Math.cos(f) * 64,

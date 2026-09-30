@@ -13,13 +13,19 @@
  * build beats is a boss the run was not building toward; a boss the formed
  * build loses is a reaction test wearing a build gate.
  *
- * `pnpm boss-bench [seeds] [tier|all] [profile|all] [final|audience|whole]`
+ * `pnpm boss-bench [seeds] [tier|all] [profile|all] [final|audience|whole] [melee|spell]`
  *
  * The last argument is which meeting (doc 022): `final` (the default) is the
  * throne hall as the run plays it now, a short phase I then II and III on the larger bar;
  * `audience` is room 5's first audience, phase I until he leaves, against the
  * builds a run brings to room 5; `whole` is the single three-phase fight the
  * king was before the document, for comparison.
+ *
+ * The last is which ladder: `melee` (the default) is the player the game is
+ * tuned for — the sword in the hands, sword-style spells beside it, and the
+ * spells left to the auto-cast assist, as every profile but `expert` plays
+ * them (`SkillProfile.autoCast`). `spell` is the caster ladder the bench had
+ * before, kept as the second check.
  */
 import {
   ITEMS, RngSource, TILE_PX, THRONE_CELLS, attachAffix, createWorld, throneHall,
@@ -123,6 +129,57 @@ const TIERS: readonly Tier[] = [
   },
 ];
 
+/**
+ * **The melee ladders**, the same four rungs for the player most runs are:
+ * the sword doing the work, the sword-style spells beside it (Crescent Edge
+ * rides the sword's damage, Blade Recall calls home what the blows lodge),
+ * and the stat cards a sword run takes — reach, recovery, health — rather
+ * than the sword-damage card, which the levels already pay for. `rich` is
+ * the build a logged run of 2026-09-30 walked into the throne hall with.
+ */
+const MELEE_AUDIENCE_TIERS: readonly Tier[] = [
+  { name: "blank", spells: [{ id: "crescent_edge", level: 1, affixes: [] }], stats: [], hearts: 6 },
+  {
+    name: "typical",
+    spells: [{ id: "crescent_edge", level: 1, affixes: [["expanse", 1]] }, { id: "blade_recall", level: 1, affixes: [] }],
+    stats: [], hearts: 6,
+  },
+  {
+    name: "strong",
+    spells: [{ id: "crescent_edge", level: 2, affixes: [["expanse", 1]] }, { id: "blade_recall", level: 2, affixes: [] }],
+    stats: ["vigour"], hearts: 6,
+  },
+];
+const MELEE_TIERS: readonly Tier[] = [
+  { name: "blank", spells: [{ id: "crescent_edge", level: 1, affixes: [] }], stats: [], hearts: 6 },
+  {
+    name: "forming",
+    spells: [
+      { id: "crescent_edge", level: 2, affixes: [["expanse", 1]] },
+      { id: "blade_recall", level: 2, affixes: [] },
+    ],
+    stats: ["vigour"], hearts: 6,
+  },
+  {
+    name: "formed",
+    spells: [
+      { id: "crescent_edge", level: 3, affixes: [["expanse", 1], ["intercept", 1], ["brand", 1]] },
+      { id: "blade_recall", level: 4, affixes: [["whirl", 1]] },
+      { id: "doom_sigil", level: 1, affixes: [["harvest", 1]] },
+    ],
+    stats: ["vigour", "long_reach", "swift_hand"], hearts: 6,
+  },
+  {
+    name: "rich",
+    spells: [
+      { id: "crescent_edge", level: 5, affixes: [["expanse", 1], ["intercept", 1], ["brand", 1]] },
+      { id: "blade_recall", level: 5, affixes: [["whirl", 1], ["repulse", 1]] },
+      { id: "doom_sigil", level: 3, affixes: [["retort", 1], ["harvest", 1], ["fork", 1]] },
+    ],
+    stats: ["vigour", "vigour", "long_reach", "long_reach", "swift_hand", "steady_nerve"], hearts: 6,
+  },
+];
+
 /** One boss fight, with the build forced rather than earned. */
 type Meeting = "final" | "audience" | "whole";
 
@@ -173,7 +230,7 @@ function bossFight(tier: Tier, profileName: string, seed: string, meeting: Meeti
 
   const before = world.player.hearts;
   const log = emptyRoom(16, "boss");
-  const r = fight(world, SKILL_PROFILES[profileName as keyof typeof SKILL_PROFILES] ?? skillProfile(profileName), BOSS_TIMEOUT_MS, false, log);
+  const r = fight(world, skillProfile(profileName), BOSS_TIMEOUT_MS, false, log);
   return {
     won: r.cleared,
     hearts: before - world.player.hearts,
@@ -187,11 +244,16 @@ const seeds = Number(process.argv[2] ?? 8);
 const tierArg = process.argv[3] ?? "all";
 const profileArg = process.argv[4] ?? "all";
 const meeting = (process.argv[5] ?? "final") as Meeting;
-const ladder = meeting === "audience" ? AUDIENCE_TIERS : TIERS;
+const style = process.argv[6] ?? "melee";
+if (style !== "melee" && style !== "spell") throw new Error(`style "${style}": expected melee or spell`);
+const ladder = style === "melee"
+  ? (meeting === "audience" ? MELEE_AUDIENCE_TIERS : MELEE_TIERS)
+  : (meeting === "audience" ? AUDIENCE_TIERS : TIERS);
 const tiers = tierArg === "all" ? ladder : ladder.filter((t) => t.name === tierArg);
 const profiles = profileArg === "all" ? ["novice", "average", "player", "expert"] : [profileArg];
 
-console.log(`boss bench (${meeting}): ${tiers.length} build tiers x ${profiles.length} profiles x ${seeds} seeds`);
+console.log(`boss bench (${meeting}, ${style}): ${tiers.length} build tiers x ${profiles.length} profiles x ${seeds} seeds`
+  + ` (auto-cast: ${profiles.filter((p) => skillProfile(p).autoCast).join(", ") || "none"})`);
 for (const t of tiers) {
   const desc = t.spells.map((s) => `${s.id}@${s.level}${s.affixes.length ? `[${s.affixes.map(([a, n]) => `${a}${n}`).join(",")}]` : ""}`).join(" ");
   console.log(`\n${t.name}: ${desc}  stats ${t.stats.length}  level ${meeting === "audience" ? AUDIENCE_LEVEL : LEVEL_AT_BOSS}  hearts ${t.hearts + LEVEL_HEARTS * ((meeting === "audience" ? AUDIENCE_LEVEL : LEVEL_AT_BOSS) - 1) + t.stats.filter((x) => x === "vigour").length}`);

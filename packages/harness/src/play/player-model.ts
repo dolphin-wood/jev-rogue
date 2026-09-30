@@ -21,7 +21,7 @@ import {
   tileOf, ITEMS, ENEMIES, MELEE_ATTACKS, TILE_PX, hazardAt,
   distanceAt, UNREACHABLE, Tile, GRID_W, GRID_H, MAX_HEARTS,
   riftHits, tetherEnds, MINE_TRIGGER, MINE_BLAST, MUSKET_RANGE, MUSKET_SPREAD_DEG,
-  armDistance, BOSS_LEAP_RADIUS, BOSS_SLAM_IMPACT_PX, spellReady,
+  armDistance, BOSS_LEAP_RADIUS, BOSS_SLAM_IMPACT_PX, spellReady, AutoCastAssist, STEP_MS,
 } from "@jr/core";
 import { holdsKey, keyWanted } from "./hands.ts";
 /**
@@ -357,11 +357,47 @@ function idleInput(w: World): Input {
  */
 export function referenceInput(live: World, profile: SkillProfile = SKILL_PROFILES.expert): Input {
   const input = decideInput(live, profile);
+  if (profile.autoCast) return withAutoCast(live, input);
   const p = live.player;
   if (p.chargeKey >= 0 && !input.dash)
     return { ...input, spell: holdsKey(live, p.chargeKey) ? p.chargeKey : null };
   if (input.spell !== null && input.spell !== undefined && !holdsKey(live, input.spell)) return { ...input, spell: null };
   return input;
+}
+
+/**
+ * **The assist casts, the hands swing.** With `autoCast` the model's own
+ * spell choice is dropped and the game's assist (`AutoCastAssist`) presses
+ * the keys instead, on the live world as the scene's does — the assist has
+ * no eyes to be late with — and aims its cast along the line to its body,
+ * one reach out, as the scene's input does. Its random beat is drawn from a
+ * stream of the model's own (`assistFor`), so a seed replays exactly and the
+ * fight's gameplay stream is never touched.
+ */
+function withAutoCast(live: World, input: Input): Input {
+  const assist = assistFor(live);
+  const key = assist.cast(live, false, live.tick * STEP_MS);
+  const f = assist.aim(live, key !== null);
+  const p = live.player;
+  return {
+    ...input,
+    ...(f === null ? {} : { aimX: p.x + Math.cos(f) * 64, aimY: p.y + Math.sin(f) * 64 }),
+    spell: key,
+    ...(key === null ? {} : { spellAuto: true }),
+  };
+}
+
+/** One assist per world, like the model's own state: a room's beat and weights must not leak into the next. */
+const assists = new WeakMap<World, AutoCastAssist>();
+function assistFor(w: World): AutoCastAssist {
+  let a = assists.get(w);
+  if (!a) {
+    // A small LCG: deterministic per world, and apart from every stream the simulation draws on.
+    let seed = 0x2545f491;
+    a = new AutoCastAssist(() => { seed = (Math.imul(seed, 1103515245) + 12345) >>> 0; return seed / 2 ** 32; });
+    assists.set(w, a);
+  }
+  return a;
 }
 
 function decideInput(live: World, profile: SkillProfile): Input {

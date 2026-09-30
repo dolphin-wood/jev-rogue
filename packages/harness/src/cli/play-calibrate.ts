@@ -1,5 +1,5 @@
 /**
- * `pnpm play:calibrate <log.json> [seeds] [arm]` — design doc 011,
+ * `pnpm play:calibrate <log.json> [seeds] [arm] [style]` — design doc 011,
  * "Calibration against real play".
  *
  * Takes a playtest log exported from the game's debug panel and lays it beside
@@ -8,6 +8,12 @@
  * time, the HP lost, and the share of the damage that was ranged: those are the
  * three a person can report about their own session, and the three the model
  * was most obviously wrong about.
+ *
+ * The runs are played in the log's own style (`run.style`, else the fourth
+ * argument, else melee): a melee session laid beside spell-style runs is two
+ * different games. The boss room is kept out of the gap and printed on its
+ * own line, since the fit is made on the ordinary fights and the boss is
+ * what it is then checked against.
  *
  * It does not tune anything. Fitting is done by hand with `JR_SKILL=` (see
  * `skill.ts`) and then written into the preset, because a profile is a claim
@@ -20,10 +26,12 @@ import { byFamily } from "../play/playtest-log.ts";
 import type { PlaytestLog, RoomLog } from "../play/playtest-log.ts";
 import type { SkillName } from "../play/skill.ts";
 import type { DirectorArm } from "@jr/director";
+import { ARCHETYPES } from "@jr/core";
+import type { Archetype } from "@jr/core";
 
 const file = process.argv[2];
 if (!file) {
-  console.error("usage: pnpm play:calibrate <log.json> [seeds] [arm]");
+  console.error("usage: pnpm play:calibrate <log.json> [seeds] [arm] [style]");
   console.error("  the log comes from the game's debug panel, tools tab, \"playtest log\"");
   process.exit(1);
 }
@@ -39,6 +47,14 @@ const AGAINST: SkillName[] = ["novice", "average", "player", "expert"];
 
 const raw: unknown = JSON.parse(readFileSync(file, "utf8"));
 const real = parse(raw);
+/** The style the runs are played in: the log's own, else the argument, else the melee most players choose. */
+const logStyle = ((raw ?? {}) as { run?: { style?: unknown } }).run?.style;
+const styleArg = typeof logStyle === "string" ? logStyle : process.argv[5] ?? "melee";
+if (!(ARCHETYPES as readonly string[]).includes(styleArg)) {
+  console.error(`unknown style "${styleArg}"; expected one of ${ARCHETYPES.join(", ")}`);
+  process.exit(1);
+}
+const style = styleArg as Archetype;
 const realFights = real.rooms.filter((r) => r.type === "combat" || r.type === "elite" || r.type === "boss");
 if (realFights.length === 0) {
   console.error(`${file}: no combat rooms in the log`);
@@ -53,17 +69,20 @@ console.log(`  room indices ${realFights.map((r) => r.index).join(", ")}`);
 const indices = new Set(realFights.map((r) => r.index));
 
 const played = new Map<SkillName, RoomLog[]>();
+/** Each profile's boss rooms, reached or not, from the run's own account of whether the room was cleared. */
+const bosses = new Map<SkillName, { cleared: boolean }[]>();
 for (const name of AGAINST) {
   const profile = skillProfile(name);
   const rooms: RoomLog[] = [];
   for (let i = 0; i < seeds; i++) {
-    const out = await playRun(`seed-${i}`, arm, "spam", {}, undefined, profile);
+    const out = await playRun(`seed-${i}`, arm, style, {}, undefined, profile);
     rooms.push(...out.log.filter((r) => indices.has(r.index) && r.type !== "shop"));
+    bosses.set(name, [...(bosses.get(name) ?? []), ...out.rooms.filter((r) => r.type === "boss").map((r) => ({ cleared: r.cleared }))]);
   }
   played.set(name, rooms);
 }
 
-console.log(`\n${seeds} seeds on the ${arm} arm, ${AGAINST.join(" / ")}.`);
+console.log(`\n${seeds} seeds on the ${arm} arm, ${style} style, ${AGAINST.join(" / ")} (auto-cast: ${AGAINST.filter((n) => skillProfile(n).autoCast).join(", ") || "none"}).`);
 console.log("Every number is a mean over the rooms with that index; `real` is the log.\n");
 
 /* Room time and HP, per index. */
@@ -77,15 +96,29 @@ for (const i of [...indices].sort((a, b) => a - b)) {
   );
 }
 
-/* The gap, which is the number this command exists to print. */
-console.log("\nhow far each profile is from the real session (room time, HP lost)");
+/* The gap, which is the number this command exists to print: the ordinary fights, which the fit is made on. */
+console.log("\nhow far each profile is from the real session, boss room left out (room time, HP lost)");
+const ordinary = realFights.filter((r) => r.type !== "boss");
 for (const name of AGAINST) {
-  const rows = played.get(name) ?? [];
-  const t = ratio(rows, realFights, (r) => r.ms);
-  const h = ratio(rows, realFights, (r) => r.hpLost);
+  const rows = (played.get(name) ?? []).filter((r) => r.type !== "boss");
+  const t = ratio(rows, ordinary, (r) => r.ms);
+  const h = ratio(rows, ordinary, (r) => r.hpLost);
   console.log(
     `  ${name.padEnd(8)} time ${verdict(t)}  HP ${verdict(h)}`,
   );
+}
+
+/* And the boss, checked against the fit rather than fitted to. */
+const realBoss = realFights.filter((r) => r.type === "boss");
+if (realBoss.length > 0) {
+  const b = realBoss[0]!;
+  console.log(`\nthe boss room, held out: real ${(b.ms / 1000).toFixed(0)}s, ${b.hpLost}hp lost`);
+  for (const name of AGAINST) {
+    const rows = (played.get(name) ?? []).filter((r) => r.type === "boss");
+    if (rows.length === 0) { console.log(`  ${name.padEnd(8)} never reached it`); continue; }
+    const cleared = (bosses.get(name) ?? []).filter((r) => r.cleared).length;
+    console.log(`  ${name.padEnd(8)} reached ${rows.length}/${seeds}, killed the king ${cleared}, ${cell(rows).trim()}`);
+  }
 }
 
 /* Where the damage came from, which is the other half of "plays like a person". */

@@ -5,7 +5,8 @@ import {
   autoRecallDue,
 } from "./auto-cast.ts";
 import type { AutoCastBar } from "./auto-cast.ts";
-import { ITEMS, TILE_PX } from "@jr/core";
+import { ITEMS } from "../spells/items.ts";
+import { TILE_PX } from "../types.ts";
 
 /** A key that can go now. */
 const on = { held: true, ready: true, cost: 0 };

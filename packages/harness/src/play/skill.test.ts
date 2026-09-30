@@ -20,9 +20,11 @@ describe("skill profiles", () => {
     expect(p.attentionBullets).toBe(Infinity);
     expect(p.attentionEnemies).toBe(Infinity);
     for (const [key, value] of Object.entries(p)) {
-      if (key === "name" || key === "reactionMs" || key.startsWith("attention")) continue;
+      if (key === "name" || key === "reactionMs" || key.startsWith("attention") || key === "autoCast") continue;
       expect(value, key).toBe(0);
     }
+    // And its own hands on the spell keys: the rotation every asserted number was measured with.
+    expect(p.autoCast).toBe(false);
     // The one limit `expert` keeps: a person's eyes are still 230 ms behind.
     expect(p.reactionMs).toBe(230);
   });

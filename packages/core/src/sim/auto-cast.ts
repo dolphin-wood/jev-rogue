@@ -47,7 +47,13 @@
  * the simulation sees a press, exactly as if the player had made it.
  */
 
-import { TILE_PX, castsItself } from "@jr/core";
+import { TILE_PX } from "../types.ts";
+import { ITEMS } from "../spells/items.ts";
+import type { ItemRegistry } from "../spells/items.ts";
+import { castsItself, chargeMsOf, slotCost, spellReady } from "./spells.ts";
+import { lodgeMaxOf } from "./recall.ts";
+import { hasLineOfSight } from "./collide.ts";
+import type { Enemy, World } from "./types.ts";
 
 
 /**
@@ -226,7 +232,11 @@ export class AutoCaster {
   /** The key being built at the run's beat (`AUTO_CAST_RUN_MS`), or null. */
   private running: number | null = null;
 
-  constructor(private readonly random: () => number = Math.random) {}
+  private readonly random: () => number;
+
+  constructor(random: () => number = Math.random) {
+    this.random = random;
+  }
 
   /** A key's weight in the draw now. */
   weight(key: number): number {
@@ -361,5 +371,176 @@ export class AutoCaster {
     });
     this.weights[key] = AUTO_CAST_MIN_WEIGHT;
     return key;
+  }
+}
+
+/*
+ * ========================= the assist, read off a world =========================
+ *
+ * The draw above sees keys, a bar and a clock. What follows reads those off
+ * a `World`, and holds the body a cast goes at, so the game and the harness
+ * press through the one assist: a harness run measured with its own spell
+ * rotation was measuring a player who does not exist, since the player the
+ * game is tuned for fights with the sword and leaves the spells to this.
+ */
+
+/**
+ * **What an auto-cast is cast at**: the nearest body awake, within reach,
+ * and in plain sight. A hand press goes the way the player faces, because
+ * they chose the moment and can turn first; the assist chose the moment,
+ * so it has to choose the target too, or a cast fired while the player
+ * walks away from the fight goes into the empty floor ahead. A body behind
+ * a wall is passed over: a bolt spent on stone is the same waste.
+ */
+export function autoCastTarget(w: World): Enemy | null {
+  const p = w.player;
+  let best: Enemy | null = null;
+  let bestD = AUTO_CAST_MAX_REACH_PX;
+  for (const e of w.enemies) {
+    if (e.hp <= 0 || !e.awake || e.spawnFadeMs > 0) continue;
+    const d = Math.hypot(e.x - p.x, e.y - p.y);
+    if (d > bestD || !hasLineOfSight(w.room.grid, p.x, p.y, e.x, e.y)) continue;
+    best = e;
+    bestD = d;
+  }
+  return best;
+}
+
+/**
+ * **How long a key's last cast is still running**, in ms, for the spells
+ * a recast renews rather than adds to: an enchant on the sword, a trail
+ * underfoot, a ring of orbiting blades (not one that grows), a companion. Zero for everything
+ * else, and for a key whose effect has run out.
+ */
+export function autoKeyRunningMs(w: World, key: number, items: ItemRegistry = ITEMS): number {
+  const p = w.player;
+  let ms = 0;
+  if (p.enchant?.spellIndex === key) ms = Math.max(ms, p.enchant.ms);
+  if (p.trail?.spellIndex === key) ms = Math.max(ms, p.trail.ms);
+  /*
+   * A ring a recast renews is running; one a recast grows (`stack_max`,
+   * Blade Storm) is not — it is built by pressing again, and a ring held
+   * back as running never got past its first blade.
+   */
+  const stacks = Number(items.get(w.spells[key]?.item.base ?? "")?.params["stack_max"] ?? 0) > 0;
+  if (!stacks) for (const b of w.playerBullets) if (b.alive && b.orbitMs > 0 && b.spellIndex === key) ms = Math.max(ms, b.orbitMs);
+  for (const pet of w.pets) if (pet.alive && pet.spellIndex === key) ms = Math.max(ms, pet.lifeMs);
+  return Math.max(0, ms);
+}
+
+/** Whether a recall key has blades enough out to be worth its press (`autoRecallDue`); true for any other key. */
+export function autoRecallDueIn(w: World, key: number, items: ItemRegistry = ITEMS): boolean {
+  const slot = w.spells[key];
+  const max = slot ? lodgeMaxOf(items, slot.item.base) : 0;
+  if (max <= 0) return true;
+  let out = 0, soonest = Infinity;
+  for (const b of w.lodged) if (b.spellIndex === key) { out++; soonest = Math.min(soonest, b.ms); }
+  return autoRecallDue(out, max, soonest);
+}
+
+/** What the assist's draw sees on a step: each key, whether the hands are free, the bar, and the body it would aim at. */
+export interface AutoCastView {
+  readonly keys: AutoCastKey[];
+  readonly free: boolean;
+  readonly bar: AutoCastBar;
+  readonly target: Enemy | null;
+}
+
+/** The draw's view of a world on this step. */
+export function autoCastView(w: World, items: ItemRegistry = ITEMS): AutoCastView {
+  const p = w.player;
+  const free = p.castPending < 0 && p.castRecoverMs <= 0 && p.chargeKey < 0 && !p.stance && p.stunMs <= 0 && p.dashMs <= 0;
+  const target = autoCastTarget(w);
+  // A body awake anywhere in the room: what an enchant or a companion is cast for (`autoCastAnyReach`).
+  const fight = w.enemies.some((e) => e.hp > 0 && e.awake && e.spawnFadeMs <= 0);
+  const floor = w.staff.mana_max * AUTO_CAST_RESERVE;
+  const dist = target ? Math.hypot(target.x - p.x, target.y - p.y) : Infinity;
+  const keys = w.spells.map((slot, i): AutoCastKey => {
+    const params = items.get(slot?.item.base ?? "")?.params;
+    if (!slot || !params) return { held: false, ready: false, cost: 0 };
+    // A tap, never a guard or a move of the body (`autoCastable`).
+    const held = autoCastable(params, chargeMsOf(items, slot.item.base));
+    /*
+     * Only a key whose own reach the body stands in: a short spell is not
+     * thrown at a far body. An enchant or a companion needs only a fight.
+     * And no spell that is still running (`autoKeyRunningMs`) — an enchant on
+     * the sword, the blades round the body, a trail underfoot, the
+     * companion: recast early, it spends the bar to renew what is already
+     * there. It sits the draws out meanwhile, and comes back owed for them.
+     */
+    const inReach = autoCastAnyReach(params) ? fight : !!target && dist <= autoCastReach(params);
+    // A ring built by pressing again (`stack_max`): how much of it is up, for the run that builds it (`AUTO_CAST_RUN_MS`).
+    const stackMax = Number(params["stack_max"] ?? 0);
+    const up = stackMax > 0 ? w.playerBullets.filter((b) => b.alive && b.orbitMs > 0 && b.spellIndex === i).length : 0;
+    return {
+      held,
+      ready: held && inReach && autoKeyRunningMs(w, i, items) <= 0 && spellReady(slot, items) && autoRecallDueIn(w, i, items),
+      cost: slotCost(slot, items, w.staff),
+      ...(stackMax > 0 ? { stacks: true, building: up > 0 && up < stackMax } : {}),
+    };
+  });
+  return { keys, free, bar: { mana: p.mana, floor, max: w.staff.mana_max }, target };
+}
+
+/**
+ * **The assist whole**: the draw (`AutoCaster`) fed from a world, and the
+ * body its cast goes at, held through the windup. The game's scene and the
+ * harness's reference player both press through one of these.
+ */
+export class AutoCastAssist {
+  readonly caster: AutoCaster;
+  /** The body an auto-cast goes at, from its press until it has left the hand; null for none. */
+  private targetId: number | null = null;
+
+  private readonly items: ItemRegistry;
+
+  constructor(random: () => number = Math.random, items: ItemRegistry = ITEMS) {
+    this.caster = new AutoCaster(random);
+    this.items = items;
+  }
+
+  /** A new room, a paused fight, the assist switched off: the beat, the weights and the target all go. */
+  reset(): void {
+    this.caster.reset();
+    this.targetId = null;
+  }
+
+  /** The player cast a key by hand: it has had its turn, the beat starts over, and the target is let go. */
+  noteManual(key: number): void {
+    this.caster.noteManual(key);
+    this.targetId = null;
+  }
+
+  /** The key the assist casts on this step, or null: on its own beat, or `now` for a press of the one cast key. */
+  cast(w: World, now: boolean, clockMs: number): number | null {
+    const { keys, free, bar, target } = autoCastView(w, this.items);
+    const key = now ? this.caster.pickNow(keys, free, bar) : this.caster.pick(clockMs, keys, free, bar);
+    // An enchant or a companion with no body in reach aims nowhere in particular: the facing the player has.
+    if (key !== null) this.targetId = target?.id ?? null;
+    return key;
+  }
+
+  /** The key the next assisted cast would be, without casting it (`AutoCaster.peek`). */
+  peek(w: World, now: boolean): number | null {
+    const { keys, bar } = autoCastView(w, this.items);
+    return this.caster.peek(keys, bar, now);
+  }
+
+  /**
+   * The facing an auto-cast aims along on this step, in radians, or null to
+   * use the player's own. Held on its body **through the windup**, since the
+   * shot leaves at the end of it and the body keeps moving; a body that dies
+   * first hands the aim to the next nearest. Let go once the cast has left.
+   */
+  aim(w: World, pressedNow: boolean): number | null {
+    if (this.targetId === null) return null;
+    const p = w.player;
+    if (!pressedNow && p.castPending < 0) { this.targetId = null; return null; }
+    let e = w.enemies.find((b) => b.id === this.targetId && b.hp > 0);
+    if (!e) {
+      e = autoCastTarget(w) ?? undefined;
+      this.targetId = e?.id ?? null;
+    }
+    return e ? Math.atan2(e.y - p.y, e.x - p.x) : null;
   }
 }

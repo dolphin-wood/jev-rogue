@@ -121,6 +121,16 @@ export interface SkillProfile {
   readonly castGapMs: number;
 
   /**
+   * **Whether the spells are left to the auto-cast assist** (`AutoCastAssist`,
+   * the game's `auto` setting), the way the player the game is tuned for
+   * plays: the sword in the hands, the spells cast on the assist's beat, at
+   * the nearest body, without the slow of a hand cast. With it on, the
+   * rotation above is not pressed at all. `expert` keeps the hand rotation,
+   * so the numbers asserted on it reproduce.
+   */
+  readonly autoCast: boolean;
+
+  /**
    * How late the dash is spent, and how often it is not spent at all.
    *
    * The model dashes the instant the best available step is still dangerous,
@@ -215,6 +225,7 @@ export const SKILL_PROFILES: Readonly<Record<SkillName, SkillProfile>> = {
     recoverMs: 0,
     castReactionMs: 0,
     castGapMs: 0,
+    autoCast: false,
     dashDelayMs: 0,
     dashSkipChance: 0,
     spacingSlopPx: 0,
@@ -263,6 +274,7 @@ export const SKILL_PROFILES: Readonly<Record<SkillName, SkillProfile>> = {
     recoverMs: 60,
     castReactionMs: 150,
     castGapMs: 700,
+    autoCast: true,
     dashDelayMs: 110,
     dashSkipChance: 0.2,
     spacingSlopPx: 7,
@@ -299,6 +311,7 @@ export const SKILL_PROFILES: Readonly<Record<SkillName, SkillProfile>> = {
     recoverMs: 90,
     castReactionMs: 250,
     castGapMs: 1200,
+    autoCast: true,
     dashDelayMs: 150,
     dashSkipChance: 0.3,
     spacingSlopPx: 10,
@@ -339,6 +352,7 @@ export const SKILL_PROFILES: Readonly<Record<SkillName, SkillProfile>> = {
     recoverMs: 200,
     castReactionMs: 650,
     castGapMs: 8000,
+    autoCast: true,
     dashDelayMs: 500,
     dashSkipChance: 0.8,
     /*
@@ -377,7 +391,7 @@ function withOverrides(p: SkillProfile): SkillProfile {
     const [key, value] = pair.split("=");
     if (!key || value === undefined) throw new Error(`JR_SKILL: expected key=value, got "${pair}"`);
     if (!(key in p) || key === "name") throw new Error(`JR_SKILL: "${key}" is not a skill parameter`);
-    out[key] = Number(value);
+    out[key] = key === "autoCast" ? value !== "0" && value !== "false" : Number(value);
   }
   return out as unknown as SkillProfile;
 }
