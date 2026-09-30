@@ -1044,8 +1044,15 @@ export const KING_RETREAT_AT = 0.6;
  * The final fight's bar: phases II and III, which were 60% of 3750 (2250), over
  * twice that. Phase I has moved to room 5, so the denser phases alone hold doc
  * 020's two minutes, against a player who has seen him once already.
+ *
+ * 8500 where it was 4500 (2026-09-30). The 4500 was sized on the caster
+ * ladder; the melee run most players make, with the sword's level growth,
+ * killed him in 54 s played and 53 to 57 s measured (`pnpm king-pressure`,
+ * `rich` and `player`), about twelve of them the roars, the call and the
+ * fall, which do not shorten with the bar. Nearly doubled, the fight is
+ * about 100 s for that build and near two minutes for `formed`.
  */
-export const KING_FINAL_HP = 4500;
+export const KING_FINAL_HP = 8500;
 /**
  * Where the final's phases begin. **A short phase I first**: he rises from the
  * throne in the armour the throne's drawing wears, and a first stretch of the

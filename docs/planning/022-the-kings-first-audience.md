@@ -225,14 +225,18 @@ the armour breaks with the roar and phase II's call, as the fight always has.
 For the player who met him in room 5, the stretch is the part they have
 already learned, played briefly and not asked of them again at length.
 
-**Phases II and III take the rest of a larger bar.** Today II and III together
-are 60% of 3750, or 2250 health. The final bar is `KING_FINAL_HP = 4500`, and
-II and III take 85% of it (II from 0.85, III from `KING_FINAL_III_AT = 0.45`):
-about 1800 and 2000, near double what each had. Doc 020 sized the fight to
-about two minutes and two and a half passes of its music, and most of phase I
-has moved to room 5, so the denser phases have to hold that length. 4500 is a
-starting figure, set once the king's own balance pass lets a profile win
-(see "Measured").
+**Phases II and III take the rest of a larger bar.** The final bar is
+`KING_FINAL_HP = 8500`, and II and III take 85% of it (II from 0.85, III from
+`KING_FINAL_III_AT = 0.45`). Doc 020 sized the fight to about two minutes and
+two and a half passes of its music, and most of phase I has moved to room 5,
+so the denser phases have to hold that length. The bar is sized on
+`pnpm king-pressure`, which plays each rung of the bench's ladders
+invincible to the end: the melee run most players make (`rich`) kills him in
+about 100 s, `formed` in about two minutes, and the caster ladder's `formed`
+in about 110 s. About twelve seconds of any fight are the roars, the call
+and the fall, which do not shorten with the bar. The win rate cannot size it:
+the reference player dies to him whatever the build, while a person who has
+met him once does not (see "Measured").
 
 The meteor into phase III, the rage tempo and the music's layers are
 unchanged, because they already hang on `e.phase`.
@@ -429,6 +433,6 @@ What that says:
 - **Nobody beats the king, before or after.** The harness profiles lost every
   final fight at 62b3333 too, so the 55% `ramp.ts` quotes is stale, and this
   document neither caused that nor fixes it. The final dies faster now (35 s
-  against 41 s for `player`), because phase II is where it starts. Whether the
-  4500 bar is right can't be read off a fight no profile wins. It needs the
-  king's own balance pass first.
+  against 41 s for `player`), because phase II is where it starts. A bar
+  can't be sized off a fight no profile wins, which is why it is sized on
+  `king-pressure`'s kill times instead.

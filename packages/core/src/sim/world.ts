@@ -2945,19 +2945,24 @@ const BOSS_BLADE_CHASE_MS = 3500;
 // Phases I and II down again, by a beat: with the leap, the storm and the slam asked at any range the heavy
 // turns went from a quarter of his turns to two fifths, and turn to turn slowed by about a twelfth. Measured
 // on the bench's fights, turn to turn is now 4.4 s in both (4.5 and 4.7 before), phase II the quicker.
-const BOSS_REST_BEATS: Readonly<Record<number, number>> = { 1: 4, 2: 3, 3: 3 };
-const BOSS_REST_JITTER_BEATS = 1.5;
+// Phases II and III down again (2026-09-30): a melee player who had met him once won the final without losing a
+// heart, and measured invincible (`pnpm king-pressure`) he rested a third of phases II and III and turned *less*
+// often in III than in I — the fight slowed as it was meant to build. Phase I, which room 5's audience also
+// plays, is left as it was. The jitter narrows with them, so a short rest is not drawn back to a long one.
+const BOSS_REST_BEATS: Readonly<Record<number, number>> = { 1: 4, 2: 2, 3: 1.5 };
+const BOSS_REST_JITTER_BEATS: Readonly<Record<number, number>> = { 1: 1.5, 2: 1, 3: 1 };
 /**
  * After a heavy turn — a leap, a slam, a quake, a string of three — this many beats more: the big opening.
- * Two in phases I and II, where heavy turns are now two in five; phase III keeps three.
+ * Two in phase I; a beat and a half in II and III, where the opening is still there but no longer a breather.
  */
-const BOSS_HEAVY_REST_BEATS: Readonly<Record<number, number>> = { 1: 2, 2: 2, 3: 3 };
+const BOSS_HEAVY_REST_BEATS: Readonly<Record<number, number>> = { 1: 2, 2: 1.5, 3: 1.5 };
 const BOSS_HEAVY_ACTS: ReadonlySet<string> = new Set(["leap", "slam", "quake", "storm"]);
 
 /** The rest after the turn that has just ended, ms. */
 function bossRestMs(w: World, e: Enemy): number {
   const heavy = BOSS_HEAVY_ACTS.has(e.bossLastAct) || e.bossStringN >= 3;
-  const n = (BOSS_REST_BEATS[e.phase] ?? 6) + w.rng.next() * BOSS_REST_JITTER_BEATS + (heavy ? BOSS_HEAVY_REST_BEATS[e.phase] ?? 3 : 0);
+  const n = (BOSS_REST_BEATS[e.phase] ?? 6) + w.rng.next() * (BOSS_REST_JITTER_BEATS[e.phase] ?? 1.5)
+    + (heavy ? BOSS_HEAVY_REST_BEATS[e.phase] ?? 3 : 0);
   return beats(n);
 }
 
