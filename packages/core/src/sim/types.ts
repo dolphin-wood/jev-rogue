@@ -1327,6 +1327,20 @@ export interface Enemy {
    */
   windupMs: number;
   /**
+   * **The held end of a slow blade** (the king's, doc 020), ms: how much of
+   * `windupMs` is the sword kept up at the top of its raise before it comes
+   * down. The drawing reaches the raise in the rest of the windup and holds
+   * it; the ground's tell fills over the whole, so what is on the floor still
+   * says when it lands. Zero for every other blade.
+   */
+  windupHoldMs: number;
+  /**
+   * How far the king's string has been pushed off the lines it is written on,
+   * ms: each fast blow in it brings the rest an eighth earlier, each slow one
+   * a beat later. Reset by the opening blow.
+   */
+  bossStringShiftMs: number;
+  /**
    * What an **unaware** body is doing, for the renderer to draw and for a
    * test to assert on. A room of bodies that have not noticed the player yet
    * is most of what the player sees before a fight starts, and a statue reads

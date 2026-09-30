@@ -18614,7 +18614,16 @@ function bossBladeFrame(e: Enemy): string | null | undefined {
   const spec = e.meleeKind ? MELEE_ATTACKS[e.meleeKind] : null;
   if (!seq || !spec) return undefined;
   const pick = (keys: readonly string[], t: number): string => keys[Math.min(keys.length - 1, Math.max(0, Math.floor(t * keys.length)))]!;
-  if (e.attack === "windup") return pick(seq.windup, 1 - e.attackMs / Math.max(1, e.windupMs));
+  /*
+   * A slow blade (`Enemy.windupHoldMs`) reaches the top of its raise in the
+   * windup before the hold and stays there, the sword up and still, until it
+   * comes down: a held pose, not a slower raise. The floor's tell runs to the
+   * landing all the same.
+   */
+  if (e.attack === "windup") {
+    const raise = Math.max(1, e.windupMs - e.windupHoldMs);
+    return pick(seq.windup, Math.min(1, (e.windupMs - e.attackMs) / raise));
+  }
   if (e.attack === "lunge") return pick(seq.strike, 1 - Math.max(0, e.attackMs) / Math.max(1, spec.lungeMs));
   if (e.attack === "recover") {
     // Between the blows of a string there is no recovery: the cut's last key holds into the next.

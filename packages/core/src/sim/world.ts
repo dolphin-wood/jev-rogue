@@ -2953,9 +2953,17 @@ const BOSS_REST_BEATS: Readonly<Record<number, number>> = { 1: 4, 2: 2, 3: 1.5 }
 const BOSS_REST_JITTER_BEATS: Readonly<Record<number, number>> = { 1: 1.5, 2: 1, 3: 1 };
 /**
  * After a heavy turn — a leap, a slam, a quake, a string of three — this many beats more: the big opening.
- * Two in phase I; a beat and a half in II and III, where the opening is still there but no longer a breather.
+ * Two in phase I, a beat and a half in II. Phase III keeps two and a half: at one and a half its slams came
+ * back-to-back across a longer bar, four times as many a fight, and the bands were most of what killed the
+ * player who tried it (51 of 90 health).
  */
-const BOSS_HEAVY_REST_BEATS: Readonly<Record<number, number>> = { 1: 2, 2: 1.5, 3: 1.5 };
+const BOSS_HEAVY_REST_BEATS: Readonly<Record<number, number>> = { 1: 2, 2: 1.5, 3: 2.5 };
+/**
+ * The slam's weight in his draw, by phase. Phase III's slam is three strikes long (the two stomps, then the
+ * band) and he draws turns fastest there, so at the weight of the others it came about three times a minute;
+ * at half it comes about as often as it did before the rests were cut.
+ */
+const BOSS_SLAM_WEIGHT: Readonly<Record<number, number>> = { 1: 1, 2: 1, 3: 0.5 };
 const BOSS_HEAVY_ACTS: ReadonlySet<string> = new Set(["leap", "slam", "quake", "storm"]);
 
 /** The rest after the turn that has just ended, ms. */
@@ -2973,6 +2981,7 @@ function chooseBossAct(w: World, e: Enemy): BossAct | null {
   const ph = e.phase;
   // Where they are now, not where his last glance put them: he has walked since.
   const level = bossLevel(e, p);
+  const slam = BOSS_SLAM_WEIGHT[ph] ?? 1;
   const opts: [BossAct, number][] = [];
   /*
    * **The sword first, the ground strikes seldom.** Measured with a player
@@ -2985,10 +2994,10 @@ function chooseBossAct(w: World, e: Enemy): BossAct | null {
    */
   if (d < BOSS_CLOSE_PX) {
     // At his feet the side matters: his sweeps go out of his front only, so beside him is the cleave's, behind him the backhand's.
-    if (bossBehind(e, p)) opts.push(["maul", 4], ["slam", 1]);
+    if (bossBehind(e, p)) opts.push(["maul", 4], ["slam", slam]);
     // Beside him, where the sweeps do not reach, the backhand (the greatcleave was taken out: it read strangely).
-    else if (level) opts.push(["maul", 4], ["slam", 1], ["dashcut", 1.5]);
-    else opts.push(["greatsweep", 3], ["greatslash", 3], ["maul", 2], ["slam", 1]);
+    else if (level) opts.push(["maul", 4], ["slam", slam], ["dashcut", 1.5]);
+    else opts.push(["greatsweep", 3], ["greatslash", 3], ["maul", 2], ["slam", slam]);
     // The quake's cracks are turned so none runs under the player; at his feet they still have to find the gap.
     opts.push(["quake", 0.8]);
     // The leap asks about the sky, not the range (`BOSS_LEAP_MS`), and the storm steps back out of
@@ -2996,7 +3005,7 @@ function chooseBossAct(w: World, e: Enemy): BossAct | null {
     opts.push(["leap", 0.6], ["storm", 0.6]);
   } else if (d < BOSS_FAR_PX) {
     // The slam's band crosses the whole hall, so it is asked here too, not only of a player at his feet.
-    opts.push(["quake", 1], ["storm", 1], ["leap", 1], ["slam", 1]);
+    opts.push(["quake", 1], ["storm", 1], ["leap", 1], ["slam", slam]);
     // A player level with him is on the dashcut's line; it hops back for the room to run (`stepBossHop`).
     if (level) opts.push(["dashcut", 2]);
     if (ph >= 2) opts.push(["hook", 1.5]);
@@ -3004,7 +3013,7 @@ function chooseBossAct(w: World, e: Enemy): BossAct | null {
     opts.push(["greatslash", 3], ["greatsweep", 2]);
     opts.push(["volley", 1]);
   } else {
-    opts.push(["leap", 2], ["storm", 1.5], ["volley", 1.5], ["quake", 0.5], ["slam", 1], ["greatslash", 2]);
+    opts.push(["leap", 2], ["storm", 1.5], ["volley", 1.5], ["quake", 0.5], ["slam", slam], ["greatslash", 2]);
     if (level) opts.push(["dashcut", ph >= 2 ? 3 : 2]);
     if (ph >= 2) opts.push(["hook", 2]);
   }

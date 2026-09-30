@@ -1081,7 +1081,7 @@ export function makeEnemy(
     summonMs: SUMMONER_FIRST_MS,
     minions: 0,
     closeIn: false, blinkCooldownMs: 0, pulseCooldownMs: 0, spikeMs: 0, strikesCast: 0, meleeKind: null,
-    windupMs: MELEE.windupMs, strung: false, comboLeft: 0,
+    windupMs: MELEE.windupMs, windupHoldMs: 0, bossStringShiftMs: 0, strung: false, comboLeft: 0,
     jukeMs: 0, jukeX: 0, jukeY: 0, jukeCooldownMs: 0, plantMs: 0,
     burnMs: 0, burnSources: 0, poisonStacks: 0, poisonMs: 0, slowMs: 0,
     burnBuild: 0, poisonBuild: 0, lavaMs: 0, groundBurnMs: 0, groundPoisonMs: 0, groundChillMs: 0, chillBuild: 0, frozenMs: 0, buildFedMs: 0, statusMult: 1, dotShown: 0, dotShowMs: 0,
@@ -2069,6 +2069,46 @@ function advanceMelee(e: Enemy, world: World, dtMs: number): void {
  * a test of the attack has to drive, and reproducing it at the call site is how
  * a test ends up asserting against a state the simulation never reaches.
  */
+/**
+ * **Fast and slow blades** (doc 020). Every blade of his used to land on the
+ * next beat, and a string's blows on the eighths written for it, so a
+ * player who counted the music could dodge without watching the sword: the
+ * first final played to a win without a heart lost. Now a blade is drawn
+ * fast, slow or on time. A fast one is cut short and let go on the next
+ * eighth, off the beat being counted; a slow one is raised on the beat it
+ * would have fallen on and held there a beat before it comes down — for the
+ * dodge thrown on the count. Both stay on the music's grid and above the
+ * reaction floor, and the ground's tell fills to the true landing, so the
+ * floor still says when it comes; only the rhythm stops saying it.
+ *
+ * Phase I, which room 5's audience plays, only ever holds a blade, and
+ * seldom: it is where the slow blade is shown. The odds rise with the phase.
+ */
+export type BossBladeTempo = "fast" | "slow" | "even";
+const BOSS_BLADE_TEMPO_ODDS: Readonly<Record<number, { fast: number; slow: number }>> = {
+  1: { fast: 0, slow: 0.15 },
+  2: { fast: 0.15, slow: 0.25 },
+  3: { fast: 0.2, slow: 0.3 },
+};
+/** A blow inside a string: the same odds as an opening blow's from phase II, none in phase I. */
+const BOSS_STRING_TEMPO_ODDS: Readonly<Record<number, { fast: number; slow: number }>> = {
+  1: { fast: 0, slow: 0 },
+  2: { fast: 0.2, slow: 0.15 },
+  3: { fast: 0.25, slow: 0.2 },
+};
+/** A fast opening blade's windup, as a share of its own. */
+export const BOSS_FAST_WINDUP = 0.7;
+/** How long a slow blade is held at the top, in beats. */
+export const BOSS_SLOW_HOLD_BEATS = 1;
+
+function bossBladeTempo(world: World, e: Enemy, inString: boolean): BossBladeTempo {
+  // The lab's forced blades are the lab's: thrown as asked, on time.
+  if (world.bossHold?.blades) return "even";
+  const odds = (inString ? BOSS_STRING_TEMPO_ODDS : BOSS_BLADE_TEMPO_ODDS)[e.phase] ?? { fast: 0, slow: 0 };
+  const r = world.rng.next();
+  return r < odds.fast ? "fast" : r < odds.fast + odds.slow ? "slow" : "even";
+}
+
 export function beginWindup(world: World, e: Enemy, target: { x: number; y: number }, kind?: MeleeKind): void {
   // `kind` is the boss lab's, or the next blow of a string: a blade asked for by name rather than chosen.
   e.meleeKind = kind ?? chooseMelee(e);
@@ -2109,15 +2149,38 @@ export function beginWindup(world: World, e: Enemy, target: { x: number; y: numb
    * eighths after the opening one (`BossPhase.strings`), and never under the
    * reaction floor.
    */
+  e.windupHoldMs = 0;
   if (e.archetype === "boss") {
     const blow = e.bossLinked ? e.bossLinkedBlow : null;
+    // Fast, slow, or on time (`bossBladeTempo`): drawn before the windup is laid, so it is the one laid.
+    const tempo = bossBladeTempo(world, e, !!blow);
     if (blow && e.bossStringAt0 >= 0) {
-      // Where the string lays it; and where a late opening blow (a freeze) leaves too little for the floor,
-      // the next eighth past the floor, so it is still on the grid rather than between two lines.
-      const due = e.bossStringAt0 + blow.at * (BEAT_MS / 2) - e.bossFightMs;
+      /*
+       * Where the string lays it, moved by the blows before it and this one:
+       * a fast blow an eighth early, a slow one a beat late, and the rest of
+       * the string with it. Where that (or a late opening blow, a freeze)
+       * leaves too little for the floor, the next eighth past the floor, so
+       * it is still on the grid rather than between two lines.
+       */
+      if (tempo === "fast") e.bossStringShiftMs -= BEAT_MS / 2;
+      if (tempo === "slow") e.bossStringShiftMs += BEAT_MS * BOSS_SLOW_HOLD_BEATS;
+      const due = e.bossStringAt0 + blow.at * (BEAT_MS / 2) + e.bossStringShiftMs - e.bossFightMs;
       e.windupMs = due >= floor
         ? due : floor + untilGrid(e.bossFightMs + floor, BEAT_MS / 2);
-    } else e.windupMs += untilGrid(e.bossFightMs + e.windupMs, BEAT_MS);
+      if (tempo === "slow") e.windupHoldMs = Math.min(e.windupMs - floor, BEAT_MS * BOSS_SLOW_HOLD_BEATS);
+    } else {
+      e.bossStringShiftMs = 0;
+      if (tempo === "fast") {
+        // Cut short and let go on the next eighth rather than the next beat: off the pulse the player is counting.
+        e.windupMs = Math.max(floor, e.windupMs * BOSS_FAST_WINDUP);
+        e.windupMs += untilGrid(e.bossFightMs + e.windupMs, BEAT_MS / 2);
+      } else {
+        e.windupMs += untilGrid(e.bossFightMs + e.windupMs, BEAT_MS);
+        // Raised on the beat it would have come down on, and held there a beat more.
+        if (tempo === "slow") { e.windupHoldMs = BEAT_MS * BOSS_SLOW_HOLD_BEATS; e.windupMs += e.windupHoldMs; }
+      }
+    }
+    e.windupHoldMs = Math.max(0, e.windupHoldMs);
     e.bossBladeAt = e.bossFightMs + e.windupMs;
   }
   // The Veteran's ram is a boss-level commitment. Give its tell a little more
