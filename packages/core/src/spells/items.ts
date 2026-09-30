@@ -837,8 +837,18 @@ const ATTACKS: readonly BaseItem[] = [
        * body travels about a twelfth of it in px), one the wake cuts a tile
        * and a half the way the wake rolls, and both are staggered by the
        * weight. A Dash Slash is how a pack in the way is opened up.
+       *
+       * 1.9 swings, down from 2.15 (2026-10-01): played, it cleared the
+       * late rooms' packs in a pass. The bench's pack is six pinned bodies,
+       * but in a run the cut rides the sword's level growth as well as its
+       * own level (about x4 at level 5 in the last rooms), and its dash
+       * affixes add a thrown cut (`finale`, cut too) that only packs feel.
+       * The run stops where the bench's base cluster does (x1.6). The wake
+       * keeps 0.55: below it the wake no longer breaks a rusher's poise, so
+       * a body mid-thrust is cut but not shoved, and opening a pack is the
+       * spell's job.
        */
-      shape: "dash", damage: swordShare(2.15), sword: 2.15, speed: 0, radius: 12, count: 1, spread: 0, lifetime: 0.26,
+      shape: "dash", damage: swordShare(1.9), sword: 1.9, speed: 0, radius: 12, count: 1, spread: 0, lifetime: 0.26,
       pierce: 0, element: "none", seek: 0, curve: 0, weight: 1.3, knock: 720, windup_ms: 40, recover_ms: 140,
       wake_reach: 40, wake_share: 0.55, wake_step: 10, wake_speed: 240, wake_thick: 12,
     },

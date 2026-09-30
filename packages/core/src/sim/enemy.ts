@@ -4,6 +4,7 @@
  * the shape of a volley is data and adding an enemy is adding a pattern.
  */
 import { BEAT_MS, BOSS_RAGE_TEMPO, beats, untilGrid } from "./beat.ts";
+import { drop } from "./pickups.ts";
 import { ENEMIES, baseArchetype, fillSubspecies, expandPattern, rampFor, resistOf } from "../encounters/index.ts";
 import type { BulletEmission } from "../encounters/patterns.ts";
 import type { BossPhase } from "../encounters/enemies.ts";
@@ -2573,6 +2574,9 @@ function bossFalling(e: Enemy): boolean {
   return e.bossRoarMs > 0 || e.bossCast === "meteor" && (e.bossCastMs > 0 || e.bossCastEndAt < 0);
 }
 
+/** The spare hearts the final's king leaves at his feet as each phase begins: one into II, two into III. */
+export const BOSS_PHASE_HEARTS: Readonly<Record<number, number>> = { 2: 1, 3: 2 };
+
 function stepBossPhase(world: World, e: Enemy): void {
   if (e.archetype !== "boss" || e.hp <= 0) return;
   const next = bossPhaseAt(e.hp / Math.max(1, e.maxHp), e.bossScript);
@@ -2617,6 +2621,21 @@ function stepBossPhase(world: World, e: Enemy): void {
     e.bossBusy = true;
     // The armour breaks off him and he roars; after it, the call (phase II) or the fall (phase III, `stepBoss`).
     e.bossRoarMs = BOSS_ROAR_MS;
+    /*
+     * **Hearts out of the armour** (the final only): what breaks off him as
+     * the phase turns leaves a heart or two at his feet — spares, as the
+     * first audience's are (`Pickup.reserve`): they wait on the floor and
+     * are not spent on a full bar. He stands roaring over them, so taking
+     * one is a step into his reach. A little, not a refill: the fight is
+     * still meant to be won on the last of the bar.
+     */
+    if (e.bossScript === "final") {
+      for (let i = 0; i < (BOSS_PHASE_HEARTS[next] ?? 0); i++) {
+        const h = drop(world.pickups, "heart", e.x, e.y + e.radius * 0.5, world.rng);
+        h.value = 0;
+        h.reserve = true;
+      }
+    }
   }
   world.trauma = Math.min(1, world.trauma + 0.5);
   world.events.push({ kind: "telegraph", x: e.x, y: e.y, what: `boss_phase:${next}` });

@@ -654,7 +654,8 @@ BASE_AFFIXES.push(
     hook: "cast",
     shapes: ["dash"],
     element: null,
-    effect: { kind: "finale", share: 0.6, reachPx: 72 },
+    // 0.45 where it was 0.6 (2026-10-01): on Dash Slash it made a run into a late pack two full cuts deep.
+    effect: { kind: "finale", share: 0.45, reachPx: 72 },
     text: "the run ends in a thrown cut",
     description:
       "Where the run stops, its cut is thrown on ahead as a crescent of sword energy that passes through each "

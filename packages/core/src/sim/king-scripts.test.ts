@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { KING_AUDIENCE_FIRST_TURN_MS, beginKingEntrance, createWorld, hurtEnemy, step, worldCleared } from "./world.ts";
-import { kingFloorHp, makeKing } from "./enemy.ts";
+import { BOSS_PHASE_HEARTS, kingFloorHp, makeKing } from "./enemy.ts";
 import { NO_INPUT, noMods } from "./types.ts";
 import type { World } from "./types.ts";
 import { throneHall } from "../rooms/index.ts";
@@ -86,6 +86,27 @@ describe("the king's scripts: phases", () => {
     step(w, NO_INPUT);
     expect(k.phase).toBe(2);
     expect(k.bossRoarMs).toBeGreaterThan(0);
+  });
+});
+
+describe("the king's scripts: the final's hearts", () => {
+  it("leaves a spare heart at his feet into phase II and two into phase III, and none are spent on a full bar", () => {
+    const w = hall("final-hearts");
+    const k = makeKing(w.nextEnemyId++, 368, 200, "final");
+    k.spawnFadeMs = 0; k.awake = true;
+    w.enemies.push(k);
+    const spares = () => w.pickups.filter((p) => p.alive && p.kind === "heart" && p.reserve).length;
+    step(w, NO_INPUT);
+    expect(spares()).toBe(0);
+    k.hp = Math.floor(KING_FINAL_HP * KING_FINAL_II_AT) - 1;
+    expect(stepUntil(w, () => k.phase === 2)).toBeGreaterThanOrEqual(0);
+    expect(spares()).toBe(BOSS_PHASE_HEARTS[2]);
+    k.hp = Math.floor(KING_FINAL_HP * KING_FINAL_III_AT) - 1;
+    expect(stepUntil(w, () => k.phase === 3)).toBeGreaterThanOrEqual(0);
+    expect(spares()).toBe((BOSS_PHASE_HEARTS[2] ?? 0) + (BOSS_PHASE_HEARTS[3] ?? 0));
+    // A spare on a full bar waits rather than being taken for nothing.
+    stepUntil(w, () => false, 60 * 3);
+    expect(spares()).toBe(3);
   });
 });
 
