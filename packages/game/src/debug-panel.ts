@@ -69,6 +69,12 @@ export interface PlaytestRoom {
   /** How long an enemy bullet was within `NEAR_BULLET_PX`. */
   nearMs: number;
   /**
+   * How long the room was being fought: `ms` up to the clear. The share of it
+   * under fire is taken over this, as the harness takes it, and not over the
+   * walk to the reward and the door that follows.
+   */
+  fightMs: number;
+  /**
    * The mana economy, as the player met it (doc 011): presses of a key holding
    * a spell, how many the bar refused for cost, and how long the bar spent
    * under the cheapest key's cost. Read straight off `WorldStats`, so the
@@ -214,7 +220,7 @@ export class PlaytestRecorder {
     this.seed = seed;
     this.live = {
       index, type, ms: 0, hpLost: 0, bySource: {}, kills: 0, level: 1,
-      dashes: 0, casts: 0, swings: 0, nearMs: 0,
+      dashes: 0, casts: 0, swings: 0, nearMs: 0, fightMs: 0,
       castPresses: 0, castRefusedMana: 0, manaShortMs: 0,
     };
     this.was = { swingMs: 0, dashMs: 0, shotsFired: 0 };
@@ -264,6 +270,7 @@ export class PlaytestRecorder {
     const p = w.player;
     this.watch.sample(w, dtMs);
     r.ms += dtMs;
+    if (!w.cleared) r.fightMs += dtMs;
     if (this.was.swingMs <= 0 && p.swingMs > 0) r.swings++;
     if (this.was.dashMs <= 0 && p.dashMs > 0) r.dashes++;
     if (w.stats.shotsFired > this.was.shotsFired) r.casts++;
@@ -298,7 +305,7 @@ export class PlaytestRecorder {
    */
   nearShare(): number {
     const r = this.live;
-    return r && r.ms > 0 ? r.nearMs / r.ms : 0;
+    return r && r.fightMs > 0 ? r.nearMs / r.fightMs : 0;
   }
 
   /** Closes the room in progress and writes the log out. */

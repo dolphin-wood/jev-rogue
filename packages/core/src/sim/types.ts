@@ -2548,6 +2548,16 @@ export interface World {
   dealer: string;
   cleared: boolean;
   /**
+   * **The room's stats as they stood the step it was cleared**, and unset
+   * while it is not. The world keeps stepping after the last body dies — the
+   * player walks to the reward, reads the cards, walks to a door — and every
+   * counter in `stats` keeps running through it, so a fight measured when the
+   * player leaves is a fight padded with however long they took to leave.
+   * The harness stops a room at the clear (`fightRoom`); this is the same
+   * moment, kept for the browser, which leaves later.
+   */
+  statsAtClear?: WorldStats;
+  /**
    * Impact freeze, in ms. While positive the whole simulation holds still.
    *
    * Nijman's "sleep": one or two frames on a hit is below the threshold at

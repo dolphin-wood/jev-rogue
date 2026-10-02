@@ -305,6 +305,7 @@ function beginDrop(w: World, a: AudienceState): void {
   a.king = king.id;
   w.awaitingBoss = false;
   w.cleared = false;
+  w.statsAtClear = undefined;
   w.events.push({ kind: "telegraph", x: at.x, y: at.y, what: "audience_drop" });
 }
 

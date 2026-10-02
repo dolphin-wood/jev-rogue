@@ -49,6 +49,14 @@ export function bucketRecentDamage(heartsLost: number): RecentDamage {
  * rooms grow — and rises again at the end, where the rooms are biggest, and
  * the boss is a fight of its own length.
  *
+ * That run was timed to the door, and a room is now timed to its clear
+ * (`World.statsAtClear`), so each anchor carries the walk to the reward and on
+ * to a door: measured at 1.5 s from the middle of the room, about 5 s from its
+ * far corner, so 3 to 6 s in play — a tenth of a room, inside the ±30% that
+ * reads `normal`, and only for the three rooms before the player's own median
+ * takes over. Refit from a played run's `fightMs` rather than corrected by
+ * guess.
+ *
  * (The same session is the evidence that the game is currently too easy: 24 HP
  * over sixteen rooms is a run that was never in danger. That is a balance
  * question, not a labelling one, and this curve does not try to answer it.)

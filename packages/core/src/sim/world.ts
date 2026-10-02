@@ -554,6 +554,7 @@ function placeGuardian(w: World): void {
   w.player.facing = Math.atan2(g.y - w.player.y, g.x - w.player.x);
   w.enemies.push(g);
   w.cleared = false;
+  w.statsAtClear = undefined;
   w.events.push({ kind: "telegraph", x: at.x, y: at.y, what: "guardian_arrives" });
 }
 
@@ -1100,6 +1101,11 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
   // Not while the boss is still to come (`World.awaitingBoss`): the hall is empty until he stands.
   if (!w.cleared && !w.awaitingBoss && worldCleared(w)) {
     w.cleared = true;
+    w.statsAtClear = {
+      ...w.stats,
+      hurtByEnemy: { ...w.stats.hurtByEnemy }, dealtBy: { ...w.stats.dealtBy },
+      castsBy: { ...w.stats.castsBy }, manaBy: { ...w.stats.manaBy },
+    };
     w.events.push({ kind: "room_cleared", x: w.player.x, y: w.player.y });
     /*
      * **The fight's leftovers go with it.** A seed armed on the floor, a shot

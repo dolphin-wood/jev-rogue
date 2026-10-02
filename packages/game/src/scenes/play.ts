@@ -25,7 +25,7 @@ import {
 import { SPELL_BUFFER_MS } from "@jr/core";
 import type {
   Bullet, Enemy, EnemyId, Input, ItemInstance, Mood, Offer, OfferCard, Portal,
-  PlayerMods, RewardCardKind, RoomPlan, RoomType, RunHistory, World, AttachedAffix,
+  PlayerMods, RewardCardKind, RoomPlan, RoomType, RunHistory, World, WorldStats, AttachedAffix,
   Element, Tension, RunContext, RunJournalEntry, Staff, SpellSlot, MeleeKind, MusicState, EliteAffix,
 } from "@jr/core";
 import { createDirector, createEvaluator, EvaluatorError } from "@jr/director";
@@ -1599,6 +1599,14 @@ export class PlayScene extends Phaser.Scene {
   private pickTags: string[][] = [];
   /** The card kept in this room, for the briefing's room-by-room journal. */
   private pickedThisRoom: string | null = null;
+  /**
+   * The debug panel emptied this room (`debugClearEnemies`), so its fight was
+   * never played: its stats are a few seconds of nothing, and folded in they
+   * would brief the Director on a player who deals no damage and clears in no
+   * time. The room is left out of every measured figure instead, as a room
+   * with no fight is.
+   */
+  private fightSkipped = false;
 
   /** The reward standing on the floor, its beam, and its glow. */
   /** The reward's column of light, redrawn each frame; see `buildRewardDrop`. */
@@ -2515,6 +2523,7 @@ export class PlayScene extends Phaser.Scene {
     // A new room, a new reward screen: what was kept in the last one belongs
     // to the last one's journal entry, which has already been written.
     this.pickedThisRoom = null;
+    this.fightSkipped = false;
     this.roomReward = through?.reward ?? "spell";
     // What the door showed — the school or family most of its cards are — and the cards themselves.
     this.roomPromise = {
@@ -3237,6 +3246,7 @@ export class PlayScene extends Phaser.Scene {
     e.awake = true;
     w.enemies.push(e);
     w.cleared = false;
+    w.statsAtClear = undefined;
   }
 
   /** Skip the encounter without kill rewards; the simulation handles the normal room-clear beat. */
@@ -3246,6 +3256,7 @@ export class PlayScene extends Phaser.Scene {
     w.enemies.length = 0;
     w.pendingWaves.length = 0;
     w.deathBursts.length = 0;
+    this.fightSkipped = true;
   }
 
   private spawnBoss(fightMs = 0): Enemy {
@@ -3268,6 +3279,7 @@ export class PlayScene extends Phaser.Scene {
     w.enemies.push(boss);
     w.awaitingBoss = false;
     w.cleared = false;
+    w.statsAtClear = undefined;
     this.throneImg?.setFrame("boss_throne_empty");
     return boss;
   }
@@ -10343,6 +10355,7 @@ export class PlayScene extends Phaser.Scene {
   private journalEntry(portal: Portal | null): RunJournalEntry {
     const w = this.world;
     const stats = w.stats;
+    const fight = fightStats(w);
     const hurtMost = Object.entries(stats.hurtByEnemy).sort((a, b) => b[1] - a[1])[0]?.[0];
     const worst = ([["shots", stats.hurtByRanged], ["blades", stats.hurtByMelee], ["hazards", stats.hurtByHazard]] as const)
       .reduce((a, b) => (b[1] > a[1] ? b : a));
@@ -10360,8 +10373,8 @@ export class PlayScene extends Phaser.Scene {
       mood: w.room.params.mood,
       health_lost: stats.heartsLost * HP_PER_HEART,
       health_low: stats.heartsLow * HP_PER_HEART,
-      ...(stats.elapsedMs > 0 ? {
-        seconds: stats.elapsedMs / 1000,
+      ...(fight.elapsedMs > 0 && !this.fightSkipped ? {
+        seconds: fight.elapsedMs / 1000,
         expected_seconds: expectedClearMsFor(this.roomIndex, this.clearedMs) / 1000,
       } : {}),
       hurt_by: worst[1] > 0 ? worst[0] : "nothing",
@@ -10423,10 +10436,13 @@ export class PlayScene extends Phaser.Scene {
     // Coins still in the air when the player steps through are theirs too.
     this.runGold += this.world.gold
       + this.world.pickups.reduce((s, c) => s + (c.alive && c.kind === "coin" ? c.value : 0), 0);
-    this.lastClearMs = this.world.stats.elapsedMs;
-    if (portal.type !== "shop" || portal.npc) this.clearedMs.push(this.world.stats.elapsedMs);
-    if (this.world.stats.elapsedMs > 0) this.measures.push(measureOf(this.world.stats));
-    this.lastNearShare = playtestLog.nearShare();
+    if (!this.fightSkipped) {
+      const fight = fightStats(this.world);
+      this.lastClearMs = fight.elapsedMs;
+      if (portal.type !== "shop" || portal.npc) this.clearedMs.push(fight.elapsedMs);
+      if (fight.elapsedMs > 0) this.measures.push(measureOf(fight));
+      this.lastNearShare = playtestLog.nearShare();
+    }
     this.heartsLostRecent = this.world.stats.heartsLost;
     /*
      * The Director sets the next room's tension from the run so far — the
@@ -12850,12 +12866,15 @@ export class PlayScene extends Phaser.Scene {
   private roomSoFar(): RoomSoFar {
     const w = this.world;
     const plan = this.planned;
+    // A skipped fight leaves the measured figures as the last played one left them (`fightSkipped`).
+    const skipped = this.fightSkipped;
+    const fight = fightStats(w);
     return {
       heartsLostRecent: w.stats.heartsLost,
-      lastClearMs: w.stats.elapsedMs,
-      clearedMs: this.npcRoom ? this.clearedMs : [...this.clearedMs, w.stats.elapsedMs],
-      measures: w.stats.elapsedMs > 0 ? [...this.measures, measureOf(w.stats)] : this.measures,
-      nearShare: playtestLog.nearShare(),
+      lastClearMs: skipped ? this.lastClearMs : fight.elapsedMs,
+      clearedMs: this.npcRoom || skipped ? this.clearedMs : [...this.clearedMs, fight.elapsedMs],
+      measures: fight.elapsedMs > 0 && !skipped ? [...this.measures, measureOf(fight)] : this.measures,
+      nearShare: skipped ? this.lastNearShare : playtestLog.nearShare(),
       gold: this.runGold + w.gold,
       history: {
         ...this.history,
@@ -21017,6 +21036,15 @@ function floorFrame(x: number, y: number, drains: ReadonlySet<number>): string {
  * drawings are about that size; the Crypt King stands far taller than the
  * circle he fights on, so his sit over his crown rather than on his chest.
  */
+/**
+ * **The fight's stats**: as the room stood when it was cleared, or as it
+ * stands if it has not been. What the Director is briefed on is the fight, not
+ * the walk to the reward and the door after it (`World.statsAtClear`).
+ */
+function fightStats(w: World): WorldStats {
+  return w.statsAtClear ?? w.stats;
+}
+
 /** What `window.__lab` offers the debug harness; see `PlayScene.labApi`. */
 interface LabApi {
   /** A room is up and nothing modal is over it. */
