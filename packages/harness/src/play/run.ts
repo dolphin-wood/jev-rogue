@@ -16,6 +16,7 @@ import {
   observedFigures,
   bucketConsistency, cardStyleTags, measureOf, observedLabels, UNMEASURED,
   makeEnemy, GRID_W, GRID_H, TILE_PX, runStaff, SPELL_LEVEL_MAX, slotCost, affixFitsSpell, spellAffixById, journalDoor, cardTypesOf, hasChest, CHEST_SALT, CHEST_GOLD,
+  REWARD_KINDS, OPENING_CARD_KINDS, OPENING_SALT,
 } from "@jr/core";
 import type { OfferPromise,
   Archetype, ItemInstance, RoomType, JournalDoor, RunContext, RunHistory, RunJournalEntry, Staff, Tension, World,
@@ -524,8 +525,10 @@ export async function playRun(
      * here, riding in the room's round 1 as they always did. The merchant
      * stocks one card of each kind; the boss room offers nothing.
      */
-    const offerKind: RewardCardKind | null =
+    let offerKind: RewardCardKind | null =
       isFight ? door.reward : stage === "shop" ? "stat" : null;
+    // The run's first room has no door in: its kind is asked with its plan, as the scene asks it.
+    const opening = isFight && index === 1 && !door.cards;
     const held = heldNow();
     const needs = needsFor(ctx);
     // The first audience pays its door a grade higher (doc 022).
@@ -533,7 +536,14 @@ export async function playRun(
       ? promiseFor(index, isFixedFightRoom(index, audienceRoom) ? audienceGrade(door.grade) : door.grade) : {};
     const decidedCards = isFight && door.reward !== "gold" ? door.cards : undefined;
     const cardReqs: CardRequest[] = [];
-    if (isFight && door.reward !== "gold" && !decidedCards)
+    if (opening)
+      for (const k of OPENING_CARD_KINDS)
+        cardReqs.push({
+          room_index: index, pool: cardPool(ITEMS, ownedFor(k), k, held, promise, needs),
+          count: CARDS_PER_OFFER, pity: needMisses >= 3, temptation: offersMade % 4 === 3,
+          salt: `${OPENING_SALT}${k}`,
+        });
+    else if (isFight && door.reward !== "gold" && !decidedCards)
       cardReqs.push({
         room_index: index, pool: cardPool(ITEMS, ownedFor(door.reward), door.reward, held, promise, needs),
         count: CARDS_PER_OFFER, pity: needMisses >= 3, temptation: offersMade % 4 === 3,
@@ -551,7 +561,7 @@ export async function playRun(
         room_index: index, pool: cardPool(ITEMS, ownedFor("stat"), "stat", held, {}, needs), count: 1,
         pity: false, temptation: false, salt: CHEST_SALT,
       });
-    const offerReq: OfferRequest = { cards: cardReqs };
+    const offerReq: OfferRequest = { cards: cardReqs, ...(opening ? { opening: REWARD_KINDS } : {}) };
 
     // The Director still plans the fights; the merchant and the boss are
     // placed directly, as the scene does, because neither is an encounter.
@@ -566,10 +576,18 @@ export async function playRun(
     const answered = stage === "boss" || cardReqs.length === 0 ? null
       : planned?.offer ?? await director.planOffer(ctx, offerReq);
 
+    if (opening && answered?.opening) {
+      const kind = answered.opening.kind;
+      const at = cardReqs.findIndex((r) => r.salt === `${OPENING_SALT}${kind}`);
+      const ids = at >= 0 ? answered.cards[at]?.ids : undefined;
+      door = { ...door, reward: kind, ...(ids?.length ? { ...cardTypesOf(kind, ids), cards: ids } : {}) };
+      offerKind = kind;
+    }
     const chestAt = cardReqs.findIndex((r) => r.salt === CHEST_SALT);
     const chestStat = chestAt >= 0 ? answered?.cards[chestAt]?.ids[0] ?? null : null;
     let cards: OfferCard[] = [];
-    const cardIds = decidedCards ?? (isFight && door.reward !== "gold" ? answered?.cards[0]?.ids : undefined);
+    const cardIds = (opening ? door.cards : decidedCards)
+      ?? (isFight && door.reward !== "gold" ? answered?.cards[0]?.ids : undefined);
     if (cardIds && door.reward !== "gold") {
       cards = cardsFor(ITEMS, door.reward, cardIds, promise);
       // Pity reads whether a card of a need reached the screen, against the build as it stands.

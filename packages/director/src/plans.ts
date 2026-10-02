@@ -15,7 +15,7 @@ import type {
   PatternNode, RestOption, RoomPlan, RoomType, Staff, Tension,
   WaveStructure,
 } from "@jr/core";
-import type { CardPool, DoorOffer, Distribution, PortalChoices } from "@jr/core";
+import type { CardPool, DoorOffer, Distribution, PortalChoices, RewardCardKind } from "@jr/core";
 import type { Decision, DecisionSource, FallbackPath } from "./types.ts";
 import type { AffixIntent } from "./questions/affixes.ts";
 
@@ -139,6 +139,13 @@ export interface OfferRequest {
   readonly portals?: PortalChoices;
   readonly cards?: readonly CardRequest[];
   /**
+   * **The reward kinds the run's first room may pay**, when it is asked. Every
+   * other room's kind is the door the player came through; the first has no
+   * door in, so its kind is a question of its own (`opening_reward`), and the
+   * caller sends a card request for each kind beside it.
+   */
+  readonly opening?: readonly RewardCardKind[];
+  /**
    * What the request is named on the readout (`RequestMeta.purpose`); `offer`
    * when left out. A vendor's room asks its shelf and, once the player turns
    * to go, its doors: two requests of this shape in one room, which a caller
@@ -149,6 +156,8 @@ export interface OfferRequest {
 
 export interface OfferPlan {
   readonly portals?: PortalPlan;
+  /** The first room's reward kind, when `OfferRequest.opening` asked for it. */
+  readonly opening?: { readonly kind: RewardCardKind; readonly decisions: readonly Decision[] };
   /** One per card request, in the order asked. */
   readonly cards: readonly CardPlan[];
 }

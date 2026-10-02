@@ -29,7 +29,6 @@ import type {
   BaseItem, EncounterProfile, HeldKey, JournalDoor, Mood, ObservedLabels, RunContext, RunJournalEntry,
   SpaceArchetypeId, StatFamily,
 } from "@jr/core";
-import { AFFIX_LANES, laneFromText } from "./questions/affixes.ts";
 import { clampFreeText } from "./questions/common.ts";
 import { recentHistory } from "./questions/history.ts";
 import { LAST_LOOK } from "./questions/specs.ts";
@@ -43,10 +42,8 @@ export interface BriefingPlayer {
   readonly stylePreset?: string;
   /** What the style's spells do (`STYLE_CARDS[preset].does`), not the card's blurb. */
   readonly styleMeans?: string;
-  /** What they typed at the start, if anything, and the lane `laneFromText` reads in it. */
+  /** What they typed at the start, if anything, verbatim. */
   readonly ownWords?: string;
-  readonly ownWordsLane?: string;
-  readonly ownWordsLaneMeans?: string;
 }
 
 export interface BriefingBuild {
@@ -256,7 +253,7 @@ export const THE_GAME: string = [
   `- Stats: small permanent upgrades, in four families — ${STAT_FAMILIES.join(", ")} — with three in each. `
     + "Those four words are the answers to the stat-family question.",
   "- Doors: each room ends with one to three doors, each promising a reward for clearing the next room: "
-    + "spell (a new spell, or a level for one on the staff), affix, stat, gold, or a room with no fight in "
+    + "spell (a new spell, or a level for one held on a key), affix, stat, gold, or a room with no fight in "
     + `it — merchant (buys a card for gold: spell ${MERCHANT_PRICE["spell"]}, affix ${MERCHANT_PRICE["affix"]}, `
     + `stat ${MERCHANT_PRICE["stat"]}), smith (raises one held spell's level for gold: `
     + `${[1, 2, 3, 4].map((l) => `${SMITH_PRICE[l]} from level ${l}`).join(", ")}), or fountain (one drink, `
@@ -310,18 +307,6 @@ function playerLines(p: BriefingPlayer): string[] {
   if (p.ownWords?.trim()) {
     out.push("- In their own words, typed before the run:");
     out.push(`  - "${p.ownWords.trim()}"`);
-    /*
-     * **A keyword read that found nothing says nothing.** It used to print
-     * "names no affix lane in particular", which reads as the game's verdict
-     * on the words — that they ask for nothing — when all it means is that no
-     * English keyword matched: every sentence typed in Chinese or Japanese got
-     * it, and the words themselves were left standing under a line
-     * discounting them.
-     */
-    if (p.ownWordsLane) {
-      out.push(`  - A keyword read of those words names the ${p.ownWordsLane} affix lane`);
-      if (p.ownWordsLaneMeans) out.push(`  - That lane is: ${p.ownWordsLaneMeans}`);
-    }
   } else {
     out.push("- In their own words: they typed nothing");
   }
@@ -526,7 +511,7 @@ function buildLines(b: BriefingBuild): string[] {
   if (b.affixSlotsOpen) {
     const total = b.keys.filter(Boolean).length * AFFIX_SLOTS;
     const open = b.keys.reduce((n, k) => n + (k ? AFFIX_SLOTS - k.affixes.length : 0), 0);
-    out.push(`- Affix slots across the staff: ${open} of ${total} open (${b.affixSlotsOpen})`);
+    out.push(`- Affix slots across the keys: ${open} of ${total} open (${b.affixSlotsOpen})`);
   }
   if (b.spellLevels) out.push(`- Spell levels: ${LEVELS_WORD[b.spellLevels] ?? b.spellLevels}`);
   if (b.heldElements) out.push(`- Elements the keys carry between them: ${ELEMENTS_WORD[b.heldElements] ?? b.heldElements}`);
@@ -985,7 +970,7 @@ const FACT_WORDS: Readonly<Record<string, string>> = {
   need: "a Ward or Retort affix or a survival stat, offered while health is low",
   eases: "tagged for what the last fights measured short: shots landing, the bar, the cast rate or the damage",
   synergy: "carries an element the keys carry",
-  upgrade: "a copy of a spell on the staff, which raises its level and fills no key",
+  upgrade: "a copy of a spell held on a key, which raises its level and fills no key",
   promised: "the school or family the door's badge names",
 };
 const factWords = (f: string) => FACT_WORDS[f] ?? f;
@@ -1244,7 +1229,6 @@ export function briefingFrom(ctx: RunContext, extra: BriefingExtra): string {
   });
   const recent = recentHistory(ctx.history);
   const words = clampFreeText(ctx.intent.free_text);
-  const lane = laneFromText(words);
   const card = STYLE_CARDS[ctx.intent.preset];
   const maxHealth = ctx.max_health ?? MAX_HEARTS * HP_PER_HEART;
   const journal = ctx.history.journal ?? [];
@@ -1254,7 +1238,6 @@ export function briefingFrom(ctx: RunContext, extra: BriefingExtra): string {
       stylePreset: ctx.intent.preset,
       ...(card ? { styleMeans: card.does } : {}),
       ...(words ? { ownWords: words } : {}),
-      ...(lane ? { ownWordsLane: lane, ownWordsLaneMeans: AFFIX_LANES[lane].text } : {}),
     },
     build: {
       keys, manaMax,

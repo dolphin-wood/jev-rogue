@@ -71,6 +71,14 @@ Three layers of decision at every portal:
 | Which portal to enter | player | the visible choice |
 | What the room behind each portal contains | Jev, per room | 004, 005, 007 |
 
+**The run's first room has no portal in**, so no portal has said what it pays.
+It asks which reward it pays (`opening_reward`), over the doors' reward kinds,
+in its own round-1 request beside the cards for every kind it could be. Its
+instruction is not the doors': every player of a style starts with the same
+staff and nothing measured, so the stated style and the player's own words are
+what it goes on, and a reward fixed as a spell would have set them aside before
+anything read them.
+
 ### One question, ranked, instead of a menu of combinations
 
 The portal question used to enumerate every legal **set** of kinds and ask Jev

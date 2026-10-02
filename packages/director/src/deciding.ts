@@ -34,6 +34,7 @@ const GROUPS: readonly { readonly phrase: string; readonly matches: (name: strin
   },
   { phrase: "how many enraged bodies this room hides", matches: (n) => n === "elite_presence" },
   { phrase: "which reward each door out of this room promises, in rank order", matches: (n) => n === "portal_need" },
+  { phrase: "which kind of reward this room, the run's first, pays", matches: (n) => n === "opening_reward" },
   {
     phrase: "whether one of those doors leads to an elite fight, and how far its reward is graded up",
     matches: (n) => ["elite_portal", "elite_grade", "normal_grade"].includes(n),

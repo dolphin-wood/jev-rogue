@@ -100,7 +100,7 @@ judgement over several inputs. Nothing in class (b) or (c) is sent any more.
 | `keys_lean` | a | tally of the style tags on the keyed spells | — |
 | `off_style_picks` | a | picks outside the stated style in the last three | `consistency`, a verdict, and hard-coded `on_plan` |
 | `dominant_tags`, `held_schools` | a | tags and schools of what is held | — |
-| `intent_preset`, `typed_intent`, `intent.free_text` | a | what the player said | — |
+| `intent_preset`, `intent.free_text` | a | what the player said, the sentence verbatim | `typed_intent`, a keyword read of the sentence |
 | `zones`, `spawn_groups`, `open_ratio_label`, `cover_label`, `last_shapes`, `room_type`, `portal_count`, `tension` | a | the room that exists | — |
 | `mana_refused`, `mana_short_time` | a | see below | — |
 | `hits_per_shot`, `cast_rate`, `damage_rate`, `sword_share`, `hurt_by` | a | see below | — |
@@ -315,9 +315,8 @@ build, and the state said only how *complete* it was:
 
 `affix_intent` (007) is a lane over the affix roster rather than a content
 entry, so its option text is composed in `director/questions/affixes.ts` from
-the lane's affixes and its fit clause. Each lane also carries the **words and
-phrases** a player might type for it, which is how the control reads
-`intent.free_text`; Jev reads the sentence itself.
+the lane's affixes and its fit clause. Jev reads `intent.free_text` itself;
+no table of words turns it into a lane.
 
 ## Instructions
 

@@ -240,7 +240,7 @@ export const CATEGORY_OF: Readonly<Record<string, Category>> = {
   portal_need: "portals", spell_school: "portals", stat_family: "portals", elite_portal: "portals",
   elite_kind: "portals", elite_grade: "portals", normal_grade: "portals",
   overall: "cards", for_style: "cards", for_needs: "cards", variety: "cards", temptation: "cards", pity: "cards",
-  affix_intent: "cards",
+  affix_intent: "cards", opening_reward: "cards",
 };
 
 export function categoryOf(name: string): Category {

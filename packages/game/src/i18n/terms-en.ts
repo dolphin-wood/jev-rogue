@@ -30,7 +30,6 @@ export const EN_TERMS = {
   "term.dominant_tags": "leaning toward",
   "term.consistency": "consistency",
   "term.intent_preset": "chosen style",
-  "term.typed_intent": "typed intent",
   "term.last_tension": "last tension",
   "term.since_release": "since a breather",
   "term.last_room_kind": "last room",
@@ -437,6 +436,7 @@ export const EN_TERMS = {
   "term.qs.temptation": "temptation",
   "term.qs.pity": "pity",
   "term.qs.affix_intent": "affix lane",
+  "term.qs.opening_reward": "first room's reward",
   "term.qs.blendedOffer": "blended offer",
 
   /* ------ how an answer was reached, said beside the question it answers ---- */
@@ -481,6 +481,7 @@ export const EN_TERMS = {
   "term.q.temptation": "Which off-style card is strongest on its own terms?",
   "term.q.pity": "Which card makes up for the ones that never came?",
   "term.q.affix_intent": "Which way should the affixes lean?",
+  "term.q.opening_reward": "What should the run's first room pay?",
   "term.q.blendedOffer": "The offer, blended: {label}",
 
   /* ---------------------------- request headings ------------------------- */

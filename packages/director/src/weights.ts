@@ -5,7 +5,6 @@
  * the experiment.
  */
 import type { WeightTable } from "./source.ts";
-import { FREE_TEXT_WEIGHT, laneFromText } from "./questions/affixes.ts";
 import { NOUL_YES } from "./types.ts";
 
 function label(state: Readonly<Record<string, unknown>>, path: string): string {
@@ -16,12 +15,6 @@ function label(state: Readonly<Record<string, unknown>>, path: string): string {
   }
   return typeof cur === "string" ? cur : "";
 }
-
-/** The player's typed intent, as the state carries it (doc 002 caps it at 120 characters). */
-const freeText = (s: Readonly<Record<string, unknown>>): string | undefined => {
-  const v = label(s, "intent.free_text");
-  return v || undefined;
-};
 
 const hurt = (s: Readonly<Record<string, unknown>>) =>
   ["low", "critical"].includes(label(s, "health")) || label(s, "recent_damage") === "heavy";
@@ -273,10 +266,6 @@ export const ruleTable: WeightTable = (scopedQuestion, option, scopedState) => {
         : preset === "spam" || preset === "area" ? 1.6 : 1;
       else if (option === "survival") w = hurt(state) ? 2.5
         : label(state, "hurt_by") === "blades" ? 2 : preset === "melee" ? 2 : 0.6;
-      // The player's own words outrank every label above: they are the one
-      // input that is not inferred. Read off `typed_intent`, the label the
-      // state carries, so both arms weigh the same reading of the sentence.
-      if (label(state, "typed_intent") === option) w *= FREE_TEXT_WEIGHT;
       return w;
     }
 
@@ -296,6 +285,8 @@ export const ruleTable: WeightTable = (scopedQuestion, option, scopedState) => {
      * same single options the Jev arm ranks, and code turns the ranking into
      * doors, so the two arms still differ in exactly one thing.
      */
+    // The first room's kind is the same need, asked about this room (`openingAsk`).
+    case "opening_reward":
     case "portal_need": {
       const shape = label(state, "build_shape");
       const gold = label(state, "gold");
@@ -321,8 +312,10 @@ export const ruleTable: WeightTable = (scopedQuestion, option, scopedState) => {
           * (shape === "forming" ? 2 : shape === "raw" ? 0.7 : 1.2);
       if (option === "spell")
         return fatigue * (shape === "raw" ? 2.2 : shape === "forming" ? 1 : 0.7)
-          // A full staff with nothing raised: the spell door is the level door.
-          * (levels === "all_base" ? 1.8 : levels === "some_raised" ? 1.2 : 0.8);
+          // Full keys with nothing raised: the spell door is the level door. Only full ones: with a key
+          // empty, `raw` has already said so, and every run's opening keys are at level 1.
+          * (label(state, "build_gaps") === "some" ? 1
+            : levels === "all_base" ? 1.8 : levels === "some_raised" ? 1.2 : 0.8);
       if (option === "stat")
         return fatigue * (hurt(state) ? 1.5 : 1) * (shape === "formed" ? 1.5 : 0.8)
           // The only door that makes the bar bigger, and levels keep shrinking it.

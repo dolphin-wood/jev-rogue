@@ -49,7 +49,7 @@ import {
   staleFirst, tensionsAfter,
 } from "./questions/history.ts";
 import {
-  AFFIX_INTENT_INSTRUCTIONS, AFFIX_INTENT_WEIGHT, AFFIX_LANES, affixIntentOptions, laneFromText,
+  AFFIX_INTENT_INSTRUCTIONS, AFFIX_INTENT_WEIGHT, AFFIX_LANES, affixIntentOptions,
 } from "./questions/affixes.ts";
 import type { AffixIntent } from "./questions/affixes.ts";
 import {
@@ -387,6 +387,33 @@ export const DIRECTOR_BRIEF =
   + "every slot full and nothing raised has raising left, not widening. And a run that has gone wrong can "
   + "be saved: when the last rooms went badly, answer with what would turn it round rather than with what "
   + "the plan said.";
+
+/**
+ * **How a need for a reward kind is read** by the doors out of a room
+ * (`portal_need`). The run's first room asks over the same options but not
+ * with this reading (`openingAsk`): its staff and figures are the same for
+ * every player of a style.
+ */
+const NEED_READING =
+  "Start from build shape and from what the keys are actually holding — held spells names every spell with "
+  + "its level, its element, what it costs and what is already attached to it, and spell levels, affix slots "
+  + "open and casts per bar say what is left to do to it. Keys whose affix slots are all full have nothing an "
+  + "affix can go on. Then weigh what the "
+  + "last rooms measured: how many bodies each shot hit, how often the bar refused a cast, how much of the "
+  + "fight it spent under the cheapest key, how fast the casts and the damage came, and what took the most "
+  + "health. "
+  /*
+   * **The player's own words are one of the needs.** The briefing has
+   * always carried them, but this question never said to read them,
+   * and the one sentence it had about them (`INTENT_CLAUSE`) only
+   * fenced them in — so a player who typed "faster attacks" met a
+   * question that ranked from the staff and the last rooms and set
+   * their sentence aside. The kind whose cards do what they asked
+   * for is named here as a need among the others, not above them.
+   */
+  + "If the player typed what they want, read it as a need beside those: the reward whose cards give them "
+  + "what they asked for — whatever language they wrote it in — is one they need. "
+  + INTENT_CLAUSE;
 
 /*
  * **The fact it is read off, named first and alone.** The instruction used to
@@ -756,26 +783,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
         instructions:
           DIRECTOR_BRIEF + " " +
           "Which reward does this player need most right now? One option per portal badge; the highest " +
-          "answers become the portals out of this room, in that order. Start from build shape and from what " +
-          "the keys are actually holding — held spells names every spell with its level, its element, what " +
-          "it costs and what is already attached to it, and spell levels, affix slots open and casts per " +
-          "bar say what is left to do to it. A staff whose slots are full has nothing an affix can go on; " +
-          "a staff whose levels have never moved is a staff a spell door raises. Then weigh what the last " +
-          "rooms measured: how many bodies each shot hit, how often the bar refused a cast, how much of the " +
-          "fight it spent under the cheapest key, how fast the casts and the damage came, and what took the " +
-          "most health. " +
-          /*
-           * **The player's own words are one of the needs.** The briefing has
-           * always carried them, but this question never said to read them,
-           * and the one sentence it had about them (`INTENT_CLAUSE`) only
-           * fenced them in — so a player who typed "faster attacks" met a
-           * question that ranked from the staff and the last rooms and set
-           * their sentence aside. The kind whose cards do what they asked
-           * for is named here as a need among the others, not above them.
-           */
-          "If the player typed what they want, read it as a need beside those: the door whose cards "
-          + "give them what they asked for — whatever language they wrote it in — is one they need. "
-          + INTENT_CLAUSE,
+          "answers become the portals out of this room, in that order. " + NEED_READING,
         options: needOptions,
       }),
     };
@@ -1113,7 +1121,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
           "against the build as held spells writes it out — every key with its level, its school, its " +
           "element, what it costs and what is already attached to it — and against the player's own words " +
           "in intent free text, which is the one input they wrote themselves. Every card on the list can go " +
-          "on the staff as it stands: a new spell fills the first empty key, a copy of a held spell raises " +
+          "on the keys as they stand: a new spell fills the first empty key, a copy of a held spell raises " +
           "that key's level and fills no key, and an affix goes on a key that does not carry it yet. " +
           INTENT_CLAUSE + namedSpellFit,
       }),
@@ -1327,16 +1335,70 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
     finish(answer: Answered | null): OfferPlan;
   }
 
+  /**
+   * **What the run's first room pays.** Every other room's reward kind is
+   * the door the player walked through; the first room has none, and it was
+   * a spell for everyone — so a player who typed that they want a faster
+   * sword met a reward screen of spells before anything had read their
+   * words. It ranks the doors' own options, asked once about this room
+   * instead of about the rooms beyond it.
+   */
+  function openingAsk(ctx: RunContext, kinds: readonly RewardCardKind[]): Asked<NonNullable<OfferPlan["opening"]>> {
+    const labels = labelSet(ctx.labels as unknown as Record<string, unknown>);
+    return {
+      questions: {
+        opening_reward: choiceQuestion({
+          labels, style,
+          /*
+           * **Not the doors' reading.** It began as `NEED_READING`, which starts
+           * from the build shape and the staff's levels and then the rooms
+           * measured — and in the first room those are the same for every
+           * player of a style: one starting spell at level 1, two empty keys,
+           * nothing measured. Read first, they were a standing verdict for the
+           * spell door; on live Jev typed words moved it in English and Chinese
+           * and hardly at all in Japanese, and no-words states of every style
+           * came out at the same spell 0.84–0.86. So the instruction says what
+           * the state is here, and what in it tells one player from another.
+           */
+          instructions:
+            DIRECTOR_BRIEF + " " +
+            "Which reward should this room, the first of the run, pay? It has no door in, so nothing has " +
+            "chosen its reward yet; whatever is chosen here is the run's first reward screen. Every player of " +
+            "a style starts the same way — the style's one starting spell at level 1, the other keys empty, " +
+            "nothing measured — so the keys and the figures do not tell this player from any other. What " +
+            "does is the style they picked and what they typed, if anything: read their words, in whatever " +
+            "language they wrote them, for which of these rewards gives them what they asked for. Words that " +
+            "describe how they want to play, rather than name a reward, ask for whichever reward most " +
+            "directly makes that way of playing stronger. With " +
+            "nothing typed, go by the style. " + INTENT_CLAUSE,
+          options: kinds.map((k) => ({
+            id: k, description: KIND_CLAUSE[k] ?? k, ...(KIND_SPEC[k] ? { spec: KIND_SPEC[k]! } : {}),
+          })),
+        }),
+      },
+      state: {},
+      finish({ dists, source, path }) {
+        const rng = new RngSource(ctx.seed).stream("opening", ctx.room_index);
+        // The escape option is no reward: the answer is drawn over the kinds alone.
+        const d = decide("opening_reward", dists, source, rng, TEMPERATURE.portal, path,
+          restrictTo(dists.opening_reward!, kinds));
+        return { kind: d.choice as RewardCardKind, decisions: [d] };
+      },
+    };
+  }
+
   function offerAsk(ctx: RunContext, req: OfferRequest): OfferAsked {
     const portals = req.portals ? portalAsk(ctx, req.portals) : null;
+    const opening = req.opening?.length ? openingAsk(ctx, req.opening) : null;
     const cards = (req.cards ?? []).map((c) => cardAsk(ctx, c, c.salt ? `${c.salt}__` : ""));
     const asked = cards.filter((c): c is Asked<CardPlan> => !("done" in c));
-    const parts = [...(portals ? [portals] : []), ...asked];
+    const parts = [...(portals ? [portals] : []), ...(opening ? [opening] : []), ...asked];
     return {
       questions: mergeQuestions(parts.map((p) => p.questions)),
       state: Object.assign({}, ...parts.map((p) => p.state)),
       first(answer) {
         const done = cards.map((c) => ("done" in c ? c.done : c.finish(answer)));
+        const openingPlan = opening?.finish(answer);
         const draft = portals ? portals.draft(answer) : null;
         const next = portals && draft ? portals.follow(draft) : { questions: {}, state: {} };
         return {
@@ -1346,6 +1408,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
           finish(second) {
             return {
               ...(portals && draft ? { portals: portals.finish(draft, second) } : {}),
+              ...(openingPlan ? { opening: openingPlan } : {}),
               cards: done,
             };
           },
@@ -1809,7 +1872,7 @@ function notThisOne(field: "door_offered_running" | "door_skipped_most", kind: s
 
 const KIND_CLAUSE: Readonly<Record<string, string>> = {
   spell: grounded(
-    "A spell portal fills an empty key with a new castable, and to a full staff it offers both copies of " +
+    "A spell portal fills an empty key with a new castable, and when all three keys are full it offers both copies of " +
     "the spells already held — which raise their level — and new spells to replace one with.",
     ["build_shape", "raw"], ["build_gaps", "some"], ["spell_levels", "all_base"],
     notThisOne("door_offered_running", "spell"), notThisOne("door_skipped_most", "spell"),
@@ -1978,13 +2041,6 @@ function flatState(ctx: RunContext, extra: Record<string, unknown> = {}): Record
      */
     off_style_picks: OFF_STYLE[ctx.labels.preference.consistency] ?? "none",
     intent_preset: ctx.intent.preset,
-    /*
-     * The lane the player's own words name (doc 007), as a label, because a
-     * label is what Jev matches. The sentence itself still travels verbatim
-     * below: the label is the part an option can be grounded on, the sentence
-     * is the nuance no keyword table holds.
-     */
-    typed_intent: laneFromText(clampFreeText(ctx.intent.free_text)) ?? "none",
     ...recentHistory(ctx.history),
     intent: { preset: ctx.intent.preset, ...(clampFreeText(ctx.intent.free_text) ? { free_text: clampFreeText(ctx.intent.free_text) } : {}) },
     ...extra,

@@ -64,7 +64,6 @@ function input(over: Partial<BriefingInput> = {}): BriefingInput {
       style: "Crowd", stylePreset: "area",
       styleMeans: "Hit many at once.",
       ownWords: "I keep getting surrounded",
-      ownWordsLane: "wider", ownWordsLaneMeans: AFFIX_LANES.wider.text,
     },
     build: {
       keys: [
@@ -198,7 +197,7 @@ describe("the build section", () => {
 
   it("reports the staff's affix slots as a count of the total", () => {
     // Two keys held, three slots each; one taken.
-    expect(briefing(input())).toContain("Affix slots across the staff: 5 of 6 open");
+    expect(briefing(input())).toContain("Affix slots across the keys: 5 of 6 open");
   });
 });
 
@@ -369,10 +368,6 @@ describe("the affix lanes describe their own contents correctly", () => {
     expect(AFFIX_LANES.wider.affixes).toContain("harvest");
     expect(AFFIX_LANES.wider.text).toMatch(/Harvest makes a kill burst/);
   });
-  it("reads a sentence about pace as a sentence about pace", () => {
-    // "clear rooms fast" took a chain-lightning player to the mana lane.
-    expect(AFFIX_LANES.freecast.words).not.toContain("fast");
-  });
 });
 
 /* ------------------------------------------------------------- the adapter */
@@ -404,15 +399,12 @@ describe("briefingFrom", () => {
     expect(text).toContain("of 60");
   });
 
-  it("reads the player's own words for an affix lane and says which", () => {
-    expect(briefingFrom(ctx, { deciding: ["x"] })).toContain("names the wider affix lane");
-  });
-
-  it("quotes words no keyword matches without a line discounting them", () => {
-    const zh = { ...ctx, intent: { ...ctx.intent, free_text: "想要更快的攻击速度" } };
-    const text = briefingFrom(zh, { deciding: ["x"] });
-    expect(text).toContain('"想要更快的攻击速度"');
-    expect(text).not.toContain("keyword read");
+  it("quotes the player's own words verbatim, in any language, and reads nothing into them", () => {
+    for (const words of ["I keep getting surrounded", "想要更快的攻击速度", "剣を素早く振りたい"]) {
+      const text = briefingFrom({ ...ctx, intent: { ...ctx.intent, free_text: words } }, { deciding: ["x"] });
+      expect(text).toContain(`"${words}"`);
+      expect(text).not.toMatch(/keyword|affix lane/);
+    }
   });
 });
 

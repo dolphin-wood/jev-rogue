@@ -3,6 +3,7 @@ import {
   ITEMS, MAX_HEARTS, bucketClearSpeed, bucketGold, bucketHealth, bucketMovementPressure,
   bucketRecentDamage, bucketRunProgress, cardPool, cardsFor, emptyHistory, heldSpell, plainInstance,
   portalChoices, RngSource, schoolOf, heldDominantTags, NPC_OFFERS_MAX, RUN_COMBAT_ROOMS,
+  OPENING_CARD_KINDS, OPENING_SALT, REWARD_KINDS,
 } from "@jr/core";
 import type { RunContext, RunShape } from "@jr/core";
 import { CARD_JUDGING, createDirector } from "./director.ts";
@@ -512,6 +513,26 @@ describe("the offer asked in one request (doc 002: parallel questions)", () => {
     const alone = createDirector("rule");
     expect(room.offer?.portals?.doors).toEqual((await alone.planPortals(ctx(7), choices)).doors);
     expect(room.offer?.cards[0]?.ids).toEqual((await alone.planCards(ctx(7), req)).ids);
+  });
+
+  it("asks the first room's reward kind in its round 1, beside the cards for every kind it could be", async () => {
+    const seen: import("./director.ts").ObservedRequest[] = [];
+    const d = createDirector("rule", { observe: (r) => seen.push(r) });
+    const cards = OPENING_CARD_KINDS.map((k) => cardsReq(1, `${OPENING_SALT}${k}`, k));
+    const kinds = new Set<string>();
+    for (let seed = 0; seed < 20; seed++) {
+      seen.length = 0;
+      const room = await d.planRoom(ctx(1, { seed: `o${seed}`, shape: "raw" }), { room_index: 1, door_slot: 0, room_type: "combat" },
+        "release", { opening: REWARD_KINDS, cards });
+      expect(seen[0]!.questions.opening_reward).toBeTruthy();
+      expect(seen[0]!.questions.opening_spell__overall).toBeTruthy();
+      const opening = room.offer?.opening;
+      expect(REWARD_KINDS).toContain(opening?.kind);
+      expect(opening?.decisions[0]?.question).toBe("opening_reward");
+      kinds.add(opening!.kind);
+    }
+    // A draw, not a constant: the first room is no longer always a spell.
+    expect(kinds.size).toBeGreaterThan(1);
   });
 
   it("asks a vendor's three shelves and its portals together, each shelf scoped by its salt", async () => {

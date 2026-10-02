@@ -18,7 +18,6 @@ export const JA_TERMS = {
   "term.dominant_tags": "寄っている方向",
   "term.consistency": "方針の一貫性",
   "term.intent_preset": "選んだスタイル",
-  "term.typed_intent": "プレイヤーの意図",
   "term.last_tension": "前の層の緊張",
   "term.since_release": "息継ぎからの間隔",
   "term.last_room_kind": "前の層",
@@ -424,6 +423,7 @@ export const JA_TERMS = {
   "term.qs.temptation": "誘惑",
   "term.qs.pity": "救済",
   "term.qs.affix_intent": "付与の方向",
+  "term.qs.opening_reward": "最初の部屋の報酬",
   "term.qnote.advisory": "参考",
   "term.qnote.code_draw": "コードが抽選",
   "term.qnote.from_the_need_ranking": "必要度の順位から",
@@ -465,6 +465,7 @@ export const JA_TERMS = {
   "term.q.temptation": "スタイル外で単体最強のカードは？",
   "term.q.pity": "ずっと来ていないものを補うカードは？",
   "term.q.affix_intent": "付与効果はどちらへ寄せる？",
+  "term.q.opening_reward": "最初の部屋の報酬は何にする？",
   "term.q.blendedOffer": "混ぜ合わせた提示：{label}",
 
   /* ---------------------------- request headings ------------------------- */

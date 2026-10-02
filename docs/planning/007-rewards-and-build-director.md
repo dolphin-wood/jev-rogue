@@ -113,10 +113,14 @@ The third column is the half the question was missing. `build_shape` is a
 *ratio*, so it sits at `forming` for most of a run: once the keys fill and the
 affix slots start opening, the affix door's primary clause holds room after room
 after room, and it won essentially every offer — reported from play as "you just
-close your eyes and pick affix". The staff's own facts break the tie honestly:
-a staff with no slot left has nothing an affix can go on, a staff whose levels
-have never moved is one a spell door raises, and a bar that buys few casts with
-no mana stat ever taken is a build that is about to stop working.
+close your eyes and pick affix". The keys' own facts break the tie honestly:
+keys with no slot left have nothing an affix can go on, full keys whose levels
+have never moved are what a spell door raises, and a bar that buys few casts with
+no mana stat ever taken is a build that is about to stop working. The second of
+these is a weight in the control and a clause on the label arm only; said in the
+doors' instruction it was true of every run's opening keys and raised the spell
+door everywhere, so the briefing arm reads the levels off the state instead
+(finding 37).
 
 Each kind also carries the run's own history, as **"not this one"** clauses over
 `door_offered_running` and `door_skipped_most` (002, "Not this one, in the
@@ -436,19 +440,17 @@ which lane was chosen. The plan records it as `CardPlan.affix_intent`.
 this is the question it bears on most. "I want to freeze things and shatter
 them" has to produce ice affixes, or the field is decoration.
 
-- **Jev** reads the sentence directly: it is in the request's state, and the
-  instruction tells it to weigh the stated style and the player's words *first*,
-  then which way the keys lean and what the last fights measured.
-- **The control** reads it through a keyword and phrase table (`laneFromText`),
-  and multiplies the lane it names by `FREE_TEXT_WEIGHT`. The multiplier is
-  large because the inferred signals are strong and there are three of them; a
-  typed sentence is the one input that is not inferred, so it outweighs them
-  rather than joining them. A control that never opened the free text would be
-  a straw man on this question (011), which is why it is not one.
-
-Phrases outrank single words, because the words a player reaches for collide:
-"hit" is an aiming word in "I can never hit anything" and a damage word in "one
-big hit", and only the phrase says which was meant.
+- **Jev** reads the sentence directly: it is in the briefing verbatim, and the
+  instruction tells it to start from the player's words when they name a way
+  for the build to go, then weigh the stated style, which way the keys lean and
+  what the last fights measured.
+- **Nothing reads it for Jev.** No keyword table turns the sentence into a
+  label: one did (`laneFromText`, a `typed_intent` label), read only English,
+  misread what it matched, and stood between Jev and the one input that is not
+  inferred. Where Jev under-weighs a sentence, the briefing and the instruction
+  are what change.
+- **The control** does not read it. A weight table cannot read prose, so on the
+  rule arm typed words change nothing.
 
 ## The card request (Jev)
 

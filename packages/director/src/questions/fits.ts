@@ -50,7 +50,6 @@ export const FIT_FIELDS = {
   sword_share: ["none", "some", "most"],
   hurt_by: ["nothing", "shots", "blades", "hazards"],
   intent_preset: ["spam", "nuke", "area", "dot", "melee"],
-  typed_intent: ["homing", "freecast", "elemental", "heavier", "wider", "survival", "none"],
   last_tension: ["release", "build", "peak", "none"],
   since_release: ["just", "a_while", "long"],
   last_room_kind: ["combat", "elite", "rest", "none"],

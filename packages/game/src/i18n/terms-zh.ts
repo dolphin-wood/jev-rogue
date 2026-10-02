@@ -18,7 +18,6 @@ export const ZH_TERMS = {
   "term.dominant_tags": "偏向",
   "term.consistency": "流派一致性",
   "term.intent_preset": "所选流派",
-  "term.typed_intent": "玩家意图",
   "term.last_tension": "上一层张力",
   "term.since_release": "距上次喘息",
   "term.last_room_kind": "上一层类型",
@@ -424,6 +423,7 @@ export const ZH_TERMS = {
   "term.qs.temptation": "诱惑",
   "term.qs.pity": "保底",
   "term.qs.affix_intent": "词条方向",
+  "term.qs.opening_reward": "第一房的奖励",
   "term.qnote.advisory": "参考",
   "term.qnote.code_draw": "由代码抽取",
   "term.qnote.from_the_need_ranking": "取自需求排序",
@@ -465,6 +465,7 @@ export const ZH_TERMS = {
   "term.q.temptation": "哪张偏离流派的牌本身最强？",
   "term.q.pity": "哪张牌能补上一直没出现的卡？",
   "term.q.affix_intent": "词条该往哪个方向偏？",
+  "term.q.opening_reward": "第一房该给什么奖励？",
   "term.q.blendedOffer": "混合后的给牌：{label}",
 
   /* ---------------------------- request headings ------------------------- */

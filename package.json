@@ -29,6 +29,7 @@
     "route-review:jev": "NODE_USE_ENV_PROXY=1 node --no-warnings --env-file-if-exists=.env.local --experimental-strip-types packages/harness/src/cli/route-review.ts jev",
     "jev-run": "NODE_USE_ENV_PROXY=1 node --no-warnings --env-file-if-exists=.env.local --experimental-strip-types packages/harness/src/cli/jev-run.ts",
     "door-intent-ab": "NODE_USE_ENV_PROXY=1 node --no-warnings --env-file-if-exists=.env.local --experimental-strip-types packages/harness/src/cli/door-intent-ab.ts",
+    "words-ab": "NODE_USE_ENV_PROXY=1 node --no-warnings --env-file-if-exists=.env.local --experimental-strip-types packages/harness/src/cli/words-ab.ts",
     "variant-ab": "NODE_USE_ENV_PROXY=1 node --no-warnings --env-file-if-exists=.env.local --experimental-strip-types packages/harness/src/cli/variant-ab.ts",
     "card-exposure": "NODE_USE_ENV_PROXY=1 node --no-warnings --env-file-if-exists=.env.local --experimental-strip-types packages/harness/src/cli/card-exposure.ts",
     "jev-probe": "NODE_USE_ENV_PROXY=1 node --no-warnings --env-file-if-exists=.env.local --experimental-strip-types packages/harness/src/cli/jev-probe.ts",

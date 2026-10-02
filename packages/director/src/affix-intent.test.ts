@@ -16,7 +16,7 @@ import {
 } from "@jr/core";
 import type { Archetype, CardPool, RunContext } from "@jr/core";
 import { createDirector } from "./director.ts";
-import { AFFIX_INTENTS, AFFIX_LANES, laneFromText, laneOf } from "./questions/affixes.ts";
+import { AFFIX_INTENTS, AFFIX_LANES, laneOf } from "./questions/affixes.ts";
 
 function ctx(over: { preset?: Archetype; text?: string; hearts?: number; seed?: string } = {}): RunContext {
   const staff = { slots: 6, mana_max: 120 };
@@ -104,31 +104,18 @@ describe("the affix intent (doc 007)", () => {
       expect([...offered].some((id) => laneOf(id) === intent), `no ${intent} affix was ever offered`).toBe(true);
   });
 
-  it("follows the player's typed words: freezing and shattering pulls the elemental lane", () => {
-    expect(laneFromText("I want to freeze things and shatter them")).toBe("elemental");
-    expect(laneFromText("burn everything down")).toBe("elemental");
-    // No affix gives mana back, so running dry names no affix lane: it is the stat door's.
-    expect(laneFromText("I keep running out of mana")).toBeNull();
-    expect(laneFromText("I want to cast more")).toBe("freecast");
-    expect(laneFromText("I can never hit anything")).toBe("homing");
-    expect(laneFromText("get me in sword range")).toBe("survival");
-    expect(laneFromText("one big hit")).toBe("heavier");
-    expect(laneFromText(undefined)).toBeNull();
-    expect(laneFromText("something with no keywords at all")).toBeNull();
-  });
-
-  it("skews the offer toward the words the player typed", async () => {
-    const frozen = await offers((seed) => ctx({ seed, text: "I want to freeze things and shatter them" }));
+  /*
+   * The control does not read the player's words: a weight table cannot read
+   * prose, and the keyword table that tried read only English. The words are
+   * Jev's to read; on the rule arm they change nothing.
+   */
+  it("ignores typed words on the control arm", async () => {
+    const typed = await offers((seed) => ctx({ seed, text: "I want to freeze things and shatter them" }));
     const plain = await offers((seed) => ctx({ seed }));
-    // The lane the words name is the one chosen most often...
-    const modal = [...frozen.lanes].sort((a, b) => b[1] - a[1])[0];
-    expect(modal?.[0]).toBe("elemental");
-    expect((frozen.lanes.get("elemental") ?? 0) / 120).toBeGreaterThan(0.3);
-    // ...and that shows up in the cards, which is the point of the question.
-    expect(shareOfLane(frozen.ids, "elemental")).toBeGreaterThan(shareOfLane(plain.ids, "elemental"));
+    expect(typed.ids).toEqual(plain.ids);
   });
 
-  it("skews the offer toward the stated style when no words were typed", async () => {
+  it("skews the offer toward the stated style", async () => {
     const melee = await offers((seed) => ctx({ seed, preset: "melee" }));
     const spam = await offers((seed) => ctx({ seed, preset: "spam" }));
     expect(shareOfLane(melee.ids, "survival")).toBeGreaterThan(shareOfLane(spam.ids, "survival"));

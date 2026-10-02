@@ -99,18 +99,18 @@ export const LAST_LOOK = {
 export const KIND_SPEC: Readonly<Record<string, OptionSpec>> = {
   spell: {
     what: "A spell door. A new spell goes on the first empty key; a copy of a spell already held raises "
-      + "that key's level and fills no key. To a staff with all three keys full it offers both copies, "
+      + "that key's level and fills no key. When all three keys are full it offers both copies, "
       + "which raise a level, and new spells, each of which replaces one held spell. The build section "
       + "says which keys are empty and what level each held spell is at.",
-    not_for: "A staff whose three keys are full and raised, where a new spell takes the place of a "
+    not_for: "Three keys that are full and raised, where a new spell takes the place of a "
       + "raised one.",
   },
   affix: {
     what: "An affix door. It attaches a modifier to a spell already held — it chains, it burns, it comes "
       + "back off walls — in one of that key's affix slots, or in place of one on a full key. It fills no "
       + "key, and a key never takes an affix it already carries. The build section says how many affix "
-      + "slots are still open across the staff, and which are on which key.",
-    not_for: "A staff with no affix slot left anywhere, where every card means giving up an affix already "
+      + "slots are still open across the keys, and which are on which key.",
+    not_for: "Keys with no affix slot left anywhere, where every card means giving up an affix already "
       + "attached.",
   },
   /*
@@ -148,7 +148,7 @@ export const KIND_SPEC: Readonly<Record<string, OptionSpec>> = {
   gold: {
     what: `A gold door. It scatters a purse the player carries to a merchant or a smith: a card at the `
       + `merchant costs ${MERCHANT_PRICE["stat"]} to ${MERCHANT_PRICE["spell"]}, a level at the smith `
-      + `${SMITH_PRICE[1]} upward. The purse is spent in a later room; nothing goes on the staff in this `
+      + `${SMITH_PRICE[1]} upward. The purse is spent in a later room; nothing goes on a key in this `
       + `one. The Right now section says what the purse holds and what it buys.`,
     not_for: "A player carrying more gold than everything at the stop costs, for whom a second purse "
       + "buys nothing the first did not.",
@@ -169,7 +169,7 @@ export const NPC_SPEC: Readonly<Record<string, OptionSpec>> = {
     what: `A door to the smith instead of a fight: one held spell's level raised for gold `
       + `(${SMITH_PRICE[1]} from level 1, up to ${SMITH_PRICE[4]} from level 4). There is no fight, so it `
       + "costs this room's reward.",
-    not_for: "A staff with an empty key, where a level raises a held spell and the empty key stays empty, "
+    not_for: "Keys with one still empty, where a level raises a held spell and the empty key stays empty, "
       + "or a player who cannot afford a level.",
     examples: ["Spell levels: all keys at level 1; none raised"],
   },
@@ -827,7 +827,7 @@ export function subspeciesSpec(input: {
 export function cardNotFor(id: string, facts: readonly string[], discriminating: boolean): string | undefined {
   const claims = facts.filter((f) => CARD_CLAIMS.has(f));
   if (claims.length === 1 && claims[0] === "upgrade")
-    return "A staff with an empty key: the copy raises what is already held, and the empty key stays "
+    return "Keys with one still empty: the copy raises what is already held, and the empty key stays "
       + "empty.";
   const own = cardOwnNegative(id);
   if (own) return own;
@@ -837,7 +837,7 @@ export function cardNotFor(id: string, facts: readonly string[], discriminating:
    * where the cards it applies to are the minority (`discriminating`).
    */
   return claims.length === 0 && discriminating
-    ? "This card is not on the style the player stated, covers no role the staff is missing, eases "
+    ? "This card is not on the style the player stated, covers no role the keys are missing, eases "
       + "nothing the last fights were shortest of, carries no element the keys already build, and "
       + "raises nothing already held. It is here on its own merits alone."
     : undefined;
@@ -957,7 +957,7 @@ export function spellNegative(item: BaseItem): string {
     : item.tags.includes("long")
       ? "a fight held at sword range, where the cast has no room to travel"
     : element
-      ? `a staff whose keys already carry ${element}: its hits fill the same ${GAUGE[element] ?? element} `
+      ? `keys that already carry ${element}: its hits fill the same ${GAUGE[element] ?? element} `
         + "gauge the other key fills"
       : "a build that puts a status on every body: it carries no element and fills no gauge";
   return sentence(`${covers}; and ${asks}`);

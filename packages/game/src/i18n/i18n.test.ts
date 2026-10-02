@@ -192,7 +192,7 @@ const vocabulary = (): { id: string; field?: string }[] => {
   // The rest of the state, which is history and code's own labels.
   add([
     "build_range", "build_gaps", "dominant_tags", "intent_preset",
-    "typed_intent", "last_tension", "since_release", "last_room_kind", "damage_trend",
+    "last_tension", "since_release", "last_room_kind", "damage_trend",
     "build_shape", "keys_lean", "off_style_picks", "mana_refused", "mana_short_time",
     "hits_per_shot", "cast_rate", "damage_rate", "sword_share", "hurt_by",
     "portal_count", "held_schools", "reward_kind", "card_facts", "room_type",

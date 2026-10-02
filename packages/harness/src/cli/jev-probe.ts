@@ -31,8 +31,7 @@ const INDEX = 7;
 /**
  * The typed intent both players carry. The affix lane (doc 007) is the one
  * question the player can answer in words, so the probe has to send words:
- * without them `typed_intent` is `none` and the question is only being asked
- * half.
+ * without them the question is only being asked half.
  */
 const FREE_TEXT = "I want to freeze things and shatter them";
 

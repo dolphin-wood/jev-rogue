@@ -15,7 +15,7 @@ import {
   affixFits, affixFitsPart, affixTextKey, affixFitsSpell, itemShape,
   spikesOut, featureCells, fillSubspecies,
   heldDominantTags, STYLE_START, bucketClearSpeed, bucketGold, bucketMovementPressure, bucketRunProgress,
-  portalInReach, pendingPortalNear, pendingDoors, resolvePortals, cardTypesOf, answerOffer, PORTAL_RISE_MS, bucketHealth, bucketRecentDamage,
+  portalInReach, pendingPortalNear, pendingDoors, resolvePortals, cardTypesOf, answerOffer, PORTAL_RISE_MS, REWARD_KINDS, OPENING_CARD_KINDS, OPENING_SALT, bucketHealth, bucketRecentDamage,
   rewardInReach, REWARD_RISE_MS, NO_INPUT, tetherEnds, TOLL_PULSE_MS, ALERT_MS, MINE_BLAST, MINE_PRIME_MS, MINE_BURST_MS,
   MUSKET_RANGE, MUSKET_SPREAD_DEG, MUSKET_WINDUP_MS, FLAME_ROLL_MS, FLAME_LIFE_MS, flameRays, muzzleOf,
   ELEMENT_TINT, spellLookOf, swordEnergyLook, energyElements, energyTurn, WAKE_STRIPE,
@@ -1360,6 +1360,14 @@ export class PlayScene extends Phaser.Scene {
   private runMs = 0;
   /** The reward kind the player chose at the portal into this room. */
   private roomReward: RewardCardKind = "spell";
+  /**
+   * The run's first room, which has no portal in: its reward kind is asked of
+   * the Director with its plan (`OPENING_SALT`), and `roomReward` holds the
+   * answer once it is in.
+   */
+  private openingRoom = false;
+  /** How the first room's reward kind was decided, for the plan page; empty in every other room. */
+  private openingDecisions: readonly Decision[] = [];
   /** Whether this room is an elite one, from the portal that led here. */
   private elite = false;
   private lastWasElite = false;
@@ -2525,6 +2533,7 @@ export class PlayScene extends Phaser.Scene {
     this.pickedThisRoom = null;
     this.fightSkipped = false;
     this.roomReward = through?.reward ?? "spell";
+    this.openingRoom = index === 1 && !through;
     // What the door showed — the school or family most of its cards are — and the cards themselves.
     this.roomPromise = {
       ...(through?.schools ? { schools: through.schools } : {}),
@@ -2840,7 +2849,21 @@ export class PlayScene extends Phaser.Scene {
     if (stage === "boss") return { kind, promise, request: {} };
     const needs = this.cardNeeds(ctx);
     const cards: CardRequest[] = [];
-    if (fight && kind !== "gold" && !this.roomCards)
+    const opening = fight && this.openingRoom;
+    /*
+     * **The first room asks what it pays**, beside the cards for every kind
+     * it could be, as a room's doors do for the rooms behind them; the card
+     * requests go spell first, so an answer that came back without the kind
+     * still reads as the spell offer it used to be.
+     */
+    if (opening)
+      for (const k of OPENING_CARD_KINDS)
+        cards.push({
+          room_index: run.roomIndex, pool: cardPool(ITEMS, this.ownedFor(k), k, held, promise, needs),
+          count: CARDS_PER_OFFER, pity: this.needMisses >= 3, temptation: this.offersMade % 4 === 3,
+          salt: `${OPENING_SALT}${k}`,
+        });
+    else if (fight && kind !== "gold" && !this.roomCards)
       cards.push({
         room_index: run.roomIndex, pool: cardPool(ITEMS, this.ownedFor(kind), kind, held, promise, needs),
         count: CARDS_PER_OFFER, pity: this.needMisses >= 3, temptation: this.offersMade % 4 === 3,
@@ -2869,7 +2892,7 @@ export class PlayScene extends Phaser.Scene {
      * request carries only its cards, and only when the door in did not
      * bring them.
      */
-    return { kind, promise, request: { cards } };
+    return { kind, promise, request: { cards, ...(opening ? { opening: REWARD_KINDS } : {}) } };
   }
 
   /**
@@ -2886,7 +2909,9 @@ export class PlayScene extends Phaser.Scene {
     this.portalPlan = null;
     this.cardPlan = null;
     this.chestStat = null;
-    const { kind, promise } = ask;
+    this.openingDecisions = [];
+    const { promise } = ask;
+    let { kind } = ask;
     if (stage === "boss") return { offer: { cards: [], doors: [], coins: 0 }, stock: [] };
     try {
       const plan = answered ?? await this.director.planOffer(ctx, ask.request);
@@ -2925,7 +2950,32 @@ export class PlayScene extends Phaser.Scene {
         this.chestStat = chestPlan.ids[0] ?? null;
       }
       if (this.chestDue && !this.chestStat) this.chestStat = offerCards(ITEMS, src.stream("chest"), this.owned, "stat", held)[0]?.itemId ?? null;
-      if (fight && kind !== "gold" && this.roomCards) {
+      if (fight && plan.opening) {
+        // The first room: its kind, and the cards asked for that kind beside it.
+        kind = plan.opening.kind;
+        this.roomReward = kind;
+        record(plan.opening.decisions);
+        this.openingDecisions = plan.opening.decisions;
+        let chosen: CardPlan | undefined;
+        reqs.forEach((r, i) => {
+          const p = plan.cards[i];
+          if (!p || !r.salt?.startsWith(OPENING_SALT)) return;
+          const prefix = `${r.salt}__`;
+          record(p.decisions.map((d) => ({ ...d, question: `${prefix}${d.question ?? ""}` })),
+            { prefix, label: r.pool.kind, blended: p.blended, ids: p.ids });
+          if (r.pool.kind === kind) chosen = p;
+        });
+        if (kind !== "gold" && chosen?.ids.length) {
+          this.cardPlan = chosen;
+          this.roomCards = chosen.ids;
+          this.roomPromise = { ...cardTypesOf(kind, chosen.ids), grade: this.roomPromise.grade };
+          cards = cardsFor(ITEMS, kind, chosen.ids, promise);
+          const pool = reqs.find((r) => r.salt === `${OPENING_SALT}${kind}`)!.pool;
+          const hadNeed = chosen.ids.some((id) => pool.candidates.find((c) => c.id === id)?.facts.includes("need"));
+          this.needMisses = hadNeed ? 0 : this.needMisses + 1;
+          this.offersMade++;
+        }
+      } else if (fight && kind !== "gold" && this.roomCards) {
         // Decided with the door the player came through, against the build they carried through it.
         this.cardPlan = this.roomCardPlan;
         cards = cardsFor(ITEMS, kind, this.roomCards, promise);
@@ -10792,7 +10842,7 @@ export class PlayScene extends Phaser.Scene {
     // its mood and layout, the enemies, the portals, the cards.
     const decisions = [
       ...(this.doorPlan?.decisions ?? []), ...(this.planned?.decisions ?? []),
-      ...(this.cardPlan?.decisions ?? []), ...(this.portalPlan?.decisions ?? []),
+      ...this.openingDecisions, ...(this.cardPlan?.decisions ?? []), ...(this.portalPlan?.decisions ?? []),
     ].map((d, i) => ({ d, c: categoryOf(d.question ?? ""), i }))
       .sort((a, b) => CATEGORIES.indexOf(a.c) - CATEGORIES.indexOf(b.c) || a.i - b.i);
     const rows: ({ head: string } | { d: Decision })[] = [];

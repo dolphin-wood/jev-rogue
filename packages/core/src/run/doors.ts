@@ -164,6 +164,16 @@ function gradeDoors(doors: DoorOffer[], roomIndex: number, rng: Rng): DoorOffer[
 export const REWARD_KINDS: readonly RewardCardKind[] = ["stat", "spell", "affix", "gold"];
 
 /**
+ * **The run's first room has no door in**, so its reward kind is asked with
+ * its plan (`OfferRequest.opening`), beside a card request for every kind
+ * that deals cards. Spell first: an answer that comes back without the kind
+ * falls to the first request, and a spell offer is what the room used to be.
+ * The card requests are named by this prefix and the kind.
+ */
+export const OPENING_CARD_KINDS = ["spell", "affix", "stat"] as const satisfies readonly RewardCardKind[];
+export const OPENING_SALT = "opening_";
+
+/**
  * How many portals a room ends with: **one to three**, as doc 003 puts the
  * question, drawn rather than fixed. Three every time read as no randomness
  * at all — every room ended with the same three badges in a row, and the
