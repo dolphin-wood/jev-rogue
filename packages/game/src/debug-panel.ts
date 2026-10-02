@@ -490,6 +490,16 @@ const PANEL_ID = "jr-debug";
 const BUTTON_ID = "jr-debug-toggle";
 /** Whether the panel was open last time; a developer's convenience, per browser. */
 const OPEN_KEY = "jr-debug-open";
+/**
+ * Whether the open state is remembered at all: on a local dev server only.
+ * The deployed game starts with the panel closed on every load, so a panel
+ * left open once — or a stale flag from an older build — never greets the
+ * next deploy.
+ */
+const REMEMBER_OPEN = (() => {
+  const host = typeof location === "undefined" ? "" : location.hostname;
+  return ["localhost", "127.0.0.1", "[::1]"].includes(host) || host.endsWith(".localhost");
+})();
 /** Which tab was last looked at, remembered for the same reason. */
 const TAB_KEY = "jr-debug-tab";
 
@@ -590,7 +600,7 @@ export class DebugPanel {
     document.body.appendChild(this.button);
 
     let remembered = false;
-    try { remembered = localStorage.getItem(OPEN_KEY) === "1"; } catch { /* private window, or blocked */ }
+    try { remembered = REMEMBER_OPEN && localStorage.getItem(OPEN_KEY) === "1"; } catch { /* private window, or blocked */ }
     if (remembered) this.setOpen(true);
   }
 
@@ -741,9 +751,10 @@ export class DebugPanel {
       ?.addEventListener("click", () => this.actions.toFinal());
   }
 
-  /** The button or the backquote: the player's own choice, remembered for the next load. */
+  /** The button or the backquote: the player's own choice, remembered for the next load on a dev server. */
   toggle(): void {
     this.setOpen(!this.open);
+    if (!REMEMBER_OPEN) return;
     try { localStorage.setItem(OPEN_KEY, this.open ? "1" : "0"); } catch { /* not available: the panel still works */ }
   }
 
