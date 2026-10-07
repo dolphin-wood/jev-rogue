@@ -31,26 +31,50 @@ function chestWorld(seed: string, chest: boolean, gold = false): World {
 }
 
 describe("the way out", () => {
+  const open = (w: World) => w.portals.filter((p) => p.open).length;
+
   it("does not open in a card room until the reward is taken", () => {
-    for (const chest of [false, true]) {
-      const w = chestWorld(`gate-${chest}`, chest);
+    const w = chestWorld("gate", false);
+    for (let i = 0; i < 5 && !w.cleared; i++) step(w, NO_INPUT);
+    expect(w.cleared).toBe(true);
+    expect(w.rewardPending).toBe(true);
+    expect(open(w)).toBe(0);
+    answerOffer(w);
+    expect(open(w)).toBe(DOORS.length);
+  });
+
+  it("opens in a gold room as it clears", () => {
+    const w = chestWorld("gold", false, true);
+    for (let i = 0; i < 5 && !w.cleared; i++) step(w, NO_INPUT);
+    expect(w.cleared).toBe(true);
+    expect(w.rewardDrop).toBeNull();
+    expect(open(w)).toBe(DOORS.length);
+  });
+
+  it("waits for a shut chest, whichever is taken first", () => {
+    for (const chestFirst of [false, true]) {
+      const w = chestWorld(`chest-gate-${chestFirst}`, true);
       for (let i = 0; i < 5 && !w.cleared; i++) step(w, NO_INPUT);
-      expect(w.cleared).toBe(true);
-      expect(w.rewardPending).toBe(true);
-      expect(w.portals.filter((p) => p.open)).toHaveLength(0);
-      answerOffer(w);
-      expect(w.portals.filter((p) => p.open)).toHaveLength(DOORS.length);
+      if (chestFirst) {
+        expect(openChest(w)).toBe(false);
+        expect(open(w)).toBe(0);
+        answerOffer(w);
+      } else {
+        answerOffer(w);
+        expect(open(w)).toBe(0);
+        expect(openChest(w)).toBe(true);
+      }
+      expect(open(w)).toBe(DOORS.length);
     }
   });
 
-  it("opens in a gold room as it clears, chest or none", () => {
-    for (const chest of [false, true]) {
-      const w = chestWorld(`gold-${chest}`, chest, true);
-      for (let i = 0; i < 5 && !w.cleared; i++) step(w, NO_INPUT);
-      expect(w.cleared).toBe(true);
-      expect(w.rewardDrop).toBeNull();
-      expect(w.portals.filter((p) => p.open)).toHaveLength(DOORS.length);
-    }
+  it("waits for a shut chest in a gold room too", () => {
+    const w = chestWorld("gold-chest", true, true);
+    for (let i = 0; i < 5 && !w.cleared; i++) step(w, NO_INPUT);
+    expect(w.cleared).toBe(true);
+    expect(open(w)).toBe(0);
+    expect(openChest(w)).toBe(true);
+    expect(open(w)).toBe(DOORS.length);
   });
 });
 

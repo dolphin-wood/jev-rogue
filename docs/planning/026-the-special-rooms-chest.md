@@ -25,7 +25,9 @@ and we already have its closed and open frames (`prop_chest_0`, `prop_chest_1`).
 | Where | beside the reward, two tiles to one side, never on a hazard (`placeChest`); beside the player in a room with no reward |
 | How it opens | the interact key (E), as the reward does. A card shows the stat and the gold; the player takes it with E, Enter or a click, and the lid comes up. The fight is held while the card is up |
 | What it pays | `CHEST_GOLD` (20, one stat card at the merchant), bursting out and flying to the player, and **one stat upgrade** applied at once |
-| Doors | not held for it: a player may walk past it |
+| Doors | held for it, as they are for the reward: they rise once both are taken, in either order, and in a gold room once the chest alone is opened (`openWayOut`). The chest is all upside with nothing to choose, so a door beside it would only be a way to lose it unseen |
+| How it is found | it drops in with a puff of dust and stands in the reward's floor light in gold, with motes, sparks and a chevron bobbing over it; the minimap marks it with an amber box while it is shut |
+| Once open | the lid comes up on the gold, the gold flies home, and the chest fades away: an open chest left standing reads as one still to open |
 
 ## Who picks the stat
 

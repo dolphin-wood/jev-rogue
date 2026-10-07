@@ -2452,8 +2452,12 @@ export interface World {
   objective?: ObjectiveState;
   /** Whether this room leaves a chest when it clears (doc 026). */
   chestDue?: boolean;
-  /** The chest on the floor once the room has cleared (doc 026); `open` once the player has touched it. */
-  chest?: { x: number; y: number; open: boolean };
+  /**
+   * The chest on the floor once the room has cleared (doc 026); `open` once
+   * the player has touched it. `holding` is set when the way out would have
+   * opened but the chest was still shut: the doors rise when it opens.
+   */
+  chest?: { x: number; y: number; open: boolean; holding?: boolean };
   /**
    * Half the camera's view, px: what the player can see. A body fires only
    * from wholly inside it, and closes slower further off (`firePresence`).

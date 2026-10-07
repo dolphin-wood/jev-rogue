@@ -417,8 +417,21 @@ export function answerOffer(w: World): void {
   if (!w.rewardPending) return;
   w.rewardPending = false;
   w.rewardDrop = null;
-  // In front of the player, where they took the reward — which is gone, so
-  // the row need not keep clear of it.
+  openWayOut(w);
+}
+
+/**
+ * **The way out opens**, in front of the player: where they took the reward
+ * (which is gone, so the row need not keep clear of it), or where they stood
+ * when a gold room cleared. A special room's shut chest holds it (doc 026):
+ * the chest is all upside and nothing to choose, so a door beside it would
+ * only be a way to lose it unseen. The doors rise when the chest opens.
+ */
+function openWayOut(w: World): void {
+  if (w.chest && !w.chest.open) {
+    w.chest.holding = true;
+    return;
+  }
   w.portals = portalsBefore(w.room.grid, w.room.extent, w.portalSpecs, w.player, w.portalKeepClear, hazardCells(w), w.viewHalf);
   raisePortals(w.portals);
   w.events.push({ kind: "portals_open", x: w.player.x, y: w.player.y });
@@ -1134,7 +1147,7 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
         what: w.rewardDrop.kind,
       });
     }
-    // The chest stands beside whatever the room pays; it never stands in for the reward's gate.
+    // The chest stands beside whatever the room pays, and holds the way out until it is opened.
     if (w.chestDue) placeChest(w);
     if (w.offer && w.offer.cards.length === 0) {
       /*
@@ -1152,9 +1165,7 @@ export function step(w: World, input0: Input, dtMs = STEP_MS, items: ItemRegistr
        */
       for (let i = 0; i < (w.offer.coins ?? GOLD_ROOM_COINS); i++)
         drop(w.pickups, "coin", w.player.x, w.player.y, w.rng);
-      w.portals = portalsBefore(w.room.grid, w.room.extent, w.portalSpecs, w.player, w.portalKeepClear, hazardCells(w), w.viewHalf);
-      raisePortals(w.portals);
-      w.events.push({ kind: "portals_open", x: w.player.x, y: w.player.y });
+      openWayOut(w);
     }
   }
   stepExits(w, dtMs, input.interact === true);
@@ -1224,15 +1235,21 @@ export function chestInReach(w: World): boolean {
 /**
  * **The chest opens** (doc 026), when the player has taken what the card
  * shows: its gold bursts out and flies home. Its stat is the caller's to
- * hand over, since the run's modifiers are not the world's.
+ * hand over, since the run's modifiers are not the world's. A way out it was
+ * holding opens now; returns whether it did, since this runs outside a step
+ * and the caller has to ask what the doors are.
  */
-export function openChest(w: World): void {
+export function openChest(w: World): boolean {
   const c = w.chest;
-  if (!c || c.open) return;
+  if (!c || c.open) return false;
   c.open = true;
   burstCoins(w.pickups, c.x, c.y, CHEST_GOLD, w.rng);
   for (const p of w.pickups) if (p.alive && p.kind === "coin") p.homing = true;
   w.events.push({ kind: "telegraph", x: c.x, y: c.y, what: "chest_opened" });
+  if (!c.holding) return false;
+  c.holding = false;
+  openWayOut(w);
+  return true;
 }
 
 /** Floor tiles a point can see, sampled on the tile grid. */

@@ -1276,7 +1276,7 @@ export class PlayScene extends Phaser.Scene {
   private chestDue = false;
   private chestStat: string | null = null;
   /** The chest on the floor, once the room has cleared. */
-  private chestGfx: { body: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Image } | null = null;
+  private chestGfx: { body: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Image; light: Phaser.GameObjects.Graphics; ms: number } | null = null;
   /** A room with no fight met mid-run: which of them stands in it, or null for a fight. */
   private npcRoom: NpcKind | null = null;
   private npcRooms = 0;
@@ -11302,16 +11302,41 @@ export class PlayScene extends Phaser.Scene {
     }
   }
 
-  /** The special room's chest on the floor (doc 026), shut, with a faint glow so it is found. */
+  /**
+   * **The special room's chest on the floor** (doc 026), shut. It holds the
+   * way out, so it has to be found: it drops in with a thud, stands in a warm
+   * breathing glow of its own with motes and sparks (the reward's light, in
+   * gold), and a chevron bobs over it until it is opened (`updateChestLight`).
+   * A faint additive copy of the sprite alone read as a prop of the room.
+   */
   private buildChest(x: number, y: number): void {
     this.destroyChest();
-    const glow = this.add.image(x, y, this.uiTextureKey, safeFrame(this.atlas, "prop_chest_0", "prop_shop_0"))
-      .setOrigin(0.5, 0.6).setScale(1 / ART_SCALE).setDepth(4.4).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.35);
-    const body = this.add.image(x, y, this.uiTextureKey, safeFrame(this.atlas, "prop_chest_0", "prop_shop_0"))
-      .setOrigin(0.5, 0.6).setScale(1 / ART_SCALE).setDepth(bodyDepth(y, 0));
-    this.tweens.add({ targets: glow, alpha: 0.1, duration: 700, yoyo: true, repeat: -1 });
-    this.chestGfx = { body, glow };
+    const frame = safeFrame(this.atlas, "prop_chest_0", "prop_shop_0");
+    const glow = this.add.image(x, y, this.uiTextureKey, frame)
+      .setOrigin(0.5, 0.6).setScale(1.12 / ART_SCALE).setDepth(4.4).setBlendMode(Phaser.BlendModes.ADD)
+      .setTint(0xffc45e).setAlpha(0);
+    const body = this.add.image(x, y - 26, this.uiTextureKey, frame)
+      .setOrigin(0.5, 0.6).setScale(1 / ART_SCALE).setDepth(bodyDepth(y, 0)).setAlpha(0);
+    const light = this.add.graphics().setDepth(9.2).setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({ targets: body, y, alpha: 1, duration: 320, ease: "Bounce.easeOut" });
+    this.time.delayedCall(140, () => { if (this.chestGfx?.body === body) this.burst(x, y + 4, 0xd8c8a0, 10, 90, -Math.PI / 2, Math.PI * 1.4, 0.8, 160); });
+    this.chestGfx = { body, glow, light, ms: 0 };
     this.sfx.play("reward_reveal");
+  }
+
+  /** The shut chest's light, per frame: the reward's floor glow in gold, its own sprite breathing, and a chevron over it. */
+  private updateChestLight(dtMs: number): void {
+    const g = this.chestGfx;
+    const c = this.world.chest;
+    if (!g || !c || c.open) return;
+    g.ms += dtMs;
+    const rise = Math.min(1, g.ms / 400);
+    this.drawRewardBeam(g.light, c.x, c.y - 4, rise * (1.15 + 0.2 * Math.sin(g.ms / 520)), g.ms, 0xffc45e);
+    g.glow.setY(g.body.y).setAlpha(rise * (0.3 + 0.3 * Math.sin(g.ms / 300)));
+    // The chevron: a gold arrowhead over the lid, bobbing.
+    const top = c.y - TILE_PX * 1.25 + Math.sin(g.ms / 240) * 2.5;
+    g.light.fillStyle(0xffd45e, 0.9 * rise);
+    g.light.fillTriangle(c.x - 5, top - 4, c.x + 5, top - 4, c.x, top + 2);
   }
 
   /**
@@ -11372,13 +11397,24 @@ export class PlayScene extends Phaser.Scene {
     this.interactPressed = false;
     const id = this.chestStat;
     this.chestStat = null;
-    openChest(this.world);
+    // A way out the chest was holding rises now; ask what its doors are, as the reward's taking does.
+    if (openChest(this.world)) { this.sfx.play("portal_open"); void this.openDoors(); }
     const g = this.chestGfx;
     if (g) {
+      g.light.clear();
       g.body.setFrame(safeFrame(this.atlas, "prop_chest_1", "prop_chest_0"));
-      this.tweens.killTweensOf(g.glow);
-      g.glow.setFrame(safeFrame(this.atlas, "prop_chest_1", "prop_chest_0")).setAlpha(0.5);
-      this.tweens.add({ targets: g.glow, alpha: 0, duration: 900 });
+      this.tweens.killTweensOf([g.glow, g.body]);
+      g.glow.setFrame(safeFrame(this.atlas, "prop_chest_1", "prop_chest_0")).setAlpha(0.8);
+      this.tweens.add({ targets: g.glow, alpha: 0, duration: 500 });
+      this.burst(g.body.x, g.body.y - 6, 0xffd45e, 14, 160, -Math.PI / 2, Math.PI * 1.2, 1, 120);
+      /*
+       * Gone once the gold is out: an open chest left standing reads as one
+       * still to open, and the way out has just risen to take the eye.
+       */
+      this.tweens.add({
+        targets: g.body, alpha: 0, y: g.body.y + 4, delay: 550, duration: 350,
+        onComplete: () => { if (this.chestGfx === g) this.destroyChest(); },
+      });
     }
     this.sfx.play("clear");
     if (id) this.grantStat(id);
@@ -11386,9 +11422,10 @@ export class PlayScene extends Phaser.Scene {
 
   private destroyChest(): void {
     if (!this.chestGfx) return;
-    this.tweens.killTweensOf(this.chestGfx.glow);
+    this.tweens.killTweensOf([this.chestGfx.glow, this.chestGfx.body]);
     this.chestGfx.body.destroy();
     this.chestGfx.glow.destroy();
+    this.chestGfx.light.destroy();
     this.chestGfx = null;
   }
 
@@ -11510,20 +11547,19 @@ export class PlayScene extends Phaser.Scene {
    * a few sparks that rise a little way and fade. Findable from across the
    * room by the breathing, and it sits in the room rather than on it.
    */
-  private drawRewardBeam(x: number, baseY: number, strength: number, ms: number): void {
-    const g = this.beamGfx;
+  private drawRewardBeam(g: Phaser.GameObjects.Graphics, x: number, baseY: number, strength: number, ms: number, tint = 0xffe9a8): void {
     g.clear();
     if (strength <= 0) return;
     const breathe = 0.85 + 0.15 * Math.sin(ms / 520);
     // The floor glow, three discs from wide and dim to tight and bright.
     for (const [r, alpha] of [[38, 0.07], [24, 0.12], [13, 0.22]] as const) {
-      g.fillStyle(0xffe9a8, alpha * strength * breathe);
+      g.fillStyle(tint, alpha * strength * breathe);
       g.fillEllipse(x, baseY + 6, r * 2 * breathe, r * 1.1 * breathe);
     }
     // Motes orbiting the pedestal on the floor plane.
     for (let i = 0; i < 6; i++) {
       const a = ms / 700 + (i / 6) * Math.PI * 2;
-      g.fillStyle(i % 2 ? 0xffffff : 0xffe9a8, 0.7 * strength);
+      g.fillStyle(i % 2 ? 0xffffff : tint, 0.7 * strength);
       g.fillCircle(x + Math.cos(a) * 20, baseY + 6 + Math.sin(a) * 9, 1.4);
     }
     // Sparks rising a hand's breadth and gone.
@@ -13178,8 +13214,9 @@ export class PlayScene extends Phaser.Scene {
        * own would be a white bar.
        */
       const pulse = 0.82 + 0.18 * Math.sin(drop.riseMs / 520);
-      this.drawRewardBeam(drop.x, this.rewardGfx.body.y, rise * pulse, drop.riseMs);
+      this.drawRewardBeam(this.beamGfx, drop.x, this.rewardGfx.body.y, rise * pulse, drop.riseMs);
     }
+    this.updateChestLight(this.game.loop.delta);
 
     /*
      * One prompt, on whichever thing is in reach.
@@ -16690,6 +16727,12 @@ export class PlayScene extends Phaser.Scene {
       const rx = x0 + drop.x * scale, ry = y0 + drop.y * scale;
       g.fillStyle(0xffd45e, 1);
       g.fillPoints([{ x: rx, y: ry - 3 }, { x: rx + 3, y: ry }, { x: rx, y: ry + 3 }, { x: rx - 3, y: ry }], true);
+    }
+    // A shut chest, an amber box, since it holds the way out (doc 026).
+    const chest = this.world.chest;
+    if (chest && !chest.open) {
+      g.fillStyle(0xffa63d, 1);
+      g.fillRect(x0 + chest.x * scale - 2.5, y0 + chest.y * scale - 2, 5, 4);
     }
     /*
      * What a room with no fight in it holds, so the stop before the boss does
