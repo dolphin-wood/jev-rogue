@@ -423,12 +423,22 @@ const NEED_READING =
  * question before the first was read, and `variety` came back `low` in 84% of
  * offers, 9 of 14 with two off-style picks running (jev-findings 28, 30). The
  * keys stay in the state; the question names the cards the player kept.
+ *
+ * **Before any card is kept there is no count**, and that was every run's
+ * first room: the question named one fact and the state had none of it, so
+ * Jev put 0.33–0.45 of every first offer on the escape, with or without
+ * words, and declined 31 of 108 — 「雷系の呪文を使いたい」 4 of 9, an ice
+ * sentence 9 of 9. What tells one first-room player from another is what
+ * they typed, so that is what the question names there, both ways.
  */
 const VARIETY_QUESTION = {
   instructions:
     "How widely should this offer be drawn from the fit ranking? Answer from the cards the player has " +
     "kept (off style picks): how many of the last three are off the style they stated, and how many of " +
-    "the newest two.",
+    "the newest two. Before any card has been kept there is no such count: answer from what the player " +
+    "typed instead. Words that name one thing to build toward — a school, an element, a spell — ask for " +
+    "a draw that keeps to the cards that give it; words that ask to try many different things ask for a " +
+    "wide one; with nothing typed, the draw keeps to the stated style.",
   options: [
     {
       id: "low",

@@ -1145,6 +1145,29 @@ Reported from play: a player typed 「剣を素早く振りたい」 ("I want to
 
 **Rule:** a clause meant for one case is written into the state as that case's fact, not into the instruction as a reason for an option; in the instruction it raises the option in every state.
 
+<a id="finding-38"></a>
+
+### 38. A question that names one fact is declined where the state has none of it; name what the state does have (2026-10-07)
+Reported from play: a player typed 「雷系の呪文を使いたい」 ("I want to use thunder spells") and the first room's plan page read "declined". The room's own kind was fine (`opening_reward` spell 0.98, confidence 0.97); what Jev declined was each card offer's `variety`, whose instruction said to answer from the off-style count of the last three cards kept — and in the first room nothing has been kept. The briefing says so ("Cards kept so far: none"), and the wider two options' negatives, "a player none of whose last three cards kept is off the stated style", were vacuously true of it.
+
+Measured with `pnpm words-ab` (`AB_SET=variety`, new): the reported sentence, eight sentences written before the change and never used to tune it — four naming one thing to build toward, four asking to try many — and two no-words controls, three repeats; plus three room-4 states with cards kept as the control on the count itself. The first room put **0.33–0.45 of every `variety` answer on the escape, words or none**: declined 31 of 108, an ice sentence 9 of 9, poison 8 of 9, the no-words Barrage 4 of 9. Answered, it was `low` every time, the try-many sentences included.
+
+The instruction now says that before any card is kept there is no count, and to answer from what the player typed — words naming one thing (a school, an element, a spell) ask for a draw that keeps to it, words asking to try many things a wide one, nothing typed the stated style; the wider negatives are about "a player who has kept cards":
+
+| | before | after |
+|---|---|---|
+| first room, declined | 31 / 108 | **0 / 108** |
+| escape mass, first room | 0.33–0.45 | 0.02–0.11 |
+| top answer as wide as the words ask | 29 / 60 answered | **87 / 87** |
+| naming one thing → `low` | 0.29–0.53 | 0.53–0.94 (ice lowest) |
+| asking to try many → `high` | 0.06–0.13 | 0.87–0.94 |
+| no words → `low` | 0.45–0.49 | 0.85–0.87 |
+| kept, 0 off the style → `low` / 2 off → `high` | 1.00 / 0.99 | 0.98 / 0.94 |
+
+The opening set (`AB_SET=opening`, two repeats each side) moved nothing on `opening_reward` beyond ±0.05 a state and stayed at 36/42, and its `variety` declines went 10/156 → 0/156. One kept-card state with words named against the count — two off the style, then 「雷系の呪文を使いたい」 — went from `high` 0.98 to 0.71: the clause is conditional, but the words now pull a little where the count is present. Small, and arguably right; watched rather than fixed.
+
+**Rule:** where a question names one fact as its evidence, check every state it is asked in has that fact; where one does not, the question says what to read instead, not the state an option to fall back on.
+
 ## Standing rules that follow
 - State: facts from play, in words, with counts precomputed; no verdicts, no
   prescriptions; every coined term explained. An instruction may name a fact

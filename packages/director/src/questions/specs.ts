@@ -281,6 +281,11 @@ export const FAMILY_SPEC: Readonly<Record<string, OptionSpec>> = {
  * them, the count printed the other way round ("tagged with the stated
  * style: 0 of 3") and the negatives only, still answered `low` at 0.9 with
  * three cards of three off the style.
+ *
+ * The wider two's negatives are about a player **who has kept cards**: said
+ * of anyone none of whose last three is off the style, they held for the
+ * first room too, where nothing is kept, and ruled both out before the
+ * player's words were read.
  */
 export const VARIETY_SPEC: Readonly<Record<string, OptionSpec>> = {
   low: {
@@ -291,13 +296,13 @@ export const VARIETY_SPEC: Readonly<Record<string, OptionSpec>> = {
   },
   medium: {
     what: "A middling offer: mostly the closest fits, and now and then a card from further out.",
-    not_for: "A player none of whose last three cards kept is off the stated style, or whose newest two "
-      + "both are.",
+    not_for: "A player who has kept cards, none of the last three off the stated style, or whose newest "
+      + "two both are.",
     examples: ["Of those, off the stated style: 1 of 3; of the newest two: 1"],
   },
   high: {
     what: "A wide offer: cards from further out — other styles, other roles — beside the closest fits.",
-    not_for: "A player none of whose last three cards kept is off the stated style.",
+    not_for: "A player who has kept cards, none of the last three off the stated style.",
     examples: ["Of those, off the stated style: 2 of 3; of the newest two: 2"],
   },
 };
