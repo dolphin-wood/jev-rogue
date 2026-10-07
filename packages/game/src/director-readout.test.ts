@@ -93,3 +93,23 @@ describe("an answer drawn below its top option", () => {
     ])).toEqual({ space: "temperature", size: undefined, symmetry: "asGiven" });
   });
 });
+
+describe("a card's yes/no fit on the readout", () => {
+  it("keeps yes before no, however the two compare, and ranks every other answer", () => {
+    const log: ObservedRequest[] = [{
+      meta: { run_id: "r", room_index: 1, door_slot: null, round: 1, purpose: "room" },
+      state: {}, source: "jev",
+      dists: {
+        opening_stat__fit_leeching_edge: { no: 0.73, yes: 0.27 },
+        opening_stat__fit_swift_hand: { yes: 0.83, no: 0.17 },
+        size: { small: 0.2, standard: 0.8 },
+      },
+      questions: Object.fromEntries(["opening_stat__fit_leeching_edge", "opening_stat__fit_swift_hand", "size"]
+        .map((n) => [n, { instructions: "", criteria: {} }])) as unknown as ObservedRequest["questions"],
+    }];
+    const probs = Object.fromEntries(buildReadout(log, new Map())[0]!.questions.map((x) => [x.name, x.probs.map(([k]) => k)]));
+    expect(probs["opening_stat__fit_leeching_edge"]).toEqual(["yes", "no"]);
+    expect(probs["opening_stat__fit_swift_hand"]).toEqual(["yes", "no"]);
+    expect(probs["size"]).toEqual(["standard", "small"]);
+  });
+});

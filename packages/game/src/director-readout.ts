@@ -337,7 +337,16 @@ function unscoped(name: string): string {
   return at < 0 ? name : name.slice(at + 2);
 }
 
+/**
+ * A distribution's options, the likeliest first — except a yes/no answer,
+ * which keeps **yes before no** whatever the numbers. Ranked, a card Jev
+ * judged unfit read "no 73% · yes 27%" beside its neighbours' "yes 68% ·
+ * no 32%", and a column of those reads as two kinds of answer rather than
+ * one question with a score.
+ */
 function sorted(d: Readonly<Record<string, number>>): [string, number][] {
+  const keys = Object.keys(d);
+  if (keys.length === 2 && "yes" in d && "no" in d) return [["yes", d["yes"]!], ["no", d["no"]!]];
   return Object.entries(d).sort((a, b) => b[1] - a[1]);
 }
 
