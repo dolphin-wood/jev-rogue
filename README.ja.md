@@ -8,7 +8,7 @@ TypeSafe AI の選択モデル [Jev](https://docs.typesafe.ai/) がディレク�
 
 30 秒弱のプレイ：スタイルを選んで一言で注文し、戦う。Jev が報酬カードと次の扉を選ぶ。
 
-https://github.com/user-attachments/assets/6b883b46-4f20-42e2-b602-acdb12c0e31d
+https://github.com/user-attachments/assets/3a7ad7b9-ef1a-4b4b-8be7-4ae9413a9a94
 
 ## なぜ Jev を使うのか
 

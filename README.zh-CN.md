@@ -8,7 +8,7 @@
 
 不到 30 秒的一局：选风格、用一句话说明想要什么、战斗，然后看 Jev 挑选奖励卡和下一扇门。
 
-https://github.com/user-attachments/assets/6b883b46-4f20-42e2-b602-acdb12c0e31d
+https://github.com/user-attachments/assets/3a7ad7b9-ef1a-4b4b-8be7-4ae9413a9a94
 
 ## 为什么用 Jev？
 

@@ -8,7 +8,7 @@ A top-down action room roguelike directed by [Jev](https://docs.typesafe.ai/), T
 
 A run in under thirty seconds: pick a style and say what you want, fight, then watch Jev pick the reward cards and the next doors.
 
-https://github.com/user-attachments/assets/6b883b46-4f20-42e2-b602-acdb12c0e31d
+https://github.com/user-attachments/assets/3a7ad7b9-ef1a-4b4b-8be7-4ae9413a9a94
 
 ## Why Jev?
 
