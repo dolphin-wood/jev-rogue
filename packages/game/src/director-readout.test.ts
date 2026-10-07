@@ -67,3 +67,29 @@ describe("the doors' request on the readout", () => {
     expect(two!.questions.filter((x) => x.name === "normal_grade (code)")).toHaveLength(1);
   });
 });
+
+describe("an answer drawn below its top option", () => {
+  const log: ObservedRequest[] = [{
+    meta: { run_id: "r", room_index: 1, door_slot: 0, round: 1, purpose: "room" },
+    state: {}, source: "jev",
+    dists: { space: { open: 0.51, cramped: 0.49 }, size: { small: 0.6, large: 0.4 }, symmetry: { mirrored: 0.8, none: 0.2 } },
+    questions: Object.fromEntries(["space", "size", "symmetry"].map((n) => [n, { instructions: "", criteria: {} }])) as unknown as ObservedRequest["questions"],
+  }];
+  const plans = (decisions: PlanRecord["decisions"]) => new Map<string, PlanRecord>([["room", { decisions }]]);
+  const drawn = (decisions: PlanRecord["decisions"]) =>
+    Object.fromEntries(buildReadout(log, plans(decisions))[0]!.questions.map((x) => [x.name, x.drawn]));
+
+  it("says an unsure Jev answer was drawn as given, not re-rolled by a temperature", () => {
+    expect(drawn([
+      { choice: "cramped", probabilities: { open: 0.51, cramped: 0.49 }, confidence: 0.02, source: "jev", question: "space" },
+      { choice: "small", probabilities: { small: 0.6, large: 0.4 }, confidence: 0.2, source: "jev", question: "size" },
+    ])).toEqual({ space: "asGiven", size: undefined, symmetry: undefined });
+  });
+
+  it("says a rule-table answer was re-rolled by its temperature", () => {
+    expect(drawn([
+      { choice: "cramped", probabilities: { open: 0.51, cramped: 0.49 }, confidence: null, source: "rule", question: "space", temperature: 0.4 },
+      { choice: "none", probabilities: { mirrored: 0.8, none: 0.2 }, confidence: null, source: "rule", question: "symmetry" },
+    ])).toEqual({ space: "temperature", size: undefined, symmetry: "asGiven" });
+  });
+});

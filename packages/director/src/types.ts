@@ -119,6 +119,14 @@ export interface Decision<T extends string = string> {
   readonly confidence: number | null;
   readonly source: DecisionSource;
   readonly fallback_path?: FallbackPath;
+  /**
+   * The temperature the choice was drawn at, when one re-read the
+   * distribution before the draw. Absent for a draw from the distribution as
+   * given (Jev unsure, a frequency question) and for a confident answer's
+   * top option, so the plan page can say which of the two put a room below
+   * its distribution's first answer.
+   */
+  readonly temperature?: number;
   /** Which question this answers, for showing a plan's decisions by name. */
   readonly question?: string;
 }

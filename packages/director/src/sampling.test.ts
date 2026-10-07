@@ -77,6 +77,17 @@ describe("a confident Jev answer", () => {
     }
   });
 
+  it("records no temperature on a draw below its top, which the plan page reads", async () => {
+    // The rankings are the exception: they are read at a temperature
+    // whoever answered, and say so.
+    const rankings = new Set(["subspecies", "portal_need", "elite_kind (from the need ranking)"]);
+    const all = await decisions(80);
+    const below = all.filter((d) => d.source === "jev" && d.choice !== top(d) && !rankings.has(d.question ?? ""));
+    expect(below.length).toBeGreaterThan(0);
+    for (const d of below) expect(d.temperature, d.question).toBeUndefined();
+    for (const d of all.filter((d) => d.question === "subspecies")) expect(d.temperature).toBeGreaterThan(0);
+  });
+
   it("is taken at its top on a question about getting the one room right", async () => {
     const asked = (await decisions(40)).filter((d) => d.question === "size" && d.source === "jev");
     expect(asked.length).toBeGreaterThan(10);
@@ -115,5 +126,16 @@ describe("the variant ranking's escape", () => {
       expect(d.source).toBe("jev");
       expect(d.fallback_path).toBeUndefined();
     }
+  });
+});
+
+describe("a rule-table answer", () => {
+  it("records the temperature it was drawn at", async () => {
+    const director = createDirector("rule");
+    const all: Decision[] = [];
+    for (let i = 0; i < 20; i++) all.push(...(await director.planRoom(ctx(`r-${i}`, 6), { room_index: 6, door_slot: 0, room_type: "combat" }, "build")).decisions);
+    const space = all.filter((d) => d.question === "space");
+    expect(space.length).toBeGreaterThan(0);
+    for (const d of space) expect(d.temperature).toBeGreaterThan(0);
   });
 });

@@ -11103,12 +11103,15 @@ export class PlayScene extends Phaser.Scene {
             ...(q.choice ? [{ text: " →", color: "#6a7396" }, { text: ` ${optionName(q.choice, q.name)}`, color: "#ffe9a8", bold: true }] : []),
             ...(q.noteKey ? [{ text: ` (${planNote(q.noteKey)})`, color: "#6a7396" }] : []),
             /*
-             * A room is drawn from the answer, not given its top option: the
-             * temperature, and the code terms that weigh a repeat down, can
-             * land on something the distribution ranked lower. Said so, or the
-             * page reads as the Director choosing its least likely answer.
+             * A room is drawn from the answer, not given its top option: an
+             * unsure Jev answer drawn as given, a rule table's temperature,
+             * and the code terms that weigh a repeat down can all land on
+             * something the distribution ranked lower. Said so, and which, or
+             * the page reads as the Director choosing its least likely answer
+             * — or as a temperature re-reading Jev, which it never does.
              */
-            ...(q.choice && drawnBelowTop(q.choice, q.probs) ? [{ text: ` ↺ ${t("plan.drawn")}`, color: "#c7a0ff" }] : []),
+            ...(q.drawn === "temperature" ? [{ text: ` ↺ ${t("plan.drawnTemperature")}`, color: "#c7a0ff" }]
+              : q.drawn === "asGiven" ? [{ text: ` ~ ${t("plan.drawnAsGiven")}`, color: "#c7a0ff" }] : []),
           ];
           out.push({ text: line.map((x) => x.text).join(""), color: "#e8e3d8", indent: 16, spans: line });
           /*
@@ -20230,14 +20233,6 @@ const POP_FLASH_SHARE = 0.35;
 /** The filter over the death frame: a glow cooling from white-gold to ember as the body gives. */
 const POP_GLOW_HOT = 0xffe2a8;
 const POP_GLOW_COOL = 0xc8402a;
-/** Whether the option taken is not the one the distribution ranked first. */
-function drawnBelowTop(choice: string, probs: readonly (readonly [string, number])[]): boolean {
-  let top = -1;
-  for (const [, p] of probs) top = Math.max(top, p);
-  const mine = probs.find(([k]) => k === choice)?.[1];
-  return mine !== undefined && mine < top - 1e-9;
-}
-
 /** Two 0xRRGGBB colours mixed, `t` of the way from `a` to `b`. */
 function lerpColour(a: number, b: number, t: number): number {
   const k = Math.max(0, Math.min(1, t));

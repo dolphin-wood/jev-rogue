@@ -676,6 +676,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
     const choice = sampleOne(tuned, rng);
     return {
       choice, probabilities: tuned, confidence: null, source, question: name,
+      ...(temperature !== 1 ? { temperature } : {}),
       ...(path ? { fallback_path: path as Decision["fallback_path"] } : {}),
     };
   }
@@ -950,6 +951,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
         decisions.push({
           choice: [...kinds, ...(npc ? [npc] : [])].join(" > "),
           probabilities: need, confidence: null, source, question: "portal_need",
+          temperature: PORTAL_NEED_TEMPERATURE,
           ...(path ? { fallback_path: path as Decision["fallback_path"] } : {}),
         });
 
@@ -971,7 +973,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
           const pick = sampleOne(d, rng);
           decisions.push({
             choice: pick, probabilities: d, confidence: null, source,
-            question: "elite_kind (from the need ranking)",
+            question: "elite_kind (from the need ranking)", temperature: PORTAL_NEED_TEMPERATURE,
           });
           eliteKind = pick as RewardCardKind;
         }
@@ -1454,6 +1456,7 @@ export function createDirector(mode: DirectorArm, deps: DirectorDeps = {}): Dire
         : tensions[0]!;
       const tensionD: Decision = {
         choice, probabilities, confidence: null, source: "rule", question: "next_tension (advisory)",
+        ...(tensions.length > 1 ? { temperature: TEMPERATURE.next_tension } : {}),
       };
       return {
         room_index: ctx.room_index,
@@ -2689,6 +2692,7 @@ function rankTop(
     confidence: null,
     source: answer.source,
     question: name,
+    temperature: PORTAL_NEED_TEMPERATURE,
     ...(answer.path ? { fallback_path: answer.path as Decision["fallback_path"] } : {}),
   });
   return out;

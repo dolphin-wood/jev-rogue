@@ -184,7 +184,8 @@ export const EN = {
   /* The staff, key by key, is quoted the same way and for the same reason. */
   "plan.heldSpellsSent": "The keys sent, word for word",
   "plan.noOptions": "No options",
-  "plan.drawn": "re-rolled by temperature",
+  "plan.drawnTemperature": "re-rolled by temperature",
+  "plan.drawnAsGiven": "drawn as given",
   "plan.listHead": "{head} ({count})",
   "plan.trimmedYes": "yes, the commit check cut the plan",
   "plan.trimmedNo": "no",

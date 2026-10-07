@@ -29,7 +29,17 @@ export interface ReadoutQuestion {
   readonly noteKey?: NoteKey;
   /** What the request actually asked, as it was sent. */
   readonly instructions?: string;
+  /**
+   * How an answer the distribution ranked below its first option was drawn:
+   * at a temperature (the rule table, the door ranking), or from the
+   * distribution as given (Jev unsure, a frequency question). Absent when the
+   * top option was taken.
+   */
+  readonly drawn?: DrawnBy;
 }
+
+/** Why an answer was not its distribution's first option (`ReadoutQuestion.drawn`). */
+export type DrawnBy = "temperature" | "asGiven";
 
 /** Why an answer was not a plain draw from the distribution it was shown. */
 export type NoteKey = "renormalised" | "blended" | "notNeeded" | "drawnByCode" | "offerBlend";
@@ -124,6 +134,21 @@ export interface OfferRecord {
   readonly ids: readonly string[];
 }
 
+/**
+ * Whether a decision landed below its distribution's first option, and how.
+ *
+ * A temperature is only one way to get there: a Jev answer under
+ * `JEV_CONFIDENT` is drawn from its distribution as given, and saying
+ * "re-rolled by temperature" of it describes a step that never ran.
+ */
+function drawnBy(d: Decision | undefined, dist: Readonly<Record<string, number>>): { drawn?: DrawnBy } {
+  const mine = d ? dist[d.choice] : undefined;
+  if (mine === undefined) return {};
+  const top = Math.max(...Object.values(dist));
+  if (mine >= top - 1e-9) return {};
+  return { drawn: d!.temperature !== undefined ? "temperature" : "asGiven" };
+}
+
 /** Questions whose answer is blended with others rather than drawn on its own (doc 007). */
 const BLENDED = new Set(["overall", "for_style", "for_needs"]);
 
@@ -158,6 +183,7 @@ export function buildReadout(
         // question's temperature, or before it for one that was not drawn.
         probs: sorted(Object.keys(own).length > 0 ? own : dist),
         source: d?.source ?? req.source,
+        ...drawnBy(d, Object.keys(own).length > 0 ? own : dist),
         ...(restricted ? { note: "renormalised over what was on offer", noteKey: "renormalised" as const }
           : !d && (BLENDED.has(unscoped(name)) || unscoped(name).startsWith("fit_")) ? { note: "blended, not drawn on its own", noteKey: "blended" as const }
           : !d ? { note: "not needed this time", noteKey: "notNeeded" as const } : {}),
@@ -174,7 +200,7 @@ export function buildReadout(
         if (!name || all.has(name)) continue;
         questions.push({
           name, choice: d.choice, probs: sorted(d.probabilities), source: d.source,
-          note: "drawn by code", noteKey: "drawnByCode",
+          note: "drawn by code", noteKey: "drawnByCode", ...drawnBy(d, d.probabilities),
         });
       }
     for (const o of plan?.offers ?? [])
