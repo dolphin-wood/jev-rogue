@@ -4,11 +4,11 @@
 
 TypeSafe AI の選択モデル [Jev](https://docs.typesafe.ai/) がディレクターを務める、見下ろし型のアクションルームローグライクです。Jev はゲームが用意した**合法な選択肢**のうち、現在のランに合うものを判断します。部屋、敵との遭遇、報酬、戦闘そのものはゲームのコードが生成・実行します。
 
-## スクリーンショット
+## トレーラー
 
-| プレイスタイルを選ぶ | 部屋のプランを見る | Jev の判断を見る |
-|---|---|---|
-| <img src="assets/screenshots/style.png" alt="プレイスタイルを選び、好みのランを入力する画面" width="100%"> | <img src="assets/screenshots/room-params.png" alt="生成された部屋のプランとレイアウトの測定値" width="100%"> | <img src="assets/screenshots/jev-response.png" alt="Jev の部屋プランへの回答と確率" width="100%"> |
+30 秒弱のプレイ：スタイルを選んで一言で注文し、戦う。Jev が報酬カードと次の扉を選ぶ。
+
+https://github.com/user-attachments/assets/6b883b46-4f20-42e2-b602-acdb12c0e31d
 
 ## なぜ Jev を使うのか
 

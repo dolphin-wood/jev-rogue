@@ -4,11 +4,11 @@
 
 A top-down action room roguelike directed by [Jev](https://docs.typesafe.ai/), TypeSafe AI's choice model. Jev decides which of the game's *legal* design options fit the current run. The game still generates its own rooms, encounters, rewards, and combat.
 
-## Screenshots
+## Trailer
 
-| Choose a play style | Review the room plan | Inspect Jev's decisions |
-|---|---|---|
-| <img src="assets/screenshots/style.png" alt="Choosing a play style and describing a preferred run" width="100%"> | <img src="assets/screenshots/room-params.png" alt="A generated room plan with its measured layout" width="100%"> | <img src="assets/screenshots/jev-response.png" alt="Jev's room-planning answers and probabilities" width="100%"> |
+A run in under thirty seconds: pick a style and say what you want, fight, then watch Jev pick the reward cards and the next doors.
+
+https://github.com/user-attachments/assets/6b883b46-4f20-42e2-b602-acdb12c0e31d
 
 ## Why Jev?
 

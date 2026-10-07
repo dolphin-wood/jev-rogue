@@ -4,11 +4,11 @@
 
 一款俯视角动作房间 Roguelike 游戏，由 TypeSafe AI 的选择模型 [Jev](https://docs.typesafe.ai/) 担任「导演」。Jev 从游戏预先给出的**合法选项**中判断什么适合当前战局；房间、遭遇、奖励和战斗仍由游戏代码生成与执行。
 
-## 游戏截图
+## 预告片
 
-| 选择游玩风格 | 查看房间规划 | 查看 Jev 的决策 |
-|---|---|---|
-| <img src="assets/screenshots/style.png" alt="选择游玩风格并描述偏好的战局" width="100%"> | <img src="assets/screenshots/room-params.png" alt="生成的房间规划与布局测量结果" width="100%"> | <img src="assets/screenshots/jev-response.png" alt="Jev 对房间规划的回答与概率" width="100%"> |
+不到 30 秒的一局：选风格、用一句话说明想要什么、战斗，然后看 Jev 挑选奖励卡和下一扇门。
+
+https://github.com/user-attachments/assets/6b883b46-4f20-42e2-b602-acdb12c0e31d
 
 ## 为什么用 Jev？
 
