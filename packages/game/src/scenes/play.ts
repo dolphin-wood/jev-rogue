@@ -4589,12 +4589,24 @@ export class PlayScene extends Phaser.Scene {
      */
     const typing = this.intentTyping;
     const W = STYLE_CARD_W;
-    const H = 128;
     const CY = 136;
+    const cardX = (i: number): number => cx + (i - (STYLES.length - 1) / 2) * (W + STYLE_CARD_GAP);
+    // The blurb at the pixel font's own size: below it the face resamples,
+    // and this is the copy a player actually reads to choose a style.
+    const blurbs = STYLES.map((st, i) => this.uiText(cardX(i), CY + 9, contentDescription(`style.${st.id}`, st.desc),
+      nativePx(1.5), "#c9cfe8", { align: "center", wordWrap: { width: (W - 14) * ZOOM } }).setOrigin(0.5, 0).setDepth(232));
+    /*
+     * **The cards are as tall as the longest blurb**, grown downward from a
+     * fixed top. A fixed height held the copy it was measured against; the
+     * English Blade blurb wrapped to five lines and its last one sat on the
+     * card's border.
+     */
+    const top = CY - 64;
+    const H = Math.max(128, CY + 9 - top + Math.max(...blurbs.map(b => b.displayHeight)) + 8);
     STYLES.forEach((st, i) => {
-      const x = cx + (i - (STYLES.length - 1) / 2) * (W + STYLE_CARD_GAP);
+      const x = cardX(i);
       const on = i === ui.selected;
-      const panel = this.add.rectangle(x, CY, W, H, on ? 0x221d46 : 0x161334, 0.97).setDepth(231)
+      const panel = this.add.rectangle(x, top + H / 2, W, H, on ? 0x221d46 : 0x161334, 0.97).setDepth(231)
         .setStrokeStyle(on ? 2 : 1, on ? (typing ? 0x8a8296 : 0xffe9a8) : 0x4a5480, 1);
       ui.objects.push(panel);
       // The style's own picture: its starting spell's icon.
@@ -4606,11 +4618,7 @@ export class PlayScene extends Phaser.Scene {
         on ? (typing ? "#c9bfa0" : "#ffe9a8") : "#e8e3d8").setDepth(232));
       // The style's short id under its name, as a subtitle in every language.
       ui.objects.push(this.menuText(x, CY - 3, st.id.toUpperCase(), 7, "#8792b5").setDepth(232));
-      // The blurb at the pixel font's own size: below it the face resamples,
-      // and this is the copy a player actually reads to choose a style.
-      ui.objects.push(this.uiText(x, CY + 9, contentDescription(`style.${st.id}`, st.desc), nativePx(1.5), "#c9cfe8", {
-        align: "center", wordWrap: { width: (W - 14) * ZOOM },
-      }).setOrigin(0.5, 0).setDepth(232));
+      ui.objects.push(blurbs[i]!);
     });
     /*
      * The starting spell of the chosen style, shown: its card on the right,
@@ -20025,7 +20033,7 @@ function damageColour(what: string): string {
  * that panel. Three copies of `-190` is how the panel came to be 60 px
  * narrower than the row it belonged to.
  */
-const STYLE_CARD_W = 116;
+const STYLE_CARD_W = 126;
 const STYLE_CARD_GAP = 10;
 /** The demo stage's box, on the left of the preview panel. */
 const STYLE_STAGE_W = 170;
