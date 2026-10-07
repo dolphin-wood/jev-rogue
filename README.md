@@ -125,17 +125,17 @@ Nine lessons from the [full Jev findings log](docs/research/jev-findings.md) app
 
 ### Jev versus rule in this game
 
-Finding 30 also compares Jev briefing with the rule arm on the **same 10 seeds** using the expert reference player. The table measures the share of style-matching **spell cards in Director-generated reward offers**; Jev and rule are the two sources of those offers.
+Measured on 2026-10-07 with the current Director (reward cards judged one at a time, finding 35): the **same 10 seeds**, the expert reference player, briefing state, two players per style, each with a typed sentence (`route-review`'s players). The table measures the share of style-matching **spell cards in Director-generated reward offers**; Jev and rule are the two sources of those offers.
 
 | Style ID | On-style spells offered by Director, Jev / rule |
 |---|---:|
-| `spam` | 69% / 40% |
-| `nuke` | 63% / 34% |
-| `area` | 75% / 61% |
-| `dot` | 63% / 40% |
-| `melee` | 69% / 53% |
+| `spam` | 56% / 39% |
+| `nuke` | 65% / 48% |
+| `area` | 74% / 48% |
+| `dot` | 57% / 40% |
+| `melee` | 77% / 54% |
 
-Jev-generated offers showed more style-matching **spell** cards in all five styles. Jev showed fewer distinct spells across these runs (9.7 versus 13.6), so stronger style focus also came with a narrower spell pool. Boss reach was Jev 10/10 versus rule 9/10, too small a gap to establish an advantage, especially while the boss was being reworked.
+Jev-generated offers showed more style-matching **spell** cards in all five styles. Jev showed fewer distinct spells per run (11.9 versus 14.4), so stronger style focus still comes with a narrower spell pool, though less so than before per-card judging (9.7 versus 13.6 in finding 30). Boss reach was Jev 8/10 versus rule 5/10; with ten runs a side this is a lean, not an established survival advantage. The rule arm cannot read the typed sentence at all.
 
 **Player-facing conclusion:** the current data supports “more style-focused spell offers,” but not “more fun” or “more replayable.” No completed human Jev-versus-rule blind-test result is recorded. [011: telemetry and evaluation](docs/planning/011-telemetry-and-evaluation.md) defines the test: players rank which run felt arranged for them and which they would replay.
 
